@@ -1,0 +1,112 @@
+{
+  "brand": "VOKA",
+  "tagline": "Talk. Done.",
+  "headline": "Your AI Sales Employee",
+  "description": "Turn conversations into professional quotations in seconds using AI.",
+  "cta": {
+    "startFree": "Start Free",
+    "bookDemo": "Book Demo"
+  },
+  "hero": {
+    "liveDemoTitle": "Live demo",
+    "liveDemoHeadline": "AI quote preview",
+    "liveDemoDescription": "Intelligent proposals created directly from your sales conversations.",
+    "statusLabel": "Status",
+    "statusValue": "Active",
+    "timeSavedLabel": "Time saved",
+    "timeSavedValue": "+73%"
+  },
+  "features": {
+    "titleLabel": "Features",
+    "title": "Everything your sales team needs to move faster.",
+    "description": "VOKA blends real conversations, AI quotation drafting, and team-ready processes into one elegant workflow.",
+    "featureCards": [
+      {
+        "title": "AI-powered quotation creation",
+        "description": "Convert conversations into polished proposals with instant AI assistance.",
+        "accent": "Auto-generated quotes"
+      },
+      {
+        "title": "Smart conversation capture",
+        "description": "Collect customer requests and translate them into professional offers.",
+        "accent": "Conversation-driven workflow"
+      },
+      {
+        "title": "Ready for teams",
+        "description": "Keep your pipeline moving with shared controls, templates, and analytics.",
+        "accent": "Scale without friction"
+      }
+    ],
+    "whyLabel": "Why VOKA",
+    "whyTitle": "AI-first quoting for modern sales teams.",
+    "whyDescription": "Build proposals, keep approvals aligned, and use AI to reduce onboarding friction and close deals faster.",
+    "whyFeatures": [
+      {
+        "title": "Intelligent summary cards",
+        "description": "Auto extract customer needs, line items, and next steps from conversations."
+      },
+      {
+        "title": "Proposal templates",
+        "description": "Use sleek sales templates that match your brand and keep quotes consistent."
+      }
+    ]
+  },
+  "work": {
+    "titleLabel": "How VOKA Works",
+    "title": "From conversation to quote in three simple steps.",
+    "description": "VOKA listens to your discussion, writes the proposal, and helps you send it with confidence — all in one polished workflow.",
+    "steps": [
+      {
+        "title": "Talk to VOKA",
+        "description": "Share the customer conversation, requirements, or brief directly in chat."
+      },
+      {
+        "title": "Generate fast",
+        "description": "VOKA drafts quotes, line items, and next steps in a polished format."
+      },
+      {
+        "title": "Send with confidence",
+        "description": "Review, personalize, and deliver the proposal instantly."
+      }
+    ]
+  },
+  "pricing": {
+    "titleLabel": "Pricing",
+    "title": "Build with AI-enabled sales workflows.",
+    "description": "Pricing coming soon — designed for teams that want speed, consistency, and insights from every conversation.",
+    "placeholderLabel": "Placeholder",
+    "placeholderTitle": "Launching soon"
+  },
+  "faq": {
+    "titleLabel": "FAQ",
+    "title": "Frequently asked questions",
+    "description": "Everything you need to know before you bring VOKA into your workflow.",
+    "items": [
+      {
+        "question": "Can VOKA connect to my CRM?",
+        "answer": "Yes. VOKA is designed to fit into modern sales workflows and can be extended to sync with your CRM via APIs."
+      },
+      {
+        "question": "How quickly can I create quotes?",
+        "answer": "Most proposals are created in seconds after the conversation is captured, without manual formatting."
+      },
+      {
+        "question": "Is there a free trial?",
+        "answer": "Start with a free onboarding period and explore VOKA before moving to a full team plan."
+      }
+    ]
+  },
+  "footer": {
+    "description": "A modern sales automation experience powered by AI.",
+    "links": {
+      "pricing": "Pricing",
+      "demo": "Book Demo",
+      "contact": "Contact"
+    }
+  },
+  "badge": "Premium AI Sales Automation",
+  "languageSwitcher": {
+    "en": "EN",
+    "ar": "AR"
+  }
+}
