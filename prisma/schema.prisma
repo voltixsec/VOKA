@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Locale {
+  EN
+  AR
+}
+
+enum CompanyRole {
+  OWNER
+  ADMIN
+  SALES
+  VIEWER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+model Company {
+  id              String          @id @default(cuid())
+  name            String
+  slug            String          @unique
+  defaultLocale   Locale          @default(EN)
+  defaultCurrency String          @default("KWD")
+  timezone        String          @default("Asia/Kuwait")
+  isActive        Boolean         @default(true)
+  members         CompanyMember[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String?
+  passwordHash String?
+  locale       Locale          @default(EN)
+  isActive     Boolean         @default(true)
+  memberships  CompanyMember[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([isActive])
+}
+
+model CompanyMember {
+  id        String           @id @default(cuid())
+  companyId String
+  userId    String
+  role      CompanyRole      @default(SALES)
+  status    MembershipStatus @default(ACTIVE)
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([companyId, userId])
+  @@index([companyId])
+  @@index([userId])
+  @@index([companyId, role])
+  @@index([companyId, status])
+}
