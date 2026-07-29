@@ -13,3 +13,8 @@ npm-debug.log*
 prisma/dev.db
 prisma/dev.db-journal
 tsconfig.tsbuildinfo
+# VOKA local test artifacts
+.voka-*.json
+.voka-*.txt
+.voka-*.log
+test-auth-*.ps1
