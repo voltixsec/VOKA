@@ -1,13 +1,15 @@
-import {
+﻿import {
   DomainError,
   Result,
   type Service,
 } from '../../../../lib/core';
+
 import {
   Company,
   type CompanyLocale,
-} from '../../domain/entities/Company';
-import type { CompanyRepository } from '../../domain/repositories/CompanyRepository';
+} from '../../domain/entities';
+
+import type { CompanyRepository } from '../../domain/repositories';
 
 export type CreateCompanyInput = {
   name: string;
@@ -40,7 +42,9 @@ export class CreateCompany
     const company = companyResult.getValue();
 
     const existingCompany =
-      await this.companyRepository.findBySlug(company.slug);
+      await this.companyRepository.findBySlug(
+        company.slug,
+      );
 
     if (existingCompany) {
       return Result.failure(
