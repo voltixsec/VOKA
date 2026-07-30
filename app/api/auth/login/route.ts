@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server';
-
-import { PrismaCompanyMemberRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';
+﻿import { PrismaCompanyMemberRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';
 import { PrismaCompanyRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyRepository';
 import { LoginUser } from '../../../../features/user/application/commands/LoginUser';
 import { PrismaUserRepository } from '../../../../features/user/infrastructure/prisma/PrismaUserRepository';
 import { BCryptPasswordHasher } from '../../../../features/user/infrastructure/security/BCryptPasswordHasher';
-import { JwtTokenService } from '../../../../features/user/infrastructure/security/JwtTokenService';
+import {
+  ApiError,
+  apiSuccess,
+  handleApiError,
+} from '../../../../lib/api';
+import { createTokenService } from '../../../../lib/auth';
 import { prisma } from '../../../../lib/prisma';
 
 export const runtime = 'nodejs';
@@ -16,180 +19,107 @@ const REFRESH_TOKEN_COOKIE = 'voka_refresh_token';
 const ACCESS_TOKEN_MAX_AGE = 15 * 60;
 const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60;
 
-function getRequiredEnvironmentVariable(name: string): string {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(
-      `Required environment variable "${name}" is missing.`,
-    );
-  }
-
-  return value;
-}
+type LoginRequestBody = {
+  email: string;
+  password: string;
+};
 
 function createLoginUser(): LoginUser {
-  const userRepository =
-    new PrismaUserRepository(prisma);
-
-  const companyRepository =
-    new PrismaCompanyRepository(prisma);
-
-  const companyMemberRepository =
-    new PrismaCompanyMemberRepository(prisma);
-
-  const passwordHasher =
-    new BCryptPasswordHasher();
-
-  const tokenService =
-    new JwtTokenService({
-      accessTokenSecret:
-        getRequiredEnvironmentVariable(
-          'JWT_ACCESS_SECRET',
-        ),
-      refreshTokenSecret:
-        getRequiredEnvironmentVariable(
-          'JWT_REFRESH_SECRET',
-        ),
-      issuer:
-        process.env.JWT_ISSUER?.trim() || 'VOKA',
-      audience:
-        process.env.JWT_AUDIENCE?.trim() ||
-        'VOKA-WEB',
-      accessTokenExpiresIn: '15m',
-      refreshTokenExpiresIn: '7d',
-    });
-
   return new LoginUser(
-    userRepository,
-    companyRepository,
-    companyMemberRepository,
-    passwordHasher,
-    tokenService,
+    new PrismaUserRepository(prisma),
+    new PrismaCompanyRepository(prisma),
+    new PrismaCompanyMemberRepository(prisma),
+    new BCryptPasswordHasher(),
+    createTokenService(),
   );
 }
 
-function getErrorStatus(code: string): number {
+async function parseLoginRequest(
+  request: Request,
+): Promise<LoginRequestBody> {
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    throw new ApiError(
+      400,
+      'INVALID_REQUEST_BODY',
+      'The request body must contain valid JSON.',
+    );
+  }
+
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    Array.isArray(body)
+  ) {
+    throw new ApiError(
+      400,
+      'INVALID_REQUEST_BODY',
+      'The request body is invalid.',
+    );
+  }
+
+  const input = body as Record<string, unknown>;
+
+  if (
+    typeof input.email !== 'string' ||
+    typeof input.password !== 'string' ||
+    input.email.trim() === '' ||
+    input.password === ''
+  ) {
+    throw new ApiError(
+      400,
+      'INVALID_CREDENTIALS',
+      'Email and password are required.',
+    );
+  }
+
+  return {
+    email: input.email.trim(),
+    password: input.password,
+  };
+}
+
+function mapLoginError(
+  code: string,
+  message: string,
+): ApiError {
   switch (code) {
     case 'INVALID_CREDENTIALS':
-      return 401;
+      return new ApiError(401, code, message);
 
     case 'USER_INACTIVE':
-      return 403;
+      return new ApiError(403, code, message);
 
     default:
-      return 400;
+      return new ApiError(400, code, message);
   }
 }
 
-export async function POST(
-  request: Request,
-): Promise<NextResponse> {
+export async function POST(request: Request) {
   try {
-    let body: unknown;
+    const input = await parseLoginRequest(request);
 
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'INVALID_REQUEST_BODY',
-            message:
-              'The request body must contain valid JSON.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
-    if (
-      typeof body !== 'object' ||
-      body === null ||
-      Array.isArray(body)
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'INVALID_REQUEST_BODY',
-            message:
-              'The request body is invalid.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
-    const input =
-      body as Record<string, unknown>;
-
-    if (
-      typeof input.email !== 'string' ||
-      typeof input.password !== 'string'
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'INVALID_CREDENTIALS',
-            message:
-              'Email and password are required.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
-    const loginUser = createLoginUser();
-
-    const result = await loginUser.execute({
-      email: input.email,
-      password: input.password,
-    });
+    const result = await createLoginUser().execute(input);
 
     if (!result.isSuccess) {
       const error = result.getError();
 
-      return NextResponse.json(
-        {
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        },
-        {
-          status: getErrorStatus(error.code),
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
+      throw mapLoginError(
+        error.code,
+        error.message,
       );
     }
 
     const output = result.getValue();
 
-    const response = NextResponse.json(
+    const response = apiSuccess(
       {
-        data: {
-          user: output.user,
-          memberships: output.memberships,
-          activeCompanyId:
-            output.activeCompanyId,
-        },
+        user: output.user,
+        memberships: output.memberships,
+        activeCompanyId: output.activeCompanyId,
       },
       {
         status: 200,
@@ -228,22 +158,6 @@ export async function POST(
 
     return response;
   } catch (error) {
-    console.error('Login API error:', error);
-
-    return NextResponse.json(
-      {
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message:
-            'The login request could not be completed.',
-        },
-      },
-      {
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      },
-    );
+    return handleApiError(error);
   }
 }
