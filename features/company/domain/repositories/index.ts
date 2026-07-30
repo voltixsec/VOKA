@@ -1,2 +1,2 @@
-﻿export * from './CompanyRepository';
+export * from './CompanyRepository';
 export * from './CompanyMemberRepository';

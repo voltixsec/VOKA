@@ -18,3 +18,4 @@ export function Logo({ compact = false }: LogoProps) {
     </div>
   );
 }
+

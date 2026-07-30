@@ -1,4 +1,4 @@
-﻿import { cookies } from 'next/headers';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 import { PrismaCompanyMemberRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';

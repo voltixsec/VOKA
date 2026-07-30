@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { PrismaCompanyMemberRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';
 import { PrismaCompanyRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyRepository';

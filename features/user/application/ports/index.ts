@@ -1,2 +1,2 @@
-﻿export * from './PasswordHasher';
+export * from './PasswordHasher';
 export * from './TokenService';

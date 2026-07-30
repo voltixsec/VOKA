@@ -39,7 +39,7 @@ export default function Home() {
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-4">
                   <p className="text-sm uppercase tracking-[0.3em] text-slate-400">{t.tagline}</p>
-                  <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">{t.headline}</h1>
+                  <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-4xl lg:text-4xl">{t.headline}</h1>
                   <p className="max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">{t.description}</p>
                 </div>
                 <LanguageSwitcher locale={locale} onChange={setLocale} />
@@ -124,7 +124,7 @@ export default function Home() {
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div className="space-y-6">
             <p className="text-sm uppercase tracking-[0.3em] text-slate-400">{t.work.titleLabel}</p>
-            <h2 className="text-4xl font-semibold text-white sm:text-5xl">{t.work.title}</h2>
+            <h2 className="text-4xl font-semibold text-white sm:text-4xl">{t.work.title}</h2>
             <p className="max-w-xl text-base leading-7 text-slate-300">{t.work.description}</p>
           </div>
           <div className="grid gap-4">
@@ -159,7 +159,7 @@ export default function Home() {
         <div className="grid gap-10 lg:grid-cols-2">
           <div className="space-y-5">
             <p className="text-sm uppercase tracking-[0.3em] text-slate-400">{t.faq.titleLabel}</p>
-            <h2 className="text-4xl font-semibold text-white sm:text-5xl">{t.faq.title}</h2>
+            <h2 className="text-4xl font-semibold text-white sm:text-4xl">{t.faq.title}</h2>
             <p className="max-w-xl text-base leading-7 text-slate-300">{t.faq.description}</p>
           </div>
           <div className="space-y-4">
@@ -189,3 +189,4 @@ export default function Home() {
     </main>
   );
 }
+
