@@ -1,4 +1,4 @@
-﻿import type { PrismaClient } from '../../../../lib/generated/prisma/client';
+import type { PrismaClient } from '../../../../lib/generated/prisma/client';
 import { UniqueEntityID } from '../../../../lib/core';
 
 import {

@@ -1,2 +1,2 @@
-﻿export * from './BCryptPasswordHasher';
+export * from './BCryptPasswordHasher';
 export * from './JwtTokenService';

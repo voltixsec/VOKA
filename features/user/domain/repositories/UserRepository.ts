@@ -1,4 +1,4 @@
-﻿import type { Repository } from '../../../../lib/core';
+import type { Repository } from '../../../../lib/core';
 import type { User } from '../entities';
 
 export interface UserRepository

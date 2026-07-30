@@ -1,2 +1,2 @@
-﻿export * from './Company';
+export * from './Company';
 export * from './CompanyMember';

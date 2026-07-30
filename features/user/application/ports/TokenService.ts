@@ -1,4 +1,4 @@
-﻿export type AuthTokenType = 'access' | 'refresh';
+export type AuthTokenType = 'access' | 'refresh';
 
 export type AuthTokenPayload = {
   userId: string;

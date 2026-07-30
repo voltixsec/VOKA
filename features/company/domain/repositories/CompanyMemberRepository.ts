@@ -1,4 +1,4 @@
-﻿import type { Repository } from '../../../../lib/core';
+import type { Repository } from '../../../../lib/core';
 import type {
   CompanyMember,
   CompanyRole,

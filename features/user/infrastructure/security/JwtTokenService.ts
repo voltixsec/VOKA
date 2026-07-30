@@ -1,4 +1,4 @@
-﻿import {
+import {
   jwtVerify,
   SignJWT,
   type JWTPayload,

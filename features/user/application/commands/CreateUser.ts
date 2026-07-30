@@ -1,4 +1,4 @@
-﻿import {
+import {
   DomainError,
   Guard,
   Result,

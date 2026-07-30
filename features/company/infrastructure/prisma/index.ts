@@ -1,2 +1,2 @@
-﻿export * from './PrismaCompanyRepository';
+export * from './PrismaCompanyRepository';
 export * from './PrismaCompanyMemberRepository';
