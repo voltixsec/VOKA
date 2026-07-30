@@ -25,6 +25,18 @@ enum MembershipStatus {
   SUSPENDED
 }
 
+enum CustomerType {
+  COMPANY
+  INDIVIDUAL
+}
+
+enum CustomerStatus {
+  LEAD
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
 model Company {
   id              String          @id @default(cuid())
   name            String
@@ -34,6 +46,7 @@ model Company {
   timezone        String          @default("Asia/Kuwait")
   isActive        Boolean         @default(true)
   members         CompanyMember[]
+  customers       Customer[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -71,4 +84,44 @@ model CompanyMember {
   @@index([userId])
   @@index([companyId, role])
   @@index([companyId, status])
+}
+
+model Customer {
+  id                String         @id @default(cuid())
+  companyId         String
+  code              String
+  type              CustomerType   @default(COMPANY)
+  status            CustomerStatus @default(LEAD)
+  name              String
+  legalName         String?
+  email             String?
+  phone             String?
+  mobile            String?
+  taxNumber         String?
+  addressLine1      String?
+  addressLine2      String?
+  city              String?
+  state             String?
+  postalCode        String?
+  countryCode       String?
+  preferredLocale   Locale?
+  preferredCurrency String?
+  creditLimit       Decimal?       @db.Decimal(18, 3)
+  paymentTermDays   Int?
+  notes             String?
+  isDeleted         Boolean        @default(false)
+  deletedAt         DateTime?
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([companyId, name])
+  @@index([companyId, status])
+  @@index([companyId, type])
+  @@index([companyId, isDeleted])
+  @@index([companyId, email])
+  @@index([companyId, phone])
+  @@index([companyId, taxNumber])
 }
