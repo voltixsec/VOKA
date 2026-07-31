@@ -38,17 +38,21 @@ enum CustomerStatus {
 }
 
 model Company {
-  id              String          @id @default(cuid())
-  name            String
-  slug            String          @unique
-  defaultLocale   Locale          @default(EN)
-  defaultCurrency String          @default("KWD")
-  timezone        String          @default("Asia/Kuwait")
-  isActive        Boolean         @default(true)
-  members         CompanyMember[]
-  customers       Customer[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                String            @id @default(cuid())
+  name              String
+  slug              String            @unique
+  defaultLocale     Locale            @default(EN)
+  defaultCurrency   String            @default("KWD")
+  timezone          String            @default("Asia/Kuwait")
+  isActive          Boolean           @default(true)
+  members           CompanyMember[]
+  customers         Customer[]
+  catalogItems      CatalogItem[]
+  catalogCategories CatalogCategory[]
+  taxRates          TaxRate[]
+  priceLists        PriceList[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@index([name])
   @@index([isActive])
@@ -124,4 +128,156 @@ model Customer {
   @@index([companyId, email])
   @@index([companyId, phone])
   @@index([companyId, taxNumber])
+}
+
+enum CatalogItemType {
+  PRODUCT
+  SERVICE
+  SHIPPING
+  LABOR
+  DISCOUNT
+  CUSTOM
+}
+
+model CatalogCategory {
+  id          String  @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  items CatalogItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Unit {
+  id       String  @id @default(cuid())
+  name     String
+  symbol   String  @unique
+  isActive Boolean @default(true)
+
+  items CatalogItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model TaxRate {
+  id         String  @id @default(cuid())
+  companyId  String?
+  name       String
+  percentage Decimal @db.Decimal(5, 2)
+  isSystem   Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  company Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items   CatalogItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([isSystem])
+  @@index([isActive])
+}
+
+model CatalogItem {
+  id String @id @default(cuid())
+
+  companyId String
+
+  categoryId String?
+
+  unitId String?
+
+  taxRateId String?
+
+  type CatalogItemType
+
+  code    String
+  sku     String?
+  barcode String?
+
+  name        String
+  description String?
+
+  purchasePrice Decimal? @db.Decimal(18, 3)
+  salePrice     Decimal  @db.Decimal(18, 3)
+
+  trackInventory Boolean @default(true)
+  allowDiscount  Boolean @default(true)
+
+  imageUrl String?
+  notes    String?
+
+  isActive Boolean @default(true)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  category CatalogCategory? @relation(fields: [categoryId], references: [id])
+
+  unit Unit? @relation(fields: [unitId], references: [id])
+
+  taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
+
+  priceListItems PriceListItem[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([companyId, type])
+  @@index([companyId, name])
+  @@index([companyId, sku])
+  @@index([barcode])
+}
+
+model PriceList {
+  id           String  @id @default(cuid())
+  companyId    String
+  code         String
+  name         String
+  currencyCode String  @default("KWD")
+  isDefault    Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items   PriceListItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([companyId, name])
+  @@index([companyId, isDefault])
+  @@index([companyId, isActive])
+}
+
+model PriceListItem {
+  id            String  @id @default(cuid())
+  priceListId   String
+  catalogItemId String
+  price         Decimal @db.Decimal(18, 3)
+
+  priceList   PriceList   @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  catalogItem CatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([priceListId, catalogItemId])
+  @@index([priceListId])
+  @@index([catalogItemId])
 }
