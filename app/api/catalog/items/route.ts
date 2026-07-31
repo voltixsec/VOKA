@@ -1,5 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server';
-
 import {
   CreateCatalogItem,
   ListCatalogItems,
@@ -8,6 +6,11 @@ import {
   type CatalogItemType,
 } from '../../../../features/catalog';
 
+import {
+  ApiError,
+  apiSuccess,
+  withCompanyAuth,
+} from '../../../../lib/api';
 import { prisma } from '../../../../lib/prisma';
 
 const catalogItemRepository =
@@ -29,7 +32,6 @@ const allowedTypes: CatalogItemType[] = [
 ];
 
 type CreateCatalogItemBody = {
-  companyId?: unknown;
   type?: unknown;
   code?: unknown;
   name?: unknown;
@@ -129,49 +131,40 @@ function parseBoolean(
   return undefined;
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-
-    const companyId = searchParams.get('companyId')?.trim();
-
-    if (!companyId) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'COMPANY_ID_REQUIRED',
-            message: 'companyId is required.',
-          },
-        },
-        {
-          status: 400,
-        },
-      );
-    }
+export const GET = withCompanyAuth(
+  [
+    'OWNER',
+    'ADMIN',
+    'SALES',
+    'VIEWER',
+  ],
+  async (request, _auth, company) => {
+    const searchParams =
+      new URL(request.url).searchParams;
 
     const rawType = searchParams.get('type');
 
     if (
       rawType &&
-      !allowedTypes.includes(rawType as CatalogItemType)
+      !allowedTypes.includes(
+        rawType as CatalogItemType,
+      )
     ) {
-      return NextResponse.json(
+      throw ApiError.badRequest(
+        'INVALID_CATALOG_ITEM_TYPE',
+        'Catalog item type is invalid.',
         {
-          error: {
-            code: 'INVALID_CATALOG_ITEM_TYPE',
-            message: 'Catalog item type is invalid.',
-          },
-        },
-        {
-          status: 400,
+          field: 'type',
         },
       );
     }
 
     const result = await listCatalogItems.execute({
-      companyId,
-      search: searchParams.get('search') ?? undefined,
-      type: rawType as CatalogItemType | undefined,
+      companyId: company.companyId,
+      search:
+        searchParams.get('search') ?? undefined,
+      type:
+        rawType as CatalogItemType | undefined,
       categoryId:
         searchParams.get('categoryId') ?? undefined,
       isActive: parseBoolean(
@@ -185,55 +178,43 @@ export async function GET(request: NextRequest) {
       ),
     });
 
-    return NextResponse.json({
-      data: result.items.map(serializeCatalogItem),
-      pagination: {
-        total: result.total,
-        page: result.page,
-        pageSize: result.pageSize,
-        totalPages: result.totalPages,
-      },
-    });
-  } catch (error) {
-    console.error('GET /api/catalog/items failed:', error);
-
-    return NextResponse.json(
+    return apiSuccess(
+      result.items.map(serializeCatalogItem),
       {
-        error: {
-          code: 'CATALOG_ITEMS_LIST_FAILED',
-          message: 'Unable to load catalog items.',
+        meta: {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            pageSize: result.pageSize,
+            totalPages: result.totalPages,
+          },
+        },
+        headers: {
+          'Cache-Control': 'no-store',
         },
       },
-      {
-        status: 500,
-      },
     );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
+  },
+);
+export const POST = withCompanyAuth(
+  [
+    'OWNER',
+    'ADMIN',
+    'SALES',
+  ],
+  async (request, _auth, company) => {
     const body =
       (await request.json()) as CreateCatalogItemBody;
 
     if (
-      typeof body.companyId !== 'string' ||
       typeof body.type !== 'string' ||
       typeof body.code !== 'string' ||
       typeof body.name !== 'string' ||
       typeof body.salePrice !== 'number'
     ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'INVALID_REQUEST_BODY',
-            message:
-              'companyId, type, code, name, and salePrice are required.',
-          },
-        },
-        {
-          status: 400,
-        },
+      throw ApiError.badRequest(
+        'INVALID_REQUEST_BODY',
+        'type, code, name, and salePrice are required.',
       );
     }
 
@@ -242,42 +223,49 @@ export async function POST(request: NextRequest) {
         body.type as CatalogItemType,
       )
     ) {
-      return NextResponse.json(
+      throw ApiError.badRequest(
+        'INVALID_CATALOG_ITEM_TYPE',
+        'Catalog item type is invalid.',
         {
-          error: {
-            code: 'INVALID_CATALOG_ITEM_TYPE',
-            message: 'Catalog item type is invalid.',
-          },
-        },
-        {
-          status: 400,
+          field: 'type',
         },
       );
     }
 
-    const result = await createCatalogItem.execute({
-      companyId: body.companyId,
-      type: body.type as CatalogItemType,
-      code: body.code,
-      name: body.name,
-      salePrice: body.salePrice,
-      categoryId: optionalString(body.categoryId),
-      unitId: optionalString(body.unitId),
-      taxRateId: optionalString(body.taxRateId),
-      sku: optionalString(body.sku),
-      barcode: optionalString(body.barcode),
-      description: optionalString(body.description),
-      purchasePrice: optionalNumber(body.purchasePrice),
-      trackInventory: optionalBoolean(
-        body.trackInventory,
-      ),
-      allowDiscount: optionalBoolean(
-        body.allowDiscount,
-      ),
-      imageUrl: optionalString(body.imageUrl),
-      notes: optionalString(body.notes),
-      isActive: optionalBoolean(body.isActive),
-    });
+    const result =
+      await createCatalogItem.execute({
+        companyId: company.companyId,
+        type: body.type as CatalogItemType,
+        code: body.code,
+        name: body.name,
+        salePrice: body.salePrice,
+        categoryId: optionalString(
+          body.categoryId,
+        ),
+        unitId: optionalString(
+          body.unitId,
+        ),
+        taxRateId: optionalString(
+          body.taxRateId,
+        ),
+        sku: optionalString(body.sku),
+        barcode: optionalString(body.barcode),
+        description: optionalString(
+          body.description,
+        ),
+        purchasePrice: optionalNumber(
+          body.purchasePrice,
+        ),
+        trackInventory: optionalBoolean(
+          body.trackInventory,
+        ),
+        allowDiscount: optionalBoolean(
+          body.allowDiscount,
+        ),
+        imageUrl: optionalString(body.imageUrl),
+        notes: optionalString(body.notes),
+        isActive: optionalBoolean(body.isActive),
+      });
 
     if (!result.isSuccess) {
       const error = result.getError();
@@ -288,60 +276,29 @@ export async function POST(request: NextRequest) {
         'CATALOG_ITEM_BARCODE_ALREADY_EXISTS',
       ];
 
-      return NextResponse.json(
-        {
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        },
-        {
-          status: duplicateCodes.includes(error.code)
-            ? 409
-            : 400,
-        },
+      if (duplicateCodes.includes(error.code)) {
+        throw ApiError.conflict(
+          error.code,
+          error.message,
+        );
+      }
+
+      throw ApiError.badRequest(
+        error.code,
+        error.message,
       );
     }
 
-    return NextResponse.json(
-      {
-        data: serializeCatalogItem(
-          result.getValue(),
-        ),
-      },
+    return apiSuccess(
+      serializeCatalogItem(
+        result.getValue(),
+      ),
       {
         status: 201,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
       },
     );
-  } catch (error) {
-    console.error('POST /api/catalog/items failed:', error);
-
-    if (
-      error instanceof SyntaxError
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Request body must be valid JSON.',
-          },
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error: {
-          code: 'CATALOG_ITEM_CREATE_FAILED',
-          message: 'Unable to create catalog item.',
-        },
-      },
-      {
-        status: 500,
-      },
-    );
-  }
-}
+  },
+);
