@@ -13,12 +13,32 @@ export class ApiError extends Error {
     code: string,
     message: string,
     details?: unknown,
+  ): ApiError;
+
+  public static badRequest(
+    message: string,
+    details?: unknown,
+  ): ApiError;
+
+  public static badRequest(
+    first: string,
+    second?: string | unknown,
+    third?: unknown,
   ): ApiError {
+    if (typeof second === 'string') {
+      return new ApiError(
+        400,
+        first,
+        second,
+        third,
+      );
+    }
+
     return new ApiError(
       400,
-      code,
-      message,
-      details,
+      'BAD_REQUEST',
+      first,
+      second,
     );
   }
 

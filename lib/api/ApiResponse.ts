@@ -17,12 +17,15 @@ export type ApiErrorResponse = {
   };
 };
 
+export type ApiSuccessOptions = {
+  status?: number;
+  meta?: unknown;
+  headers?: HeadersInit;
+};
+
 export function apiSuccess<T>(
   data: T,
-  options?: {
-    status?: number;
-    meta?: unknown;
-  },
+  options?: ApiSuccessOptions,
 ): NextResponse<ApiSuccessResponse<T>> {
   return NextResponse.json(
     {
@@ -36,6 +39,7 @@ export function apiSuccess<T>(
     },
     {
       status: options?.status ?? 200,
+      headers: options?.headers,
     },
   );
 }
