@@ -1,47 +1,72 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+﻿import type {
+  ButtonHTMLAttributes,
+  ReactNode,
+} from "react";
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "danger"
+  | "success"
+  | "ghost";
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonSize = "sm" | "md" | "lg";
+
+interface ButtonProps
+  extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   variant?: ButtonVariant;
+  size?: ButtonSize;
   fullWidth?: boolean;
-};
+}
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-slate-100 text-slate-950 hover:bg-white focus-visible:ring-slate-200',
+    "bg-sky-400 text-slate-950 hover:bg-sky-300 focus:ring-sky-400/40",
   secondary:
-    'border border-slate-700 bg-slate-900/70 text-white hover:border-slate-500 hover:bg-slate-900 focus-visible:ring-slate-500',
+    "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 focus:ring-white/20",
+  danger:
+    "bg-red-500 text-white hover:bg-red-400 focus:ring-red-500/40",
+  success:
+    "bg-emerald-500 text-slate-950 hover:bg-emerald-400 focus:ring-emerald-500/40",
   ghost:
-    'bg-transparent text-slate-300 hover:bg-white/5 hover:text-white focus-visible:ring-slate-600',
+    "bg-transparent text-slate-300 hover:bg-white/5 hover:text-white focus:ring-white/20",
+};
+
+const sizeClasses: Record<ButtonSize, string> = {
+  sm: "min-h-9 px-3 py-2 text-xs",
+  md: "min-h-11 px-5 py-2.5 text-sm",
+  lg: "min-h-12 px-6 py-3 text-base",
 };
 
 export function Button({
   children,
-  variant = 'primary',
+  variant = "primary",
+  size = "md",
   fullWidth = false,
-  className = '',
-  type = 'button',
+  type = "button",
+  className = "",
+  disabled,
   ...props
 }: ButtonProps) {
   return (
     <button
       type={type}
+      disabled={disabled}
       className={[
-        'inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        "inline-flex items-center justify-center gap-2 rounded-xl font-semibold",
+        "transition focus:outline-none focus:ring-4",
+        "disabled:cursor-not-allowed disabled:opacity-50",
         variantClasses[variant],
-        fullWidth ? 'w-full' : '',
+        sizeClasses[size],
+        fullWidth ? "w-full" : "",
         className,
       ]
         .filter(Boolean)
-        .join(' ')}
+        .join(" ")}
       {...props}
     >
       {children}
     </button>
   );
 }
-

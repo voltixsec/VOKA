@@ -1,26 +1,40 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+﻿import type {
+  HTMLAttributes,
+  ReactNode,
+} from "react";
 
-type CardProps = HTMLAttributes<HTMLDivElement> & {
+interface CardProps
+  extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
+  padding?: "none" | "sm" | "md" | "lg";
+}
+
+const paddingClasses = {
+  none: "",
+  sm: "p-4",
+  md: "p-6",
+  lg: "p-8",
 };
 
 export function Card({
   children,
-  className = '',
+  padding = "md",
+  className = "",
   ...props
 }: CardProps) {
   return (
     <div
       className={[
-        'rounded-4xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/20 backdrop-blur-xl',
+        "rounded-3xl border border-white/10",
+        "bg-slate-900/70 shadow-soft",
+        paddingClasses[padding],
         className,
       ]
         .filter(Boolean)
-        .join(' ')}
+        .join(" ")}
       {...props}
     >
       {children}
     </div>
   );
 }
-
