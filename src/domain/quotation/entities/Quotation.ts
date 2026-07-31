@@ -127,6 +127,21 @@ export class Quotation {
     }
   }
 
+  /**
+   * Rebuilds an existing quotation aggregate from persistence data.
+   *
+   * Derived totals are recalculated from the stored lines and discount
+   * to preserve domain integrity.
+   */
+  static restore(props: QuotationProps): Quotation {
+    if (!props.id?.trim()) {
+      throw new QuotationDomainError(
+        "Quotation id is required when restoring from persistence.",
+      );
+    }
+
+    return new Quotation(props);
+  }
   get status(): QuotationStatus {
     return this._status;
   }
