@@ -155,3 +155,26 @@ After this documentation foundation is committed and pushed:
 2. Confirm the exact scope of Quotations.
 3. Split Quotation Foundation into controlled implementation parts.
 4. Begin only after CEO approval.
+## 2026-07-31 — Quotation Database Foundation Implemented
+
+- Branch: `feature/mvp-08-quotation-foundation`
+- Implementation commit: `a05eb35`
+- Added enums:
+  - `QuotationStatus`
+  - `DiscountType`
+- Added models:
+  - `Quotation`
+  - `QuotationLine`
+- Added migration:
+  - `20260731030057_quotation_foundation`
+- Design decisions:
+  - Quotation lines preserve commercial snapshots independently from later catalog changes.
+  - Products and services share one line model and can be separated at presentation level.
+  - Document-level and line-level discounts and taxes are supported.
+  - Conversion to invoice or contract remains outside this milestone.
+- Validation:
+  - Prisma schema validation passed.
+  - Database migration applied successfully.
+  - TypeScript validation passed.
+- Closure state:
+  - Awaiting explicit CEO confirmation: `تم`.
