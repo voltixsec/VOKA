@@ -1,51 +1,71 @@
-import type { InputHTMLAttributes } from 'react';
+﻿import type {
+  InputHTMLAttributes,
+  ReactNode,
+} from "react";
 
-type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+interface InputProps
+  extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
-};
+  leadingIcon?: ReactNode;
+}
 
 export function Input({
   label,
   error,
+  leadingIcon,
+  className = "",
   id,
-  className = '',
   ...props
 }: InputProps) {
-  const inputId = id ?? props.name;
+  const inputId =
+    id ?? props.name ?? undefined;
 
   return (
-    <div className="space-y-2">
-      {label ? (
-        <label
-          htmlFor={inputId}
-          className="block text-sm font-medium text-slate-200"
-        >
+    <label
+      htmlFor={inputId}
+      className="block space-y-2"
+    >
+      {label && (
+        <span className="block text-sm font-medium text-slate-300">
           {label}
-        </label>
-      ) : null}
+        </span>
+      )}
 
-      <input
-        id={inputId}
-        className={[
-          'w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition',
-          'placeholder:text-slate-500 focus:ring-2',
-          error
-            ? 'border-red-500/70 focus:border-red-400 focus:ring-red-500/20'
-            : 'border-slate-700 focus:border-sky-400 focus:ring-sky-400/20',
-          className,
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        {...props}
-      />
+      <span className="relative block">
+        {leadingIcon && (
+          <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-500">
+            {leadingIcon}
+          </span>
+        )}
 
-      {error ? (
-        <p className="text-sm text-red-400" role="alert">
+        <input
+          id={inputId}
+          className={[
+            "min-h-11 w-full rounded-xl border",
+            "border-white/10 bg-slate-950/70",
+            "px-4 py-2.5 text-sm text-white",
+            "placeholder:text-slate-600",
+            "outline-none transition",
+            "focus:border-sky-400/50 focus:ring-4 focus:ring-sky-400/10",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            leadingIcon ? "pl-11" : "",
+            error
+              ? "border-red-400/50 focus:border-red-400 focus:ring-red-400/10"
+              : "",
+            className,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          {...props}
+        />
+      </span>
+
+      {error && (
+        <span className="block text-xs text-red-300">
           {error}
-        </p>
-      ) : null}
-    </div>
+        </span>
+      )}
+    </label>
   );
 }
-
