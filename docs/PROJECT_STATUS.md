@@ -14,7 +14,7 @@
 
 ## Current Milestone
 
-- Milestone: Project Documentation Foundation
+- Milestone: Quotation Database Foundation
 - Status: `IN_PROGRESS`
 - Objective: Establish GitHub-based project memory and prevent duplicate or incorrect planning.
 - Completion requires:
@@ -94,20 +94,14 @@
 ## Known Gaps
 
 - No automated test suite currently exists.
-- Quotations has only a placeholder directory.
 - AI, conversations, services and settings have placeholder directories only.
 - Documentation ledger must be updated with every future milestone.
 
-## Next Candidate Milestone
+## Next Approved Step
 
-`Quotation Foundation`
+`Quotation Domain and Application Layer`
 
-This is a candidate only. It becomes the approved next milestone after:
-
-1. Documentation foundation is committed and pushed.
-2. Current project status is reviewed.
-3. CEO approves proceeding.
-
+The database foundation is implemented and validated. Final milestone closure requires CEO confirmation by saying `تم`.
 ## Completion Rule
 
 A milestone may be marked `COMPLETED` only when:
