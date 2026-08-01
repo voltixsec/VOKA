@@ -1,1 +1,2 @@
-﻿export * from "./QuotationCustomerResolver";
+﻿export * from "./QuotationApplicationService";
+export * from "./QuotationCustomerResolver";
