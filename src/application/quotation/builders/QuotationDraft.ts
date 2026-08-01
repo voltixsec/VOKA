@@ -1,4 +1,4 @@
-﻿export interface QuotationBuilderInput {
+﻿export interface QuotationDraftInput {
 
   customerId: string;
 
@@ -12,10 +12,10 @@
 
 }
 
-export class QuotationBuilder {
+export class QuotationDraft {
 
   build(
-    input: QuotationBuilderInput,
+    input: QuotationDraftInput,
   ) {
 
     return {

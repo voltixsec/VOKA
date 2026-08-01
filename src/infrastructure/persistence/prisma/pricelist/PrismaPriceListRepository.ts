@@ -1,4 +1,4 @@
-﻿import type { PrismaClient } from "../../../../../lib/generated/prisma/client";
+﻿import { prisma } from "../../../../../lib/prisma";
 
 import type {
   IPriceListRepository,
@@ -8,11 +8,15 @@ import type {
   PriceList,
 } from "../../../../domain/pricelist";
 
+import {
+  PriceListMapper,
+} from "../mappers";
+
 export class PrismaPriceListRepository
 implements IPriceListRepository {
 
   constructor(
-    private readonly prisma: PrismaClient,
+    private readonly db = prisma,
   ) {}
 
   async findDefault(
@@ -21,15 +25,29 @@ implements IPriceListRepository {
     customerId?: string,
   ): Promise<PriceList | null> {
 
-    void this.prisma;
-
-    void companyId;
-
-    void currencyCode;
-
     void customerId;
 
-    return null;
+    const model =
+      await this.db.priceList.findFirst({
+
+        where: {
+          companyId,
+          currencyCode,
+          isDefault: true,
+          isActive: true,
+        },
+
+        include: {
+          items: true,
+        },
+
+      });
+
+    if (!model) {
+      return null;
+    }
+
+    return PriceListMapper.toDomain(model);
 
   }
 
