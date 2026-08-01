@@ -9,7 +9,7 @@ export interface ResolveQuotationCustomerRequest {
 
     name: string;
 
-    email?: string;
+    email?: string | null;
 
   };
 
@@ -35,7 +35,7 @@ export class QuotationCustomerResolver {
 
       request.customer.name,
 
-      request.customer.email,
+      (request.customer.email ?? undefined),
 
     );
 
