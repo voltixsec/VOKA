@@ -1,8 +1,8 @@
-﻿import { PrismaCompanyMemberRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';
+import { PrismaCompanyMemberRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';
 import { PrismaCompanyRepository } from '../../../../features/company/infrastructure/prisma/PrismaCompanyRepository';
-import { LoginUser } from '../../../../features/user/application/commands/LoginUser';
-import { PrismaUserRepository } from '../../../../features/user/infrastructure/prisma/PrismaUserRepository';
-import { BCryptPasswordHasher } from '../../../../features/user/infrastructure/security/BCryptPasswordHasher';
+import { LoginUseCase } from '@/src/application/auth/use-cases/LoginUseCase';
+import { PrismaUserRepository } from '@/src/infrastructure/persistence/prisma/user/PrismaUserRepository';
+import { BCryptPasswordHasher } from '@/src/infrastructure/auth/security/BCryptPasswordHasher';
 import {
   ApiError,
   apiSuccess,
@@ -24,8 +24,8 @@ type LoginRequestBody = {
   password: string;
 };
 
-function createLoginUser(): LoginUser {
-  return new LoginUser(
+function createLoginUseCase(): LoginUseCase {
+  return new LoginUseCase(
     new PrismaUserRepository(prisma),
     new PrismaCompanyRepository(prisma),
     new PrismaCompanyMemberRepository(prisma),
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   try {
     const input = await parseLoginRequest(request);
 
-    const result = await createLoginUser().execute(input);
+    const result = await createLoginUseCase().execute(input);
 
     if (!result.isSuccess) {
       const error = result.getError();

@@ -1,8 +1,8 @@
-﻿import { cookies } from 'next/headers';
+import { cookies } from 'next/headers';
 
 import { PrismaCompanyMemberRepository } from '../../features/company/infrastructure/prisma/PrismaCompanyMemberRepository';
 import { PrismaCompanyRepository } from '../../features/company/infrastructure/prisma/PrismaCompanyRepository';
-import { PrismaUserRepository } from '../../features/user/infrastructure/prisma/PrismaUserRepository';
+import { PrismaUserRepository } from '@/src/infrastructure/persistence/prisma/user/PrismaUserRepository';
 import type { AuthContext } from '../../types/auth';
 import { ApiError } from '../api';
 import { prisma } from '../prisma';
