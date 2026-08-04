@@ -25,7 +25,7 @@ export interface IQuotationRepository {
 
   save(
     quotation: Quotation,
-  ): Promise<void>;
+  ): Promise<Quotation>;
 
   findById(
     companyId: string,

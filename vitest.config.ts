@@ -1,6 +1,8 @@
-﻿import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
       "@": process.cwd(),
@@ -11,7 +13,8 @@ export default defineConfig({
     environment: "node",
     include: [
       "src/**/__tests__/**/*.test.ts",
-      "app/**/__tests__/**/*.test.ts",
+      "app/**/__tests__/**/*.test.{ts,tsx}",
+      "features/**/__tests__/**/*.test.ts",
     ],
     setupFiles: ["./vitest.setup.ts"],
     coverage: {

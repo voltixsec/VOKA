@@ -133,9 +133,15 @@ export class PrismaCatalogItemRepository
     const records = await this.prisma.catalogItem.findMany({
       where: {
         companyId: filters.companyId,
-        type: filters.type,
-        categoryId: filters.categoryId,
-        isActive: filters.isActive,
+        ...(filters.type
+          ? { type: filters.type }
+          : {}),
+        ...(filters.categoryId
+          ? { categoryId: filters.categoryId }
+          : {}),
+        ...(filters.isActive === undefined
+          ? {}
+          : { isActive: filters.isActive }),
         ...(search
           ? {
               OR: [
@@ -198,9 +204,15 @@ export class PrismaCatalogItemRepository
     return this.prisma.catalogItem.count({
       where: {
         companyId: filters.companyId,
-        type: filters.type,
-        categoryId: filters.categoryId,
-        isActive: filters.isActive,
+        ...(filters.type
+          ? { type: filters.type }
+          : {}),
+        ...(filters.categoryId
+          ? { categoryId: filters.categoryId }
+          : {}),
+        ...(filters.isActive === undefined
+          ? {}
+          : { isActive: filters.isActive }),
         ...(search
           ? {
               OR: [

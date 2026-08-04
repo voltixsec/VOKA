@@ -30,3 +30,16 @@ Architecture decisions are recorded here.
   16 test files at code commit `fdbafbb`.
 - Marked Sprint 09A implementation ready for pull-request review; final close
   remains pending publish, merge, post-merge verification, and owner approval.
+- Merged Sprint 09A through PR #11 at merge commit `287ff8f`, reran TypeScript,
+  Prisma validation, all 45 tests, and the production build, then recorded the
+  project owner's explicit close.
+- Approved Sprint 09B - Quotation Workspace, with list, detail, lifecycle,
+  create/edit-draft, bilingual/RTL, UI tests, and GitHub Actions in scope.
+- Kept PDF, external sharing, downstream sales documents, full Voice/AI, and
+  Import/Export outside Sprint 09B.
+- Selected `src/` quotation and `/api/quotations` as the canonical implementation;
+  Sprint 09B must not add a duplicate quotation domain under `features/`.
+
+- Completed the Sprint 09B implementation locally: bilingual quotation workspace,
+  lifecycle/create/edit flows, persisted-ID redirect, catalog regression fix,
+  UI coverage, and pull-request quality automation; publication and merge remain pending.
