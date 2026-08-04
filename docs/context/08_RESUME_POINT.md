@@ -5,35 +5,39 @@ Verified on: 2026-08-04 (Asia/Kuwait)
 ## Last completed point
 
 - Current branch: `feature/mvp-09-quotation-api`.
-- HEAD/tracking commit: `f4e6c8c674bbf0873c7a783913888cd9501e7452`.
-- Commit subject: `docs(architecture): adopt AI-first workflow and advanced import plan`.
+- HEAD/tracking commit: `a81cb50dbdbda2695f1ee8498c4419c0ab92d9c4`.
+- Commit subject: `fix(quotation): validate tenant-owned references`.
 - ADR-009 is approved and recorded.
 - Advanced Import / Export is approved as direction but remains `PLANNED`, optional,
   web-only, and sequenced after the Core Sales Engine.
-- After explicit approval of this Context Pack, resume MVP-09 Quotation API work.
-  Re-run Git status and verify HEAD before implementation rather than assuming this
-  snapshot remains current.
+- Commit `e49f67b` enforced tenant isolation for quotation lookup, update, and delete.
+- Commit `a81cb50` added tenant-owned reference validation for quotation creation.
+- TypeScript, Prisma schema validation, 33 tests across 12 test files, and the
+  production build passed at the current HEAD.
+- Sprint 09A remains open; no completion claim has been approved.
+- Re-run Git status and verify HEAD before implementation.
 
 ## Current product frontier
 
-The repository has quotation domain/application/infrastructure/API foundations and
-pricing/price-list foundations. The branch name points to quotation API work, but
-the latest commit is documentation-only. Before choosing new implementation work,
-reconcile Sprint 09A status with actual quotation API acceptance criteria and tests.
+The repository has quotation domain/application/infrastructure/API foundations,
+pricing/price-list foundations, tenant-scoped quotation persistence operations,
+and tenant-owned reference validation for creation. The authenticated HTTP surface
+still exposes creation only. List/detail, update, and state-transition endpoints
+remain to be approved and completed before Sprint 09A can close.
 
-## First recommended next task after Context Pack approval
+## First recommended next task
 
-Produce a CTO START REPORT that verifies dependencies and quality, then define the
-smallest approved completion slice for the Quotation API. Recommended evidence:
+Approve the exact Sprint 09A HTTP acceptance criteria, then implement the smallest
+remaining Quotation API slice. Recommended order:
 
-1. Install dependencies from the committed lockfile if absent.
-2. Run Prisma validate, typecheck, tests, and build.
-3. Review `app/api/quotations/route.ts` against quotation use cases and tenant/auth rules.
-4. Add missing quotation tests before claiming the API milestone complete.
-5. Update the official status ledger only after validation.
+1. Decide whether list/detail endpoints are required for Sprint 09A.
+2. Decide which update and state-transition endpoints close the milestone.
+3. Decide whether customer snapshots must be loaded from persistence.
+4. Add route-level tests for auth, tenant isolation, validation, and error mapping.
+5. Run Prisma validate, typecheck, tests, and build.
+6. Update the official status ledger only after validation.
 
-This is a recommendation, not an autonomous decision. CEO/CTO approval governs the
-actual next task.
+CEO/CTO approval governs the exact implementation slice.
 
 ## Open questions for owner/CTO
 

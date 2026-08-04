@@ -1,6 +1,6 @@
 # Implementation Status
 
-Snapshot: 2026-08-04 at commit `f4e6c8c` on `feature/mvp-09-quotation-api`.
+Snapshot: 2026-08-04 at commit `a81cb50` on `feature/mvp-09-quotation-api`.
 
 ## Evidence-based status
 
@@ -11,9 +11,9 @@ Snapshot: 2026-08-04 at commit `f4e6c8c` on `feature/mvp-09-quotation-api`.
 | Authentication/authorization | Implemented foundation | Login/logout/refresh/me, JWT services, company guards |
 | Customers | Implemented foundation | Schema, APIs, repositories, dashboard, domain/application tests |
 | Catalog | Implemented backend foundation | Schema, domain/application/infrastructure, secured items API |
-| Quotations | Implemented engine/API foundation | Schema, domain calculator/entity, use cases, repository, API |
+| Quotations | Implemented secured engine/API foundation | Create API, tenant-scoped repository operations, reference validation, use-case and Prisma tests |
 | Pricing/price lists | Implemented domain/application foundation | Value objects, resolver/service, Prisma repository, tests |
-| Automated tests | Partial | Eight tracked test files, focused on customer and pricing |
+| Automated tests | Partial but currently green | 12 tracked test files and 33 passing tests, including quotation tenant-isolation coverage |
 | Sales order/invoice/payment | Planned | Blueprint only; no implementation evidence |
 | Voice/AI/conversations/WhatsApp | Planned | Vision/blueprints; no implementation evidence |
 | Document/PDF engine | Planned | Strategy document; no implementation evidence |
@@ -23,23 +23,26 @@ Snapshot: 2026-08-04 at commit `f4e6c8c` on `feature/mvp-09-quotation-api`.
 “Foundation” intentionally avoids claiming production completeness. Current
 [Project Status](../PROJECT_STATUS.md) says Sprint 09A/In Progress but is sparse;
 the table above supplements it from Git and the tree without replacing it.
+The Project Status ledger has now been expanded with the verified Sprint 09A
+baseline; current Git evidence remains authoritative for dynamic facts.
 
 ## Quality state
 
-- Historical audit on 2026-07-31 reported valid Prisma schema, clean TypeScript,
-  clean lint, and successful production build at that older commit.
-- Current attempt on 2026-08-04 could not run `npm run typecheck` or tests because
-  local executables `tsc` and `vitest` were unavailable (dependencies not installed
-  or not exposed in this workspace).
-- Therefore current quality is **not reverified**. Install dependencies and rerun
-  typecheck/tests/build before the next code commit.
+- At commit `a81cb50`, TypeScript passed, Prisma schema validation passed, all 33
+  tests passed across 12 test files, and the Next.js production build passed.
+- The production build requires network access for `next/font/google` in the current
+  environment; sandboxed builds can wait indefinitely until that access is allowed.
+- Vitest reports a non-blocking future config-loader warning for ESM syntax in
+  `vitest.config.ts`; current tests remain green.
+- Historical checks never replace rerunning the applicable checks after new code.
 
-## Current Git state at pack creation
+## Current verified Git state
 
 - Branch: `feature/mvp-09-quotation-api`.
-- HEAD: `f4e6c8c674bbf0873c7a783913888cd9501e7452`.
+- HEAD: `a81cb50dbdbda2695f1ee8498c4419c0ab92d9c4`.
 - Tracking: `origin/feature/mvp-09-quotation-api` at the same observed commit.
 - Remote default branch: `main`, observed at `8ccdcc9` locally/remotely.
 - Tag: `v0.1.0-foundation` at `82fdadc`.
+- Working tree was clean at verification.
 
 Recheck these dynamic facts at every CTO START SESSION.
