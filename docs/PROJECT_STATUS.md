@@ -2,7 +2,7 @@
 
 Current Sprint: 09B
 
-Status: Approved - In Progress
+Status: Implementation Complete - Ready for Review
 
 Verified baseline: `287ff8f` on `main` (2026-08-04)
 
@@ -20,7 +20,7 @@ Status: Completed
 
 ## Sprint 09B - Quotation Workspace
 
-Status: Approved - In Progress
+Status: Implementation Complete - Ready for Review
 
 Approved scope:
 
@@ -30,6 +30,14 @@ Approved scope:
 3. Build quotation details with role- and state-aware lifecycle actions.
 4. Build quotation creation and draft editing over the canonical Quotation API.
 5. Add UI/integration coverage and GitHub Actions quality checks.
+
+Delivered:
+
+- Bilingual/RTL list, detail, lifecycle, creation, and draft-edit workflows.
+- Unsaved-change confirmation, line units, discounts, notes, and terms.
+- Persisted-ID redirect after creation and safe optional catalog filters.
+- Focused UI and repository regression coverage.
+- Pull-request quality workflow for typecheck, tests, Prisma validation, and build.
 
 Out of scope:
 

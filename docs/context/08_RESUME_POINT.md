@@ -4,27 +4,25 @@ Verified on: 2026-08-04 (Asia/Kuwait)
 
 ## Last completed point
 
-- PR #11 merged Sprint 09A into `main` at merge commit `287ff8f`.
-- Post-merge TypeScript, Prisma validation, 45 tests, and production build passed.
-- Sprint 09A was explicitly closed by the project owner.
-- Sprint 09B - Quotation Workspace was explicitly approved.
-- Current branch: `feature/mvp-09b-quotation-workspace`.
+- Sprint 09B quotation list, details, lifecycle, create, and draft-edit workflows are implemented.
+- Arabic, English, RTL, discounts, units, terms, and unsaved-change confirmation are covered.
+- Creation now redirects with the persisted quotation ID.
+- Focused UI and repository regression coverage is present.
+- A GitHub Actions quality workflow is present for pull requests.
+- Current branch: feature/mvp-09b-quotation-workspace.
 
 ## Current product frontier
 
-The secured Quotation API is complete for create, list, detail, draft update,
-send, approve, reject, and cancel. The next frontier is the bilingual web
-workspace that exposes these capabilities without duplicating domain logic.
+Sprint 09B implementation is complete and locally verified. It is ready for
+scoped commits, publication, pull-request review, merge, and post-merge checks.
 
 ## First recommended next task
 
-Implement the quotation list slice:
-
-1. Inspect and reuse the existing dashboard and customer UI patterns.
-2. Add quotation navigation and a bilingual/RTL-ready route.
-3. Connect search, status/customer filters, and pagination to the existing API.
-4. Add loading, empty, error, and authorization states.
-5. Add focused tests, then run the full quality suite.
+1. Review the scoped Sprint 09B commits.
+2. Push feature/mvp-09b-quotation-workspace.
+3. Open a pull request to main.
+4. Confirm GitHub Actions passes.
+5. Merge only after owner approval, then run post-merge verification.
 
 ## Open questions for owner/CTO
 

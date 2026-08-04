@@ -12,9 +12,9 @@ Snapshot: 2026-08-04 at merge commit `287ff8f` on `main`.
 | Customers | Implemented foundation | Schema, APIs, repositories, dashboard, tests |
 | Catalog | Implemented backend foundation | Schema, domain/application/infrastructure, secured items API |
 | Quotations | Sprint 09A API completed | Create/list/detail/update and lifecycle APIs, tenant isolation, persisted snapshots, tests |
-| Quotation workspace | Sprint 09B in progress | Approved list/detail/lifecycle/create/edit bilingual web scope |
+| Quotation workspace | Sprint 09B ready for review | Bilingual list/detail/lifecycle/create/edit flows and UI coverage implemented |
 | Pricing/price lists | Implemented domain/application foundation | Value objects, resolver/service, Prisma repository, tests |
-| Automated tests | Partial but green | 16 test files and 45 passing tests after merge |
+| Automated tests | Partial but green | 18 test files and 49 passing tests on the Sprint 09B branch |
 | Sales order/invoice/payment | Planned | Blueprint only |
 | Voice/AI/conversations/WhatsApp | Planned | Vision/blueprints only |
 | Document/PDF engine | Planned | Strategy only |
@@ -39,6 +39,6 @@ implementation evidence remain authoritative for dynamic facts.
 - Current work branch: `feature/mvp-09b-quotation-workspace`.
 - Remote default branch: `main`.
 - Tag: `v0.1.0-foundation` at `82fdadc`.
-- The worktree contains only the approved Sprint 09B documentation refresh.
+- The Sprint 09B implementation is ready for commit and pull-request review.
 
 Recheck these dynamic facts at every CTO START SESSION.

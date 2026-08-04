@@ -29,8 +29,10 @@
 - `.env.example` lists `NEXTAUTH_*`, while implementation/audit evidence expects
   JWT access/refresh variables. Align the template without exposing values.
 - README stack/status contains stale claims relative to `package.json` and Git.
-- Historical audit found dependency advisories; because advisories age quickly,
-  run a current package audit before prioritizing remediation.
+- Next.js was patched from 15.5.1 to 15.5.22 to remove the critical direct advisory.
+- The current package audit still reports three high transitive advisories in
+  Next.js dependencies (PostCSS and Sharp); npm proposes a Next 16 major upgrade,
+  which requires a separately approved compatibility migration.
 
 ## Repository hygiene
 

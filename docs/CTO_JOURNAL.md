@@ -39,3 +39,7 @@ Architecture decisions are recorded here.
   Import/Export outside Sprint 09B.
 - Selected `src/` quotation and `/api/quotations` as the canonical implementation;
   Sprint 09B must not add a duplicate quotation domain under `features/`.
+
+- Completed the Sprint 09B implementation locally: bilingual quotation workspace,
+  lifecycle/create/edit flows, persisted-ID redirect, catalog regression fix,
+  UI coverage, and pull-request quality automation; publication and merge remain pending.
