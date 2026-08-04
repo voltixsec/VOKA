@@ -1,6 +1,6 @@
 # Implementation Status
 
-Snapshot: 2026-08-04 at merge commit `287ff8f` on `main`.
+Snapshot: 2026-08-04 at merge commit `73bb875` on `main`.
 
 ## Evidence-based status
 
@@ -12,7 +12,7 @@ Snapshot: 2026-08-04 at merge commit `287ff8f` on `main`.
 | Customers | Implemented foundation | Schema, APIs, repositories, dashboard, tests |
 | Catalog | Implemented backend foundation | Schema, domain/application/infrastructure, secured items API |
 | Quotations | Sprint 09A API completed | Create/list/detail/update and lifecycle APIs, tenant isolation, persisted snapshots, tests |
-| Quotation workspace | Sprint 09B ready for review | Bilingual list/detail/lifecycle/create/edit flows and UI coverage implemented |
+| Quotation workspace | Sprint 09B completed | Bilingual list/detail/lifecycle/create/edit flows merged through PR #12 |
 | Pricing/price lists | Implemented domain/application foundation | Value objects, resolver/service, Prisma repository, tests |
 | Automated tests | Partial but green | 18 test files and 49 passing tests on the Sprint 09B branch |
 | Sales order/invoice/payment | Planned | Blueprint only |
@@ -35,10 +35,10 @@ implementation evidence remain authoritative for dynamic facts.
 ## Current verified Git state
 
 - Base branch: `main`.
-- Verified base HEAD/tracking commit: `287ff8f`.
-- Current work branch: `feature/mvp-09b-quotation-workspace`.
+- Verified base HEAD/tracking commit: `73bb875`.
+- Current work branch: `docs/sprint-09b-close`.
 - Remote default branch: `main`.
 - Tag: `v0.1.0-foundation` at `82fdadc`.
-- The Sprint 09B implementation is ready for commit and pull-request review.
+- Sprint 09B is merged and post-merge verified; Sprint 10 awaits owner approval.
 
 Recheck these dynamic facts at every CTO START SESSION.

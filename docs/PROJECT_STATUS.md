@@ -1,10 +1,10 @@
 # Project Status
 
-Current Sprint: 09B
+Current Sprint: None - Sprint 10 pending owner approval
 
-Status: Implementation Complete - Ready for Review
+Status: Completed and merged through PR #12 at 73bb875
 
-Verified baseline: `287ff8f` on `main` (2026-08-04)
+Verified baseline: `73bb875` on `main` (2026-08-04)
 
 ## Sprint 09A - Quotation API
 
@@ -20,7 +20,7 @@ Status: Completed
 
 ## Sprint 09B - Quotation Workspace
 
-Status: Implementation Complete - Ready for Review
+Status: Completed and merged through PR #12 at 73bb875
 
 Approved scope:
 

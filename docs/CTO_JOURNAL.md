@@ -43,3 +43,6 @@ Architecture decisions are recorded here.
 - Completed the Sprint 09B implementation locally: bilingual quotation workspace,
   lifecycle/create/edit flows, persisted-ID redirect, catalog regression fix,
   UI coverage, and pull-request quality automation; publication and merge remain pending.
+
+- Merged Sprint 09B through PR #12 at 73bb875; GitHub Actions and post-merge
+  TypeScript, Prisma, 49 tests, and production build all passed.

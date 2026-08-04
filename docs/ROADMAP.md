@@ -6,7 +6,7 @@ Status: Completed and merged through PR #11 at `287ff8f`.
 
 ## Sprint 09B - Quotation Workspace
 
-Status: Implementation Complete - Ready for Review
+Status: Completed and merged through PR #12 at 73bb875.
 
 Delivery order:
 
