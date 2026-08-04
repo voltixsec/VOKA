@@ -6,13 +6,16 @@ import {
 
 import {
   CreateQuotationUseCase,
+  ListQuotationsUseCase,
   type CreateQuotationDto,
 } from '@/src/application/quotation';
 
-import type { Quotation } from '@/src/domain/quotation';
+import type { QuotationStatus } from '@/src/domain/quotation';
 
 import { PrismaQuotationRepository } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository';
 import { PrismaQuotationReferenceValidator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator';
+
+import { serializeQuotation } from './serialize-quotation';
 
 const quotationRepository =
   new PrismaQuotationRepository();
@@ -26,6 +29,9 @@ const createQuotation =
     quotationReferenceValidator,
   );
 
+
+const listQuotations =
+  new ListQuotationsUseCase(quotationRepository);
 type CreateQuotationBody = {
   customerId?: unknown;
   priceListId?: unknown;
@@ -94,77 +100,67 @@ function parseOptionalDate(
 
   return date;
 }
+const quotationStatuses = new Set([
+  "DRAFT",
+  "SENT",
+  "APPROVED",
+  "REJECTED",
+  "EXPIRED",
+  "CANCELLED",
+]);
 
-function serializeQuotation(
-  quotation: Quotation,
-) {
-  const customer = quotation.customer.toJSON();
-
-  return {
-    id: quotation.id,
-    companyId: quotation.companyId,
-    customerId: quotation.customerId,
-    priceListId: quotation.priceListId,
-    quotationNumber:
-      quotation.number.toString(),
-    status: quotation.status,
-    issueDate:
-      quotation.issueDate.toISOString(),
-    expiryDate:
-      quotation.expiryDate?.toISOString() ??
-      null,
-    currencyCode: quotation.currencyCode,
-
-    customer,
-
-    lines: quotation.lines.map((line) => ({
-      id: line.id,
-      catalogItemId: line.catalogItemId,
-      taxRateId: line.taxRateId,
-      position: line.position,
-      type: line.type,
-      itemCode: line.itemCode,
-      itemName: line.itemName,
-      description: line.description,
-      unitName: line.unitName,
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      discount: line.discount,
-      discountAmount: line.discountAmount,
-      taxPercentage: line.taxPercentage,
-      taxAmount: line.taxAmount,
-      subtotal: line.subtotal,
-      totalAmount: line.totalAmount,
-    })),
-
-    discount: quotation.discount,
-
-    totals: {
-      subtotal: quotation.totals.subtotal,
-      discountAmount:
-        quotation.totals.discountAmount,
-      taxAmount: quotation.totals.taxAmount,
-      totalAmount:
-        quotation.totals.totalAmount,
-    },
-
-    notes: quotation.notes,
-    termsAndConditions:
-      quotation.termsAndConditions,
-
-    sentAt:
-      quotation.sentAt?.toISOString() ?? null,
-    approvedAt:
-      quotation.approvedAt?.toISOString() ??
-      null,
-    rejectedAt:
-      quotation.rejectedAt?.toISOString() ??
-      null,
-    cancelledAt:
-      quotation.cancelledAt?.toISOString() ??
-      null,
-  };
+function parsePositiveInteger(
+  value: string | null,
+): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : undefined;
 }
+
+export const GET = withCompanyAuth(
+  ["OWNER", "ADMIN", "SALES", "VIEWER"],
+  async (request, _auth, company) => {
+    const url = new URL(request.url);
+    const rawStatus = url.searchParams.get("status");
+    const status =
+      rawStatus && quotationStatuses.has(rawStatus)
+        ? (rawStatus as QuotationStatus)
+        : undefined;
+
+    const result = await listQuotations.execute({
+      companyId: company.companyId,
+      status,
+      customerId:
+        url.searchParams.get("customerId")?.trim() ||
+        undefined,
+      search:
+        url.searchParams.get("search")?.trim() ||
+        undefined,
+      page: parsePositiveInteger(
+        url.searchParams.get("page"),
+      ),
+      pageSize: parsePositiveInteger(
+        url.searchParams.get("pageSize"),
+      ),
+    });
+
+    return apiSuccess(
+      {
+        quotations:
+          result.quotations.map(serializeQuotation),
+        pagination: result.pagination,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  },
+);
+
 
 export const POST = withCompanyAuth(
   [
