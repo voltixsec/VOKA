@@ -1,0 +1,106 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { CreateQuotationDto } from "../dto/CreateQuotationDto";
+import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
+import type { IQuotationRepository } from "../repositories/IQuotationRepository";
+import { CreateQuotationUseCase } from "../use-cases/CreateQuotationUseCase";
+
+function createRepository(): IQuotationRepository {
+  return {
+    existsByNumber: vi.fn().mockResolvedValue(false),
+    save: vi.fn().mockResolvedValue(undefined),
+    findById: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  };
+}
+
+function createDto(): CreateQuotationDto {
+  return {
+    companyId: "company-1",
+    customerId: "customer-1",
+    priceListId: "price-list-1",
+    quotationNumber: "Q-001",
+    customer: {
+      name: "First United",
+    },
+    lines: [
+      {
+        catalogItemId: "item-1",
+        taxRateId: "tax-1",
+        position: 1,
+        type: "PRODUCT",
+        itemName: "Product",
+        quantity: 1,
+        unitPrice: 10,
+      },
+    ],
+  };
+}
+
+describe("CreateQuotationUseCase reference isolation", () => {
+  it("validates every referenced record before saving", async () => {
+    const repository = createRepository();
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+    };
+    const useCase = new CreateQuotationUseCase(
+      repository,
+      referenceValidator,
+    );
+
+    const result = await useCase.execute(createDto());
+
+    expect(
+      referenceValidator.findInvalidReference,
+    ).toHaveBeenCalledWith({
+      companyId: "company-1",
+      customerId: "customer-1",
+      priceListId: "price-list-1",
+      catalogItemIds: ["item-1"],
+      taxRateIds: ["tax-1"],
+    });
+    expect(repository.save).toHaveBeenCalledOnce();
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    {
+      code: "CUSTOMER_NOT_FOUND",
+      message: "Customer was not found for the active company.",
+    },
+    {
+      code: "PRICE_LIST_NOT_FOUND",
+      message: "Price list was not found for the active company.",
+    },
+    {
+      code: "CATALOG_ITEM_NOT_FOUND",
+      message: "A catalog item was not found for the active company.",
+    },
+    {
+      code: "TAX_RATE_NOT_FOUND",
+      message: "A tax rate was not found for the active company.",
+    },
+  ] as const)(
+    "rejects $code without saving",
+    async (invalidReference) => {
+      const repository = createRepository();
+      const referenceValidator: IQuotationReferenceValidator = {
+        findInvalidReference:
+          vi.fn().mockResolvedValue(invalidReference),
+      };
+      const useCase = new CreateQuotationUseCase(
+        repository,
+        referenceValidator,
+      );
+
+      const result = await useCase.execute(createDto());
+
+      expect(result).toEqual({
+        success: false,
+        error: invalidReference,
+      });
+      expect(repository.save).not.toHaveBeenCalled();
+    },
+  );
+});

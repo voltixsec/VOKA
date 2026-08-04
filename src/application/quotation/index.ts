@@ -1,6 +1,8 @@
 export * from "./dto/CreateQuotationDto";
 
 export * from "./repositories/IQuotationRepository";
+export * from "./repositories/IQuotationReferenceValidator";
+
 
 export * from "./results/ApplicationResult";
 

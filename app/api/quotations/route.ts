@@ -12,13 +12,18 @@ import {
 import type { Quotation } from '@/src/domain/quotation';
 
 import { PrismaQuotationRepository } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository';
+import { PrismaQuotationReferenceValidator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator';
 
 const quotationRepository =
   new PrismaQuotationRepository();
 
+const quotationReferenceValidator =
+  new PrismaQuotationReferenceValidator();
+
 const createQuotation =
   new CreateQuotationUseCase(
     quotationRepository,
+    quotationReferenceValidator,
   );
 
 type CreateQuotationBody = {
