@@ -45,6 +45,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
   }
 
   async findById(
+    companyId: string,
     id: string,
   ): Promise<Quotation | null> {
 
@@ -52,6 +53,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
       where: {
         id,
         isDeleted: false,
+        companyId,
       },
       include: {
         lines: true,
@@ -67,6 +69,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
   }
 
   async update(
+    companyId: string,
     quotation: Quotation,
   ): Promise<void> {
 
@@ -78,6 +81,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
 
       await tx.quotation.update({
         where: {
+          companyId,
           id: quotation.id,
         },
         data: {
@@ -94,6 +98,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
 
       await tx.quotation.update({
         where: {
+          companyId,
           id: quotation.id,
         },
         data: {
@@ -106,12 +111,14 @@ export class PrismaQuotationRepository implements IQuotationRepository {
   }
 
   async delete(
+    companyId: string,
     id: string,
   ): Promise<void> {
 
     await this.db.quotation.update({
       where: {
         id,
+        companyId,
       },
       data: {
         isDeleted: true,

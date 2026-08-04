@@ -4,6 +4,8 @@ import type {
 } from "../../../domain/quotation";
 
 export interface UpdateQuotationDto {
+  companyId: string;
+
   quotationId: string;
 
   lines: QuotationLineInput[];

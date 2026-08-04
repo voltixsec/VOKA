@@ -11,14 +11,17 @@ export interface IQuotationRepository {
   ): Promise<void>;
 
   findById(
+    companyId: string,
     id: string,
   ): Promise<Quotation | null>;
 
   update(
+    companyId: string,
     quotation: Quotation,
   ): Promise<void>;
 
   delete(
+    companyId: string,
     id: string,
   ): Promise<void>;
 }

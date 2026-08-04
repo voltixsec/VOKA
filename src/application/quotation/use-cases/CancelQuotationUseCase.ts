@@ -14,6 +14,7 @@ export class CancelQuotationUseCase {
   ): Promise<ApplicationResult<void>> {
 
     const quotation = await this.repository.findById(
+      dto.companyId,
       dto.quotationId,
     );
 
@@ -31,7 +32,10 @@ export class CancelQuotationUseCase {
 
       quotation.cancel();
 
-      await this.repository.update(quotation);
+      await this.repository.update(
+        dto.companyId,
+        quotation,
+      );
 
       return {
         success: true,

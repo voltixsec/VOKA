@@ -15,7 +15,10 @@ export class UpdateQuotationUseCase {
   ): Promise<ApplicationResult<void>> {
 
     const quotation =
-      await this.repository.findById(dto.quotationId);
+      await this.repository.findById(
+        dto.companyId,
+        dto.quotationId,
+      );
 
     if (!quotation) {
       return {
@@ -38,7 +41,10 @@ export class UpdateQuotationUseCase {
         dto.termsAndConditions ?? null,
       );
 
-      await this.repository.update(quotation);
+      await this.repository.update(
+        dto.companyId,
+        quotation,
+      );
 
       return {
         success: true,
