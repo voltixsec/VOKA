@@ -27,4 +27,16 @@ existed; Git history and the Context Pack remain the evidence for those periods.
 - Quality: TypeScript PASS, Prisma validation PASS, 49/49 tests PASS across 18 files
 - Production build: PASS on Next.js 15.5.22
 - Security audit: critical direct advisory removed; three high transitive advisories remain documented
-- Publication, pull request, merge, and post-merge verification remain pending
+- Publication and merge completed through PR #12; post-merge verification passed
+
+
+## 2026-08-04 - Sprint 09B Post-Merge Close
+
+- Pull request: #12
+- Merge commit: 73bb875
+- GitHub Actions: PASS
+- Post-merge TypeScript: PASS
+- Post-merge Prisma generation and validation: PASS
+- Post-merge tests: 49/49 PASS across 18 files
+- Post-merge production build: PASS
+- Sprint 10 remains proposed and requires owner approval
