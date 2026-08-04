@@ -36,15 +36,20 @@ export class PrismaQuotationRepository implements IQuotationRepository {
 
   async save(
     quotation: Quotation,
-  ): Promise<void> {
+  ): Promise<Quotation> {
 
     const data = PrismaQuotationMapper.toPersistence(
       quotation,
     );
 
-    await this.db.quotation.create({
+    const record = await this.db.quotation.create({
       data,
+      include: {
+        lines: true,
+      },
     });
+
+    return PrismaQuotationMapper.toDomain(record);
 
   }
 

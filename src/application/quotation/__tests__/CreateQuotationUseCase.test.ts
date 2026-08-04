@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { Quotation } from "../../../domain/quotation";
+
 import type { CreateQuotationDto } from "../dto/CreateQuotationDto";
 import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
@@ -8,7 +10,24 @@ import { CreateQuotationUseCase } from "../use-cases/CreateQuotationUseCase";
 function createRepository(): IQuotationRepository {
   return {
     existsByNumber: vi.fn().mockResolvedValue(false),
-    save: vi.fn().mockResolvedValue(undefined),
+    save: vi.fn().mockImplementation(async (quotation: Quotation) =>
+      Quotation.restore({
+        id: "saved-quotation-1",
+        companyId: quotation.companyId,
+        customerId: quotation.customerId,
+        priceListId: quotation.priceListId,
+        number: quotation.number.toString(),
+        status: quotation.status,
+        issueDate: quotation.issueDate,
+        expiryDate: quotation.expiryDate,
+        currencyCode: quotation.currencyCode,
+        customer: quotation.customer.toJSON(),
+        lines: [...quotation.lines],
+        discount: quotation.discount,
+        notes: quotation.notes,
+        termsAndConditions: quotation.termsAndConditions,
+      }),
+    ),
     findById: vi.fn(),
     findAll: vi.fn(),
     update: vi.fn(),
@@ -70,6 +89,7 @@ describe("CreateQuotationUseCase reference isolation", () => {
     ).toHaveBeenCalledWith("company-1", "customer-1");
     expect(result.success).toBe(true);
     if (result.success) {
+      expect(result.data.id).toBe("saved-quotation-1");
       expect(result.data.customer.name).toBe(
         "Persisted Customer",
       );

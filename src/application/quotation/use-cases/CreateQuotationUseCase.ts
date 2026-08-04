@@ -95,11 +95,12 @@ export class CreateQuotationUseCase {
         expiryDate: dto.expiryDate,
       });
 
-      await this.repository.save(quotation);
+      const savedQuotation =
+        await this.repository.save(quotation);
 
       return {
         success: true,
-        data: quotation,
+        data: savedQuotation,
       };
     }
     catch (error) {
