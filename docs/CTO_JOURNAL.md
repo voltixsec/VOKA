@@ -46,3 +46,6 @@ Architecture decisions are recorded here.
 
 - Merged Sprint 09B through PR #12 at 73bb875; GitHub Actions and post-merge
   TypeScript, Prisma, 49 tests, and production build all passed.
+
+- Merged the Sprint 09B close documentation through PR #13 at 1af1b1c and
+  set the next decision point to owner approval of the Sprint 10 charter.
