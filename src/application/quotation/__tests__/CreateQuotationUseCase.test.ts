@@ -10,6 +10,7 @@ function createRepository(): IQuotationRepository {
     existsByNumber: vi.fn().mockResolvedValue(false),
     save: vi.fn().mockResolvedValue(undefined),
     findById: vi.fn(),
+    findAll: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   };
@@ -43,6 +44,9 @@ describe("CreateQuotationUseCase reference isolation", () => {
     const repository = createRepository();
     const referenceValidator: IQuotationReferenceValidator = {
       findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn().mockResolvedValue({
+        name: "Persisted Customer",
+      }),
     };
     const useCase = new CreateQuotationUseCase(
       repository,
@@ -61,7 +65,16 @@ describe("CreateQuotationUseCase reference isolation", () => {
       taxRateIds: ["tax-1"],
     });
     expect(repository.save).toHaveBeenCalledOnce();
+    expect(
+      referenceValidator.getCustomerSnapshot,
+    ).toHaveBeenCalledWith("company-1", "customer-1");
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.customer.name).toBe(
+        "Persisted Customer",
+      );
+      expect(result.data.customer.name).not.toBe("First United");
+    }
   });
 
   it.each([
@@ -88,6 +101,7 @@ describe("CreateQuotationUseCase reference isolation", () => {
       const referenceValidator: IQuotationReferenceValidator = {
         findInvalidReference:
           vi.fn().mockResolvedValue(invalidReference),
+        getCustomerSnapshot: vi.fn(),
       };
       const useCase = new CreateQuotationUseCase(
         repository,

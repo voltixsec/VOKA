@@ -13,6 +13,7 @@ function createRepository(): IQuotationRepository {
     save: vi.fn(),
     findById: vi.fn().mockResolvedValue(null),
     update: vi.fn(),
+    findAll: vi.fn(),
     delete: vi.fn(),
   };
 }
@@ -22,7 +23,13 @@ describe("Quotation use case tenant isolation", () => {
     {
       name: "update",
       create: (repository: IQuotationRepository) =>
-        new UpdateQuotationUseCase(repository),
+        new UpdateQuotationUseCase(
+          repository,
+          {
+            findInvalidReference: vi.fn(),
+            getCustomerSnapshot: vi.fn(),
+          },
+        ),
       dto: {
         companyId: "company-1",
         quotationId: "quotation-1",

@@ -6,6 +6,10 @@ export * from "./repositories/IQuotationReferenceValidator";
 
 export * from "./results/ApplicationResult";
 
+export * from "./use-cases/GetQuotationUseCase";
+
+export * from "./use-cases/ListQuotationsUseCase";
+
 export * from "./use-cases/CreateQuotationUseCase";
 
 export * from "./dto/UpdateQuotationDto";

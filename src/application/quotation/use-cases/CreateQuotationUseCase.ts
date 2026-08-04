@@ -64,6 +64,21 @@ export class CreateQuotationUseCase {
       };
     }
 
+    const customer =
+      await this.referenceValidator.getCustomerSnapshot(
+        dto.companyId,
+        dto.customerId,
+      );
+
+    if (!customer) {
+      return {
+        success: false,
+        error: {
+          code: "CUSTOMER_NOT_FOUND",
+          message: "Customer was not found for the active company.",
+        },
+      };
+    }
     try {
       const quotation = new Quotation({
         companyId: dto.companyId,
@@ -71,7 +86,7 @@ export class CreateQuotationUseCase {
         priceListId: dto.priceListId,
         number: dto.quotationNumber,
         currencyCode: dto.currencyCode,
-        customer: dto.customer,
+        customer,
         lines: dto.lines,
         discount: dto.discount,
         notes: dto.notes,

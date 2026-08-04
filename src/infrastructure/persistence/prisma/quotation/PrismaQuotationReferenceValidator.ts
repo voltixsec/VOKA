@@ -107,4 +107,48 @@ implements IQuotationReferenceValidator {
 
     return null;
   }
+
+  async getCustomerSnapshot(
+    companyId: string,
+    customerId: string,
+  ) {
+    const customer = await this.db.customer.findFirst({
+      where: {
+        id: customerId,
+        companyId,
+        isDeleted: false,
+      },
+      select: {
+        name: true,
+        email: true,
+        phone: true,
+        taxNumber: true,
+        addressLine1: true,
+        addressLine2: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        countryCode: true,
+      },
+    });
+
+    if (!customer) return null;
+
+    const billingAddress = [
+      customer.addressLine1,
+      customer.addressLine2,
+      customer.city,
+      customer.state,
+      customer.postalCode,
+      customer.countryCode,
+    ].filter(Boolean).join(", ") || null;
+
+    return {
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      taxNumber: customer.taxNumber,
+      billingAddress,
+    };
+  }
 }

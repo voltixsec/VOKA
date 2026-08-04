@@ -1,3 +1,5 @@
+import type { CustomerSnapshotProps } from "../../../domain/quotation";
+
 export type QuotationReferenceValidationInput = {
   companyId: string;
   customerId: string;
@@ -19,4 +21,8 @@ export interface IQuotationReferenceValidator {
   findInvalidReference(
     input: QuotationReferenceValidationInput,
   ): Promise<InvalidQuotationReference | null>;
+  getCustomerSnapshot(
+    companyId: string,
+    customerId: string,
+  ): Promise<CustomerSnapshotProps | null>;
 }
