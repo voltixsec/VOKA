@@ -32,6 +32,13 @@ Company
 - SALES
 - VIEWER
 
+## Advanced Import / Export Center
+
+The Advanced Import / Export Center is an optional, web-only capability for
+advanced users. Voice and AI remain the primary interface for normal users.
+
+Implementation details: [Modules — Advanced Import / Export Center](architecture/13_MODULES.md#advanced-import--export-center).
+
 ## المرحلة الحالية
 
 MVP-02 Core Architecture

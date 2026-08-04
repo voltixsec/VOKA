@@ -5,11 +5,13 @@ import {
 
 import type { CreateQuotationDto } from "../dto/CreateQuotationDto";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
+import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
 import type { ApplicationResult } from "../results/ApplicationResult";
 
 export class CreateQuotationUseCase {
   constructor(
     private readonly repository: IQuotationRepository,
+    private readonly referenceValidator: IQuotationReferenceValidator,
   ) {}
 
   async execute(
@@ -30,7 +32,53 @@ export class CreateQuotationUseCase {
         },
       };
     }
+    const catalogItemIds = dto.lines
+      .map((line) => line?.catalogItemId)
+      .filter(
+        (id): id is string =>
+          typeof id === "string" && Boolean(id.trim()),
+      )
+      .map((id) => id.trim());
 
+    const taxRateIds = dto.lines
+      .map((line) => line?.taxRateId)
+      .filter(
+        (id): id is string =>
+          typeof id === "string" && Boolean(id.trim()),
+      )
+      .map((id) => id.trim());
+
+    const invalidReference =
+      await this.referenceValidator.findInvalidReference({
+        companyId: dto.companyId,
+        customerId: dto.customerId,
+        priceListId: dto.priceListId,
+        catalogItemIds,
+        taxRateIds,
+      });
+
+    if (invalidReference) {
+      return {
+        success: false,
+        error: invalidReference,
+      };
+    }
+
+    const customer =
+      await this.referenceValidator.getCustomerSnapshot(
+        dto.companyId,
+        dto.customerId,
+      );
+
+    if (!customer) {
+      return {
+        success: false,
+        error: {
+          code: "CUSTOMER_NOT_FOUND",
+          message: "Customer was not found for the active company.",
+        },
+      };
+    }
     try {
       const quotation = new Quotation({
         companyId: dto.companyId,
@@ -38,7 +86,7 @@ export class CreateQuotationUseCase {
         priceListId: dto.priceListId,
         number: dto.quotationNumber,
         currencyCode: dto.currencyCode,
-        customer: dto.customer,
+        customer,
         lines: dto.lines,
         discount: dto.discount,
         notes: dto.notes,

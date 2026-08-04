@@ -1,8 +1,8 @@
-﻿import type { NextResponse } from 'next/server';
+import type { NextResponse } from 'next/server';
 
 import type { AuthContext } from '../../types/auth';
 import { getCurrentUser } from '../auth';
-import { handleApiError } from './error-handler';
+import { handleApiError } from './ApiResponse';
 
 export type AuthenticatedRouteHandler = (
   request: Request,

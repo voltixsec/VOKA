@@ -4,6 +4,8 @@ import type { ApplicationResult } from "../results/ApplicationResult";
 import { QuotationDomainError } from "../../../domain/quotation";
 
 export interface SendQuotationDto {
+  companyId: string;
+
   quotationId: string;
 }
 
@@ -18,7 +20,10 @@ export class SendQuotationUseCase {
   ): Promise<ApplicationResult<void>> {
 
     const quotation =
-      await this.repository.findById(dto.quotationId);
+      await this.repository.findById(
+        dto.companyId,
+        dto.quotationId,
+      );
 
     if (!quotation) {
       return {
@@ -34,7 +39,10 @@ export class SendQuotationUseCase {
 
       quotation.send();
 
-      await this.repository.update(quotation);
+      await this.repository.update(
+        dto.companyId,
+        quotation,
+      );
 
       return {
         success: true,

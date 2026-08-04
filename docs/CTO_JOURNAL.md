@@ -1,180 +1,32 @@
-# VOKA CTO Journal
+# CTO Journal
 
-> Engineering decisions, constraints and technical debt.
 
-## 2026-07-31 — Project Ledger Adopted
+Architecture decisions are recorded here.
 
-### Context
+## 2026-08-04
 
-A planning error incorrectly identified Customers as the next module even though its backend and dashboard UI had already been completed.
-
-### Decision
-
-GitHub becomes the authoritative source of truth for VOKA project status.
-
-Three permanent project documents are introduced:
-
-- `docs/PROJECT_STATUS.md`
-- `docs/ROADMAP.md`
-- `docs/CTO_JOURNAL.md`
-
-### Operating Rule
-
-Before selecting any next task, the CTO must inspect:
-
-1. `docs/PROJECT_STATUS.md`
-2. Git branch and working-tree status
-3. Recent Git commits
-4. Existing project files
-5. Prisma models and migrations
-6. Existing API routes
-
-No next milestone may be selected from conversational memory alone.
-
-### Completion Rule
-
-The system must never close a milestone due to silence or elapsed time.
-
-Only the CEO closes the milestone by explicitly saying:
-
-`تم`
-
-Technical completion also requires successful validation, commit, push and documentation update.
-
----
-
-## 2026-07-31 — Catalog Company Security
-
-### Commit
-
-`34697ab` — `feat(catalog): secure catalog routes with company auth`
-
-### Decision
-
-Catalog routes must never trust a client-supplied `companyId`.
-
-The active company is resolved from authenticated company context.
-
-### Authorization
-
-- Catalog GET:
-  - `OWNER`
-  - `ADMIN`
-  - `SALES`
-  - `VIEWER`
-
-- Catalog POST:
-  - `OWNER`
-  - `ADMIN`
-  - `SALES`
-
-### API Standardization
-
-Catalog routes use:
-
-- `withCompanyAuth`
-- `ApiError`
-- `apiSuccess`
-
-### Validation
-
-- Prisma: passed
-- TypeScript: passed
-- Push: completed
-
----
-
-## 2026-07-31 — Customers Status Confirmed
-
-### Evidence
-
-The repository contains:
-
-- Customer Prisma model and migration
-- Customer domain entity
-- Customer repository contract
-- Prisma customer repository
-- Create-customer command
-- List-customers query
-- Customers API
-- Customers dashboard page
-- `useCustomers` hook
-- Customer table
-- Loading state
-- Empty state
-
-### Decision
-
-Customers must be treated as an existing completed foundation, not as a new module.
-
-Future customer work should be described specifically, such as:
-
-- customer editing
-- customer details
-- activity history
-- importing customers
-
-The generic label `Customers Module` must not be used as though nothing exists.
-
----
-
-## Technical Debt Register
-
-### TD-001 — Automated Tests Missing
-
-- Status: OPEN
-- Severity: MEDIUM
-- Evidence: No tests directory found.
-- Risk: Regressions currently depend on manual validation and TypeScript checks.
-- Proposed action: Add unit and integration test foundation before high-risk workflow modules mature.
-
-### TD-002 — Placeholder Feature Directories
-
-- Status: OPEN
-- Severity: LOW
-- Affected:
-  - AI
-  - conversations
-  - quotations
-  - services
-  - settings
-- Note: Placeholder directories do not count as implemented modules.
-
-### TD-003 — Documentation Was Not Part of Milestones
-
-- Status: RESOLVED BY POLICY
-- Resolution: Every future milestone must update the project ledger before completion.
-
----
-
-## Next Decision Gate
-
-After this documentation foundation is committed and pushed:
-
-1. Re-read the project ledger.
-2. Confirm the exact scope of Quotations.
-3. Split Quotation Foundation into controlled implementation parts.
-4. Begin only after CEO approval.
-## 2026-07-31 — Quotation Database Foundation Implemented
-
-- Branch: `feature/mvp-08-quotation-foundation`
-- Implementation commit: `a05eb35`
-- Added enums:
-  - `QuotationStatus`
-  - `DiscountType`
-- Added models:
-  - `Quotation`
-  - `QuotationLine`
-- Added migration:
-  - `20260731030057_quotation_foundation`
-- Design decisions:
-  - Quotation lines preserve commercial snapshots independently from later catalog changes.
-  - Products and services share one line model and can be separated at presentation level.
-  - Document-level and line-level discounts and taxes are supported.
-  - Conversion to invoice or contract remains outside this milestone.
-- Validation:
-  - Prisma schema validation passed.
-  - Database migration applied successfully.
-  - TypeScript validation passed.
-- Closure state:
-  - Awaiting explicit CEO confirmation: `تم`.
+- Adopted AI First as an approved architecture decision.
+- Approved the Advanced Import / Export Center as an optional capability for advanced users.
+- Confirmed that the Import / Export Center is planned and has not been implemented.
+- Adopted Codex Desktop as the official development execution agent after a successful GitHub workflow test.
+- Added the permanent Context Pack in commit `9b197cc` as the repository-backed
+  operational memory shared between workstations.
+- Verified the laptop workspace at `C:\Dev\VOKA` against GitHub using
+  fetch/switch/pull with fast-forward-only synchronization.
+- Enforced tenant isolation for quotation lookup, update, and delete in commit
+  `e49f67b`.
+- Added tenant-owned reference validation for quotation creation in commit
+  `a81cb50`.
+- Kept Sprint 09A open pending approved API acceptance criteria and completion of
+  the remaining HTTP surface and route-level tests.
+- Confirmed GitHub and repository documentation as durable cross-workstation
+  memory; Codex conversation state is not a synchronization mechanism.
+- Reverified TypeScript, Prisma schema, production build, and 33 tests across 12
+  test files at `a81cb50`.
+- Approved and implemented the remaining Sprint 09A quotation API slice.
+- Added tenant-scoped list/detail, draft update, and lifecycle HTTP workflows.
+- Required persisted tenant-owned customer data as the customer snapshot source.
+- Verified TypeScript, Prisma validation, production build, and 45 tests across
+  16 test files at code commit `fdbafbb`.
+- Marked Sprint 09A implementation ready for pull-request review; final close
+  remains pending publish, merge, post-merge verification, and owner approval.
