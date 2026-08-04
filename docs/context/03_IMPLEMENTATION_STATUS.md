@@ -1,6 +1,6 @@
 # Implementation Status
 
-Snapshot: 2026-08-04 at commit `a81cb50` on `feature/mvp-09-quotation-api`.
+Snapshot: 2026-08-04 at commit `fdbafbb` on `feature/mvp-09-quotation-api`.
 
 ## Evidence-based status
 
@@ -11,9 +11,9 @@ Snapshot: 2026-08-04 at commit `a81cb50` on `feature/mvp-09-quotation-api`.
 | Authentication/authorization | Implemented foundation | Login/logout/refresh/me, JWT services, company guards |
 | Customers | Implemented foundation | Schema, APIs, repositories, dashboard, domain/application tests |
 | Catalog | Implemented backend foundation | Schema, domain/application/infrastructure, secured items API |
-| Quotations | Implemented secured engine/API foundation | Create API, tenant-scoped repository operations, reference validation, use-case and Prisma tests |
+| Quotations | Implemented secured Sprint 09A API slice | Create/list/detail/update and lifecycle APIs, tenant isolation, persisted customer snapshots, role authorization, tests |
 | Pricing/price lists | Implemented domain/application foundation | Value objects, resolver/service, Prisma repository, tests |
-| Automated tests | Partial but currently green | 12 tracked test files and 33 passing tests, including quotation tenant-isolation coverage |
+| Automated tests | Partial but currently green | 16 test files and 45 passing tests, including quotation isolation, listing, lifecycle, and route coverage |
 | Sales order/invoice/payment | Planned | Blueprint only; no implementation evidence |
 | Voice/AI/conversations/WhatsApp | Planned | Vision/blueprints; no implementation evidence |
 | Document/PDF engine | Planned | Strategy document; no implementation evidence |
@@ -28,8 +28,8 @@ baseline; current Git evidence remains authoritative for dynamic facts.
 
 ## Quality state
 
-- At commit `a81cb50`, TypeScript passed, Prisma schema validation passed, all 33
-  tests passed across 12 test files, and the Next.js production build passed.
+- At commit `fdbafbb`, TypeScript passed, Prisma schema validation passed, all 45
+  tests passed across 16 test files, and the Next.js production build passed.
 - The production build requires network access for `next/font/google` in the current
   environment; sandboxed builds can wait indefinitely until that access is allowed.
 - Vitest reports a non-blocking future config-loader warning for ESM syntax in

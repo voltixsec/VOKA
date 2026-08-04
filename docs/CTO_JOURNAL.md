@@ -23,3 +23,10 @@ Architecture decisions are recorded here.
   memory; Codex conversation state is not a synchronization mechanism.
 - Reverified TypeScript, Prisma schema, production build, and 33 tests across 12
   test files at `a81cb50`.
+- Approved and implemented the remaining Sprint 09A quotation API slice.
+- Added tenant-scoped list/detail, draft update, and lifecycle HTTP workflows.
+- Required persisted tenant-owned customer data as the customer snapshot source.
+- Verified TypeScript, Prisma validation, production build, and 45 tests across
+  16 test files at code commit `fdbafbb`.
+- Marked Sprint 09A implementation ready for pull-request review; final close
+  remains pending publish, merge, post-merge verification, and owner approval.

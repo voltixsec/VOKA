@@ -3,9 +3,9 @@
 
 Current Sprint: 09A
 
-Status: In Progress
+Status: Ready for PR Review
 
-Verified baseline: `a81cb50` on `feature/mvp-09-quotation-api` (2026-08-04)
+Verified baseline: `fdbafbb` on `feature/mvp-09-quotation-api` (2026-08-04)
 
 ## Sprint 09A - Quotation API
 
@@ -18,19 +18,17 @@ Completed and verified:
   references before quotation creation.
 - Company tax rates and global system tax rates are supported without allowing
   cross-company references.
+- Tenant-scoped list/detail APIs with filtering, search, and pagination.
+- Draft update plus send, approve, reject, and cancel lifecycle APIs.
+- Customer snapshots are loaded from persisted tenant-owned customer data.
 - Current quality baseline: TypeScript PASS, Prisma validation PASS, production
-  build PASS, and 33/33 tests PASS across 12 test files.
+  build PASS, and 45/45 tests PASS across 16 test files.
 
 Remaining before Sprint 09A can be closed:
 
-- Approve the exact HTTP API surface and acceptance criteria.
-- Complete list/detail and required update/state-transition endpoints.
-- Add route-level integration coverage for authentication, authorization,
-  validation, tenant isolation, and error mapping.
-- Decide whether the customer snapshot must be loaded from persistence rather
-  than accepted from the request after validating `customerId`.
-- Refresh the status ledger again after the approved completion slice passes all
-  required checks.
+- Publish the approved commits and complete pull-request review.
+- Merge the feature branch into `main` after explicit owner approval.
+- Reverify `main` after merge and record the final Sprint 09A close point.
 
 Architecture:
 - Clean Architecture
