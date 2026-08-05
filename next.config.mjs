@@ -1,5 +1,6 @@
 const nextConfig = {
-  reactStrictMode: true
+  reactStrictMode: true,
+  serverExternalPackages: ["pdfkit", "qrcode"]
 };
 
 export default nextConfig;

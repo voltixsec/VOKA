@@ -1,8 +1,8 @@
 # Project Status
 
-Current Sprint: None - Sprint 10 pending owner approval
+Current Sprint: 10A - Quotation Documents
 
-Status: Completed and merged through PR #12 at 73bb875
+Status: Approved; architecture and implementation in progress
 
 Verified baseline: `73bb875` on `main` (2026-08-04)
 
@@ -61,3 +61,13 @@ Architecture:
 
 The Advanced Import / Export Center remains `PLANNED` and is sequenced after the
 Core Sales Engine.
+
+## Sprint 10A - Quotation Documents
+
+Status: Approved by the project owner on 2026-08-05.
+
+The approved scope is defined in
+[Document Engine Blueprint](blueprints/03_DOCUMENT_ENGINE.md): bilingual/RTL
+quotation PDF, available company branding, safe QR content, authenticated
+download, browser print, and focused automated coverage. Persistent extended
+company branding requires a separate schema/migration decision.

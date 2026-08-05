@@ -29,10 +29,15 @@ Acceptance criteria:
 
 ## Sprint 10 - Quotation Documents and Sharing
 
-Status: Proposed; requires owner approval after Sprint 09B.
+Status: Approved as two delivery stages on 2026-08-05.
 
-Candidate scope: branded bilingual PDF, QR code, download/print, email, and a
-human-approved WhatsApp integration foundation.
+- Sprint 10A: Document Engine architecture, branded bilingual/RTL quotation PDF,
+  safe QR content, authenticated download, browser print, and automated tests.
+- Sprint 10B: Email and human-approved WhatsApp integration foundation with a
+  delivery audit trail.
+
+Next.js 16 compatibility/security migration is a separate workstream and must not
+be mixed into Sprint 10 implementation.
 
 ## Import / Export Center
 
