@@ -47,7 +47,7 @@ be mixed into Sprint 10 implementation.
 
 ## Sprint 10B — Quotation Proposal Composer
 
-Status: **Approved / Pending Sprint 10A Merge**
+Status: **Approved / Pending Documentation Merge**
 
 ### Goal
 
