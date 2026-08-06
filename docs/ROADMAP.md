@@ -44,3 +44,60 @@ be mixed into Sprint 10 implementation.
 - Status: Planned
 - Priority: Medium
 - Sequence: After Core Sales Engine completion
+
+## Sprint 10B — Quotation Proposal Composer
+
+Status: **Approved / Pending Sprint 10A Merge**
+
+### Goal
+
+Evolve the quotation document into a professional bilingual commercial proposal.
+
+### First Delivery Slice
+
+- Add quotation subject in Arabic and English.
+- Add quotation brief in Arabic and English.
+- Add structured `scopeType`.
+- Add project name and customer attention fields where required.
+- Add a dedicated commercial cover page.
+- Move BOQ, totals and terms to following pages.
+- Allow BOQ content to continue across additional pages.
+- Place the approval/signature block on the final page.
+- Place the block on the right for Arabic and the left for English.
+- Preserve tenant isolation and role authorization.
+- Require human review before final PDF generation.
+
+### Planned Scope Types
+
+- Supply only.
+- Supply and installation.
+- Installation only.
+- Service.
+- Maintenance.
+- Consultation.
+- Custom.
+
+### Later Slices
+
+1. Web-based proposal templates.
+2. AI-assisted subject and brief generation.
+3. Voice quotation capture and intent extraction.
+4. AI-assisted scope and commercial terms.
+5. Email and WhatsApp delivery.
+6. Certificate-based cryptographic PDF signatures.
+
+### Out of Scope for the First Slice
+
+- Full voice implementation.
+- Autonomous AI approval.
+- Autonomous document sending.
+- WhatsApp integration.
+- Email delivery.
+- Sales orders.
+- Invoices and payments.
+- Advanced Import / Export Center.
+- Unnecessary Prisma changes.
+
+### Entry Condition
+
+Sprint 10A must be reviewed and merged into `main` before implementation of Sprint 10B begins.

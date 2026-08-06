@@ -60,3 +60,121 @@ Architecture decisions are recorded here.
   security workstream.
 - Confirmed that persistent logo/contact/legal branding is not present in the
   current Company model and requires a separate schema/migration decision.
+
+## 2026-08-06 — Quotation Proposal Composer Approved
+
+### CEO Proposal
+
+The CEO approved evolving the quotation document from a single pricing sheet into a structured commercial proposal.
+
+The reference format separates:
+
+1. A commercial cover page.
+2. One or more BOQ and terms pages.
+
+### Product Decision
+
+Approved Epic:
+
+**Quotation Proposal Composer — Cover, Brief, Voice and Signature**
+
+The quotation document shall support:
+
+- A commercial cover page.
+- Quotation subject.
+- Project name.
+- Customer and attention details.
+- A concise bilingual brief.
+- A structured scope type.
+- Scope of work.
+- Exclusions.
+- Commercial terms.
+- BOQ and totals on following pages.
+- A visible approval/signature block on the final page.
+- Right-aligned signature placement for Arabic documents.
+- Left-aligned signature placement for English documents.
+- Human approval before final document generation or sending.
+
+### Supported Scope Types
+
+Initial planned values:
+
+- `SUPPLY_ONLY`
+- `SUPPLY_AND_INSTALLATION`
+- `INSTALLATION_ONLY`
+- `SERVICE`
+- `MAINTENANCE`
+- `CONSULTATION`
+- `CUSTOM`
+
+Examples:
+
+- Supply of CCTV equipment.
+- Supply and installation of CCTV systems.
+- Installation of customer-supplied equipment.
+- CCTV maintenance services.
+
+### Document Pagination Decision
+
+The document is not technically limited to exactly two pages.
+
+The approved rule is:
+
+- One commercial cover page.
+- One or more detail pages for BOQ, totals, scope and terms.
+- The approval/signature block appears on the final page only.
+
+### AI and Voice Decision
+
+Voice and AI are part of the approved product direction, but not the first implementation slice.
+
+Future flow:
+
+`Voice or Web Input → AI Extraction → Quotation Proposal Draft → Human Review → Document Snapshot → PDF Renderer`
+
+AI may propose the subject, brief, scope and commercial terms, but it shall not finalize or send the quotation without explicit human approval.
+
+### Signature Decision
+
+Phase one will provide a visible electronic approval block containing:
+
+- Approver name.
+- Job title.
+- Approval date and time.
+- Company identity.
+- Optional private company stamp/signature asset.
+- Safe verification reference or QR.
+
+A certificate-based cryptographic PDF signature is a later capability and must not be confused with a visible signature image.
+
+### Architecture Decision
+
+The PDF renderer remains presentation infrastructure only.
+
+It must not:
+
+- Interpret voice.
+- Generate business terms.
+- Make AI decisions.
+- Approve a quotation.
+- Store authorization logic.
+
+Subject, brief, scope and approval data must reach the renderer through an application-owned document snapshot.
+
+### Delivery Decision
+
+Sprint 10A remains unchanged after its approved commit.
+
+The proposed next sprint is:
+
+**Sprint 10B — Quotation Proposal Composer**
+
+First implementation slice:
+
+- Subject.
+- Brief.
+- Scope Type.
+- Commercial Cover Page.
+- Final-page Signature Block.
+
+Voice and AI extraction are deferred to a later slice.
