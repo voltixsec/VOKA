@@ -46,9 +46,13 @@ Commit message:
 
 `feat(documents): add bilingual quotation PDF generation`
 
-The branch was pushed successfully and local/remote equality was previously verified.
+The branch was pushed successfully and local/remote equality was verified.
 
-Its merge into `main` is not yet confirmed by the current session.
+Sprint 10A was merged into `main` through Pull Request #15.
+
+Verified merge commit:
+
+`9d6db831373d13b2ea7a6f269c1cc903f23617fb`
 
 ### Newly Approved Product Direction
 
@@ -80,11 +84,10 @@ Deferred:
 
 ### Required Next Action
 
-1. Review Sprint 10A Pull Request status.
-2. Create a Pull Request if none exists.
-3. Review and merge Sprint 10A into `main`.
-4. Update local `main`.
-5. Create a dedicated Sprint 10B branch.
-6. Convert the approved direction into acceptance criteria before code changes.
+1. Review and merge Pull Request #16 containing the approved Sprint 10B direction.
+2. Update local `main` after the merge.
+3. Create a dedicated Sprint 10B feature branch from the updated `main`.
+4. Convert the approved direction into detailed acceptance criteria.
+5. Begin implementation with Subject, Brief, Scope Type, Commercial Cover Page and Final-page Signature Block.
 
-Do not implement Sprint 10B directly on the Sprint 10A branch.
+Do not implement Sprint 10B on the old Sprint 10A branch or on the documentation branch.

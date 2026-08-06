@@ -106,4 +106,12 @@ Deferred:
 
 Important:
 
-Sprint 10A commit `9254eadc871e7ae8b79e85d7a76277cfc0300a58` exists on branch `feature/sprint-10a-quotation-documents`, but its merge into `main` must be verified before Sprint 10B implementation begins.
+Sprint 10A was merged into `main` through Pull Request #15.
+
+Verified merge commit:
+
+`9d6db831373d13b2ea7a6f269c1cc903f23617fb`
+
+Sprint 10B documentation is being reviewed through Pull Request #16.
+
+Implementation must begin only after this approved direction is merged and a dedicated feature branch is created from the updated `main`.

@@ -100,4 +100,15 @@ Evolve the quotation document into a professional bilingual commercial proposal.
 
 ### Entry Condition
 
-Sprint 10A must be reviewed and merged into `main` before implementation of Sprint 10B begins.
+Sprint 10A was merged into `main` through Pull Request #15.
+
+Verified merge commit:
+
+`9d6db831373d13b2ea7a6f269c1cc903f23617fb`
+
+Before implementation begins:
+
+1. Merge the approved Sprint 10B documentation through Pull Request #16.
+2. Update local `main`.
+3. Create a dedicated Sprint 10B feature branch from the updated `main`.
+4. Confirm the detailed implementation acceptance criteria.
