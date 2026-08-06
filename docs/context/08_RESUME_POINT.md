@@ -19,8 +19,10 @@ human-approved WhatsApp integration foundation.
 
 ## First recommended next task
 
-Review and explicitly approve or revise the Sprint 10 charter. If approved,
-create a dedicated Sprint 10 feature branch before implementation.
+Implement the first Sprint 10A slice from the approved
+[Document Engine Blueprint](../blueprints/03_DOCUMENT_ENGINE.md): define the
+document snapshot and renderer contracts, select a bilingual PDF/font/QR stack,
+and add focused contract tests before exposing the authenticated download route.
 
 ## Open questions for owner/CTO
 

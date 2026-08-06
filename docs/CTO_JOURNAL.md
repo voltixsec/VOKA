@@ -49,3 +49,14 @@ Architecture decisions are recorded here.
 
 - Merged the Sprint 09B close documentation through PR #13 at 1af1b1c and
   set the next decision point to owner approval of the Sprint 10 charter.
+
+## 2026-08-05
+
+- The project owner approved Sprint 10 as two stages: Sprint 10A for quotation
+  documents and Sprint 10B for human-approved external sharing.
+- Approved a Clean Architecture boundary in which application contracts expose
+  document snapshots and infrastructure owns PDF, font, QR, and delivery tools.
+- Kept Next.js 16 migration outside Sprint 10 as a separate compatibility and
+  security workstream.
+- Confirmed that persistent logo/contact/legal branding is not present in the
+  current Company model and requires a separate schema/migration decision.
