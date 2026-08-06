@@ -71,3 +71,47 @@ The approved scope is defined in
 quotation PDF, available company branding, safe QR content, authenticated
 download, browser print, and focused automated coverage. Persistent extended
 company branding requires a separate schema/migration decision.
+
+## Approved Next Product Direction — Quotation Proposal Composer
+
+Status: **Approved / Not Started**
+
+Proposed Sprint:
+
+**Sprint 10B — Quotation Proposal Composer**
+
+Objective:
+
+Transform the bilingual quotation PDF into a structured commercial proposal consisting of a cover page followed by one or more BOQ and terms pages.
+
+Approved first slice:
+
+- Bilingual quotation subject.
+- Bilingual commercial brief.
+- Structured scope type.
+- Project and attention details.
+- Commercial cover page.
+- Multi-page quotation document flow.
+- Final-page electronic approval/signature block.
+- Arabic and English layout positioning.
+- Human approval before final document generation.
+
+Deferred:
+
+- Voice capture.
+- AI intent extraction.
+- AI-generated scope and terms.
+- Certificate-based cryptographic PDF signing.
+- Email and WhatsApp delivery.
+
+Important:
+
+Sprint 10A was merged into `main` through Pull Request #15.
+
+Verified merge commit:
+
+`9d6db831373d13b2ea7a6f269c1cc903f23617fb`
+
+Sprint 10B documentation is being reviewed through Pull Request #16.
+
+Implementation must begin only after this approved direction is merged and a dedicated feature branch is created from the updated `main`.

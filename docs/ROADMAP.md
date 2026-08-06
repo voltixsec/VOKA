@@ -44,3 +44,71 @@ be mixed into Sprint 10 implementation.
 - Status: Planned
 - Priority: Medium
 - Sequence: After Core Sales Engine completion
+
+## Sprint 10B — Quotation Proposal Composer
+
+Status: **Approved / Pending Documentation Merge**
+
+### Goal
+
+Evolve the quotation document into a professional bilingual commercial proposal.
+
+### First Delivery Slice
+
+- Add quotation subject in Arabic and English.
+- Add quotation brief in Arabic and English.
+- Add structured `scopeType`.
+- Add project name and customer attention fields where required.
+- Add a dedicated commercial cover page.
+- Move BOQ, totals and terms to following pages.
+- Allow BOQ content to continue across additional pages.
+- Place the approval/signature block on the final page.
+- Place the block on the right for Arabic and the left for English.
+- Preserve tenant isolation and role authorization.
+- Require human review before final PDF generation.
+
+### Planned Scope Types
+
+- Supply only.
+- Supply and installation.
+- Installation only.
+- Service.
+- Maintenance.
+- Consultation.
+- Custom.
+
+### Later Slices
+
+1. Web-based proposal templates.
+2. AI-assisted subject and brief generation.
+3. Voice quotation capture and intent extraction.
+4. AI-assisted scope and commercial terms.
+5. Email and WhatsApp delivery.
+6. Certificate-based cryptographic PDF signatures.
+
+### Out of Scope for the First Slice
+
+- Full voice implementation.
+- Autonomous AI approval.
+- Autonomous document sending.
+- WhatsApp integration.
+- Email delivery.
+- Sales orders.
+- Invoices and payments.
+- Advanced Import / Export Center.
+- Unnecessary Prisma changes.
+
+### Entry Condition
+
+Sprint 10A was merged into `main` through Pull Request #15.
+
+Verified merge commit:
+
+`9d6db831373d13b2ea7a6f269c1cc903f23617fb`
+
+Before implementation begins:
+
+1. Merge the approved Sprint 10B documentation through Pull Request #16.
+2. Update local `main`.
+3. Create a dedicated Sprint 10B feature branch from the updated `main`.
+4. Confirm the detailed implementation acceptance criteria.
