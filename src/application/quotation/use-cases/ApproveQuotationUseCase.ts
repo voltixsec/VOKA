@@ -1,34 +1,53 @@
-import { QuotationDomainError } from "../../../domain/quotation";
+import {
+  QuotationDomainError,
+} from "../../../domain/quotation";
 
-import type { ApproveQuotationDto } from "../dto/ApproveQuotationDto";
-import type { IQuotationRepository } from "../repositories/IQuotationRepository";
-import type { ApplicationResult } from "../results/ApplicationResult";
+import type {
+  ApproveQuotationDto,
+} from "../dto/ApproveQuotationDto";
+import type {
+  IQuotationRepository,
+} from "../repositories/IQuotationRepository";
+import type {
+  ApplicationResult,
+} from "../results/ApplicationResult";
 
 export class ApproveQuotationUseCase {
   constructor(
-    private readonly repository: IQuotationRepository,
+    private readonly repository:
+      IQuotationRepository,
   ) {}
 
   async execute(
     dto: ApproveQuotationDto,
   ): Promise<ApplicationResult<void>> {
-    const quotation = await this.repository.findById(
-      dto.companyId,
-      dto.quotationId,
-    );
+    const quotation =
+      await this.repository.findById(
+        dto.companyId,
+        dto.quotationId,
+      );
 
     if (!quotation) {
       return {
         success: false,
         error: {
           code: "QUOTATION_NOT_FOUND",
-          message: "Quotation not found.",
+          message:
+            "Quotation not found.",
         },
       };
     }
 
     try {
-      quotation.approve();
+      quotation.approve({
+        name:
+          dto.approvedByName?.trim() ||
+          "Authorized Approver",
+
+        role:
+          dto.approvedByRole?.trim() ||
+          "APPROVER",
+      });
 
       await this.repository.update(
         dto.companyId,
@@ -40,7 +59,10 @@ export class ApproveQuotationUseCase {
         data: undefined,
       };
     } catch (error) {
-      if (error instanceof QuotationDomainError) {
+      if (
+        error instanceof
+        QuotationDomainError
+      ) {
         return {
           success: false,
           error: {

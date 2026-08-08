@@ -10,10 +10,24 @@ import {
   type CreateQuotationDto,
 } from '@/src/application/quotation';
 
-import type { QuotationStatus } from '@/src/domain/quotation';
+import {
+  isQuotationScopeType,
+  type QuotationStatus,
+} from '@/src/domain/quotation';
 
 import { PrismaQuotationRepository } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository';
 import { PrismaQuotationReferenceValidator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator';
+
+import {
+  BilingualTranslationService,
+} from '@/src/application/translation';
+
+import {
+  createTranslationPort,
+} from '@/src/infrastructure/translation/createTranslationPort';
+import {
+  localizeQuotationDraft,
+} from "@/src/infrastructure/translation/quotation/localizeQuotationDraft";
 
 import { serializeQuotation } from './serialize-quotation';
 
@@ -42,6 +56,15 @@ type CreateQuotationBody = {
   discount?: unknown;
   notes?: unknown;
   termsAndConditions?: unknown;
+  termsAndConditionsAr?: unknown;
+  termsAndConditionsEn?: unknown;
+  subjectAr?: unknown;
+  subjectEn?: unknown;
+  briefAr?: unknown;
+  briefEn?: unknown;
+  projectName?: unknown;
+  attentionName?: unknown;
+  scopeType?: unknown;
   issueDate?: unknown;
   expiryDate?: unknown;
 };
@@ -119,6 +142,33 @@ function parsePositiveInteger(
     : undefined;
 }
 
+function parseScopeType(
+  value: unknown,
+): CreateQuotationDto['scopeType'] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (
+    value === null ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  if (!isQuotationScopeType(value)) {
+    throw ApiError.badRequest(
+      'INVALID_QUOTATION_SCOPE_TYPE',
+      'scopeType is invalid.',
+      {
+        field: 'scopeType',
+      },
+    );
+  }
+
+  return value;
+}
+
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request, _auth, company) => {
@@ -149,7 +199,7 @@ export const GET = withCompanyAuth(
     return apiSuccess(
       {
         quotations:
-          result.quotations.map(serializeQuotation),
+          result.quotations.map((quotation) => serializeQuotation(quotation)),
         pagination: result.pagination,
       },
       {
@@ -169,8 +219,16 @@ export const POST = withCompanyAuth(
     'SALES',
   ],
   async (request, _auth, company) => {
+    const rawBody =
+      (await request.json()) as Record<
+        string,
+        unknown
+      >;
+
     const body =
-      (await request.json()) as CreateQuotationBody;
+      (await localizeQuotationDraft(
+        rawBody,
+      )) as CreateQuotationBody;
 
     if (
       typeof body.customerId !== 'string' ||
@@ -252,7 +310,101 @@ export const POST = withCompanyAuth(
       'expiryDate',
     );
 
+    let localizedSubjectAr =
+      parseOptionalString(body.subjectAr);
+
+    let localizedSubjectEn =
+      parseOptionalString(body.subjectEn);
+
+    let localizedBriefAr =
+      parseOptionalString(body.briefAr);
+
+    let localizedBriefEn =
+      parseOptionalString(body.briefEn);
+
+    let localizedTermsAr =
+      parseOptionalString(
+        body.termsAndConditionsAr,
+      );
+
+    let localizedTermsEn =
+      parseOptionalString(
+        body.termsAndConditionsEn,
+      );
+
+    const hasArabicSource =
+      body.subjectAr !== undefined ||
+      body.briefAr !== undefined ||
+      body.termsAndConditionsAr !== undefined;
+
+    const hasEnglishSource =
+      body.subjectEn !== undefined ||
+      body.briefEn !== undefined ||
+      body.termsAndConditionsEn !== undefined;
+
+    const sourceLocale =
+      hasArabicSource && !hasEnglishSource
+        ? "ar"
+        : hasEnglishSource && !hasArabicSource
+          ? "en"
+          : null;
+    const translationPort =
+      sourceLocale
+        ? createTranslationPort()
+        : null;
+
+    if (sourceLocale && translationPort) {
+      try {
+        const translator =
+          new BilingualTranslationService(
+            translationPort,
+          );
+
+        const sourceFields =
+          sourceLocale === "ar"
+            ? {
+                subject: localizedSubjectAr,
+                brief: localizedBriefAr,
+                terms: localizedTermsAr,
+              }
+            : {
+                subject: localizedSubjectEn,
+                brief: localizedBriefEn,
+                terms: localizedTermsEn,
+              };
+
+        const translation =
+          await translator.translateSourceFields(
+            sourceLocale,
+            sourceFields,
+          );
+
+        if (sourceLocale === "ar") {
+          localizedSubjectEn =
+            translation.translated.subject;
+
+          localizedBriefEn =
+            translation.translated.brief;
+
+          localizedTermsEn =
+            translation.translated.terms;
+        } else {
+          localizedSubjectAr =
+            translation.translated.subject;
+
+          localizedBriefAr =
+            translation.translated.brief;
+
+          localizedTermsAr =
+            translation.translated.terms;
+        }
+      } catch {
+        // Keep the original source text.
+        // Translation failure must not block quotation creation.
+      }
+    }
     const dto: CreateQuotationDto = {
+      ...(body as unknown as CreateQuotationDto),
       companyId: company.companyId,
       customerId: body.customerId.trim(),
       quotationNumber:
@@ -284,6 +436,29 @@ export const POST = withCompanyAuth(
         parseOptionalString(
           body.termsAndConditions,
         ),
+
+      termsAndConditionsAr: localizedTermsAr,
+
+      termsAndConditionsEn: localizedTermsEn,
+      subjectAr: localizedSubjectAr,
+
+      subjectEn: localizedSubjectEn,
+
+      briefAr: localizedBriefAr,
+
+      briefEn: localizedBriefEn,
+
+      projectName: parseOptionalString(
+        body.projectName,
+      ),
+
+      attentionName: parseOptionalString(
+        body.attentionName,
+      ),
+
+      scopeType: parseScopeType(
+        body.scopeType,
+      ),
 
       issueDate: issueDate ?? undefined,
       expiryDate,

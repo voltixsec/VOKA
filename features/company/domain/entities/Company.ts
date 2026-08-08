@@ -10,6 +10,20 @@ export type CompanyLocale = 'EN' | 'AR';
 
 export type CompanyProps = {
   name: string;
+
+  nameAr?: string | null;
+  nameEn?: string | null;
+
+  addressAr?: string | null;
+  addressEn?: string | null;
+
+  poBox?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  whatsapp?: string | null;
+
+  logoUrl?: string | null;
+
   slug: string;
   defaultLocale: CompanyLocale;
   defaultCurrency: string;
@@ -21,6 +35,20 @@ export type CompanyProps = {
 
 export type CreateCompanyProps = {
   name: string;
+
+  nameAr?: string | null;
+  nameEn?: string | null;
+
+  addressAr?: string | null;
+  addressEn?: string | null;
+
+  poBox?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  whatsapp?: string | null;
+
+  logoUrl?: string | null;
+
   slug?: string;
   defaultLocale?: CompanyLocale;
   defaultCurrency?: string;
@@ -34,6 +62,76 @@ export class Company extends Entity<CompanyProps> {
 
   public get name(): string {
     return this.props.name;
+  }
+
+  public get nameAr(): string | null {
+    return this.props.nameAr ?? null;
+  }
+
+  public get nameEn(): string | null {
+    return this.props.nameEn ?? null;
+  }
+
+  public get addressAr(): string | null {
+    return this.props.addressAr ?? null;
+  }
+
+  public get addressEn(): string | null {
+    return this.props.addressEn ?? null;
+  }
+
+  public get poBox(): string | null {
+    return this.props.poBox ?? null;
+  }
+
+  public get phone(): string | null {
+    return this.props.phone ?? null;
+  }
+
+  public get mobile(): string | null {
+    return this.props.mobile ?? null;
+  }
+
+  public get whatsapp(): string | null {
+    return this.props.whatsapp ?? null;
+  }
+
+  public get logoUrl(): string | null {
+    return this.props.logoUrl ?? null;
+  }
+
+  public displayName(
+    locale: CompanyLocale,
+  ): string {
+    if (locale === 'AR') {
+      return (
+        this.nameAr ||
+        this.nameEn ||
+        this.name
+      );
+    }
+
+    return (
+      this.nameEn ||
+      this.nameAr ||
+      this.name
+    );
+  }
+
+  public displayAddress(
+    locale: CompanyLocale,
+  ): string | null {
+    if (locale === 'AR') {
+      return (
+        this.addressAr ||
+        this.addressEn
+      );
+    }
+
+    return (
+      this.addressEn ||
+      this.addressAr
+    );
   }
 
   public get slug(): string {
@@ -111,6 +209,43 @@ export class Company extends Entity<CompanyProps> {
       new Company(
         {
           name,
+
+          nameAr: Company.normalizeOptional(
+            input.nameAr,
+          ),
+
+          nameEn: Company.normalizeOptional(
+            input.nameEn,
+          ),
+
+          addressAr: Company.normalizeOptional(
+            input.addressAr,
+          ),
+
+          addressEn: Company.normalizeOptional(
+            input.addressEn,
+          ),
+
+          poBox: Company.normalizeOptional(
+            input.poBox,
+          ),
+
+          phone: Company.normalizeOptional(
+            input.phone,
+          ),
+
+          mobile: Company.normalizeOptional(
+            input.mobile,
+          ),
+
+          whatsapp: Company.normalizeOptional(
+            input.whatsapp,
+          ),
+
+          logoUrl: Company.normalizeOptional(
+            input.logoUrl,
+          ),
+
           slug,
           defaultLocale: input.defaultLocale ?? 'EN',
           defaultCurrency: currency,
@@ -153,6 +288,80 @@ export class Company extends Entity<CompanyProps> {
     return Result.success(undefined);
   }
 
+  public updateIdentity(
+    input: {
+      nameAr?: string | null;
+      nameEn?: string | null;
+
+      addressAr?: string | null;
+      addressEn?: string | null;
+
+      poBox?: string | null;
+      phone?: string | null;
+      mobile?: string | null;
+      whatsapp?: string | null;
+
+      logoUrl?: string | null;
+    },
+  ): void {
+    const fields = [
+      'nameAr',
+      'nameEn',
+      'addressAr',
+      'addressEn',
+      'poBox',
+      'phone',
+      'mobile',
+      'whatsapp',
+      'logoUrl',
+    ] as const;
+
+    for (const field of fields) {
+      if (
+        input[field] !==
+        undefined
+      ) {
+        this.props[field] =
+          Company.normalizeOptional(
+            input[field],
+          );
+      }
+    }
+
+    this.touch();
+  }
+
+  public changeDefaultCurrency(
+    currency: string,
+  ): Result<void, DomainError> {
+    const normalizedCurrency =
+      currency
+        .trim()
+        .toUpperCase();
+
+    if (
+      !/^[A-Z]{3}$/.test(
+        normalizedCurrency,
+      )
+    ) {
+      return Result.failure(
+        new DomainError(
+          "Company currency must be a valid three-letter currency code.",
+          "INVALID_COMPANY_CURRENCY",
+        ),
+      );
+    }
+
+    this.props.defaultCurrency =
+      normalizedCurrency;
+
+    this.touch();
+
+    return Result.success(
+      undefined,
+    );
+  }
+
   public activate(): void {
     this.props.isActive = true;
     this.touch();
@@ -165,6 +374,18 @@ export class Company extends Entity<CompanyProps> {
 
   private touch(): void {
     this.props.updatedAt = new Date();
+  }
+
+  private static normalizeOptional(
+    value:
+      | string
+      | null
+      | undefined,
+  ): string | null {
+    return (
+      value?.trim() ||
+      null
+    );
   }
 
   private static normalizeSlug(value: string): string {

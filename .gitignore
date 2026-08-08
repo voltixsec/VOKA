@@ -18,3 +18,7 @@ tsconfig.tsbuildinfo
 .voka-*.txt
 .voka-*.log
 test-auth-*.ps1
+# Local secrets / temporary VOKA backups
+.env.local.backup-*
+*.bak-line-locale
+*.bak-localized-lines-final

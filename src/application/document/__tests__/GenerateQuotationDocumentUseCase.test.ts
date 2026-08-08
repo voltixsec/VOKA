@@ -30,10 +30,57 @@ describe("GenerateQuotationDocumentUseCase", () => {
     const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array([37, 80, 68, 70])) };
     const useCase = new GenerateQuotationDocumentUseCase(repository, renderer);
 
-    const result = await useCase.execute({ companyId: "company-1", companyName: "VOKA Demo", quotationId: "quotation-1", locale: "ar" });
+    const result = await useCase.execute({
+      companyId: "company-1",
+      companyName: "VOKA Demo",
+
+      companyIdentity: {
+        nameAr: "???? ????",
+        nameEn: "VOKA Company",
+
+        addressAr: "??????",
+        addressEn: "Kuwait",
+
+        poBox: "12345",
+        phone: "+965 2222 2222",
+        mobile: "+965 9999 9999",
+        whatsapp: "+965 9999 9999",
+
+        logoUrl:
+          "data:image/png;base64,AAAA",
+      },
+
+      quotationId:
+        "quotation-1",
+
+      locale:
+        "ar",
+    });
 
     expect(repository.findById).toHaveBeenCalledWith("company-1", "quotation-1");
-    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({ locale: "ar", company: { name: "VOKA Demo" }, qrValue: "VOKA:Q/2026 001", quotation: expect.objectContaining({ number: "Q/2026 001", totals: { subtotal: 200, discountAmount: 0, taxAmount: 10, totalAmount: 210 } }) }));
+    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({ locale: "ar", company:
+        expect.objectContaining({
+          name:
+            "???? ????",
+
+          address:
+            "??????",
+
+          poBox:
+            "12345",
+
+          phone:
+            "+965 2222 2222",
+
+          mobile:
+            "+965 9999 9999",
+
+          whatsapp:
+            "+965 9999 9999",
+
+          logoUrl:
+            "data:image/png;base64,AAAA",
+        }), qrValue: "VOKA:Q/2026 001", quotation: expect.objectContaining({ number: "Q/2026 001", totals: { subtotal: 200, discountAmount: 0, taxAmount: 10, totalAmount: 210 } }) }));
     expect(result).toEqual({ success: true, data: { bytes: new Uint8Array([37, 80, 68, 70]), filename: "quotation-Q-2026-001.pdf" } });
   });
 

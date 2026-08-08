@@ -9,8 +9,15 @@ import {
   UpdateQuotationUseCase,
   type UpdateQuotationDto,
 } from "@/src/application/quotation";
+import {
+  isQuotationScopeType,
+} from "@/src/domain/quotation";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
+
+import {
+  localizeQuotationDraft,
+} from "@/src/infrastructure/translation/quotation/localizeQuotationDraft";
 
 import { serializeQuotation } from "../serialize-quotation";
 
@@ -50,6 +57,20 @@ function getQuotationId(request: Request): string {
   return decodeURIComponent(quotationId);
 }
 
+function getRequestedLocale(
+  request: Request,
+): "ar" | "en" | undefined {
+  const locale =
+    new URL(request.url)
+      .searchParams
+      .get("locale");
+
+  return locale === "ar" ||
+    locale === "en"
+    ? locale
+    : undefined;
+}
+
 export const GET = withCompanyAuth(
   [
     "OWNER",
@@ -71,7 +92,10 @@ export const GET = withCompanyAuth(
     }
 
     return apiSuccess(
-      serializeQuotation(result.data),
+      serializeQuotation(
+        result.data,
+        getRequestedLocale(request),
+      ),
       {
         headers: {
           "Cache-Control": "no-store",
@@ -85,14 +109,83 @@ type UpdateQuotationBody = {
   discount?: unknown;
   notes?: unknown;
   termsAndConditions?: unknown;
+  termsAndConditionsAr?: unknown;
+  termsAndConditionsEn?: unknown;
+  subjectAr?: unknown;
+  subjectEn?: unknown;
+  briefAr?: unknown;
+  briefEn?: unknown;
+  projectName?: unknown;
+  attentionName?: unknown;
+  scopeType?: unknown;
 };
+
+function parseOptionalString(
+  value: unknown,
+  fieldName: string,
+): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw ApiError.badRequest(
+      "INVALID_STRING",
+      `${fieldName} must be a string or null.`,
+      {
+        field: fieldName,
+      },
+    );
+  }
+
+  return value.trim() || null;
+}
+
+function parseScopeType(
+  value: unknown,
+): UpdateQuotationDto["scopeType"] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (
+    value === null ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  if (!isQuotationScopeType(value)) {
+    throw ApiError.badRequest(
+      "INVALID_QUOTATION_SCOPE_TYPE",
+      "scopeType is invalid.",
+      {
+        field: "scopeType",
+      },
+    );
+  }
+
+  return value;
+}
 
 export const PATCH = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
   async (request, _auth, company) => {
     const quotationId = getQuotationId(request);
+    const rawBody =
+      (await request.json()) as Record<
+        string,
+        unknown
+      >;
+
     const body =
-      (await request.json()) as UpdateQuotationBody;
+      (await localizeQuotationDraft(
+        rawBody,
+      )) as UpdateQuotationBody;
 
     if (
       !Array.isArray(body.lines) ||
@@ -107,22 +200,19 @@ export const PATCH = withCompanyAuth(
       );
     }
 
-    const result = await updateQuotation.execute({
+    const localizedDto = {
+      ...(body as unknown as Record<
+        string,
+        unknown
+      >),
       companyId: company.companyId,
       quotationId,
-      lines:
-        body.lines as UpdateQuotationDto["lines"],
-      discount:
-        body.discount as UpdateQuotationDto["discount"],
-      notes:
-        typeof body.notes === "string"
-          ? body.notes
-          : null,
-      termsAndConditions:
-        typeof body.termsAndConditions === "string"
-          ? body.termsAndConditions
-          : null,
-    });
+    } as unknown as UpdateQuotationDto;
+
+    const result =
+      await updateQuotation.execute(
+        localizedDto,
+      );
 
     if (!result.success) {
       if (

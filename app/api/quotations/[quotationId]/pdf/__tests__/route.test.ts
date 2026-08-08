@@ -1,6 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ findById: vi.fn(), render: vi.fn(), roleSets: [] as string[][] }));
+const mocks = vi.hoisted(() => ({
+  findById:
+    vi.fn(),
+
+  render:
+    vi.fn(),
+
+  companyFindUnique:
+    vi.fn(),
+
+  roleSets:
+    [] as string[][],
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    company: {
+      findUnique:
+        mocks.companyFindUnique,
+    },
+  },
+}));
 
 vi.mock("@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository", () => ({
   PrismaQuotationRepository: class { findById = mocks.findById; },
@@ -31,7 +52,49 @@ function quotation(): Quotation {
 }
 
 describe("GET /api/quotations/[quotationId]/pdf", () => {
-  beforeEach(() => { mocks.findById.mockReset(); mocks.render.mockReset(); });
+  beforeEach(() => {
+    mocks.findById
+      .mockReset();
+
+    mocks.render
+      .mockReset();
+
+    mocks.companyFindUnique
+      .mockReset();
+
+    mocks.companyFindUnique
+      .mockResolvedValue({
+        name:
+          "VOKA Company",
+
+        nameAr:
+          "???? ????",
+
+        nameEn:
+          "VOKA Company",
+
+        addressAr:
+          "??????",
+
+        addressEn:
+          "Kuwait",
+
+        poBox:
+          "12345",
+
+        phone:
+          "+965 2222 2222",
+
+        mobile:
+          "+965 9999 9999",
+
+        whatsapp:
+          "+965 9999 9999",
+
+        logoUrl:
+          "data:image/png;base64,AAAA",
+      });
+  });
 
   it("downloads an Arabic tenant-scoped PDF for every read role", async () => {
     mocks.findById.mockResolvedValue(quotation());
@@ -39,7 +102,29 @@ describe("GET /api/quotations/[quotationId]/pdf", () => {
     const response = await GET(new Request("http://localhost/api/quotations/quotation-1/pdf?locale=ar"));
     expect(mocks.roleSets).toContainEqual(["OWNER", "ADMIN", "SALES", "VIEWER"]);
     expect(mocks.findById).toHaveBeenCalledWith("company-1", "quotation-1");
-    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ locale: "ar", company: { name: "VOKA Company" }, qrValue: "VOKA:Q-001" }));
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ locale: "ar", company:
+      expect.objectContaining({
+        name:
+          "???? ????",
+
+        address:
+          "??????",
+
+        poBox:
+          "12345",
+
+        phone:
+          "+965 2222 2222",
+
+        mobile:
+          "+965 9999 9999",
+
+        whatsapp:
+          "+965 9999 9999",
+
+        logoUrl:
+          "data:image/png;base64,AAAA",
+      }), qrValue: "VOKA:Q-001" }));
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="quotation-Q-001.pdf"');

@@ -68,7 +68,25 @@ export class UpdateQuotationUseCase {
       quotation.updateText(
         dto.notes ?? null,
         dto.termsAndConditions ?? null,
+        dto.notesAr,
+        dto.notesEn,
+        dto.termsAndConditionsAr,
+        dto.termsAndConditionsEn,
       );
+
+      quotation.updateProposal({
+        subjectAr: dto.subjectAr,
+        subjectEn: dto.subjectEn,
+        briefAr: dto.briefAr,
+        briefEn: dto.briefEn,
+        projectName: dto.projectName,
+        projectNameAr: dto.projectNameAr,
+        projectNameEn: dto.projectNameEn,
+        attentionName: dto.attentionName,
+        attentionNameAr: dto.attentionNameAr,
+        attentionNameEn: dto.attentionNameEn,
+        scopeType: dto.scopeType,
+      });
 
       await this.repository.update(
         dto.companyId,

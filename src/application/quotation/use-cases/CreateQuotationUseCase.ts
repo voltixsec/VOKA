@@ -86,11 +86,34 @@ export class CreateQuotationUseCase {
         priceListId: dto.priceListId,
         number: dto.quotationNumber,
         currencyCode: dto.currencyCode,
-        customer,
+        customer: {
+          ...customer,
+          nameAr:
+            dto.customer.nameAr ??
+            customer.nameAr,
+          nameEn:
+            dto.customer.nameEn ??
+            customer.nameEn,
+        },
         lines: dto.lines,
         discount: dto.discount,
         notes: dto.notes,
+        notesAr: dto.notesAr,
+        notesEn: dto.notesEn,
         termsAndConditions: dto.termsAndConditions,
+        termsAndConditionsAr: dto.termsAndConditionsAr,
+        termsAndConditionsEn: dto.termsAndConditionsEn,
+        subjectAr: dto.subjectAr,
+        subjectEn: dto.subjectEn,
+        briefAr: dto.briefAr,
+        briefEn: dto.briefEn,
+        projectName: dto.projectName,
+        projectNameAr: dto.projectNameAr,
+        projectNameEn: dto.projectNameEn,
+        attentionName: dto.attentionName,
+        attentionNameAr: dto.attentionNameAr,
+        attentionNameEn: dto.attentionNameEn,
+        scopeType: dto.scopeType,
         issueDate: dto.issueDate,
         expiryDate: dto.expiryDate,
       });
