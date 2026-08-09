@@ -117,4 +117,59 @@ describe("Quotation proposal metadata", () => {
       "Only draft quotations can be modified.",
     );
   });
+
+  it("preserves localized line fields when recalculating after discount changes", () => {
+    const quotation = new Quotation({
+      companyId: "company-1",
+      customerId: "customer-1",
+      number: "Q-LOCALIZED-001",
+      customer: {
+        name: "First United",
+      },
+      lines: [
+        {
+          position: 1,
+          type: "PRODUCT",
+          itemName: "اسمنت اسود",
+          itemNameAr: "اسمنت اسود",
+          itemNameEn: "Black Cement",
+          description: "توريد اسمنت اسود",
+          descriptionAr: "توريد اسمنت اسود",
+          descriptionEn: "Supply of Black Cement",
+          unitName: "كيس",
+          unitNameAr: "كيس",
+          unitNameEn: "Bag",
+          quantity: 300,
+          unitPrice: 1.25,
+        },
+      ],
+    });
+
+    expect(quotation.lines[0]).toMatchObject({
+      itemNameAr: "اسمنت اسود",
+      itemNameEn: "Black Cement",
+      descriptionAr: "توريد اسمنت اسود",
+      descriptionEn: "Supply of Black Cement",
+      unitNameAr: "كيس",
+      unitNameEn: "Bag",
+    });
+
+    quotation.setDiscount({
+      type: "PERCENTAGE",
+      value: 10,
+    });
+
+    expect(quotation.lines[0]).toMatchObject({
+      itemNameAr: "اسمنت اسود",
+      itemNameEn: "Black Cement",
+      descriptionAr: "توريد اسمنت اسود",
+      descriptionEn: "Supply of Black Cement",
+      unitNameAr: "كيس",
+      unitNameEn: "Bag",
+    });
+
+    expect(quotation.totals.subtotal).toBe(375);
+    expect(quotation.totals.discountAmount).toBe(37.5);
+    expect(quotation.totals.totalAmount).toBe(337.5);
+  });
 });
