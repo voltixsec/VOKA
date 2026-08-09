@@ -100,8 +100,7 @@ export class OllamaTranslationAdapter
             think:
               false,
 
-            keep_alive:
-              "10m",
+            keep_alive: "15m",
 
             messages: [
               {
@@ -134,6 +133,7 @@ export class OllamaTranslationAdapter
 
                   "Do not add explanations, comments or markdown.",
                 ].join("\n"),
+        signal: AbortSignal.timeout(600_000),
               },
 
               {
@@ -161,8 +161,8 @@ export class OllamaTranslationAdapter
               temperature:
                 0,
 
-              num_predict:
-                1200,
+              num_predict: 450,
+          num_ctx: 2048,
             },
           }),
         },

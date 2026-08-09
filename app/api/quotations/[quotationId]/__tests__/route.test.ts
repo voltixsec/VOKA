@@ -10,7 +10,34 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
+
+  afterTasks: [] as Array<
+    () => void | Promise<void>
+  >,
 }));
+
+vi.mock(
+  "next/server",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("next/server")
+      >();
+
+    return {
+      ...actual,
+
+      after: (
+        task: () =>
+          void | Promise<void>,
+      ) => {
+        mocks.afterTasks.push(
+          task,
+        );
+      },
+    };
+  },
+);
 
 vi.mock(
   "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository",
@@ -98,6 +125,7 @@ function createQuotation(): Quotation {
 
 describe("GET /api/quotations/[quotationId]", () => {
   beforeEach(() => {
+    mocks.afterTasks.length = 0;
     mocks.findById.mockReset();
   });
     mocks.update.mockReset();

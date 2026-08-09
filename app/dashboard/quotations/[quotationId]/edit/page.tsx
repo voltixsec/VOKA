@@ -38,8 +38,14 @@ type Line = {
   type: string;
   itemCode?: string | null;
   itemName: string;
+  itemNameAr?: string | null;
+  itemNameEn?: string | null;
   description?: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
   unitName?: string | null;
+  unitNameAr?: string | null;
+  unitNameEn?: string | null;
   quantity: number;
   unitPrice: number;
   taxPercentage?: number;
@@ -53,13 +59,23 @@ type Quote = {
   currencyCode: string;
   lines: Line[];
   notes?: string | null;
+  notesAr?: string | null;
+  notesEn?: string | null;
+
   termsAndConditions?: string | null;
+  termsAndConditionsAr?: string | null;
+  termsAndConditionsEn?: string | null;
   discount?: {
     type: "FIXED" | "PERCENTAGE";
     value: number;
   } | null;
   projectName?: string | null;
+  projectNameAr?: string | null;
+  projectNameEn?: string | null;
+
   attentionName?: string | null;
+  attentionNameAr?: string | null;
+  attentionNameEn?: string | null;
   subjectAr?: string | null;
   subjectEn?: string | null;
   briefAr?: string | null;
@@ -200,7 +216,9 @@ export default function EditQuotationPage() {
       try {
         const response = await fetch(
           "/api/quotations/" +
-            params.quotationId,
+            params.quotationId +
+            "?locale=" +
+            (isArabic ? "ar" : "en"),
         );
 
         if (!response.ok) {
@@ -329,13 +347,33 @@ export default function EditQuotationPage() {
 
     setLines((current) =>
       current.map(
-        (line, lineIndex) =>
-          lineIndex === index
-            ? {
-                ...line,
-                [key]: value,
-              }
-            : line,
+        (line, lineIndex) => {
+          if (lineIndex !== index) {
+            return line;
+          }
+
+          const localizedKey =
+            key === "itemName"
+              ? isArabic
+                ? "itemNameAr"
+                : "itemNameEn"
+              : key === "unitName"
+                ? isArabic
+                  ? "unitNameAr"
+                  : "unitNameEn"
+                : null;
+
+          return {
+            ...line,
+            [key]: value,
+            ...(localizedKey
+              ? {
+                  [localizedKey]:
+                    value,
+                }
+              : {}),
+          };
+        },
       ),
     );
   }
@@ -384,6 +422,9 @@ export default function EditQuotationPage() {
               "application/json",
           },
           body: JSON.stringify({
+            localizationSourceLocale:
+              isArabic ? "ar" : "en",
+
             lines: lines.map(
               (line, index) => ({
                 ...line,
@@ -392,7 +433,28 @@ export default function EditQuotationPage() {
             ),
 
             projectName,
+
+            projectNameAr:
+              isArabic
+                ? projectName
+                : quote.projectNameAr,
+
+            projectNameEn:
+              isArabic
+                ? quote.projectNameEn
+                : projectName,
+
             attentionName,
+
+            attentionNameAr:
+              isArabic
+                ? attentionName
+                : quote.attentionNameAr,
+
+            attentionNameEn:
+              isArabic
+                ? quote.attentionNameEn
+                : attentionName,
             scopeType:
               scopeType || null,
             subjectAr,
@@ -401,8 +463,29 @@ export default function EditQuotationPage() {
             briefEn,
 
             notes,
+
+            notesAr:
+              isArabic
+                ? notes
+                : quote.notesAr,
+
+            notesEn:
+              isArabic
+                ? quote.notesEn
+                : notes,
+
             termsAndConditions:
               terms,
+
+            termsAndConditionsAr:
+              isArabic
+                ? terms
+                : quote.termsAndConditionsAr,
+
+            termsAndConditionsEn:
+              isArabic
+                ? quote.termsAndConditionsEn
+                : terms,
 
             discount: discountType
               ? {

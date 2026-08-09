@@ -239,6 +239,27 @@ export async function localizeQuotationDraft<
       return;
     }
 
+    /*
+     * Do not ask AI to regenerate a translation that is
+     * already stored.
+     *
+     * The active source locale is authoritative.
+     * Translation is required only when its opposite locale
+     * value is missing.
+     */
+    const existingTarget =
+      asText(
+        target[
+          sourceLocale === "ar"
+            ? enKey
+            : arKey
+        ],
+      );
+
+    if (existingTarget) {
+      return;
+    }
+
     items.push({
       key,
       text: source,
