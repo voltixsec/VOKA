@@ -2,6 +2,7 @@ import type { PrismaClient } from '../../../../lib/generated/prisma/client';
 import { UniqueEntityID } from '../../../../lib/core';
 import {
   Company,
+  type CompanyBrandTheme,
   type CompanyLocale,
 } from '../../domain/entities';
 import type { CompanyRepository } from '../../domain/repositories';
@@ -22,6 +23,7 @@ type CompanyRecord = {
   whatsapp: string | null;
 
   logoUrl: string | null;
+  brandTheme: string;
 
   slug: string;
   defaultLocale: string;
@@ -107,6 +109,9 @@ export class PrismaCompanyRepository
       logoUrl:
         company.logoUrl,
 
+      brandTheme:
+        company.brandTheme,
+
       slug: company.slug,
       defaultLocale: company.defaultLocale,
       defaultCurrency: company.defaultCurrency,
@@ -173,6 +178,10 @@ export class PrismaCompanyRepository
         slug: record.slug,
         defaultLocale:
           record.defaultLocale as CompanyLocale,
+
+        brandTheme:
+          record.brandTheme as CompanyBrandTheme,
+
         defaultCurrency: record.defaultCurrency,
         timezone: record.timezone,
         isActive: record.isActive,

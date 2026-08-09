@@ -66,6 +66,9 @@ function serializeCompany(
     defaultLocale:
       company.defaultLocale,
 
+    brandTheme:
+      company.brandTheme,
+
     defaultCurrency:
       company.defaultCurrency,
 
@@ -241,6 +244,37 @@ export const PATCH =
           ),
       });
 
+      if (
+        body.brandTheme !==
+        undefined
+      ) {
+        const allowedBrandThemes = [
+          "NAVY_GOLD",
+          "ROYAL_BLUE",
+          "EMERALD",
+          "BURGUNDY",
+          "CHARCOAL",
+        ] as const;
+
+        if (
+          typeof body.brandTheme !==
+            "string" ||
+          !allowedBrandThemes.includes(
+            body.brandTheme as
+              (typeof allowedBrandThemes)[number],
+          )
+        ) {
+          throw ApiError.badRequest(
+            "INVALID_COMPANY_BRAND_THEME",
+            "brandTheme is invalid.",
+          );
+        }
+
+        company.changeBrandTheme(
+          body.brandTheme as
+            (typeof allowedBrandThemes)[number],
+        );
+      }
       if (
         body.defaultCurrency !==
         undefined

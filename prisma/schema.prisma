@@ -7,6 +7,14 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CompanyBrandTheme {
+  NAVY_GOLD
+  ROYAL_BLUE
+  EMERALD
+  BURGUNDY
+  CHARCOAL
+}
+
 enum Locale {
   EN
   AR
@@ -51,6 +59,7 @@ model Company {
   logoUrl                 String?
   slug                    String                          @unique
   defaultLocale           Locale                          @default(EN)
+  brandTheme              CompanyBrandTheme               @default(NAVY_GOLD)
   defaultCurrency         String                          @default("KWD")
   timezone                String                          @default("Asia/Kuwait")
   isActive                Boolean                         @default(true)

@@ -15,6 +15,8 @@ export type QuotationDocumentSnapshot = {
     whatsapp?: string | null;
 
     logoUrl?: string | null;
+
+    brandTheme?: string | null;
   };
 
   quotation: {
@@ -33,7 +35,13 @@ export type QuotationDocumentSnapshot = {
     briefEn: string | null;
 
     projectName: string | null;
+    projectNameAr: string | null;
+    projectNameEn: string | null;
+
     attentionName: string | null;
+    attentionNameAr: string | null;
+    attentionNameEn: string | null;
+
     scopeType: string | null;
 
     customer: {
@@ -49,9 +57,18 @@ export type QuotationDocumentSnapshot = {
       type: string;
 
       itemCode: string | null;
+
       itemName: string;
+      itemNameAr: string | null;
+      itemNameEn: string | null;
+
       description: string | null;
+      descriptionAr: string | null;
+      descriptionEn: string | null;
+
       unitName: string | null;
+      unitNameAr: string | null;
+      unitNameEn: string | null;
 
       quantity: number;
       unitPrice: number;
@@ -77,8 +94,16 @@ export type QuotationDocumentSnapshot = {
     };
 
     notes: string | null;
+    notesAr: string | null;
+    notesEn: string | null;
 
     termsAndConditions:
+      string | null;
+
+    termsAndConditionsAr:
+      string | null;
+
+    termsAndConditionsEn:
       string | null;
 
     approvedAt: Date | null;

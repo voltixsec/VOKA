@@ -63,7 +63,19 @@ function snapshot(
       projectName:
         "VOKA Project",
 
+      projectNameAr:
+        "\u0645\u0634\u0631\u0648\u0639 \u0641\u0648\u0643\u0627",
+
+      projectNameEn:
+        "VOKA Project",
+
       attentionName:
+        "Mr. Customer",
+
+      attentionNameAr:
+        "\u0627\u0644\u0633\u064a\u062f \u0627\u0644\u0639\u0645\u064a\u0644",
+
+      attentionNameEn:
         "Mr. Customer",
 
       scopeType:
@@ -99,13 +111,31 @@ function snapshot(
               ? "\u0645\u0646\u062a\u062c \u062a\u062c\u0631\u064a\u0628\u064a"
               : "Demo product",
 
+          itemNameAr:
+            "\u0645\u0646\u062a\u062c \u062a\u062c\u0631\u064a\u0628\u064a",
+
+          itemNameEn:
+            "Demo product",
+
           description:
+            "Product description.",
+
+          descriptionAr:
+            "\u0648\u0635\u0641 \u0627\u0644\u0645\u0646\u062a\u062c.",
+
+          descriptionEn:
             "Product description.",
 
           unitName:
             locale === "ar"
               ? "\u0642\u0637\u0639\u0629"
               : "piece",
+
+          unitNameAr:
+            "\u0642\u0637\u0639\u0629",
+
+          unitNameEn:
+            "piece",
 
           quantity: 2,
           unitPrice: 100,
@@ -133,7 +163,19 @@ function snapshot(
       notes:
         "Proposal notes.",
 
+      notesAr:
+        "\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0627\u0644\u0639\u0631\u0636.",
+
+      notesEn:
+        "Proposal notes.",
+
       termsAndConditions:
+        "Payment and delivery are subject to the stated terms.",
+
+      termsAndConditionsAr:
+        "\u064a\u062e\u0636\u0639 \u0627\u0644\u062f\u0641\u0639 \u0648\u0627\u0644\u062a\u0633\u0644\u064a\u0645 \u0644\u0644\u0634\u0631\u0648\u0637 \u0627\u0644\u0645\u0630\u0643\u0648\u0631\u0629.",
+
+      termsAndConditionsEn:
         "Payment and delivery are subject to the stated terms.",
 
       approvedAt:

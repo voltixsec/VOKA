@@ -139,6 +139,8 @@ export const GET =
               whatsapp: true,
 
               logoUrl: true,
+
+              brandTheme: true,
             },
           });
 
@@ -187,6 +189,9 @@ export const GET =
 
               logoUrl:
                 company.logoUrl,
+
+              brandTheme:
+                company.brandTheme,
             },
 
             quotationId:

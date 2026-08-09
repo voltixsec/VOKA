@@ -1,4 +1,8 @@
-﻿import type {
+import {
+  resolveQuotationBrandTheme,
+} from "@/src/application/document/branding/QuotationBrandTheme";
+
+import type {
   QuotationDocumentSnapshot,
 } from "@/src/application/document";
 
@@ -28,6 +32,14 @@ export const PROPOSAL_COLOR = {
   paleAmber: "#fffbeb",
 } as const;
 
+export function proposalBrand(
+  snapshot: ProposalSnapshot,
+) {
+  return resolveQuotationBrandTheme(
+    snapshot.company.brandTheme,
+  );
+}
+
 export const PROPOSAL_TEXT = {
   ar: {
     quotation:
@@ -46,7 +58,7 @@ export const PROPOSAL_TEXT = {
       "عناية",
 
     scope:
-      "نطاق العمل",
+      "البيان",
 
     issueDate:
       "تاريخ الإصدار",
@@ -121,7 +133,7 @@ export const PROPOSAL_TEXT = {
       "هذه الصفحة متممة لعرض السعر.",
 
     approvalStatement:
-      "يعتمد هذا العرض بقيمته وشروطه ونطاق العمل الموضح فيه، ويصبح ساريًا وفق مدة الصلاحية المحددة.",
+      "يعتمد هذا العرض بقيمته وشروطه والبيان الموضح فيه، ويصبح ساريًا وفق مدة الصلاحية المحددة.",
   },
 
   en: {
@@ -466,48 +478,41 @@ export function drawProposalHeader(
   const locale =
     snapshot.locale;
 
-  const pageWidth =
-    doc.page.width;
-
-  const left = 38;
-
-  const right = 38;
-
-  const width =
-    pageWidth -
-    left -
-    right;
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
 
   const company =
     snapshot.company;
 
+  const pageWidth =
+    doc.page.width;
+
+  const left = 38;
+  const right = 38;
+
+  const usableWidth =
+    pageWidth -
+    left -
+    right;
+
+  const headerHeight =
+    132;
+
   const labels =
     locale === "ar"
       ? {
-          poBox:
-            "????? ??????",
-
-          phone:
-            "????",
-
-          mobile:
-            "??????",
-
-          whatsapp:
-            "??????",
+          poBox: "ص.ب",
+          phone: "هاتف",
+          mobile: "موبايل",
+          whatsapp: "واتساب",
         }
       : {
-          poBox:
-            "P.O. Box",
-
-          phone:
-            "Tel",
-
-          mobile:
-            "Mobile",
-
-          whatsapp:
-            "WhatsApp",
+          poBox: "P.O. Box",
+          phone: "Tel",
+          mobile: "Mobile",
+          whatsapp: "WhatsApp",
         };
 
   const firstContactLine =
@@ -559,10 +564,21 @@ export function drawProposalHeader(
       0,
       0,
       pageWidth,
-      112,
+      headerHeight,
     )
     .fill(
-      PROPOSAL_COLOR.navy,
+      brand.primary,
+    );
+
+  doc
+    .rect(
+      0,
+      headerHeight - 4,
+      pageWidth,
+      4,
+    )
+    .fill(
+      brand.accent,
     );
 
   const logo =
@@ -570,63 +586,72 @@ export function drawProposalHeader(
       company.logoUrl,
     );
 
-  if (logo) {
-    doc
-      .roundedRect(
-        left,
-        15,
-        82,
-        54,
-        6,
-      )
-      .fill(
-        PROPOSAL_COLOR.white,
-      );
+  const logoWidth = 96;
+  const logoHeight = 52;
+  const gap = 24;
 
+  const companyWidth =
+    usableWidth -
+    logoWidth -
+    gap;
+
+  const companyX =
+    locale === "ar"
+      ? pageWidth -
+        right -
+        companyWidth
+      : left;
+
+  const logoX =
+    locale === "ar"
+      ? left
+      : pageWidth -
+        right -
+        logoWidth;
+
+  /*
+   * No background, no white box,
+   * no border behind the logo.
+   */
+  if (logo) {
     try {
       doc.image(
         logo,
-        left + 7,
-        21,
+        logoX,
+        16,
         {
           fit: [
-            68,
-            42,
+            logoWidth,
+            logoHeight,
           ],
-
-          align:
-            "center",
-
-          valign:
-            "center",
+          align: "center",
+          valign: "center",
         },
       );
     } catch {
       /*
-       * Invalid image data must not
-       * prevent PDF generation.
+       * Invalid logo data must not
+       * stop PDF generation.
        */
     }
   }
 
-  const companyX = 210;
-
-  const companyWidth =
-    pageWidth -
-    companyX -
-    right;
+  const align =
+    locale === "ar"
+      ? "right"
+      : "left";
 
   doc
     .fillColor(
-      PROPOSAL_COLOR.white,
+      brand.textOnPrimary,
     )
-    .fontSize(13)
+    .fontSize(15)
     .text(
       company.name,
       companyX,
       12,
       proposalTextOptions(
-        "right",
+        align,
         companyWidth,
         18,
       ),
@@ -635,17 +660,17 @@ export function drawProposalHeader(
   if (company.address) {
     doc
       .fillColor(
-        PROPOSAL_COLOR.white,
+        brand.textOnPrimary,
       )
-      .fontSize(7)
+      .fontSize(8.5)
       .text(
         company.address,
         companyX,
-        33,
+        34,
         proposalTextOptions(
-          "right",
+          align,
           companyWidth,
-          17,
+          16,
         ),
       );
   }
@@ -653,17 +678,17 @@ export function drawProposalHeader(
   if (firstContactLine) {
     doc
       .fillColor(
-        PROPOSAL_COLOR.white,
+        brand.textOnPrimary,
       )
-      .fontSize(6.5)
+      .fontSize(8)
       .text(
         firstContactLine,
         companyX,
-        53,
+        54,
         proposalTextOptions(
-          "right",
+          align,
           companyWidth,
-          11,
+          10,
         ),
       );
   }
@@ -671,39 +696,40 @@ export function drawProposalHeader(
   if (secondContactLine) {
     doc
       .fillColor(
-        PROPOSAL_COLOR.white,
+        brand.textOnPrimary,
       )
-      .fontSize(6.5)
+      .fontSize(8)
       .text(
         secondContactLine,
         companyX,
-        66,
+        68,
         proposalTextOptions(
-          "right",
+          align,
           companyWidth,
-          11,
+          10,
         ),
       );
   }
 
   doc
     .fillColor(
-      PROPOSAL_COLOR.white,
+      brand.textOnPrimary,
     )
-    .fontSize(18)
+    .fontSize(24)
     .text(
-      PROPOSAL_TEXT[locale]
-        .quotation,
+      PROPOSAL_TEXT[
+        locale
+      ].quotation,
       left,
-      84,
+      76,
       proposalTextOptions(
         "center",
-        width,
+        usableWidth,
         20,
       ),
     );
 
-  return 126;
+  return 146;
 }
 
 export function drawProposalSubject(
@@ -713,6 +739,11 @@ export function drawProposalSubject(
 ): number {
   const locale =
     snapshot.locale;
+
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
 
   const quote =
     snapshot.quotation;
@@ -733,14 +764,14 @@ export function drawProposalSubject(
     y,
     width,
     72,
-    PROPOSAL_COLOR.lightBlue,
+    brand.soft,
   );
 
   doc
     .fillColor(
       PROPOSAL_COLOR.muted,
     )
-    .fontSize(7)
+    .fontSize(9)
     .text(
       PROPOSAL_TEXT[locale]
         .subject,
@@ -754,9 +785,9 @@ export function drawProposalSubject(
 
   doc
     .fillColor(
-      PROPOSAL_COLOR.navy,
+      brand.primary,
     )
-    .fontSize(13)
+    .fontSize(16)
     .text(
       subject ||
         PROPOSAL_TEXT[locale]
@@ -935,10 +966,14 @@ export function drawProposalFinancialSummary(
         )
         .text(
           row.label,
-          x + 9,
+          locale === "ar"
+            ? x + width * 0.39
+            : x + 9,
           currentY + 7,
           proposalTextOptions(
-            align,
+            locale === "ar"
+              ? "right"
+              : "left",
             width * 0.58,
           ),
         );
@@ -954,10 +989,14 @@ export function drawProposalFinancialSummary(
         )
         .text(
           row.value,
-          x + width * 0.61,
+          locale === "ar"
+            ? x + 9
+            : x + width * 0.61,
           currentY + 7,
           proposalTextOptions(
-            "right",
+            locale === "ar"
+              ? "left"
+              : "right",
             width * 0.35,
           ),
         );
@@ -982,9 +1021,6 @@ export function drawProposalCompanyApproval(
   const quote =
     snapshot.quotation;
 
-  const align =
-    proposalAlignment(locale);
-
   const left = 38;
 
   const width =
@@ -997,6 +1033,44 @@ export function drawProposalCompanyApproval(
       quote.approvedAt,
     );
 
+  const align =
+    locale === "ar"
+      ? "right"
+      : "left";
+
+  const name =
+    quote.approvedByName ||
+    (
+      locale === "ar"
+        ? "السيد/ هاني عثمان"
+        : "Mr. Hani Othman"
+    );
+
+  const role =
+    quote.approvedByRole
+      ? proposalRoleLabel(
+          quote.approvedByRole,
+          locale,
+        )
+      : (
+          locale === "ar"
+            ? "مدير المشتريات"
+            : "Purchase Manager"
+        );
+
+  const status =
+    approved
+      ? locale === "ar"
+        ? "تم الاعتماد"
+        : "Approved"
+      : PROPOSAL_TEXT[locale]
+          .pendingApproval;
+
+  const phone =
+    snapshot.company.mobile ||
+    snapshot.company.phone ||
+    "-";
+
   drawProposalCard(
     doc,
     left,
@@ -1008,152 +1082,153 @@ export function drawProposalCompanyApproval(
       : PROPOSAL_COLOR.pale,
   );
 
-  doc
-    .fillColor(
-      approved
-        ? PROPOSAL_COLOR.green
-        : PROPOSAL_COLOR.amber,
-    )
-    .fontSize(9)
-    .text(
-      PROPOSAL_TEXT[locale]
-        .companyApproval,
-      left + 14,
-      y + 11,
-      proposalTextOptions(
-        align,
-        width - 28,
-      ),
-    );
+  const contentX =
+    left + 14;
 
-  const name =
-    approved
-      ? quote.approvedByName ||
-        PROPOSAL_TEXT[locale]
-          .pendingApproval
-      : PROPOSAL_TEXT[locale]
-          .pendingApproval;
+  const contentWidth =
+    width - 28;
 
-  const role =
-    approved
-      ? proposalRoleLabel(
-          quote.approvedByRole,
-          locale,
+  const rows = [
+    {
+      value: name,
+      size: 9,
+      color:
+        PROPOSAL_COLOR.navy,
+    },
+    {
+      value: role,
+      size: 8,
+      color:
+        PROPOSAL_COLOR.navy,
+    },
+    {
+      value: status,
+      size: 8,
+      color:
+        approved
+          ? PROPOSAL_COLOR.green
+          : PROPOSAL_COLOR.amber,
+    },
+    {
+      value:
+        phone,
+      size: 8,
+      color:
+        PROPOSAL_COLOR.navy,
+    },
+  ];
+
+  rows.forEach(
+    (row, index) => {
+      doc
+        .fillColor(
+          row.color,
         )
-      : "-";
+        .fontSize(
+          row.size,
+        )
+        .text(
+          row.value,
+          contentX,
+          y + 11 + index * 17,
+          proposalTextOptions(
+            align,
+            contentWidth,
+            14,
+          ),
+        );
+    },
+  );
 
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.muted,
-    )
-    .fontSize(7)
-    .text(
-      PROPOSAL_TEXT[locale]
-        .name,
-      left + 14,
-      y + 36,
-      proposalTextOptions(
-        align,
-        width * 0.45,
-      ),
-    );
+  const signatureY =
+    y + 87;
 
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.navy,
-    )
-    .fontSize(9)
-    .text(
-      name,
-      left + 14,
-      y + 51,
-      proposalTextOptions(
-        align,
-        width * 0.45,
-      ),
-    );
+  const signatureLabelWidth =
+    62;
 
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.muted,
-    )
-    .fontSize(7)
-    .text(
-      PROPOSAL_TEXT[locale]
-        .role,
-      left + width * 0.52,
-      y + 36,
-      proposalTextOptions(
-        align,
-        width * 0.44,
-      ),
-    );
+  const signatureLineWidth =
+    width * 0.15;
 
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.navy,
-    )
-    .fontSize(9)
-    .text(
-      role,
-      left + width * 0.52,
-      y + 51,
-      proposalTextOptions(
-        align,
-        width * 0.44,
-      ),
-    );
+  if (locale === "ar") {
+    const rightEdge =
+      left + width - 14;
 
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.muted,
-    )
-    .fontSize(7)
-    .text(
-      PROPOSAL_TEXT[locale]
-        .date +
-        ": " +
-        formatProposalDate(
-          quote.approvedAt,
+    const labelLeft =
+      rightEdge -
+      signatureLabelWidth;
+
+    doc
+      .fillColor(
+        PROPOSAL_COLOR.muted,
+      )
+      .fontSize(8.5)
+      .text(
+        PROPOSAL_TEXT.ar.signature,
+        labelLeft,
+        signatureY,
+        proposalTextOptions(
+          "right",
+          signatureLabelWidth,
+          12,
         ),
-      left + 14,
-      y + 78,
-      proposalTextOptions(
-        align,
-        width * 0.45,
-      ),
-    );
+      );
 
-  doc
-    .moveTo(
-      left + width * 0.52,
-      y + 91,
-    )
-    .lineTo(
-      left + width - 14,
-      y + 91,
-    )
-    .lineWidth(0.5)
-    .strokeColor(
-      PROPOSAL_COLOR.muted,
-    )
-    .stroke();
+    doc
+      .moveTo(
+        labelLeft -
+          7 -
+          signatureLineWidth,
+        signatureY + 9,
+      )
+      .lineTo(
+        labelLeft - 7,
+        signatureY + 9,
+      )
+      .lineWidth(0.5)
+      .strokeColor(
+        PROPOSAL_COLOR.muted,
+      )
+      .stroke();
+  } else {
+    const labelLeft =
+      left + 14;
 
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.muted,
-    )
-    .fontSize(6)
-    .text(
-      PROPOSAL_TEXT[locale]
-        .signature,
-      left + width * 0.52,
-      y + 94,
-      proposalTextOptions(
-        "center",
-        width * 0.44,
-      ),
-    );
+    doc
+      .fillColor(
+        PROPOSAL_COLOR.muted,
+      )
+      .fontSize(8.5)
+      .text(
+        PROPOSAL_TEXT.en.signature,
+        labelLeft,
+        signatureY,
+        proposalTextOptions(
+          "left",
+          signatureLabelWidth,
+          12,
+        ),
+      );
+
+    doc
+      .moveTo(
+        labelLeft +
+          signatureLabelWidth +
+          7,
+        signatureY + 9,
+      )
+      .lineTo(
+        labelLeft +
+          signatureLabelWidth +
+          7 +
+          signatureLineWidth,
+        signatureY + 9,
+      )
+      .lineWidth(0.5)
+      .strokeColor(
+        PROPOSAL_COLOR.muted,
+      )
+      .stroke();
+  }
 
   return y + height;
 }

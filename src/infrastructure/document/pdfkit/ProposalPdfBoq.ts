@@ -1,4 +1,4 @@
-﻿import {
+import {
   PROPOSAL_COLOR,
   PROPOSAL_TEXT,
   drawProposalCard,
@@ -8,6 +8,7 @@
   formatProposalDate,
   formatProposalMoney,
   proposalAlignment,
+  proposalBrand,
   proposalScopeLabel,
   proposalTextOptions,
   type ProposalPdfDocument,
@@ -109,13 +110,17 @@ function drawTotals(
   const locale =
     snapshot.locale;
 
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
+
   const text =
     PROPOSAL_TEXT[locale];
 
   const align =
     proposalAlignment(locale);
-
-  const left = 38;
+const left = 38;
 
   const width =
     doc.page.width - 76;
@@ -235,7 +240,7 @@ function drawTotals(
             rowHeight,
           )
           .fill(
-            PROPOSAL_COLOR.lightBlue,
+            brand.softStrong,
           );
       }
 
@@ -259,7 +264,7 @@ function drawTotals(
       doc
         .fillColor(
           row.strong
-            ? PROPOSAL_COLOR.blue
+            ? brand.primary
             : PROPOSAL_COLOR.slate,
         )
         .fontSize(
@@ -278,7 +283,7 @@ function drawTotals(
       doc
         .fillColor(
           row.strong
-            ? PROPOSAL_COLOR.blue
+            ? brand.primary
             : PROPOSAL_COLOR.navy,
         )
         .fontSize(
@@ -312,6 +317,11 @@ function drawNotesAndTerms(
 
   const locale =
     snapshot.locale;
+
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
 
   const text =
     PROPOSAL_TEXT[locale];
@@ -347,7 +357,7 @@ function drawNotesAndTerms(
 
   doc
     .fillColor(
-      PROPOSAL_COLOR.blue,
+      brand.primary,
     )
     .fontSize(7.5)
     .text(
@@ -366,7 +376,11 @@ function drawNotesAndTerms(
     )
     .fontSize(6.5)
     .text(
-      quote.notes || "-",
+      (
+        locale === "ar"
+          ? quote.notesAr || quote.notes
+          : quote.notesEn || quote.notes
+      ) || "-",
       left + 10,
       y + 27,
       proposalTextOptions(
@@ -378,7 +392,7 @@ function drawNotesAndTerms(
 
   doc
     .fillColor(
-      PROPOSAL_COLOR.blue,
+      brand.primary,
     )
     .fontSize(7.5)
     .text(
@@ -397,8 +411,13 @@ function drawNotesAndTerms(
     )
     .fontSize(6.5)
     .text(
-      quote.termsAndConditions ||
-        "-",
+      (
+        locale === "ar"
+          ? quote.termsAndConditionsAr ||
+            quote.termsAndConditions
+          : quote.termsAndConditionsEn ||
+            quote.termsAndConditions
+      ) || "-",
       left + width + gap + 10,
       y + 27,
       proposalTextOptions(
@@ -419,6 +438,11 @@ function drawApprovalStatement(
   const locale =
     snapshot.locale;
 
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
+
   const text =
     PROPOSAL_TEXT[locale];
 
@@ -436,12 +460,12 @@ function drawApprovalStatement(
     y,
     width,
     58,
-    PROPOSAL_COLOR.lightBlue,
+    brand.soft,
   );
 
   doc
     .fillColor(
-      PROPOSAL_COLOR.navy,
+      brand.primary,
     )
     .fontSize(8.5)
     .text(
@@ -484,6 +508,11 @@ export function drawProposalBoq(
 
   const locale =
     snapshot.locale;
+
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
 
   const text =
     PROPOSAL_TEXT[locale];
@@ -547,7 +576,13 @@ export function drawProposalBoq(
   drawCompactField(
     doc,
     text.project,
-    quote.projectName || "-",
+    (
+      locale === "ar"
+        ? quote.projectNameAr ||
+          quote.projectName
+        : quote.projectNameEn ||
+          quote.projectName
+    ) || "-",
     left + metaWidth * 2 + 9,
     y + 9,
     metaWidth - 18,
@@ -649,7 +684,7 @@ export function drawProposalBoq(
       24,
     )
     .fill(
-      PROPOSAL_COLOR.paleBlue,
+      brand.softStrong,
     );
 
   headers.forEach(
@@ -721,12 +756,17 @@ export function drawProposalBoq(
           .fill("#fbfdff");
       }
 
+      const localizedItemName =
+        locale === "ar"
+          ? line.itemNameAr || line.itemName
+          : line.itemNameEn || line.itemName;
+
       const itemText =
         String(
           line.position,
         ) +
         ". " +
-        line.itemName;
+        localizedItemName;
 
       doc
         .fillColor(
@@ -749,8 +789,13 @@ export function drawProposalBoq(
           ),
         );
 
+      const localizedUnitName =
+        locale === "ar"
+          ? line.unitNameAr || line.unitName
+          : line.unitNameEn || line.unitName;
+
       const values = [
-        line.unitName || "-",
+        localizedUnitName || "-",
         String(line.quantity),
 
         formatProposalMoney(
@@ -830,12 +875,7 @@ export function drawProposalBoq(
       y,
     ) + 8;
 
-  y =
-    drawNotesAndTerms(
-      doc,
-      snapshot,
-      y,
-    ) + 8;
+
 
   y =
     drawApprovalStatement(

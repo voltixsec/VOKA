@@ -11,6 +11,56 @@ import {
   useLanguage,
 } from "@/components/i18n/LanguageProvider";
 
+type BrandTheme =
+  | "NAVY_GOLD"
+  | "ROYAL_BLUE"
+  | "EMERALD"
+  | "BURGUNDY"
+  | "CHARCOAL";
+
+const BRAND_THEMES: Array<{
+  value: BrandTheme;
+  en: string;
+  ar: string;
+  primary: string;
+  accent: string;
+}> = [
+  {
+    value: "NAVY_GOLD",
+    en: "Navy + Gold",
+    ar: "كحلي وذهبي",
+    primary: "#0f172a",
+    accent: "#d4a72c",
+  },
+  {
+    value: "ROYAL_BLUE",
+    en: "Royal Blue",
+    ar: "أزرق ملكي",
+    primary: "#1d4ed8",
+    accent: "#60a5fa",
+  },
+  {
+    value: "EMERALD",
+    en: "Emerald",
+    ar: "زمردي",
+    primary: "#065f46",
+    accent: "#34d399",
+  },
+  {
+    value: "BURGUNDY",
+    en: "Burgundy",
+    ar: "نبيتي",
+    primary: "#7f1d1d",
+    accent: "#f59e0b",
+  },
+  {
+    value: "CHARCOAL",
+    en: "Charcoal",
+    ar: "فحمي",
+    primary: "#27272a",
+    accent: "#a1a1aa",
+  },
+];
 type CompanyIdentity = {
   id: string;
   name: string;
@@ -27,6 +77,7 @@ type CompanyIdentity = {
   whatsapp: string | null;
 
   logoUrl: string | null;
+  brandTheme: BrandTheme;
 
   defaultCurrency: string;
 };
@@ -44,6 +95,7 @@ type CompanyForm = {
   whatsapp: string;
 
   logoUrl: string;
+  brandTheme: BrandTheme;
 
   defaultCurrency: string;
 };
@@ -171,6 +223,9 @@ const EMPTY_FORM: CompanyForm = {
 
   logoUrl: "",
 
+  brandTheme:
+    "NAVY_GOLD",
+
   defaultCurrency: "KWD",
 };
 
@@ -204,6 +259,10 @@ function toForm(
 
     logoUrl:
       company.logoUrl ?? "",
+
+    brandTheme:
+      company.brandTheme ??
+      "NAVY_GOLD",
 
     defaultCurrency:
       company.defaultCurrency ??
@@ -352,7 +411,7 @@ export default function CompanySettingsPage() {
               ?.message ||
               (
                 isArabic
-                  ? "???? ????? ?????? ??????."
+                  ? "تم حفظ إعدادات الشركة بنجاح"
                   : "Unable to load company details."
               ),
           );
@@ -374,7 +433,7 @@ export default function CompanySettingsPage() {
               ? loadError.message
               : (
                   isArabic
-                    ? "???? ????? ?????? ??????."
+                    ? "تم حفظ إعدادات الشركة بنجاح"
                     : "Unable to load company details."
                 ),
           );
@@ -694,7 +753,7 @@ export default function CompanySettingsPage() {
     ) {
       setError(
         isArabic
-          ? "???? ?????? ??? ?? ???? PNG ?? JPG ?? WebP."
+          ? "تم حفظ إعدادات الشركة بنجاح"
           : "Logo must be PNG, JPG or WebP.",
       );
 
@@ -707,7 +766,7 @@ export default function CompanySettingsPage() {
     ) {
       setError(
         isArabic
-          ? "??? ?????? ??? ??? ?????? 750 ????????."
+          ? "تم حفظ إعدادات الشركة بنجاح"
           : "Logo size must not exceed 750 KB.",
       );
 
@@ -736,7 +795,7 @@ export default function CompanySettingsPage() {
       () => {
         setError(
           isArabic
-            ? "???? ????? ??? ??????."
+            ? "تم حفظ إعدادات الشركة بنجاح"
             : "Unable to read the logo file.",
         );
       };
@@ -826,6 +885,9 @@ export default function CompanySettingsPage() {
                     form.logoUrl,
                   ),
 
+                brandTheme:
+                  form.brandTheme,
+
                 defaultCurrency:
                   form.defaultCurrency,
               }),
@@ -841,7 +903,7 @@ export default function CompanySettingsPage() {
             ?.message ||
             (
               isArabic
-                ? "???? ??? ?????? ??????."
+                ? "تم حفظ إعدادات الشركة بنجاح"
                 : "Unable to save company details."
             ),
         );
@@ -855,7 +917,7 @@ export default function CompanySettingsPage() {
 
       setSuccess(
         isArabic
-          ? "?? ??? ?????? ?????? ?????."
+          ? "تم حفظ إعدادات الشركة بنجاح"
           : "Company details saved successfully.",
       );
     } catch (
@@ -866,7 +928,7 @@ export default function CompanySettingsPage() {
           ? saveError.message
           : (
               isArabic
-                ? "???? ??? ?????? ??????."
+                ? "تم حفظ إعدادات الشركة بنجاح"
                 : "Unable to save company details."
             ),
       );
@@ -1210,6 +1272,146 @@ export default function CompanySettingsPage() {
             </div>
           </div>
 
+          {/* BRAND THEME PICKER */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 lg:col-span-2">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-xl font-bold">
+                {isArabic
+                  ? "الهوية البصرية"
+                  : "Brand identity"}
+              </h2>
+
+              <p className="text-sm leading-7 text-slate-400">
+                {isArabic
+                  ? "اختر هوية ألوان موحدة لعرض السعر والمستندات."
+                  : "Choose the visual color identity used across quotation documents."}
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              {BRAND_THEMES.map(
+                (theme) => {
+                  const selected =
+                    form.brandTheme ===
+                    theme.value;
+
+                  return (
+                    <button
+                      key={theme.value}
+                      type="button"
+                      onClick={() =>
+                        updateField(
+                          "brandTheme",
+                          theme.value,
+                        )
+                      }
+                      className={
+                        "rounded-2xl border p-4 text-start transition " +
+                        (
+                          selected
+                            ? "border-sky-400 bg-slate-800"
+                            : "border-slate-700 bg-slate-950 hover:border-slate-500"
+                        )
+                      }
+                    >
+                      <div
+                        className="h-16 overflow-hidden rounded-xl"
+                        style={{
+                          backgroundColor:
+                            theme.primary,
+                        }}
+                      >
+                        <div
+                          className="mt-11 h-1.5 w-full"
+                          style={{
+                            backgroundColor:
+                              theme.accent,
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-3 text-sm font-semibold">
+                        {isArabic
+                          ? theme.ar
+                          : theme.en}
+                      </div>
+
+                      {selected ? (
+                        <div className="mt-1 text-xs text-sky-400">
+                          {isArabic
+                            ? "محدد"
+                            : "Selected"}
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                },
+              )}
+            </div>
+
+            <div
+              className="mt-6 overflow-hidden rounded-2xl border border-slate-700"
+              style={{
+                backgroundColor:
+                  BRAND_THEMES.find(
+                    (theme) =>
+                      theme.value ===
+                      form.brandTheme,
+                  )?.primary ??
+                  "#0f172a",
+              }}
+            >
+              <div className="flex min-h-28 items-center justify-between gap-5 p-6">
+                <div
+                  className={
+                    isArabic
+                      ? "order-2 text-right"
+                      : "text-left"
+                  }
+                >
+                  <div className="text-lg font-bold text-white">
+                    {currentName ||
+                      (
+                        isArabic
+                          ? "اسم الشركة"
+                          : "Company name"
+                      )}
+                  </div>
+
+                  <div className="mt-1 text-xs text-white/70">
+                    {currentAddress ||
+                      (
+                        isArabic
+                          ? "عنوان الشركة"
+                          : "Company address"
+                      )}
+                  </div>
+                </div>
+
+                {form.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={form.logoUrl}
+                    alt="Brand preview"
+                    className="max-h-16 max-w-32 object-contain"
+                  />
+                ) : null}
+              </div>
+
+              <div
+                className="h-1.5"
+                style={{
+                  backgroundColor:
+                    BRAND_THEMES.find(
+                      (theme) =>
+                        theme.value ===
+                        form.brandTheme,
+                    )?.accent ??
+                    "#d4a72c",
+                }}
+              />
+            </div>
+          </div>
           <aside className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-bold">
               {labels.logo}

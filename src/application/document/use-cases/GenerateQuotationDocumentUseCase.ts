@@ -24,6 +24,8 @@ export type GenerateQuotationCompanyIdentity = {
   whatsapp?: string | null;
 
   logoUrl?: string | null;
+
+  brandTheme?: string | null;
 };
 
 export type GenerateQuotationDocumentInput = {
@@ -168,6 +170,12 @@ export class GenerateQuotationDocumentUseCase {
             ?.logoUrl
             ?.trim() ||
           null,
+
+        brandTheme:
+          input.companyIdentity
+            ?.brandTheme
+            ?.trim() ||
+          "NAVY_GOLD",
       },
 
       quotation: {
@@ -201,8 +209,20 @@ export class GenerateQuotationDocumentUseCase {
         projectName:
           quotation.projectName,
 
+        projectNameAr:
+          quotation.projectNameAr,
+
+        projectNameEn:
+          quotation.projectNameEn,
+
         attentionName:
           quotation.attentionName,
+
+        attentionNameAr:
+          quotation.attentionNameAr,
+
+        attentionNameEn:
+          quotation.attentionNameEn,
 
         scopeType:
           quotation.scopeType,
@@ -241,12 +261,36 @@ export class GenerateQuotationDocumentUseCase {
               itemName:
                 line.itemName,
 
+              itemNameAr:
+                line.itemNameAr ??
+                null,
+
+              itemNameEn:
+                line.itemNameEn ??
+                null,
+
               description:
                 line.description ??
                 null,
 
+              descriptionAr:
+                line.descriptionAr ??
+                null,
+
+              descriptionEn:
+                line.descriptionEn ??
+                null,
+
               unitName:
                 line.unitName ??
+                null,
+
+              unitNameAr:
+                line.unitNameAr ??
+                null,
+
+              unitNameEn:
+                line.unitNameEn ??
                 null,
 
               quantity:
@@ -300,9 +344,23 @@ export class GenerateQuotationDocumentUseCase {
         notes:
           quotation.notes,
 
+        notesAr:
+          quotation.notesAr,
+
+        notesEn:
+          quotation.notesEn,
+
         termsAndConditions:
           quotation
             .termsAndConditions,
+
+        termsAndConditionsAr:
+          quotation
+            .termsAndConditionsAr,
+
+        termsAndConditionsEn:
+          quotation
+            .termsAndConditionsEn,
 
         approvedAt:
           quotation.approvedAt,

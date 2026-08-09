@@ -1,13 +1,15 @@
-﻿import {
+import {
   PROPOSAL_COLOR,
   PROPOSAL_TEXT,
   drawProposalCard,
-  drawProposalCompanyApproval,
+
   drawProposalHeader,
   drawProposalSubject,
   formatProposalDate,
   formatProposalMoney,
+
   proposalAlignment,
+  proposalBrand,
   proposalScopeLabel,
   proposalTextOptions,
   type ProposalPdfDocument,
@@ -55,89 +57,7 @@ function drawField(
     );
 }
 
-function drawFinancialRow(
-  doc: ProposalPdfDocument,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-  width: number,
-  strong: boolean,
-  align: "left" | "right",
-): number {
-  const height =
-    strong ? 31 : 25;
-
-  if (strong) {
-    doc
-      .rect(
-        x,
-        y,
-        width,
-        height,
-      )
-      .fill(
-        PROPOSAL_COLOR.lightBlue,
-      );
-  }
-
-  doc
-    .fillColor(
-      strong
-        ? PROPOSAL_COLOR.blue
-        : PROPOSAL_COLOR.slate,
-    )
-    .fontSize(
-      strong ? 9 : 8,
-    )
-    .text(
-      label,
-      x + 10,
-      y + 8,
-      proposalTextOptions(
-        align,
-        width * 0.60,
-      ),
-    );
-
-  doc
-    .fillColor(
-      strong
-        ? PROPOSAL_COLOR.blue
-        : PROPOSAL_COLOR.navy,
-    )
-    .fontSize(
-      strong ? 10 : 8,
-    )
-    .text(
-      value,
-      x + width * 0.62,
-      y + 8,
-      proposalTextOptions(
-        "right",
-        width * 0.34,
-      ),
-    );
-
-  doc
-    .moveTo(
-      x,
-      y + height,
-    )
-    .lineTo(
-      x + width,
-      y + height,
-    )
-    .lineWidth(0.4)
-    .strokeColor(
-      PROPOSAL_COLOR.line,
-    )
-    .stroke();
-
-  return y + height;
-}
-
-function drawFinancialSummary(
+function drawCoverCommercialSummary(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
   y: number,
@@ -148,123 +68,217 @@ function drawFinancialSummary(
   const quote =
     snapshot.quotation;
 
-  const text =
-    PROPOSAL_TEXT[locale];
-
-  const align =
-    proposalAlignment(locale);
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
 
   const left = 38;
 
   const width =
     doc.page.width - 76;
 
-  const hasDiscount =
-    quote.totals.discountAmount >
-    0;
+  const align =
+    locale === "ar"
+      ? "right"
+      : "left";
 
-  const height =
-    hasDiscount ? 103 : 52;
+  const notes =
+    locale === "ar"
+      ? quote.notesAr ||
+        quote.notes ||
+        null
+      : quote.notesEn ||
+        quote.notes ||
+        null;
 
-  drawProposalCard(
-    doc,
-    left,
-    y,
-    width,
-    height,
-    PROPOSAL_COLOR.white,
-  );
+  const terms =
+    locale === "ar"
+      ? quote.termsAndConditionsAr ||
+        quote.termsAndConditions ||
+        null
+      : quote.termsAndConditionsEn ||
+        quote.termsAndConditions ||
+        null;
 
-  let rowY = y;
+  const notesLabel =
+    locale === "ar"
+      ? "ملاحظات"
+      : "Notes";
 
-  if (hasDiscount) {
-    rowY =
-      drawFinancialRow(
-        doc,
-        text.valueBeforeDiscount,
-        formatProposalMoney(
-          quote.totals.subtotal,
-          quote.currencyCode,
+  const termsLabel =
+    locale === "ar"
+      ? "الشروط والأحكام"
+      : "Terms and conditions";
+
+  const netLabel =
+    locale === "ar"
+      ? "صافي قيمة عرض السعر"
+      : "Net proposal value";
+
+  let currentY =
+    y;
+
+  if (notes) {
+    const notesHeight =
+      68;
+
+    drawProposalCard(
+      doc,
+      left,
+      currentY,
+      width,
+      notesHeight,
+      brand.soft,
+    );
+
+    doc
+      .fillColor(
+        brand.primary,
+      )
+      .fontSize(8)
+      .text(
+        notesLabel,
+        left + 14,
+        currentY + 10,
+        proposalTextOptions(
+          align,
+          width - 28,
+          14,
         ),
-        left,
-        rowY,
-        width,
-        false,
-        align,
       );
 
-    let discountLabel =
-      text.commercialDiscount;
-
-    if (
-      quote.discount?.type ===
-      "PERCENTAGE"
-    ) {
-      const percentage =
-        quote.discount.value
-          .toFixed(2)
-          .replace(
-            /\.00$/,
-            "",
-          );
-
-      discountLabel +=
-        " (" +
-        percentage +
-        "%)";
-    }
-
-    rowY =
-      drawFinancialRow(
-        doc,
-        discountLabel,
-        "- " +
-          formatProposalMoney(
-            quote.totals
-              .discountAmount,
-            quote.currencyCode,
-          ),
-        left,
-        rowY,
-        width,
-        false,
-        align,
-      );
-
-    rowY =
-      drawFinancialRow(
-        doc,
-        text.netProposalValue,
-        formatProposalMoney(
-          quote.totals
-            .totalAmount,
-          quote.currencyCode,
+    doc
+      .fillColor(
+        PROPOSAL_COLOR.slate,
+      )
+      .fontSize(8)
+      .text(
+        notes,
+        left + 14,
+        currentY + 29,
+        proposalTextOptions(
+          align,
+          width - 28,
+          30,
         ),
-        left,
-        rowY,
-        width,
-        true,
-        align,
       );
-  } else {
-    rowY =
-      drawFinancialRow(
-        doc,
-        text.totalProposalValue,
-        formatProposalMoney(
-          quote.totals
-            .totalAmount,
-          quote.currencyCode,
-        ),
-        left,
-        rowY,
-        width,
-        true,
-        align,
-      );
+
+    currentY +=
+      notesHeight + 10;
   }
 
-  return rowY;
+  if (terms) {
+    const termsHeight =
+      86;
+
+    drawProposalCard(
+      doc,
+      left,
+      currentY,
+      width,
+      termsHeight,
+      PROPOSAL_COLOR.pale,
+    );
+
+    doc
+      .fillColor(
+        brand.primary,
+      )
+      .fontSize(8)
+      .text(
+        termsLabel,
+        left + 14,
+        currentY + 10,
+        proposalTextOptions(
+          align,
+          width - 28,
+          14,
+        ),
+      );
+
+    doc
+      .fillColor(
+        PROPOSAL_COLOR.slate,
+      )
+      .fontSize(8)
+      .text(
+        terms,
+        left + 14,
+        currentY + 29,
+        proposalTextOptions(
+          align,
+          width - 28,
+          48,
+        ),
+      );
+
+    currentY +=
+      termsHeight + 12;
+  }
+
+  /*
+   * Page 1 shows ONLY final net value.
+   * No subtotal / discount breakdown here.
+   */
+  const valueHeight =
+    58;
+
+  doc
+    .roundedRect(
+      left,
+      currentY,
+      width,
+      valueHeight,
+      8,
+    )
+    .fill(
+      brand.primary,
+    );
+
+  doc
+    .fillColor(
+      brand.textOnPrimary,
+    )
+    .fontSize(8)
+    .text(
+      netLabel,
+      left + 16,
+      currentY + 10,
+      proposalTextOptions(
+        locale === "ar"
+          ? "right"
+          : "left",
+        width - 32,
+        14,
+      ),
+    );
+
+  doc
+    .fillColor(
+      brand.textOnPrimary,
+    )
+    .fontSize(15)
+    .text(
+      formatProposalMoney(
+        quote.totals.totalAmount,
+        quote.currencyCode,
+      ),
+      left + 16,
+      currentY + 28,
+      proposalTextOptions(
+        locale === "ar"
+          ? "left"
+          : "right",
+        width - 32,
+        22,
+      ),
+    );
+
+  return (
+    currentY +
+    valueHeight
+  );
 }
 
 export function drawProposalCover(
@@ -368,7 +382,13 @@ export function drawProposalCover(
   drawField(
     doc,
     text.project,
-    quote.projectName || "-",
+    (
+      locale === "ar"
+        ? quote.projectNameAr ||
+          quote.projectName
+        : quote.projectNameEn ||
+          quote.projectName
+    ) || "-",
     left +
       columnWidth +
       gap +
@@ -381,7 +401,13 @@ export function drawProposalCover(
   drawField(
     doc,
     text.attention,
-    quote.attentionName || "-",
+    (
+      locale === "ar"
+        ? quote.attentionNameAr ||
+          quote.attentionName
+        : quote.attentionNameEn ||
+          quote.attentionName
+    ) || "-",
     left +
       (columnWidth + gap) * 2,
     y + 65,
@@ -434,7 +460,7 @@ export function drawProposalCover(
     .fillColor(
       PROPOSAL_COLOR.muted,
     )
-    .fontSize(7)
+    .fontSize(10.5)
     .text(
       text.brief,
       left + 14,
@@ -454,7 +480,7 @@ export function drawProposalCover(
     .fillColor(
       PROPOSAL_COLOR.navy,
     )
-    .fontSize(9)
+    .fontSize(10.5)
     .text(
       brief || "-",
       left + 14,
@@ -468,25 +494,11 @@ export function drawProposalCover(
 
   y += 144;
 
-  /*
-   * Quotation value.
-   * No explanatory discount paragraph.
-   */
-  y =
-    drawFinancialSummary(
-      doc,
-      snapshot,
-      y,
-    ) + 14;
+    y += 14;
 
-  /*
-   * Company approval only.
-   * Customer acceptance has been removed.
-   */
-  drawProposalCompanyApproval(
+  drawCoverCommercialSummary(
     doc,
     snapshot,
     y,
-    112,
   );
 }

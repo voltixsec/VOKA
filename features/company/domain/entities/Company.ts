@@ -8,6 +8,13 @@ import {
 
 export type CompanyLocale = 'EN' | 'AR';
 
+export type CompanyBrandTheme =
+  | 'NAVY_GOLD'
+  | 'ROYAL_BLUE'
+  | 'EMERALD'
+  | 'BURGUNDY'
+  | 'CHARCOAL';
+
 export type CompanyProps = {
   name: string;
 
@@ -23,6 +30,7 @@ export type CompanyProps = {
   whatsapp?: string | null;
 
   logoUrl?: string | null;
+  brandTheme: CompanyBrandTheme;
 
   slug: string;
   defaultLocale: CompanyLocale;
@@ -48,6 +56,7 @@ export type CreateCompanyProps = {
   whatsapp?: string | null;
 
   logoUrl?: string | null;
+  brandTheme?: CompanyBrandTheme;
 
   slug?: string;
   defaultLocale?: CompanyLocale;
@@ -140,6 +149,10 @@ export class Company extends Entity<CompanyProps> {
 
   public get defaultLocale(): CompanyLocale {
     return this.props.defaultLocale;
+  }
+
+  public get brandTheme(): CompanyBrandTheme {
+    return this.props.brandTheme;
   }
 
   public get defaultCurrency(): string {
@@ -248,6 +261,7 @@ export class Company extends Entity<CompanyProps> {
 
           slug,
           defaultLocale: input.defaultLocale ?? 'EN',
+          brandTheme: input.brandTheme ?? 'NAVY_GOLD',
           defaultCurrency: currency,
           timezone: input.timezone?.trim() || 'Asia/Kuwait',
           isActive: true,
@@ -331,6 +345,14 @@ export class Company extends Entity<CompanyProps> {
     this.touch();
   }
 
+  public changeBrandTheme(
+    theme: CompanyBrandTheme,
+  ): void {
+    this.props.brandTheme =
+      theme;
+
+    this.touch();
+  }
   public changeDefaultCurrency(
     currency: string,
   ): Result<void, DomainError> {
