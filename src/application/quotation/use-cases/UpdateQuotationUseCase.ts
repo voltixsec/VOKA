@@ -2,6 +2,7 @@ import type { UpdateQuotationDto } from "../dto/UpdateQuotationDto";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
 import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
 import type { ApplicationResult } from "../results/ApplicationResult";
+import { invalidateQuotationTargetFields } from "../services/invalidateQuotationTargetFields";
 
 import { QuotationDomainError } from "../../../domain/quotation";
 
@@ -31,19 +32,26 @@ export class UpdateQuotationUseCase {
         },
       };
     }
+
+    const processedDto =
+      invalidateQuotationTargetFields(
+        quotation,
+        dto,
+      );
+
     const invalidReference =
       await this.referenceValidator.findInvalidReference({
-        companyId: dto.companyId,
+        companyId: processedDto.companyId,
         customerId: quotation.customerId,
         priceListId: quotation.priceListId,
-        catalogItemIds: dto.lines
+        catalogItemIds: processedDto.lines
           .map((line) => line?.catalogItemId)
           .filter(
             (id): id is string =>
               typeof id === "string" &&
               Boolean(id.trim()),
           ),
-        taxRateIds: dto.lines
+        taxRateIds: processedDto.lines
           .map((line) => line?.taxRateId)
           .filter(
             (id): id is string =>
@@ -61,35 +69,35 @@ export class UpdateQuotationUseCase {
 
     try {
 
-      quotation.replaceLines(dto.lines);
+      quotation.replaceLines(processedDto.lines);
 
-      quotation.setDiscount(dto.discount ?? null);
+      quotation.setDiscount(processedDto.discount ?? null);
 
       quotation.updateText(
-        dto.notes ?? null,
-        dto.termsAndConditions ?? null,
-        dto.notesAr,
-        dto.notesEn,
-        dto.termsAndConditionsAr,
-        dto.termsAndConditionsEn,
+        processedDto.notes ?? null,
+        processedDto.termsAndConditions ?? null,
+        processedDto.notesAr,
+        processedDto.notesEn,
+        processedDto.termsAndConditionsAr,
+        processedDto.termsAndConditionsEn,
       );
 
       quotation.updateProposal({
-        subjectAr: dto.subjectAr,
-        subjectEn: dto.subjectEn,
-        briefAr: dto.briefAr,
-        briefEn: dto.briefEn,
-        projectName: dto.projectName,
-        projectNameAr: dto.projectNameAr,
-        projectNameEn: dto.projectNameEn,
-        attentionName: dto.attentionName,
-        attentionNameAr: dto.attentionNameAr,
-        attentionNameEn: dto.attentionNameEn,
-        scopeType: dto.scopeType,
+        subjectAr: processedDto.subjectAr,
+        subjectEn: processedDto.subjectEn,
+        briefAr: processedDto.briefAr,
+        briefEn: processedDto.briefEn,
+        projectName: processedDto.projectName,
+        projectNameAr: processedDto.projectNameAr,
+        projectNameEn: processedDto.projectNameEn,
+        attentionName: processedDto.attentionName,
+        attentionNameAr: processedDto.attentionNameAr,
+        attentionNameEn: processedDto.attentionNameEn,
+        scopeType: processedDto.scopeType,
       });
 
       await this.repository.update(
-        dto.companyId,
+        processedDto.companyId,
         quotation,
       );
 
