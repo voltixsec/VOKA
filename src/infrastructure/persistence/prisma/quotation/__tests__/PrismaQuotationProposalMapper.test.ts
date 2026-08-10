@@ -4,6 +4,7 @@ import {
   it,
 } from "vitest";
 
+import { LocalizationStatus } from "../../../../../domain/quotation/types/LocalizationStatus";
 import { Quotation } from "../../../../../domain/quotation";
 import { PrismaQuotationMapper } from "../PrismaQuotationMapper";
 
@@ -170,6 +171,101 @@ describe(
         ).toBe(
           "MAINTENANCE",
         );
+      },
+    );
+
+    it(
+      "maps localization lifecycle metadata to persistence and restores it",
+      () => {
+        const now = new Date(
+          "2026-08-06T00:00:00.000Z",
+        );
+
+        const quotation = new Quotation({
+          companyId: "company-1",
+          customerId: "customer-1",
+          number: "Q-001",
+          customer: {
+            name: "First United",
+          },
+        });
+
+        quotation.markLocalizationPending(
+          "ar",
+          now,
+        );
+
+        const data =
+          PrismaQuotationMapper.toPersistence(
+            quotation,
+          );
+
+        expect(
+          data.localizationStatus,
+        ).toBe("PENDING");
+        expect(
+          data.localizationRequestedAt,
+        ).toEqual(now);
+        expect(
+          data.localizationSourceLocale,
+        ).toBe("AR");
+
+        const restored =
+          PrismaQuotationMapper.toDomain({
+            id: "quotation-1",
+            companyId: "company-1",
+            customerId: "customer-1",
+            priceListId: null,
+            number: "Q-001",
+            status: "DRAFT",
+            issueDate: now,
+            expiryDate: null,
+            currencyCode: "KWD",
+            customerName: "First United",
+            customerEmail: null,
+            customerPhone: null,
+            customerTaxNo: null,
+            billingAddress: null,
+            localizationStatus: "PENDING",
+            localizationRequestedAt: now,
+            localizationCompletedAt: null,
+            localizationLastError: null,
+            localizationSourceLocale: "AR",
+            subjectAr: null,
+            subjectEn: null,
+            briefAr: null,
+            briefEn: null,
+            projectName: null,
+            attentionName: null,
+            scopeType: null,
+            subtotal: 0,
+            discountType: null,
+            discountValue: 0,
+            discountAmount: 0,
+            taxAmount: 0,
+            totalAmount: 0,
+            notes: null,
+            termsAndConditions: null,
+            sentAt: null,
+            approvedAt: null,
+            rejectedAt: null,
+            cancelledAt: null,
+            isDeleted: false,
+            deletedAt: null,
+            createdAt: now,
+            updatedAt: now,
+            lines: [],
+          } as never);
+
+        expect(
+          restored.localizationStatus,
+        ).toBe(LocalizationStatus.PENDING);
+        expect(
+          restored.localizationRequestedAt,
+        ).toEqual(now);
+        expect(
+          restored.localizationSourceLocale,
+        ).toBe("ar");
       },
     );
   },

@@ -175,6 +175,67 @@ function parseScopeType(
 }
 
 
+type LocalizationErrorCode =
+  | "TRANSLATION_TIMEOUT"
+  | "TRANSLATION_PROVIDER_ERROR"
+  | "TRANSLATION_INVALID_RESPONSE"
+  | "TRANSLATION_UNEXPECTED_ERROR";
+
+const localizationErrorCodes: Set<string> = new Set([
+  "TRANSLATION_TIMEOUT",
+  "TRANSLATION_PROVIDER_ERROR",
+  "TRANSLATION_INVALID_RESPONSE",
+  "TRANSLATION_UNEXPECTED_ERROR",
+]);
+
+function classifyLocalizationError(
+  error: unknown,
+): LocalizationErrorCode {
+  if (
+    typeof error === "object" &&
+    error !== null
+  ) {
+    const candidateCode =
+      (error as { code?: unknown }).code;
+
+    if (
+      typeof candidateCode === "string" &&
+      localizationErrorCodes.has(candidateCode)
+    ) {
+      return candidateCode as LocalizationErrorCode;
+    }
+
+    const message =
+      (error as { message?: unknown }).message;
+
+    if (typeof message === "string") {
+      const normalized =
+        message.toLowerCase();
+
+      if (normalized.includes("timeout")) {
+        return "TRANSLATION_TIMEOUT";
+      }
+
+      if (
+        normalized.includes("provider") ||
+        normalized.includes("api")
+      ) {
+        return "TRANSLATION_PROVIDER_ERROR";
+      }
+
+      if (
+        normalized.includes("invalid response") ||
+        normalized.includes("missing translation") ||
+        normalized.includes("translation missing")
+      ) {
+        return "TRANSLATION_INVALID_RESPONSE";
+      }
+    }
+  }
+
+  return "TRANSLATION_UNEXPECTED_ERROR";
+}
+
 function localizationSignature(
   input: Record<string, unknown>,
 ): string {
@@ -376,6 +437,10 @@ export const PATCH = withCompanyAuth(
         : {}),
     };
 
+    const wasPending =
+      updated.data.localizationStatus ===
+      "PENDING";
+
     console.log(
       "[VOKA:LOCALIZATION][SCHEDULED]",
       {
@@ -475,6 +540,46 @@ export const PATCH = withCompanyAuth(
           return;
         }
 
+        if (wasPending) {
+          const persisted =
+            await getQuotation.execute({
+              companyId:
+                company.companyId,
+
+              quotationId,
+            });
+
+          if (!persisted.success) {
+            console.warn(
+              "[VOKA:LOCALIZATION][COMPLETED_NOT_FOUND]",
+              {
+                quotationId,
+              },
+            );
+          } else {
+            const completedQuotation =
+              persisted.data;
+            completedQuotation.markLocalizationCompleted(
+              new Date(),
+            );
+
+            try {
+              await quotationRepository.update(
+                company.companyId,
+                completedQuotation,
+              );
+            } catch (updateError) {
+              console.error(
+                "[VOKA:LOCALIZATION][FAILED_PERSIST_COMPLETION]",
+                {
+                  quotationId,
+                  error: updateError,
+                },
+              );
+            }
+          }
+        }
+
         console.log(
           "[VOKA:LOCALIZATION][COMPLETED]",
           {
@@ -493,13 +598,78 @@ export const PATCH = withCompanyAuth(
          * AI failure is background-only.
          * It must never turn a successful Save into HTTP 500.
          */
-        console.error(
-          "[VOKA:LOCALIZATION][FAILED]",
-          {
+        const latest =
+          await getQuotation.execute({
+            companyId: company.companyId,
             quotationId,
+          });
+
+        if (!latest.success) {
+          console.warn(
+            "[VOKA:LOCALIZATION][SKIPPED_NOT_FOUND]",
+            {
+              quotationId,
+            },
+          );
+
+          return;
+        }
+
+        const latestSnapshot =
+          serializeQuotation(
+            latest.data,
+          ) as unknown as Record<
+            string,
+            unknown
+          >;
+
+        if (
+          localizationSignature(
+            latestSnapshot,
+          ) !== savedSignature
+        ) {
+          console.log(
+            "[VOKA:LOCALIZATION][SKIPPED_STALE]",
+            {
+              quotationId,
+            },
+          );
+
+          return;
+        }
+
+        if (!wasPending) {
+          console.log(
+            "[VOKA:LOCALIZATION][SKIPPED_NO_PENDING]",
+            {
+              quotationId,
+            },
+          );
+
+          return;
+        }
+
+        const quotation = latest.data;
+        quotation.markLocalizationFailed(
+          classifyLocalizationError(
             error,
-          },
+          ),
         );
+
+        try {
+          await quotationRepository.update(
+            company.companyId,
+            quotation,
+          );
+        } catch (updateError) {
+          console.error(
+            "[VOKA:LOCALIZATION][FAILED_PERSIST]",
+            {
+              quotationId,
+              error: updateError,
+            },
+          );
+        }
       }
     });
 

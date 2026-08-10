@@ -160,6 +160,12 @@ enum QuotationStatus {
   CANCELLED
 }
 
+enum LocalizationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 enum QuotationScopeType {
   SUPPLY_ONLY
   SUPPLY_AND_INSTALLATION
@@ -394,6 +400,12 @@ model Quotation {
   notesEn              String?
   termsAndConditionsAr String?
   termsAndConditionsEn String?
+
+  localizationStatus      LocalizationStatus?
+  localizationRequestedAt DateTime?
+  localizationCompletedAt DateTime?
+  localizationLastError   String?
+  localizationSourceLocale Locale?
 
   sentAt         DateTime?
   approvedAt     DateTime?

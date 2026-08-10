@@ -10,11 +10,20 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
+  localizeQuotationDraft: vi.fn(),
 
   afterTasks: [] as Array<
     () => void | Promise<void>
   >,
 }));
+
+vi.mock(
+  "@/src/infrastructure/translation/quotation/localizeQuotationDraft",
+  () => ({
+    localizeQuotationDraft:
+      mocks.localizeQuotationDraft,
+  }),
+);
 
 vi.mock(
   "next/server",
@@ -127,8 +136,16 @@ describe("GET /api/quotations/[quotationId]", () => {
   beforeEach(() => {
     mocks.afterTasks.length = 0;
     mocks.findById.mockReset();
-  });
     mocks.update.mockReset();
+    mocks.localizeQuotationDraft.mockReset();
+  });
+
+  async function runAfterTasks() {
+    const tasks = mocks.afterTasks.splice(0);
+    for (const task of tasks) {
+      await task();
+    }
+  }
 
   it("returns a tenant-scoped quotation to every read role", async () => {
     mocks.findById.mockResolvedValue(createQuotation());
@@ -229,5 +246,171 @@ describe("GET /api/quotations/[quotationId]", () => {
         },
       },
     });
+  });
+
+  it("persists FAILED when AI fails and signature matches", async () => {
+    const quotation = createQuotation();
+    quotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.localizeQuotationDraft.mockRejectedValue(
+      new Error("Provider unavailable"),
+    );
+
+    const updates: Array<unknown> = [];
+    mocks.update.mockImplementation(async (_companyId, updatedQuotation) => {
+      updates.push(updatedQuotation);
+    });
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost/api/quotations/quotation-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            lines: [
+              {
+                position: 1,
+                type: "PRODUCT",
+                itemName: "Product",
+                quantity: 1,
+                unitPrice: 10,
+              },
+            ],
+          }),
+        },
+      ),
+    );
+
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(updates.length).toBeGreaterThanOrEqual(2);
+    const failedUpdate = updates[updates.length - 1] as { localizationStatus: string; localizationLastError: string | null; localizationRequestedAt: Date | null; localizationSourceLocale: string | null };
+    expect(failedUpdate.localizationStatus).toBe("FAILED");
+    expect(failedUpdate.localizationLastError).toBe(
+      "TRANSLATION_PROVIDER_ERROR",
+    );
+    expect(failedUpdate.localizationRequestedAt).toBe(
+      quotation.localizationRequestedAt,
+    );
+    expect(failedUpdate.localizationSourceLocale).toBe(
+      quotation.localizationSourceLocale,
+    );
+  });
+
+  it("does not mutate lifecycle when AI fails on stale quotation", async () => {
+    const quotation = createQuotation();
+    quotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+    const staleQuotation = createQuotation();
+    staleQuotation.replaceLines([
+      {
+        position: 1,
+        type: "PRODUCT",
+        itemName: "Updated Product",
+        quantity: 1,
+        unitPrice: 10,
+      },
+    ]);
+    staleQuotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+
+    mocks.findById.mockResolvedValueOnce(quotation); // initial find
+    mocks.findById.mockResolvedValueOnce(quotation); // updated snapshot read
+    mocks.findById.mockResolvedValueOnce(staleQuotation); // stale latest
+    mocks.localizeQuotationDraft.mockResolvedValue(
+      {} as unknown,
+    );
+    mocks.update.mockResolvedValue(undefined);
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost/api/quotations/quotation-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            lines: [
+              {
+                position: 1,
+                type: "PRODUCT",
+                itemName: "Product",
+                quantity: 1,
+                unitPrice: 10,
+              },
+            ],
+          }),
+        },
+      ),
+    );
+
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("completes localization with timestamp on current AI success", async () => {
+    const quotation = createQuotation();
+    quotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.localizeQuotationDraft.mockImplementation(
+      async (snapshot) => {
+        return {
+          ...snapshot,
+          lines: Array.isArray(snapshot.lines)
+            ? snapshot.lines.map(
+                (line: Record<string, unknown>) => ({
+                  ...line,
+                  itemNameEn: line.itemName ?? null,
+                  itemNameAr: "منتج",
+                }),
+              )
+            : [],
+        } as unknown as typeof snapshot;
+      },
+    );
+
+    const updates: Array<unknown> = [];
+    mocks.update.mockImplementation(async (_companyId, updatedQuotation) => {
+      updates.push(updatedQuotation);
+    });
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost/api/quotations/quotation-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            lines: [
+              {
+                position: 1,
+                type: "PRODUCT",
+                itemName: "Product",
+                quantity: 1,
+                unitPrice: 10,
+              },
+            ],
+          }),
+        },
+      ),
+    );
+
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(updates.length).toBeGreaterThanOrEqual(2);
+    const completedUpdate = updates[updates.length - 1] as { localizationStatus: string; localizationCompletedAt: Date | null };
+    expect(completedUpdate.localizationStatus).toBe("COMPLETED");
+    expect(completedUpdate.localizationCompletedAt).toBeInstanceOf(Date);
   });
 });
