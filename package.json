@@ -11,7 +11,9 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "quality": "npm run typecheck && npm run lint && npm run test"
+        "quality": "npm run typecheck && npm run lint && npm run test",
+        "localization:backfill": "tsx scripts/backfill-quotation-localization-status.ts",
+        "localization:backfill:apply": "tsx scripts/backfill-quotation-localization-status.ts --apply"
     },
     "dependencies": {
         "@prisma/adapter-pg": "^7.9.1",
