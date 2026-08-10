@@ -21,4 +21,5 @@ export interface UpdateQuotationDto
   termsAndConditions?: string | null;
   termsAndConditionsAr?: string | null;
   termsAndConditionsEn?: string | null;
+  localizationSourceLocale?: "ar" | "en";
 }

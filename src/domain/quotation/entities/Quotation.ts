@@ -1,4 +1,5 @@
 import { QuotationDomainError } from "../errors/QuotationDomainError";
+import { LocalizationStatus } from "../types/LocalizationStatus";
 import {
   QuotationCalculator,
   type QuotationTotals,
@@ -66,6 +67,12 @@ export interface QuotationProps
   approvedByRole?: string | null;
   rejectedAt?: Date | null;
   cancelledAt?: Date | null;
+  // New localization lifecycle fields
+  localizationStatus?: LocalizationStatus;
+  localizationRequestedAt?: Date | null;
+  localizationCompletedAt?: Date | null;
+  localizationLastError?: string | null;
+  localizationSourceLocale?: "ar" | "en" | null;
 }
 
 export class Quotation {
@@ -106,6 +113,12 @@ export class Quotation {
   private _approvedByRole: string | null;
   private _rejectedAt: Date | null;
   private _cancelledAt: Date | null;
+  // Localization lifecycle fields
+  private _localizationStatus: LocalizationStatus = LocalizationStatus.COMPLETED;
+  private _localizationRequestedAt: Date | null = null;
+  private _localizationCompletedAt: Date | null = null;
+  private _localizationLastError: string | null = null;
+  private _localizationSourceLocale: "ar" | "en" | null = null;
 
   constructor(props: QuotationProps) {
     this.assertRequiredIdentifier(props.companyId, "Company id");
@@ -122,6 +135,11 @@ export class Quotation {
     }
 
     const issueDate = props.issueDate ?? new Date();
+    this._localizationStatus = props.localizationStatus ?? LocalizationStatus.COMPLETED;
+    this._localizationRequestedAt = props.localizationRequestedAt ?? null;
+    this._localizationCompletedAt = props.localizationCompletedAt ?? null;
+    this._localizationLastError = props.localizationLastError ?? null;
+    this._localizationSourceLocale = props.localizationSourceLocale ?? null;
     const expiryDate = props.expiryDate ?? null;
 
     if (
@@ -338,6 +356,60 @@ export class Quotation {
 
   get cancelledAt(): Date | null {
     return this._cancelledAt;
+  }
+
+  // Localization getters
+  get localizationStatus(): LocalizationStatus {
+    return this._localizationStatus;
+  }
+
+  get localizationRequestedAt(): Date | null {
+    return this._localizationRequestedAt;
+  }
+
+  get localizationCompletedAt(): Date | null {
+    return this._localizationCompletedAt;
+  }
+
+  get localizationLastError(): string | null {
+    return this._localizationLastError;
+  }
+
+  get localizationSourceLocale(): "ar" | "en" | null {
+    return this._localizationSourceLocale;
+  }
+
+  // Domain transition methods
+  markLocalizationPending(sourceLocale: "ar" | "en", requestedAt: Date): void {
+    this._localizationStatus = LocalizationStatus.PENDING;
+    this._localizationRequestedAt = requestedAt;
+    this._localizationCompletedAt = null;
+    this._localizationLastError = null;
+    this._localizationSourceLocale = sourceLocale;
+  }
+
+  markLocalizationCompleted(completedAt?: Date): void {
+    this._localizationStatus = LocalizationStatus.COMPLETED;
+    this._localizationLastError = null;
+    if (completedAt !== undefined) {
+      this._localizationCompletedAt = completedAt;
+    }
+  }
+
+  setLocalizationSourceLocale(sourceLocale: "ar" | "en"): void {
+    this._localizationSourceLocale = sourceLocale;
+  }
+
+  markLocalizationFailed(error: string): void {
+    this._localizationStatus = LocalizationStatus.FAILED;
+    this._localizationLastError =
+      error === "TRANSLATION_TIMEOUT" ||
+      error === "TRANSLATION_PROVIDER_ERROR" ||
+      error === "TRANSLATION_INVALID_RESPONSE" ||
+      error === "TRANSLATION_UNEXPECTED_ERROR"
+        ? error
+        : "TRANSLATION_UNEXPECTED_ERROR";
+    this._localizationCompletedAt = null;
   }
 
   replaceLines(lines: QuotationLineInput[]): void {

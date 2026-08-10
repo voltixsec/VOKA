@@ -1,4 +1,5 @@
 import type { UpdateQuotationDto } from "../dto/UpdateQuotationDto";
+import { analyzeQuotationLocalization } from "../services/QuotationLocalizationAnalyzer";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
 import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
 import type { ApplicationResult } from "../results/ApplicationResult";
@@ -68,7 +69,6 @@ export class UpdateQuotationUseCase {
     }
 
     try {
-
       quotation.replaceLines(processedDto.lines);
 
       quotation.setDiscount(processedDto.discount ?? null);
@@ -95,6 +95,63 @@ export class UpdateQuotationUseCase {
         attentionNameEn: processedDto.attentionNameEn,
         scopeType: processedDto.scopeType,
       });
+
+      const analysis = analyzeQuotationLocalization(
+        {
+          customer: quotation.customer.toJSON(),
+          projectName: quotation.projectName,
+          projectNameAr: quotation.projectNameAr,
+          projectNameEn: quotation.projectNameEn,
+          attentionName: quotation.attentionName,
+          attentionNameAr: quotation.attentionNameAr,
+          attentionNameEn: quotation.attentionNameEn,
+          subjectAr: quotation.subjectAr,
+          subjectEn: quotation.subjectEn,
+          briefAr: quotation.briefAr,
+          briefEn: quotation.briefEn,
+          notes: quotation.notes,
+          notesAr: quotation.notesAr,
+          notesEn: quotation.notesEn,
+          termsAndConditions: quotation.termsAndConditions,
+          termsAndConditionsAr: quotation.termsAndConditionsAr,
+          termsAndConditionsEn: quotation.termsAndConditionsEn,
+          lines: quotation.lines.map((line) => ({
+            id: line.id,
+            catalogItemId: line.catalogItemId,
+            taxRateId: line.taxRateId,
+            position: line.position,
+            type: line.type,
+            itemCode: line.itemCode,
+            itemName: line.itemName,
+            itemNameAr: line.itemNameAr,
+            itemNameEn: line.itemNameEn,
+            description: line.description,
+            descriptionAr: line.descriptionAr,
+            descriptionEn: line.descriptionEn,
+            unitName: line.unitName,
+            unitNameAr: line.unitNameAr,
+            unitNameEn: line.unitNameEn,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            discount: line.discount,
+            taxPercentage: line.taxPercentage,
+          })),
+        },
+        dto.localizationSourceLocale,
+      );
+      const now = new Date();
+
+      if (analysis.items.length > 0) {
+        quotation.markLocalizationPending(
+          analysis.sourceLocale,
+          now,
+        );
+      } else {
+        quotation.setLocalizationSourceLocale(
+          analysis.sourceLocale,
+        );
+        quotation.markLocalizationCompleted();
+      }
 
       await this.repository.update(
         processedDto.companyId,
