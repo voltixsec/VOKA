@@ -73,6 +73,10 @@ export interface QuotationProps
   localizationCompletedAt?: Date | null;
   localizationLastError?: string | null;
   localizationSourceLocale?: "ar" | "en" | null;
+  localizationSourceSignature?: string | null;
+  localizationClaimToken?: string | null;
+  localizationLeaseUntil?: Date | null;
+  localizationAttemptCount?: number;
 }
 
 export class Quotation {
@@ -119,6 +123,10 @@ export class Quotation {
   private _localizationCompletedAt: Date | null = null;
   private _localizationLastError: string | null = null;
   private _localizationSourceLocale: "ar" | "en" | null = null;
+  private _localizationSourceSignature: string | null = null;
+  private _localizationClaimToken: string | null = null;
+  private _localizationLeaseUntil: Date | null = null;
+  private _localizationAttemptCount: number = 0;
 
   constructor(props: QuotationProps) {
     this.assertRequiredIdentifier(props.companyId, "Company id");
@@ -140,6 +148,10 @@ export class Quotation {
     this._localizationCompletedAt = props.localizationCompletedAt ?? null;
     this._localizationLastError = props.localizationLastError ?? null;
     this._localizationSourceLocale = props.localizationSourceLocale ?? null;
+    this._localizationSourceSignature = props.localizationSourceSignature ?? null;
+    this._localizationClaimToken = props.localizationClaimToken ?? null;
+    this._localizationLeaseUntil = props.localizationLeaseUntil ?? null;
+    this._localizationAttemptCount = props.localizationAttemptCount ?? 0;
     const expiryDate = props.expiryDate ?? null;
 
     if (
@@ -377,6 +389,22 @@ export class Quotation {
 
   get localizationSourceLocale(): "ar" | "en" | null {
     return this._localizationSourceLocale;
+  }
+
+  get localizationSourceSignature(): string | null {
+    return this._localizationSourceSignature;
+  }
+
+  get localizationClaimToken(): string | null {
+    return this._localizationClaimToken;
+  }
+
+  get localizationLeaseUntil(): Date | null {
+    return this._localizationLeaseUntil;
+  }
+
+  get localizationAttemptCount(): number {
+    return this._localizationAttemptCount;
   }
 
   // Domain transition methods

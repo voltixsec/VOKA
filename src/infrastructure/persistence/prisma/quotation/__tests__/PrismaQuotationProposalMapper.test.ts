@@ -268,5 +268,102 @@ describe(
         ).toBe("ar");
       },
     );
+
+    it(
+      "maps Phase 1.3 concurrency fields to persistence and restores them with default attemptCount",
+      () => {
+        const now = new Date("2026-08-06T00:00:00.000Z");
+        const leaseUntil = new Date("2026-08-06T00:02:00.000Z");
+
+        // 1. Check default domain properties for new Quotation
+        const freshQuotation = new Quotation({
+          companyId: "company-1",
+          customerId: "customer-1",
+          number: "Q-001",
+          customer: { name: "First United" },
+        });
+
+        expect(freshQuotation.localizationAttemptCount).toBe(0);
+        expect(freshQuotation.localizationSourceSignature).toBeNull();
+        expect(freshQuotation.localizationClaimToken).toBeNull();
+        expect(freshQuotation.localizationLeaseUntil).toBeNull();
+
+        // 2. Check persistence mapping with populated fields
+        const hydratedQuotation = Quotation.restore({
+          id: "quotation-1",
+          companyId: "company-1",
+          customerId: "customer-1",
+          number: "Q-001",
+          customer: { name: "First United" },
+          localizationSourceSignature: "sig_abc123",
+          localizationClaimToken: "token_xyz789",
+          localizationLeaseUntil: leaseUntil,
+          localizationAttemptCount: 2,
+        });
+
+        const data = PrismaQuotationMapper.toPersistence(hydratedQuotation);
+
+        expect(data.localizationSourceSignature).toBe("sig_abc123");
+        expect(data.localizationClaimToken).toBe("token_xyz789");
+        expect(data.localizationLeaseUntil).toEqual(leaseUntil);
+        expect(data.localizationAttemptCount).toBe(2);
+
+        // 3. Check domain restoration from record
+        const restored = PrismaQuotationMapper.toDomain({
+          id: "quotation-1",
+          companyId: "company-1",
+          customerId: "customer-1",
+          priceListId: null,
+          number: "Q-001",
+          status: "DRAFT",
+          issueDate: now,
+          expiryDate: null,
+          currencyCode: "KWD",
+          customerName: "First United",
+          customerEmail: null,
+          customerPhone: null,
+          customerTaxNo: null,
+          billingAddress: null,
+          localizationStatus: "PENDING",
+          localizationRequestedAt: now,
+          localizationCompletedAt: null,
+          localizationLastError: null,
+          localizationSourceLocale: "AR",
+          localizationSourceSignature: "sig_abc123",
+          localizationClaimToken: "token_xyz789",
+          localizationLeaseUntil: leaseUntil,
+          localizationAttemptCount: 2,
+          subjectAr: null,
+          subjectEn: null,
+          briefAr: null,
+          briefEn: null,
+          projectName: null,
+          attentionName: null,
+          scopeType: null,
+          subtotal: 0,
+          discountType: null,
+          discountValue: 0,
+          discountAmount: 0,
+          taxAmount: 0,
+          totalAmount: 0,
+          notes: null,
+          termsAndConditions: null,
+          sentAt: null,
+          approvedAt: null,
+          rejectedAt: null,
+          cancelledAt: null,
+          isDeleted: false,
+          deletedAt: null,
+          createdAt: now,
+          updatedAt: now,
+          lines: [],
+        } as never);
+
+        expect(restored.localizationSourceSignature).toBe("sig_abc123");
+        expect(restored.localizationClaimToken).toBe("token_xyz789");
+        expect(restored.localizationLeaseUntil).toEqual(leaseUntil);
+        expect(restored.localizationAttemptCount).toBe(2);
+      },
+    );
   },
 );

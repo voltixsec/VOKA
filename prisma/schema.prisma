@@ -406,6 +406,10 @@ model Quotation {
   localizationCompletedAt DateTime?
   localizationLastError   String?
   localizationSourceLocale Locale?
+  localizationSourceSignature String?
+  localizationClaimToken      String?
+  localizationLeaseUntil      DateTime?
+  localizationAttemptCount    Int     @default(0)
 
   sentAt         DateTime?
   approvedAt     DateTime?
@@ -432,6 +436,7 @@ model Quotation {
   @@index([companyId, issueDate])
   @@index([companyId, expiryDate])
   @@index([companyId, isDeleted])
+  @@index([companyId, localizationStatus, localizationLeaseUntil])
   @@index([customerId])
   @@index([priceListId])
 }

@@ -87,6 +87,10 @@ export class PrismaQuotationMapper {
           : quotation.localizationSourceLocale === "en"
             ? "EN"
             : undefined,
+      localizationSourceSignature: quotation.localizationSourceSignature,
+      localizationClaimToken: quotation.localizationClaimToken,
+      localizationLeaseUntil: quotation.localizationLeaseUntil,
+      localizationAttemptCount: quotation.localizationAttemptCount,
       sentAt: quotation.sentAt,
       approvedAt: quotation.approvedAt,
       approvedByName: quotation.approvedByName,
@@ -229,6 +233,10 @@ export class PrismaQuotationMapper {
         ? record.localizationSourceLocale.toLowerCase() as
             "ar" | "en"
         : null,
+      localizationSourceSignature: record.localizationSourceSignature,
+      localizationClaimToken: record.localizationClaimToken,
+      localizationLeaseUntil: record.localizationLeaseUntil,
+      localizationAttemptCount: record.localizationAttemptCount ?? 0,
       sentAt: record.sentAt,
       approvedAt: record.approvedAt,
       approvedByName: record.approvedByName,
