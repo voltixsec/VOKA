@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 15
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/voka
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/voka_shadow
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
@@ -24,7 +25,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
