@@ -47,6 +47,7 @@ function createRepository(quotation: Quotation): IQuotationRepository {
       storedQuotation = updated;
     }),
     delete: vi.fn(),
+    claimLocalization: vi.fn(),
   };
 }
 

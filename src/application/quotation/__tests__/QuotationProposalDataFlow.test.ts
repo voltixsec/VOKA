@@ -33,6 +33,7 @@ function createRepository(
     findAll: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    claimLocalization: vi.fn().mockResolvedValue(null),
   };
 }
 

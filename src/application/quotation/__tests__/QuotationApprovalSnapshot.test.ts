@@ -66,6 +66,7 @@ describe(
               ),
 
           delete: vi.fn(),
+          claimLocalization: vi.fn(),
         };
 
         const result =

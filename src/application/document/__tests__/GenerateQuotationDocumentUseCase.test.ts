@@ -10,7 +10,7 @@ function createRepository(quotation: Quotation | null): IQuotationRepository {
   return {
     existsByNumber: vi.fn(), save: vi.fn(),
     findById: vi.fn().mockResolvedValue(quotation), findAll: vi.fn(),
-    update: vi.fn(), delete: vi.fn(),
+    update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(),
   };
 }
 

@@ -4,6 +4,8 @@ import type {
   IQuotationRepository,
   QuotationListFilters,
   QuotationListResult,
+  QuotationLocalizationClaim,
+  QuotationLocalizationClaimParams,
 } from "../../../../application/quotation/repositories/IQuotationRepository";
 import type { Quotation } from "../../../../domain/quotation/entities/Quotation";
 import { PrismaQuotationMapper } from "./PrismaQuotationMapper";
@@ -185,6 +187,81 @@ export class PrismaQuotationRepository implements IQuotationRepository {
       },
     });
 
+  }
+
+  async claimLocalization(
+    params: QuotationLocalizationClaimParams,
+  ): Promise<QuotationLocalizationClaim | null> {
+    const { companyId, quotationId, leaseDurationMs } = params;
+    const claimToken = params.claimToken || crypto.randomUUID();
+    const now = new Date();
+    const leaseExpiresAt = new Date(now.getTime() + leaseDurationMs);
+
+    const result = await this.db.quotation.updateMany({
+      where: {
+        companyId,
+        id: quotationId,
+        isDeleted: false,
+        localizationSourceSignature: { not: null },
+        localizationAttemptCount: { lt: 3 },
+        AND: [
+          {
+            OR: [
+              { localizationLeaseUntil: null },
+              { localizationLeaseUntil: { lt: now } },
+            ],
+          },
+          {
+            OR: [
+              { localizationStatus: "PENDING" },
+              {
+                localizationStatus: "FAILED",
+                localizationLastError: {
+                  in: [
+                    "TRANSLATION_TIMEOUT",
+                    "TRANSLATION_PROVIDER_ERROR",
+                    "TRANSLATION_UNEXPECTED_ERROR",
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      data: {
+        localizationClaimToken: claimToken,
+        localizationLeaseUntil: leaseExpiresAt,
+        localizationAttemptCount: { increment: 1 },
+        localizationStatus: "PENDING",
+        localizationLastError: null,
+      },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    const claimedRecord = await this.db.quotation.findFirst({
+      where: {
+        id: quotationId,
+        companyId,
+        localizationClaimToken: claimToken,
+      },
+      select: {
+        localizationSourceSignature: true,
+        localizationAttemptCount: true,
+      },
+    });
+
+    if (!claimedRecord || !claimedRecord.localizationSourceSignature) {
+      return null;
+    }
+
+    return {
+      claimToken,
+      sourceSignature: claimedRecord.localizationSourceSignature,
+      attemptCount: claimedRecord.localizationAttemptCount,
+    };
   }
 
 }

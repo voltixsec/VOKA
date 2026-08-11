@@ -14,6 +14,7 @@ function createRepository(): IQuotationRepository {
     }),
     update: vi.fn(),
     delete: vi.fn(),
+    claimLocalization: vi.fn(),
   };
 }
 

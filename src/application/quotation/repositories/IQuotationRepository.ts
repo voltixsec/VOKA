@@ -17,6 +17,19 @@ export type QuotationListResult = {
   total: number;
 };
 
+export type QuotationLocalizationClaimParams = {
+  companyId: string;
+  quotationId: string;
+  claimToken?: string;
+  leaseDurationMs: number;
+};
+
+export type QuotationLocalizationClaim = {
+  claimToken: string;
+  sourceSignature: string;
+  attemptCount: number;
+};
+
 export interface IQuotationRepository {
   existsByNumber(
     companyId: string,
@@ -31,10 +44,10 @@ export interface IQuotationRepository {
     companyId: string,
     id: string,
   ): Promise<Quotation | null>;
+
   findAll(
     filters: QuotationListFilters,
   ): Promise<QuotationListResult>;
-
 
   update(
     companyId: string,
@@ -45,4 +58,8 @@ export interface IQuotationRepository {
     companyId: string,
     id: string,
   ): Promise<void>;
+
+  claimLocalization(
+    params: QuotationLocalizationClaimParams,
+  ): Promise<QuotationLocalizationClaim | null>;
 }
