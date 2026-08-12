@@ -415,6 +415,7 @@ model Quotation {
   approvedAt     DateTime?
   approvedByName String?
   approvedByRole String?
+  documentBrandSnapshot Json?
   rejectedAt     DateTime?
   cancelledAt    DateTime?
 

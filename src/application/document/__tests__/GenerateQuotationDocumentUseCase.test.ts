@@ -5,6 +5,7 @@ import type { IQuotationRepository } from "@/src/application/quotation";
 
 import type { IQuotationDocumentRenderer } from "../contracts/IQuotationDocumentRenderer";
 import { GenerateQuotationDocumentUseCase } from "../use-cases/GenerateQuotationDocumentUseCase";
+import { createCompanyDocumentBrandSnapshot } from "@/src/domain/document/CompanyDocumentBrandSnapshot";
 
 function createRepository(quotation: Quotation | null): IQuotationRepository {
   return {
@@ -18,10 +19,27 @@ function createRepository(quotation: Quotation | null): IQuotationRepository {
 function createQuotation(): Quotation {
   return Quotation.restore({
     id: "quotation-1", companyId: "company-1", customerId: "customer-1",
-    number: "Q/2026 001", status: "SENT", issueDate: new Date("2026-08-05T00:00:00Z"),
+    number: "Q/2026 001", status: "DRAFT", issueDate: new Date("2026-08-05T00:00:00Z"),
     currencyCode: "KWD", customer: { name: "شركة الاختبار", email: "customer@example.com" },
     lines: [{ position: 1, type: "SERVICE", itemName: "خدمة استشارية", unitName: "ساعة", quantity: 2, unitPrice: 100, taxPercentage: 5 }],
     notes: "مراجعة بشرية مطلوبة",
+  });
+}
+
+function approvedQuotation(withSnapshot: boolean): Quotation {
+  const base = createQuotation();
+  return Quotation.restore({
+    id: base.id, companyId: base.companyId, customerId: base.customerId,
+    number: base.number.toString(), status: "APPROVED", issueDate: base.issueDate,
+    currencyCode: base.currencyCode, customer: base.customer.toJSON(),
+    lines: [...base.lines], notes: base.notes, approvedAt: new Date("2026-08-06T00:00:00Z"),
+    approvedByName: "Approver", approvedByRole: "OWNER",
+    documentBrandSnapshot: withSnapshot ? createCompanyDocumentBrandSnapshot({
+      nameAr: "العلامة الأصلية", nameEn: "Original Brand",
+      addressAr: "العنوان الأصلي", addressEn: "Original Address",
+      poBox: "111", phone: "222", mobile: "333", whatsapp: "444",
+      logoUrl: "data:image/png;base64,ORIGINAL", brandTheme: "EMERALD",
+    }) : null,
   });
 }
 
@@ -92,5 +110,29 @@ describe("GenerateQuotationDocumentUseCase", () => {
     const result = await useCase.execute({ companyId: "company-1", companyName: "VOKA", quotationId: "other-company-quotation", locale: "en" });
     expect(result).toEqual({ success: false, error: { code: "QUOTATION_NOT_FOUND", message: "Quotation not found." } });
     expect(renderer.render).not.toHaveBeenCalled();
+  });
+
+  it("uses the immutable snapshot for an approved quotation", async () => {
+    const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array()) };
+    const useCase = new GenerateQuotationDocumentUseCase(createRepository(approvedQuotation(true)), renderer);
+    await useCase.execute({
+      companyId: "company-1", quotationId: "quotation-1", locale: "en", companyName: "Changed Company",
+      companyIdentity: { nameEn: "Changed Brand", addressEn: "Changed Address", logoUrl: "data:image/png;base64,CHANGED", brandTheme: "BURGUNDY" },
+    });
+    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({
+      company: expect.objectContaining({ name: "Original Brand", address: "Original Address", logoUrl: "data:image/png;base64,ORIGINAL", brandTheme: "EMERALD" }),
+    }));
+  });
+
+  it("uses live branding for legacy approved quotations without a snapshot", async () => {
+    const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array()) };
+    const useCase = new GenerateQuotationDocumentUseCase(createRepository(approvedQuotation(false)), renderer);
+    await useCase.execute({
+      companyId: "company-1", quotationId: "quotation-1", locale: "en", companyName: "Live Company",
+      companyIdentity: { nameEn: "Live Brand", brandTheme: "CHARCOAL" },
+    });
+    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({
+      company: expect.objectContaining({ name: "Live Brand", brandTheme: "CHARCOAL" }),
+    }));
   });
 });

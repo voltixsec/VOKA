@@ -365,5 +365,26 @@ describe(
         expect(restored.localizationAttemptCount).toBe(2);
       },
     );
+
+    it("round-trips the versioned document brand snapshot", () => {
+      const snapshot = {
+        version: 1 as const, nameAr: null, nameEn: "Original Brand",
+        addressAr: null, addressEn: "Kuwait", poBox: null, phone: null,
+        mobile: null, whatsapp: null, logoUrl: null, brandTheme: "EMERALD",
+      };
+      const quotation = Quotation.restore({
+        id: "quotation-1", companyId: "company-1", customerId: "customer-1",
+        number: "Q-001", customer: { name: "Customer" }, documentBrandSnapshot: snapshot,
+      });
+      expect(PrismaQuotationMapper.toPersistence(quotation).documentBrandSnapshot).toEqual(snapshot);
+
+      const record = {
+        id: "quotation-1", companyId: "company-1", customerId: "customer-1",
+        priceListId: null, number: "Q-001", status: "APPROVED", issueDate: new Date(),
+        expiryDate: null, currencyCode: "KWD", customerName: "Customer",
+        lines: [], documentBrandSnapshot: snapshot,
+      } as never;
+      expect(PrismaQuotationMapper.toDomain(record).documentBrandSnapshot).toEqual(snapshot);
+    });
   },
 );

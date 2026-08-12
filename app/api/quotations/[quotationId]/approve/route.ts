@@ -10,6 +10,8 @@ import {
 import {
   PrismaQuotationRepository,
 } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
+import { prisma } from "@/lib/prisma";
+import { createCompanyDocumentBrandSnapshot } from "@/src/domain/document/CompanyDocumentBrandSnapshot";
 
 import {
   getQuotationIdFromActionUrl,
@@ -38,6 +40,19 @@ export const POST = withCompanyAuth(
         request,
       );
 
+    const brand = await prisma.company.findUnique({
+      where: { id: company.companyId },
+      select: {
+        name: true, nameAr: true, nameEn: true, addressAr: true, addressEn: true,
+        poBox: true, phone: true, mobile: true, whatsapp: true,
+        logoUrl: true, brandTheme: true,
+      },
+    });
+
+    if (!brand) {
+      throw ApiError.notFound("COMPANY_NOT_FOUND", "Company not found.");
+    }
+
     const result =
       await approveQuotation.execute({
         companyId:
@@ -51,6 +66,11 @@ export const POST = withCompanyAuth(
 
         approvedByRole:
           company.role,
+        documentBrandSnapshot: createCompanyDocumentBrandSnapshot({
+          ...brand,
+          nameEn: brand.nameEn ?? brand.name,
+          brandTheme: brand.brandTheme,
+        }),
       });
 
     if (!result.success) {

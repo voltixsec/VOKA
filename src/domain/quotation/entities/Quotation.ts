@@ -19,6 +19,7 @@ import {
   type CustomerSnapshotProps,
 } from "../value-objects/CustomerSnapshot";
 import { QuotationNumber } from "../value-objects/QuotationNumber";
+import type { CompanyDocumentBrandSnapshot } from "../../document/CompanyDocumentBrandSnapshot";
 
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 
@@ -65,6 +66,7 @@ export interface QuotationProps
   approvedAt?: Date | null;
   approvedByName?: string | null;
   approvedByRole?: string | null;
+  documentBrandSnapshot?: CompanyDocumentBrandSnapshot | null;
   rejectedAt?: Date | null;
   cancelledAt?: Date | null;
   // New localization lifecycle fields
@@ -115,6 +117,7 @@ export class Quotation {
   private _approvedAt: Date | null;
   private _approvedByName: string | null;
   private _approvedByRole: string | null;
+  private _documentBrandSnapshot: CompanyDocumentBrandSnapshot | null;
   private _rejectedAt: Date | null;
   private _cancelledAt: Date | null;
   // Localization lifecycle fields
@@ -223,6 +226,9 @@ export class Quotation {
       props.approvedByName?.trim() || null;
     this._approvedByRole =
       props.approvedByRole?.trim() || null;
+    this._documentBrandSnapshot = props.documentBrandSnapshot
+      ? structuredClone(props.documentBrandSnapshot)
+      : null;
     this._rejectedAt = props.rejectedAt ?? null;
     this._cancelledAt = props.cancelledAt ?? null;
 
@@ -416,6 +422,12 @@ export class Quotation {
     this._localizationSourceLocale = sourceLocale;
   }
 
+  get documentBrandSnapshot(): CompanyDocumentBrandSnapshot | null {
+    return this._documentBrandSnapshot
+      ? structuredClone(this._documentBrandSnapshot)
+      : null;
+  }
+
   startLocalizationGeneration(
     sourceLocale: "ar" | "en",
     sourceSignature: string,
@@ -599,6 +611,7 @@ export class Quotation {
   }
 
   approve(
+    documentBrandSnapshot: CompanyDocumentBrandSnapshot,
     approval: QuotationApprovalIdentity = {
       name: "Authorized Approver",
       role: "APPROVER",
@@ -631,6 +644,9 @@ export class Quotation {
       approvedByName;
     this._approvedByRole =
       approvedByRole;
+    if (!this._documentBrandSnapshot) {
+      this._documentBrandSnapshot = structuredClone(documentBrandSnapshot);
+    }
   }
 
   reject(at: Date = new Date()): void {

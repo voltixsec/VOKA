@@ -10,6 +10,7 @@ import type {
   DocumentLocale,
   QuotationDocumentSnapshot,
 } from "../contracts/QuotationDocumentSnapshot";
+import { createCompanyDocumentBrandSnapshot } from "../../../domain/document/CompanyDocumentBrandSnapshot";
 
 export type GenerateQuotationCompanyIdentity = {
   nameAr?: string | null;
@@ -97,6 +98,31 @@ export class GenerateQuotationDocumentUseCase {
     const customer =
       quotation.customer.toJSON();
 
+    const liveBrand = createCompanyDocumentBrandSnapshot({
+      nameAr: input.companyIdentity?.nameAr ?? null,
+      nameEn: input.companyIdentity?.nameEn ?? input.companyName,
+      addressAr: input.companyIdentity?.addressAr ?? null,
+      addressEn: input.companyIdentity?.addressEn ?? null,
+      poBox: input.companyIdentity?.poBox ?? null,
+      phone: input.companyIdentity?.phone ?? null,
+      mobile: input.companyIdentity?.mobile ?? null,
+      whatsapp: input.companyIdentity?.whatsapp ?? null,
+      logoUrl: input.companyIdentity?.logoUrl ?? null,
+      brandTheme: input.companyIdentity?.brandTheme ?? "NAVY_GOLD",
+    });
+    const persistedBrand = quotation.documentBrandSnapshot;
+    const usePersistedBrand = Boolean(
+      persistedBrand &&
+      (quotation.status === "APPROVED" || quotation.approvedAt),
+    );
+    const effectiveBrand = usePersistedBrand && persistedBrand
+      ? persistedBrand
+      : liveBrand;
+    const effectiveFallbackName =
+      usePersistedBrand
+        ? "VOKA"
+        : input.companyName;
+
     const snapshot:
       QuotationDocumentSnapshot = {
       locale:
@@ -105,75 +131,75 @@ export class GenerateQuotationDocumentUseCase {
       company: {
         name:
           input.locale === "ar"
-            ? input.companyIdentity
-                ?.nameAr
+            ? effectiveBrand
+                .nameAr
                 ?.trim() ||
-              input.companyIdentity
-                ?.nameEn
+              effectiveBrand
+                .nameEn
                 ?.trim() ||
-              input.companyName
+              effectiveFallbackName
                 .trim() ||
               "VOKA"
-            : input.companyIdentity
-                ?.nameEn
+            : effectiveBrand
+                .nameEn
                 ?.trim() ||
-              input.companyIdentity
-                ?.nameAr
+              effectiveBrand
+                .nameAr
                 ?.trim() ||
-              input.companyName
+              effectiveFallbackName
                 .trim() ||
               "VOKA",
 
         address:
           input.locale === "ar"
-            ? input.companyIdentity
-                ?.addressAr
+            ? effectiveBrand
+                .addressAr
                 ?.trim() ||
-              input.companyIdentity
-                ?.addressEn
+              effectiveBrand
+                .addressEn
                 ?.trim() ||
               null
-            : input.companyIdentity
-                ?.addressEn
+            : effectiveBrand
+                .addressEn
                 ?.trim() ||
-              input.companyIdentity
-                ?.addressAr
+              effectiveBrand
+                .addressAr
                 ?.trim() ||
               null,
 
         poBox:
-          input.companyIdentity
-            ?.poBox
+          effectiveBrand
+            .poBox
             ?.trim() ||
           null,
 
         phone:
-          input.companyIdentity
-            ?.phone
+          effectiveBrand
+            .phone
             ?.trim() ||
           null,
 
         mobile:
-          input.companyIdentity
-            ?.mobile
+          effectiveBrand
+            .mobile
             ?.trim() ||
           null,
 
         whatsapp:
-          input.companyIdentity
-            ?.whatsapp
+          effectiveBrand
+            .whatsapp
             ?.trim() ||
           null,
 
         logoUrl:
-          input.companyIdentity
-            ?.logoUrl
+          effectiveBrand
+            .logoUrl
             ?.trim() ||
           null,
 
         brandTheme:
-          input.companyIdentity
-            ?.brandTheme
+          effectiveBrand
+            .brandTheme
             ?.trim() ||
           "NAVY_GOLD",
       },

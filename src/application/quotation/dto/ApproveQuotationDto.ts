@@ -1,3 +1,5 @@
+import type { CompanyDocumentBrandSnapshot } from "../../../domain/document/CompanyDocumentBrandSnapshot";
+
 export interface ApproveQuotationDto {
   companyId: string;
 
@@ -6,4 +8,5 @@ export interface ApproveQuotationDto {
   approvedByName?: string;
 
   approvedByRole?: string;
+  documentBrandSnapshot: CompanyDocumentBrandSnapshot;
 }

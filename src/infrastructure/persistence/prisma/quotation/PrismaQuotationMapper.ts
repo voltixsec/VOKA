@@ -7,6 +7,7 @@ import {
   type QuotationStatus,
 } from "../../../../domain/quotation";
 import type { LocalizationStatus } from "../../../../domain/quotation/types/LocalizationStatus";
+import { parseCompanyDocumentBrandSnapshot } from "../../../../domain/document/CompanyDocumentBrandSnapshot";
 
 type QuotationRecord = Prisma.QuotationGetPayload<{
   include: {
@@ -95,6 +96,9 @@ export class PrismaQuotationMapper {
       approvedAt: quotation.approvedAt,
       approvedByName: quotation.approvedByName,
       approvedByRole: quotation.approvedByRole,
+      ...(quotation.documentBrandSnapshot
+        ? { documentBrandSnapshot: quotation.documentBrandSnapshot as Prisma.InputJsonValue }
+        : {}),
       rejectedAt: quotation.rejectedAt,
       cancelledAt: quotation.cancelledAt,
       lines: {
@@ -241,6 +245,7 @@ export class PrismaQuotationMapper {
       approvedAt: record.approvedAt,
       approvedByName: record.approvedByName,
       approvedByRole: record.approvedByRole,
+      documentBrandSnapshot: parseCompanyDocumentBrandSnapshot(record.documentBrandSnapshot),
       rejectedAt: record.rejectedAt,
       cancelledAt: record.cancelledAt,
     });

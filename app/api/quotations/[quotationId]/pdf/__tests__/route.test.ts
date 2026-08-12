@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 
   companyFindUnique:
     vi.fn(),
+  update: vi.fn(),
 
   roleSets:
     [] as string[][],
@@ -24,7 +25,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository", () => ({
-  PrismaQuotationRepository: class { findById = mocks.findById; },
+  PrismaQuotationRepository: class { findById = mocks.findById; update = mocks.update; },
 }));
 vi.mock("@/src/infrastructure/document/pdfkit/PdfKitQuotationDocumentRenderer", () => ({
   PdfKitQuotationDocumentRenderer: class { render = mocks.render; },
@@ -61,6 +62,7 @@ describe("GET /api/quotations/[quotationId]/pdf", () => {
 
     mocks.companyFindUnique
       .mockReset();
+    mocks.update.mockReset();
 
     mocks.companyFindUnique
       .mockResolvedValue({
@@ -130,6 +132,36 @@ describe("GET /api/quotations/[quotationId]/pdf", () => {
     expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="quotation-Q-001.pdf"');
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(new TextDecoder().decode(await response.arrayBuffer())).toBe("%PDF-");
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("uses an approved quotation brand snapshot without mutating it", async () => {
+    const approved = Quotation.restore({
+      id: "quotation-1", companyId: "company-1", customerId: "customer-1",
+      number: "Q-001", status: "APPROVED", customer: { name: "Demo Customer" },
+      lines: [{ position: 1, type: "PRODUCT", itemName: "Product", quantity: 1, unitPrice: 10 }],
+      documentBrandSnapshot: {
+        version: 1, nameAr: null, nameEn: "Original Brand",
+        addressAr: null, addressEn: "Original Address", poBox: null,
+        phone: null, mobile: null, whatsapp: null, logoUrl: null,
+        brandTheme: "EMERALD",
+      },
+    });
+    mocks.findById.mockResolvedValue(approved);
+    mocks.companyFindUnique.mockResolvedValue({
+      name: "Changed Company", nameAr: null, nameEn: "Changed Brand",
+      addressAr: null, addressEn: "Changed Address", poBox: null,
+      phone: null, mobile: null, whatsapp: null, logoUrl: null,
+      brandTheme: "BURGUNDY",
+    });
+    mocks.render.mockResolvedValue(new Uint8Array([37, 80, 68, 70, 45]));
+
+    const response = await GET(new Request("http://localhost/api/quotations/quotation-1/pdf?locale=en"));
+    expect(response.status).toBe(200);
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({
+      company: expect.objectContaining({ name: "Original Brand", address: "Original Address", brandTheme: "EMERALD" }),
+    }));
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("returns the same 404 for missing and cross-company quotations", async () => {

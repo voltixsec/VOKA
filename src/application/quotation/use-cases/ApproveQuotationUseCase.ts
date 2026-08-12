@@ -39,7 +39,7 @@ export class ApproveQuotationUseCase {
     }
 
     try {
-      quotation.approve({
+      quotation.approve(dto.documentBrandSnapshot, {
         name:
           dto.approvedByName?.trim() ||
           "Authorized Approver",
