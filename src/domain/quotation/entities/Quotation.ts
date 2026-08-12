@@ -416,6 +416,22 @@ export class Quotation {
     this._localizationSourceLocale = sourceLocale;
   }
 
+  startLocalizationGeneration(
+    sourceLocale: "ar" | "en",
+    sourceSignature: string,
+    requestedAt: Date,
+  ): void {
+    this._localizationStatus = LocalizationStatus.PENDING;
+    this._localizationRequestedAt = requestedAt;
+    this._localizationCompletedAt = null;
+    this._localizationLastError = null;
+    this._localizationSourceLocale = sourceLocale;
+    this._localizationSourceSignature = sourceSignature;
+    this._localizationClaimToken = null;
+    this._localizationLeaseUntil = null;
+    this._localizationAttemptCount = 0;
+  }
+
   markLocalizationCompleted(completedAt?: Date): void {
     this._localizationStatus = LocalizationStatus.COMPLETED;
     this._localizationLastError = null;

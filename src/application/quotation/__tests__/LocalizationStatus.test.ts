@@ -95,6 +95,7 @@ describe("Localization lifecycle", () => {
     const saved = await repository.findById("company-1", "any-id");
     expect(saved).toBeDefined();
     expect(saved!.localizationStatus).toBe(LocalizationStatus.PENDING);
+    expect(saved!.localizationSourceSignature).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("updates quotation and transitions to COMPLETED when no fields need localization", async () => {

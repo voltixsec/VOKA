@@ -3,6 +3,7 @@ import {
   QuotationDomainError,
 } from "../../../domain/quotation";
 import { analyzeQuotationLocalization } from "../services/QuotationLocalizationAnalyzer";
+import { createQuotationLocalizationSourceSignature } from "../services/QuotationLocalizationSourceSignature";
 
 import type { CreateQuotationDto } from "../dto/CreateQuotationDto";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
@@ -167,8 +168,9 @@ export class CreateQuotationUseCase {
       const now = new Date();
 
       if (analysis.items.length > 0) {
-        quotation.markLocalizationPending(
+        quotation.startLocalizationGeneration(
           analysis.sourceLocale,
+          createQuotationLocalizationSourceSignature(analysis),
           now,
         );
       } else {

@@ -11,6 +11,8 @@ import {
   UpdateQuotationUseCase,
   type UpdateQuotationDto,
 } from "@/src/application/quotation";
+import { analyzeQuotationLocalization } from "@/src/application/quotation/services/QuotationLocalizationAnalyzer";
+import { createQuotationLocalizationSourceSignature } from "@/src/application/quotation/services/QuotationLocalizationSourceSignature";
 import {
   isQuotationScopeType,
 } from "@/src/domain/quotation";
@@ -236,109 +238,6 @@ function classifyLocalizationError(
   return "TRANSLATION_UNEXPECTED_ERROR";
 }
 
-function localizationSignature(
-  input: Record<string, unknown>,
-): string {
-  const lines =
-    Array.isArray(input.lines)
-      ? input.lines.map((rawLine) => {
-          const line =
-            rawLine &&
-            typeof rawLine === "object" &&
-            !Array.isArray(rawLine)
-              ? rawLine as Record<string, unknown>
-              : {};
-
-          return {
-            id:
-              line.id ?? null,
-
-            position:
-              line.position ?? null,
-
-            itemName:
-              line.itemName ?? null,
-
-            itemNameAr:
-              line.itemNameAr ?? null,
-
-            itemNameEn:
-              line.itemNameEn ?? null,
-
-            description:
-              line.description ?? null,
-
-            descriptionAr:
-              line.descriptionAr ?? null,
-
-            descriptionEn:
-              line.descriptionEn ?? null,
-
-            unitName:
-              line.unitName ?? null,
-
-            unitNameAr:
-              line.unitNameAr ?? null,
-
-            unitNameEn:
-              line.unitNameEn ?? null,
-          };
-        })
-      : [];
-
-  return JSON.stringify({
-    projectName:
-      input.projectName ?? null,
-
-    projectNameAr:
-      input.projectNameAr ?? null,
-
-    projectNameEn:
-      input.projectNameEn ?? null,
-
-    attentionName:
-      input.attentionName ?? null,
-
-    attentionNameAr:
-      input.attentionNameAr ?? null,
-
-    attentionNameEn:
-      input.attentionNameEn ?? null,
-
-    subjectAr:
-      input.subjectAr ?? null,
-
-    subjectEn:
-      input.subjectEn ?? null,
-
-    briefAr:
-      input.briefAr ?? null,
-
-    briefEn:
-      input.briefEn ?? null,
-
-    notes:
-      input.notes ?? null,
-
-    notesAr:
-      input.notesAr ?? null,
-
-    notesEn:
-      input.notesEn ?? null,
-
-    termsAndConditions:
-      input.termsAndConditions ?? null,
-
-    termsAndConditionsAr:
-      input.termsAndConditionsAr ?? null,
-
-    termsAndConditionsEn:
-      input.termsAndConditionsEn ?? null,
-
-    lines,
-  });
-}
-
 export const PATCH = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
   async (request, _auth, company) => {
@@ -416,16 +315,21 @@ export const PATCH = withCompanyAuth(
         unknown
       >;
 
-    const savedSignature =
-      localizationSignature(
-        savedSnapshot,
-      );
-
     const localizationSourceLocale =
       rawBody.localizationSourceLocale === "ar" ||
       rawBody.localizationSourceLocale === "en"
         ? rawBody.localizationSourceLocale
         : undefined;
+
+    const savedAnalysis =
+      analyzeQuotationLocalization(
+        savedSnapshot,
+        localizationSourceLocale,
+      );
+    const savedSignature =
+      createQuotationLocalizationSourceSignature(
+        savedAnalysis,
+      );
 
     const localizationInput = {
       ...savedSnapshot,
@@ -495,8 +399,11 @@ export const PATCH = withCompanyAuth(
           >;
 
         if (
-          localizationSignature(
-            latestSnapshot,
+          createQuotationLocalizationSourceSignature(
+            analyzeQuotationLocalization(
+              latestSnapshot,
+              savedAnalysis.sourceLocale,
+            ),
           ) !== savedSignature
         ) {
           console.log(
@@ -624,8 +531,11 @@ export const PATCH = withCompanyAuth(
           >;
 
         if (
-          localizationSignature(
-            latestSnapshot,
+          createQuotationLocalizationSourceSignature(
+            analyzeQuotationLocalization(
+              latestSnapshot,
+              savedAnalysis.sourceLocale,
+            ),
           ) !== savedSignature
         ) {
           console.log(

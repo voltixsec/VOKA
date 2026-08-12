@@ -1,5 +1,6 @@
 import type { UpdateQuotationDto } from "../dto/UpdateQuotationDto";
 import { analyzeQuotationLocalization } from "../services/QuotationLocalizationAnalyzer";
+import { createQuotationLocalizationSourceSignature } from "../services/QuotationLocalizationSourceSignature";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
 import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
 import type { ApplicationResult } from "../results/ApplicationResult";
@@ -142,10 +143,18 @@ export class UpdateQuotationUseCase {
       const now = new Date();
 
       if (analysis.items.length > 0) {
-        quotation.markLocalizationPending(
-          analysis.sourceLocale,
-          now,
-        );
+        const sourceSignature =
+          createQuotationLocalizationSourceSignature(analysis);
+        const requiresNewGeneration =
+          quotation.localizationSourceSignature !== sourceSignature;
+
+        if (requiresNewGeneration) {
+          quotation.startLocalizationGeneration(
+            analysis.sourceLocale,
+            sourceSignature,
+            now,
+          );
+        }
       } else {
         quotation.setLocalizationSourceLocale(
           analysis.sourceLocale,
