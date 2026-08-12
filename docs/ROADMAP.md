@@ -64,6 +64,14 @@ Evolve the quotation document into a professional bilingual commercial proposal.
 - Allow BOQ content to continue across additional pages.
 - Place the approval/signature block on the final page.
 - Place the block on the right for Arabic and the left for English.
+
+## Phase 1.4 Close - 2026-08-13
+
+Branded proposal delivery is implementation-complete on
+`feature/branded-proposal-delivery`, including English/Arabic stationery parity,
+approval assets and verification, asynchronous localization resilience, approval
+localization fencing, and Unicode bidi-aware Arabic PDF layout. Next work is CTO
+review and merge; no additional proposal features are authorized by this close.
 - Preserve tenant isolation and role authorization.
 - Require human review before final PDF generation.
 

@@ -6,6 +6,8 @@ import type {
   QuotationDocumentSnapshot,
 } from "@/src/application/document";
 
+import bidiFactory from "bidi-js";
+
 export type ProposalSnapshot =
   QuotationDocumentSnapshot;
 
@@ -319,6 +321,173 @@ export function proposalTextOptions(
   };
 }
 
+type ProposalBidiRun = {
+  text: string;
+  direction: "ltr" | "rtl";
+};
+
+const bidi = bidiFactory();
+
+export function proposalBidiRuns(value: string): ProposalBidiRun[] {
+  if (!value) return [];
+
+  const ltrToken = /[A-Za-z0-9][A-Za-z0-9./%:+@_-]*(?: +[A-Za-z0-9][A-Za-z0-9./%:+@_-]*)*/gu;
+  const augmentedCharacters: string[] = [];
+  const originalIndices: Array<number | null> = [];
+  let logicalIndex = 0;
+
+  for (const match of value.matchAll(ltrToken)) {
+    const start = match.index;
+    while (logicalIndex < start) {
+      augmentedCharacters.push(value[logicalIndex]);
+      originalIndices.push(logicalIndex);
+      logicalIndex += 1;
+    }
+
+    augmentedCharacters.push("\u2066");
+    originalIndices.push(null);
+    for (let index = start; index < start + match[0].length; index += 1) {
+      augmentedCharacters.push(value[index]);
+      originalIndices.push(index);
+    }
+    augmentedCharacters.push("\u2069");
+    originalIndices.push(null);
+    logicalIndex = start + match[0].length;
+  }
+
+  while (logicalIndex < value.length) {
+    augmentedCharacters.push(value[logicalIndex]);
+    originalIndices.push(logicalIndex);
+    logicalIndex += 1;
+  }
+
+  const augmented = augmentedCharacters.join("");
+  const levels = bidi.getEmbeddingLevels(augmented, "rtl");
+  const visualIndices = bidi
+    .getReorderedIndices(augmented, levels)
+    .filter((index) => originalIndices[index] !== null);
+  const runs: ProposalBidiRun[] = [];
+
+  for (let offset = 0; offset < visualIndices.length;) {
+    const firstAugmentedIndex = visualIndices[offset];
+    const firstIndex = originalIndices[firstAugmentedIndex] as number;
+    const firstCharacter = value[firstIndex];
+
+    if (/\s/u.test(firstCharacter)) {
+      runs.push({ text: firstCharacter, direction: "ltr" });
+      offset += 1;
+      continue;
+    }
+
+    const direction = (levels.levels[firstAugmentedIndex] & 1) === 1 ? "rtl" : "ltr";
+    const step = direction === "rtl" ? -1 : 1;
+    const indices = [firstIndex];
+    let cursor = offset + 1;
+
+    while (cursor < visualIndices.length) {
+      const augmentedIndex = visualIndices[cursor];
+      const index = originalIndices[augmentedIndex] as number;
+      if (/\s/u.test(value[index])) break;
+      if (((levels.levels[augmentedIndex] & 1) === 1 ? "rtl" : "ltr") !== direction) break;
+      if (index !== indices[indices.length - 1] + step) break;
+      indices.push(index);
+      cursor += 1;
+    }
+
+    const logicalIndices = [...indices].sort((a, b) => a - b);
+    runs.push({
+      text: logicalIndices.map((index) => value[index]).join(""),
+      direction,
+    });
+    offset = cursor;
+  }
+
+  return runs;
+}
+
+function wrapProposalBidiText(
+  doc: ProposalPdfDocument,
+  value: string,
+  width: number,
+): string[] {
+  const lines: string[] = [];
+
+  value.split("\n").forEach((paragraph) => {
+    const tokens = paragraph.split(/(\s+)/u).filter(Boolean);
+    let line = "";
+
+    tokens.forEach((token) => {
+      const candidate = line + token;
+      if (line.trim() && doc.widthOfString(candidate) > width) {
+        lines.push(line.trimEnd());
+        line = token.trimStart();
+      } else {
+        line = candidate;
+      }
+    });
+
+    lines.push(line.trimEnd());
+  });
+
+  return lines;
+}
+
+export function configureProposalTextDirection(
+  doc: ProposalPdfDocument,
+  locale: ProposalLocale,
+): void {
+  if (locale !== "ar") return;
+
+  const originalText = doc.text.bind(doc);
+  doc.text = ((
+    value: string,
+    xOrOptions?: number | PDFKit.Mixins.TextOptions,
+    y?: number,
+    options?: PDFKit.Mixins.TextOptions,
+  ) => {
+    const mixedDirection = /[\u0600-\u06ff]/u.test(value) && /[A-Za-z0-9]/u.test(value);
+    if (!mixedDirection || typeof xOrOptions !== "number" || typeof y !== "number" || !options?.width) {
+      return typeof xOrOptions === "number"
+        ? originalText(value, xOrOptions, y, options)
+        : originalText(value, xOrOptions);
+    }
+
+    const availableWidth = options.width;
+    const align = options.align ?? "right";
+    const lineHeight = doc.currentLineHeight(true);
+    const lines = wrapProposalBidiText(doc, value, availableWidth);
+    const maxLines = options.height
+      ? Math.max(1, Math.floor(options.height / lineHeight))
+      : lines.length;
+
+    lines.slice(0, maxLines).forEach((line, lineIndex) => {
+      const runs = proposalBidiRuns(line);
+      const widths = runs.map((run) => doc.widthOfString(run.text));
+      const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+      let cursorX = align === "center"
+        ? xOrOptions + Math.max(0, (availableWidth - totalWidth) / 2)
+        : align === "right"
+          ? xOrOptions + Math.max(0, availableWidth - totalWidth)
+          : xOrOptions;
+
+      runs.forEach((run, index) => {
+        if (!/^\s+$/u.test(run.text)) {
+          originalText(run.text, cursorX, y + lineIndex * lineHeight, {
+            ...options,
+            width: widths[index],
+            align: run.direction === "rtl" ? "right" : "left",
+            lineBreak: false,
+            ellipsis: false,
+          });
+        }
+        cursorX += widths[index];
+      });
+    });
+
+    return doc;
+  }) as typeof doc.text;
+}
+
 export function proposalAlignment(
   locale: ProposalLocale,
 ): "left" | "right" {
@@ -345,7 +514,7 @@ export function formatProposalDate(
       },
     ).format(value);
 
-  return "\u200E" + formatted;
+  return formatted;
 }
 
 export function formatProposalMoney(
@@ -353,7 +522,6 @@ export function formatProposalMoney(
   currencyCode: string,
 ): string {
   return (
-    "\u200E" +
     currencyCode +
     " " +
     value.toFixed(3)
@@ -519,12 +687,12 @@ export function drawProposalHeader(
   const headerHeight =
     132;
 
-  if (hasLetterhead && locale === "en") {
+  if (hasLetterhead) {
     doc
       .fillColor(brand.primary)
       .fontSize(20)
       .text(
-        PROPOSAL_TEXT.en.quotation,
+        PROPOSAL_TEXT[locale].quotation,
         left,
         LETTERHEAD_SAFE_AREA.top + 4,
         proposalTextOptions("center", usableWidth, 24),
@@ -1082,7 +1250,7 @@ export function drawProposalCompanyApproval(
       quote.approvedAt,
     );
 
-  if (locale === "en" && !approved) {
+  if (!approved) {
     return y;
   }
 
@@ -1227,10 +1395,16 @@ export function drawProposalCompanyApproval(
     }
   }
 
-  if (approved && verificationQr && locale === "en") {
+  if (approved && verificationQr) {
     try {
-      doc.image(verificationQr, left + width - 72, y + height - 45, { fit: [28, 28], align: "center", valign: "center" });
-      doc.fillColor(PROPOSAL_COLOR.muted).fontSize(5.2).text("Verify document", left + width - 92, y + height - 15, proposalTextOptions("center", 68, 8));
+      const qrX = locale === "ar" ? left + 84 : left + width - 72;
+      doc.image(verificationQr, qrX, y + height - 45, { fit: [28, 28], align: "center", valign: "center" });
+      doc.fillColor(PROPOSAL_COLOR.muted).fontSize(5.2).text(
+        locale === "ar" ? "التحقق من المستند" : "Verify document",
+        locale === "ar" ? left + 64 : left + width - 92,
+        y + height - 15,
+        proposalTextOptions("center", 68, 8),
+      );
     } catch { /* Verification QR failure must not break document rendering. */ }
   }
 
@@ -1240,9 +1414,9 @@ export function drawProposalCompanyApproval(
       .fontSize(5.8)
       .text(
         PROPOSAL_TEXT[locale].electronicApproval,
-        left + 14,
+        locale === "ar" ? contentX : left + 14,
         y + height - 23,
-        proposalTextOptions(align, width - 28, 16),
+        proposalTextOptions(align, locale === "ar" ? contentWidth : width - 28, 16),
       );
   }
 

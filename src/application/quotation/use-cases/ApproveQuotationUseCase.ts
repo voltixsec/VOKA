@@ -40,6 +40,22 @@ export class ApproveQuotationUseCase {
       };
     }
 
+    if (quotation.localizationStatus !== "COMPLETED") {
+      const failed = quotation.localizationStatus === "FAILED";
+
+      return {
+        success: false,
+        error: {
+          code: failed
+            ? "QUOTATION_LOCALIZATION_FAILED"
+            : "QUOTATION_LOCALIZATION_PENDING",
+          message: failed
+            ? "Quotation localization failed and must be retried before approval."
+            : "Quotation localization is still processing. Please try approval again when it is complete.",
+        },
+      };
+    }
+
     try {
       const verificationToken = quotation.verificationToken ?? (
         quotation.status === "SENT"

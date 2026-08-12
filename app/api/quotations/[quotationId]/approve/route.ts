@@ -86,6 +86,13 @@ export const POST = withCompanyAuth(
         );
       }
 
+      if (result.error.code.startsWith("QUOTATION_LOCALIZATION_")) {
+        throw ApiError.conflict(
+          result.error.code,
+          result.error.message,
+        );
+      }
+
       throw ApiError.badRequest(
         result.error.code,
         result.error.message,

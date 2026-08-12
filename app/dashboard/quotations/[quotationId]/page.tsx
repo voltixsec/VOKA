@@ -79,6 +79,7 @@ type Quote = {
   termsAndConditions?: string | null;
   termsAndConditionsAr?: string | null;
   termsAndConditionsEn?: string | null;
+  localizationStatus: "PENDING" | "COMPLETED" | "FAILED";
 };
 
 const arabicStatuses:
@@ -445,7 +446,10 @@ export default function QuotationDetailsPage() {
                       ? "danger"
                       : "primary"
                 }
-                disabled={Boolean(acting)}
+                disabled={
+                  Boolean(acting) ||
+                  (name === "approve" && quote.localizationStatus !== "COMPLETED")
+                }
                 onClick={() =>
                   action(name)
                 }
@@ -463,6 +467,22 @@ export default function QuotationDetailsPage() {
         <Card className="border-red-400/20 bg-red-400/5">
           <p className="text-red-300">
             {error}
+          </p>
+        </Card>
+      )}
+
+      {quote.status === "SENT" && quote.localizationStatus !== "COMPLETED" && (
+        <Card className="border-amber-400/20 bg-amber-400/5">
+          <p className="text-amber-200">
+            {quote.localizationStatus === "FAILED"
+              ? t(
+                  "تعذرت ترجمة عرض السعر. يجب إعادة المحاولة وإكمال الترجمة قبل الاعتماد.",
+                  "Quotation localization failed. Retry and complete localization before approval.",
+                )
+              : t(
+                  "لا تزال ترجمة عرض السعر قيد المعالجة. سيتاح الاعتماد بعد اكتمالها.",
+                  "Quotation localization is still processing. Approval will be available when it is complete.",
+                )}
           </p>
         </Card>
       )}

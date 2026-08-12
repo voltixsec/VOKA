@@ -19,6 +19,7 @@ import {
 import {
   PROPOSAL_COLOR,
   LETTERHEAD_SAFE_AREA,
+  configureProposalTextDirection,
   type ProposalPdfDocument,
   type ProposalSnapshot,
 } from "./ProposalPdfShared";
@@ -134,9 +135,9 @@ export function decorateExistingPages(
       range.start + index,
     );
 
-    const englishLetterheadMode = snapshot.locale === "en" && letterheadPages[index];
+    const letterheadMode = letterheadPages[index];
 
-    if (englishLetterheadMode) {
+    if (letterheadMode) {
       doc
         .fillColor(PROPOSAL_COLOR.muted)
         .fontSize(5.8)
@@ -285,6 +286,8 @@ export class PdfKitQuotationDocumentRenderer
         fontPath,
       )
       .font("VOKA");
+
+    configureProposalTextDirection(doc, snapshot.locale);
 
     /*
      * Page 1:

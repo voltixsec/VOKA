@@ -8,6 +8,7 @@ import {
 import {
   Quotation,
 } from "../../../domain/quotation";
+import { LocalizationStatus } from "../../../domain/quotation/types/LocalizationStatus";
 
 import type {
   IQuotationRepository,
@@ -66,6 +67,34 @@ describe(
       expect(generator.generate).not.toHaveBeenCalled();
       expect(quotation.verificationToken).toBeNull();
       expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [LocalizationStatus.PENDING, "QUOTATION_LOCALIZATION_PENDING"],
+      [LocalizationStatus.FAILED, "QUOTATION_LOCALIZATION_FAILED"],
+    ] as const)("refuses approval while required localization is %s", async (localizationStatus, code) => {
+      const quotation = Quotation.restore({
+        id: "quotation-localizing", companyId: "company-1", customerId: "customer-1",
+        number: "Q-LOCALIZING", status: "SENT", localizationStatus,
+        customer: { name: "Customer" },
+        lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
+      });
+      const repository = {
+        existsByNumber: vi.fn(), save: vi.fn(), findById: vi.fn().mockResolvedValue(quotation),
+        findAll: vi.fn(), update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(),
+        completeLocalization: vi.fn(), failLocalization: vi.fn(),
+      } satisfies IQuotationRepository;
+      const generator = { generate: vi.fn(() => "should-not-be-generated-token-123456") };
+
+      const result = await new ApproveQuotationUseCase(repository, generator).execute({
+        companyId: "company-1", quotationId: "quotation-localizing", documentBrandSnapshot: brandSnapshot,
+      });
+
+      expect(result).toEqual(expect.objectContaining({ success: false, error: expect.objectContaining({ code }) }));
+      expect(generator.generate).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
+      expect(quotation.status).toBe("SENT");
+      expect(quotation.documentBrandSnapshot).toBeNull();
     });
     it(
       "stores approver name and role",

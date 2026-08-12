@@ -178,3 +178,26 @@ First implementation slice:
 - Final-page Signature Block.
 
 Voice and AI extraction are deferred to a later slice.
+
+## 2026-08-13 - Phase 1.4 Branded Proposal Delivery Close
+
+Completed the English and Arabic branded proposal milestone on
+`feature/branded-proposal-delivery`.
+
+Technical decisions verified:
+
+- PDF generation remains read-only presentation infrastructure.
+- Approved document branding and verification identity remain immutable.
+- Approval requires `localizationStatus=COMPLETED`; `PENDING` and retryable
+  `FAILED` states return conflict without approval mutation or token generation.
+- Quotation creation remains asynchronous and does not wait for Ollama.
+- Arabic PDF mixed-direction layout uses Unicode Bidirectional Algorithm run
+  resolution (`bidi-js`) with explicit visual run placement, while Arabic runs
+  remain logical for Cairo shaping and numeric/Latin runs remain LTR.
+
+Close validation: Prisma schema valid, 15 migrations applied, Prisma Client
+generated, TypeScript passed, 251/251 tests passed, diff checks passed, and
+rendered Arabic/English PDF QA completed.
+
+First next task: CTO review the staged Phase 1.4 change set and merge the feature
+branch if approved. No new PDF, localization, or verification scope is implied.

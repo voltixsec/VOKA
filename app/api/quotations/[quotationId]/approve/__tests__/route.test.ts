@@ -16,6 +16,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { Quotation } from "@/src/domain/quotation";
+import { LocalizationStatus } from "@/src/domain/quotation/types/LocalizationStatus";
 import { POST } from "../route";
 
 describe("quotation approval document brand snapshot", () => {
@@ -49,5 +50,28 @@ describe("quotation approval document brand snapshot", () => {
       stampUrl: "data:image/png;base64,DDDD",
     });
     expect(mocks.update).toHaveBeenCalledWith("company-1", quotation);
+  });
+
+  it("returns conflict without snapshotting while localization is pending", async () => {
+    const quotation = Quotation.restore({
+      id: "quotation-1", companyId: "company-1", customerId: "customer-1",
+      number: "Q-001", status: "SENT", localizationStatus: LocalizationStatus.PENDING,
+      customer: { name: "Customer" },
+      lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
+    });
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.companyFindUnique.mockResolvedValue({
+      name: "VOKA", nameAr: null, nameEn: "VOKA", addressAr: null, addressEn: null,
+      poBox: null, phone: null, mobile: null, whatsapp: null, logoUrl: null,
+      letterheadUrl: null, signatureUrl: null, stampUrl: null, brandTheme: "NAVY_GOLD",
+    });
+
+    await expect(POST(new Request("http://localhost/api/quotations/quotation-1/approve", { method: "POST" })))
+      .rejects.toEqual(expect.objectContaining({
+        statusCode: 409,
+        code: "QUOTATION_LOCALIZATION_PENDING",
+      }));
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(quotation.documentBrandSnapshot).toBeNull();
   });
 });

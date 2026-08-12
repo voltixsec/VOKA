@@ -1,6 +1,23 @@
 # Resume Point
 
-Verified on: 2026-08-04 (Asia/Kuwait)
+Verified on: 2026-08-13 (Asia/Kuwait)
+
+## Current verified resume point - Phase 1.4
+
+- Branch: `feature/branded-proposal-delivery`.
+- Previous implementation baseline: `46f7e83`.
+- English and Arabic branded proposal delivery is complete and validated.
+- Approval is fenced until required localization is `COMPLETED`.
+- Quotation create remains asynchronous and resilient to localization-provider
+  availability.
+- Arabic mixed RTL/LTR PDF layout uses Unicode bidi run resolution and rendered
+  QA confirms natural sentence order, spacing, percentages, currencies, IDs,
+  and embedded English phrases.
+- Close checks: Prisma valid/up to date/generated, TypeScript passed, 251 tests
+  across 47 files passed, and diff checks passed.
+
+First next task: CTO review and merge `feature/branded-proposal-delivery`; do not
+add new proposal features during the review.
 
 ## Last completed point
 

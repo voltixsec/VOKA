@@ -511,7 +511,7 @@ export function drawProposalCover(
     doc,
     snapshot,
     y,
-    hasLetterhead && locale === "en",
+    hasLetterhead,
   );
 
   return hasLetterhead;

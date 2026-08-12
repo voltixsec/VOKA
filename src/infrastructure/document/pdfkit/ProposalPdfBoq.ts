@@ -28,11 +28,8 @@ export function shouldRenderProposalApproval(
   snapshot: ProposalSnapshot,
 ): boolean {
   return (
-    snapshot.locale !== "en" ||
-    (
-      snapshot.quotation.status === "APPROVED" &&
-      Boolean(snapshot.quotation.approvedAt)
-    )
+    snapshot.quotation.status === "APPROVED" &&
+    Boolean(snapshot.quotation.approvedAt)
   );
 }
 
@@ -77,7 +74,7 @@ function drawCompactField(
     );
 }
 
-function columnPositions(
+export function columnPositions(
   locale: "ar" | "en",
   left: number,
   totalWidth: number,
@@ -451,77 +448,25 @@ function drawApprovalStatement(
   const locale =
     snapshot.locale;
 
-  const brand =
-    proposalBrand(
-      snapshot,
-    );
-
   const text =
     PROPOSAL_TEXT[locale];
-
-  const align =
-    proposalAlignment(locale);
 
   const left = 38;
 
   const width =
     doc.page.width - 76;
 
-  if (locale === "en") {
-    doc
-      .fillColor(PROPOSAL_COLOR.muted)
-      .fontSize(6.2)
-      .text(
-        text.continuation,
-        left + 14,
-        y + 5,
-        proposalTextOptions("center", width - 28, 12),
-      );
-
-    return y + 20;
-  }
-
-  drawProposalCard(
-    doc,
-    left,
-    y,
-    width,
-    58,
-    brand.soft,
-  );
-
   doc
-    .fillColor(
-      brand.primary,
-    )
-    .fontSize(8.5)
-    .text(
-      text.approvalStatement,
-      left + 14,
-      y + 11,
-      proposalTextOptions(
-        align,
-        width - 28,
-        26,
-      ),
-    );
-
-  doc
-    .fillColor(
-      PROPOSAL_COLOR.muted,
-    )
-    .fontSize(6.5)
+    .fillColor(PROPOSAL_COLOR.muted)
+    .fontSize(6.2)
     .text(
       text.continuation,
       left + 14,
-      y + 39,
-      proposalTextOptions(
-        "center",
-        width - 28,
-      ),
+      y + 5,
+      proposalTextOptions("center", width - 28, 12),
     );
 
-  return y + 58;
+  return y + 20;
 }
 
 export function drawProposalBoq(
@@ -924,7 +869,7 @@ export function drawProposalBoq(
       doc,
       snapshot,
       y,
-      locale === "en" ? 112 : 90,
+      112,
       verificationQr,
     );
   }

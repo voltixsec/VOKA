@@ -6,10 +6,13 @@ import {
   drawProposalCompanyApproval,
   drawProposalHeader,
   drawProposalLetterhead,
+  configureProposalTextDirection,
+  proposalBidiRuns,
+  proposalTextOptions,
   type ProposalPdfDocument,
 } from "../ProposalPdfShared";
 import { decorateExistingPages, PdfKitQuotationDocumentRenderer } from "../PdfKitQuotationDocumentRenderer";
-import { shouldRenderProposalApproval } from "../ProposalPdfBoq";
+import { columnPositions, shouldRenderProposalApproval } from "../ProposalPdfBoq";
 
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const JPEG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABCf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
@@ -109,6 +112,16 @@ describe("proposal PDF document assets", () => {
     expect(shouldRenderProposalApproval(data)).toBe(false);
   });
 
+  it.each(["DRAFT", "SENT", "REJECTED", "CANCELLED"])("omits the entire Arabic approval block for %s", (status) => {
+    const data = snapshot(status, "ar");
+    const target = fakeDocument();
+    expect(shouldRenderProposalApproval(data)).toBe(false);
+    drawProposalCompanyApproval(target.doc, data, 600, 90, Buffer.from([1, 2, 3]));
+    expect(target.texts).toHaveLength(0);
+    expect(target.images).toHaveLength(0);
+    expect(target.doc.roundedRect).not.toHaveBeenCalled();
+  });
+
   it("requires both approved status and approval date for the English approval block", () => {
     const data = snapshot("APPROVED", "en");
     data.quotation.approvedAt = null;
@@ -134,6 +147,17 @@ describe("proposal PDF document assets", () => {
     expect(target.textCalls.find((call) => call.value === "QUOTATION")?.y).toBeGreaterThanOrEqual(124);
   });
 
+  it("uses the same Arabic stationery header mode without redundant company identity", () => {
+    const target = fakeDocument();
+    const data = snapshot("APPROVED", "ar");
+    data.company.logoUrl = PNG;
+    const y = drawProposalHeader(target.doc, data, true);
+    expect(y).toBeGreaterThan(120);
+    expect(target.doc.rect).not.toHaveBeenCalled();
+    expect(target.images).toHaveLength(0);
+    expect(target.texts).not.toContain("VOKA");
+  });
+
   it("retains the normal English branded header and logo without letterhead mode", () => {
     const target = fakeDocument();
     const data = snapshot("APPROVED", "en");
@@ -154,6 +178,53 @@ describe("proposal PDF document assets", () => {
     expect(target.texts).toContain("Q-1 · 2 / 2");
     expect(target.texts).not.toContain("VOKA — Q-1");
     expect(target.images).toHaveLength(0);
+  });
+
+  it("uses lightweight traceability and suppresses the normal footer in Arabic letterhead mode", () => {
+    const target = fakeDocument();
+    Object.assign(target.doc, {
+      bufferedPageRange: vi.fn(() => ({ start: 0, count: 2 })),
+      switchToPage: vi.fn(() => target.doc),
+    });
+    decorateExistingPages(target.doc, snapshot("APPROVED", "ar"), Buffer.from([1]), [true, true]);
+    expect(target.texts).toContain("Q-1 · 1 / 2");
+    expect(target.texts).not.toContain("VOKA — Q-1");
+  });
+
+  it.each([
+    ["توريد نايلون ميكرون 1000 خمسة وعشرون لفة", "1000"],
+    ["التوريد خلال 3 أيام من تاريخ عرض السعر", "3"],
+    ["التوصيل على العميل 10 دينار", "10"],
+    ["ساري المفعول لمدة 45 يوماً", "45"],
+    ["يتم الدفع بنسبة 40% مقدماً و60% عند التسليم", "40%"],
+    ["يتم الدفع بنسبة 40% مقدماً و60% عند التسليم", "60%"],
+    ["القيمة KWD 450.000", "KWD 450.000"],
+    ["المرجع QT-871202", "QT-871202"],
+    ["النطاق Scope of Work", "Scope of Work"],
+    ["الشروط Payment Terms", "Payment Terms"],
+  ])("resolves Arabic mixed text while preserving %s", (value, expectedRun) => {
+    const runs = proposalBidiRuns(value);
+    expect(runs.map((run) => run.text).join("")).toContain(expectedRun);
+    expect(runs.filter((run) => /^\s+$/u.test(run.text))).not.toHaveLength(0);
+  });
+
+  it("applies Bidi protection only to Arabic PDF text", () => {
+    const target = fakeDocument();
+    target.doc.widthOfString = vi.fn((value: string) => value.length * 5);
+    target.doc.currentLineHeight = vi.fn(() => 12);
+    configureProposalTextDirection(target.doc, "ar");
+    target.doc.text("دفعة 40% Payment Terms", 0, 0, proposalTextOptions("right", 200));
+    expect(target.texts).toContain("40%");
+    expect(target.texts.join(" ")).toContain("Payment Terms");
+  });
+
+  it("places Arabic BOQ columns in conceptual right-to-left order", () => {
+    const positions = columnPositions("ar", 38, 519, [
+      { width: 207.6, align: "right" }, { width: 57.09, align: "center" },
+      { width: 51.9, align: "right" }, { width: 88.23, align: "right" },
+      { width: 51.9, align: "right" }, { width: 62.28, align: "right" },
+    ]);
+    expect(positions).toEqual([...positions].sort((a, b) => b - a));
   });
 
   it("retains normal footer traceability without the former decorative QR", () => {
@@ -202,5 +273,16 @@ describe("proposal PDF document assets", () => {
     drawProposalCompanyApproval(pending.doc, snapshot("SENT", "en"), 600, 112, Buffer.from([1, 2, 3]));
     expect(pending.texts).not.toContain("Verify document");
     expect(pending.images).toHaveLength(0);
+  });
+
+  it("renders a labelled official verification QR only inside an approved Arabic block", () => {
+    const approved = fakeDocument();
+    drawProposalCompanyApproval(approved.doc, snapshot("APPROVED", "ar"), 600, 112, Buffer.from([1, 2, 3]));
+    expect(approved.texts).toContain("التحقق من المستند");
+    expect(approved.images).toHaveLength(3);
+
+    const draft = fakeDocument();
+    drawProposalCompanyApproval(draft.doc, snapshot("DRAFT", "ar"), 600, 112, Buffer.from([1, 2, 3]));
+    expect(draft.images).toHaveLength(0);
   });
 });

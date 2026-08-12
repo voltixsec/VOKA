@@ -1,8 +1,8 @@
 # Project Status
 
-Current Sprint: 10A - Quotation Documents
+Current Sprint: Phase 1.4 - Branded Proposal Delivery
 
-Status: Approved; architecture and implementation in progress
+Status: Implementation complete on `feature/branded-proposal-delivery`; awaiting CTO review/merge
 
 Verified baseline: `73bb875` on `main` (2026-08-04)
 
@@ -115,3 +115,23 @@ Verified merge commit:
 Sprint 10B documentation is being reviewed through Pull Request #16.
 
 Implementation must begin only after this approved direction is merged and a dedicated feature branch is created from the updated `main`.
+
+## Phase 1.4 - Branded Proposal Delivery
+
+Status: Completed and validated on 2026-08-13.
+
+Delivered:
+
+- English and Arabic branded two-page proposals with uploaded letterhead safe areas.
+- Draft-versus-approved document behavior, approval identity, signature, stamp,
+  immutable branding snapshot, and official public verification QR.
+- Public verification API/page with legacy approved/no-token compatibility.
+- Asynchronous quotation creation that does not wait for localization.
+- Approval protection requiring completed bilingual localization; pending or
+  failed localization returns a safe conflict without freezing a snapshot.
+- Unicode bidi-aware Arabic PDF run layout preserving Arabic sentence order,
+  whitespace, Western numbers, percentages, currencies, document IDs, and
+  embedded English phrases.
+
+Validated: Prisma schema/client/status, TypeScript, 251 tests across 47 files,
+diff checks, and rendered English/Arabic PDF visual QA.
