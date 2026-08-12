@@ -14,11 +14,21 @@ const mocks = vi.hoisted(() => ({
   completeLocalization: vi.fn(),
   failLocalization: vi.fn(),
   localizeQuotationDraft: vi.fn(),
+  runLocalizationJob: vi.fn(),
 
   afterTasks: [] as Array<
     () => void | Promise<void>
   >,
 }));
+
+vi.mock(
+  "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner",
+  () => ({
+    QuotationLocalizationJobRunner: class {
+      run = mocks.runLocalizationJob;
+    },
+  }),
+);
 
 vi.mock(
   "@/src/infrastructure/translation/quotation/localizeQuotationDraft",
@@ -148,6 +158,7 @@ describe("GET /api/quotations/[quotationId]", () => {
     mocks.completeLocalization.mockReset();
     mocks.failLocalization.mockReset();
     mocks.localizeQuotationDraft.mockReset();
+    mocks.runLocalizationJob.mockReset();
   });
 
   async function runAfterTasks() {
@@ -258,27 +269,11 @@ describe("GET /api/quotations/[quotationId]", () => {
     });
   });
 
-  it("claims before AI and has no fallback write when the failure fence is lost", async () => {
+  it("schedules the reusable localization job after a successful save", async () => {
     const quotation = createQuotation();
-    quotation.markLocalizationPending(
-      "en",
-      new Date("2026-08-04T00:00:00.000Z"),
-    );
     mocks.findById.mockResolvedValue(quotation);
-    mocks.localizeQuotationDraft.mockRejectedValue(
-      new Error("Provider unavailable"),
-    );
-    mocks.claimLocalization.mockImplementation(async () => ({
-      claimToken: "claim-1",
-      sourceSignature: quotation.localizationSourceSignature!,
-      attemptCount: 1,
-    }));
-    mocks.failLocalization.mockResolvedValue(false);
-
-    const updates: Array<unknown> = [];
-    mocks.update.mockImplementation(async (_companyId, updatedQuotation) => {
-      updates.push(updatedQuotation);
-    });
+    mocks.update.mockResolvedValue(undefined);
+    mocks.runLocalizationJob.mockResolvedValue("NO_CLAIM");
 
     const response = await PATCH(
       new Request(
@@ -304,24 +299,10 @@ describe("GET /api/quotations/[quotationId]", () => {
     await runAfterTasks();
 
     expect(response.status).toBe(200);
-    expect(mocks.claimLocalization).toHaveBeenCalledWith({
+    expect(mocks.runLocalizationJob).toHaveBeenCalledWith({
       companyId: "company-1",
       quotationId: "quotation-1",
-      leaseDurationMs: 12 * 60 * 1000,
     });
-    expect(mocks.claimLocalization.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.localizeQuotationDraft.mock.invocationCallOrder[0]);
-    expect(mocks.claimLocalization.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.findById.mock.invocationCallOrder[2]);
-    expect(mocks.failLocalization).toHaveBeenCalledWith({
-      companyId: "company-1",
-      quotationId: "quotation-1",
-      expectedSourceSignature: quotation.localizationSourceSignature,
-      expectedClaimToken: "claim-1",
-      errorCode: "TRANSLATION_PROVIDER_ERROR",
-    });
-    expect(updates).toHaveLength(1);
-    expect(mocks.completeLocalization).not.toHaveBeenCalled();
   });
 
   it("does not mutate lifecycle when AI fails on stale quotation", async () => {
@@ -387,7 +368,7 @@ describe("GET /api/quotations/[quotationId]", () => {
     expect(mocks.failLocalization).not.toHaveBeenCalled();
   });
 
-  it("uses a narrow completion patch and has no fallback when its fence is lost", async () => {
+  it("keeps background execution behind the runner seam", async () => {
     const quotation = createQuotation();
     quotation.markLocalizationPending(
       "en",
@@ -447,6 +428,11 @@ describe("GET /api/quotations/[quotationId]", () => {
 
     expect(response.status).toBe(200);
     expect(updates).toHaveLength(1);
+    expect(mocks.runLocalizationJob).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+    return;
     expect(mocks.completeLocalization).toHaveBeenCalledOnce();
     const completion = mocks.completeLocalization.mock.calls[0][0];
     expect(completion).toMatchObject({

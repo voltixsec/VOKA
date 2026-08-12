@@ -11,17 +11,13 @@ import {
   UpdateQuotationUseCase,
   type UpdateQuotationDto,
 } from "@/src/application/quotation";
-import { analyzeQuotationLocalization } from "@/src/application/quotation/services/QuotationLocalizationAnalyzer";
-import { createQuotationLocalizationSourceSignature } from "@/src/application/quotation/services/QuotationLocalizationSourceSignature";
 import {
   isQuotationScopeType,
 } from "@/src/domain/quotation";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
 
-import {
-  localizeQuotationDraft,
-} from "@/src/infrastructure/translation/quotation/localizeQuotationDraft";
+import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
 
 import { serializeQuotation } from "../serialize-quotation";
 
@@ -40,6 +36,8 @@ const updateQuotation =
     quotationRepository,
     quotationReferenceValidator,
   );
+const localizationJobRunner =
+  new QuotationLocalizationJobRunner(quotationRepository);
 
 
 function getQuotationId(request: Request): string {
@@ -124,58 +122,6 @@ type UpdateQuotationBody = {
   scopeType?: unknown;
 };
 
-type UnknownRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): UnknownRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
-function localizedText(value: unknown): string | null | undefined {
-  return typeof value === "string" ? value : value === null ? null : undefined;
-}
-
-function buildLocalizationCompletionPatch(localized: UnknownRecord) {
-  const customer = asRecord(localized.customer);
-  const header = {
-    customerNameAr: localizedText(customer?.nameAr),
-    customerNameEn: localizedText(customer?.nameEn),
-    projectNameAr: localizedText(localized.projectNameAr),
-    projectNameEn: localizedText(localized.projectNameEn),
-    attentionNameAr: localizedText(localized.attentionNameAr),
-    attentionNameEn: localizedText(localized.attentionNameEn),
-    subjectAr: localizedText(localized.subjectAr),
-    subjectEn: localizedText(localized.subjectEn),
-    briefAr: localizedText(localized.briefAr),
-    briefEn: localizedText(localized.briefEn),
-    notesAr: localizedText(localized.notesAr),
-    notesEn: localizedText(localized.notesEn),
-    termsAndConditionsAr: localizedText(localized.termsAndConditionsAr),
-    termsAndConditionsEn: localizedText(localized.termsAndConditionsEn),
-  };
-
-  const lines = Array.isArray(localized.lines)
-    ? localized.lines.flatMap((value) => {
-        const line = asRecord(value);
-        if (!line || typeof line.id !== "string" || !line.id.trim()) {
-          return [];
-        }
-
-        return [{
-          id: line.id,
-          itemNameAr: localizedText(line.itemNameAr),
-          itemNameEn: localizedText(line.itemNameEn),
-          descriptionAr: localizedText(line.descriptionAr),
-          descriptionEn: localizedText(line.descriptionEn),
-          unitNameAr: localizedText(line.unitNameAr),
-          unitNameEn: localizedText(line.unitNameEn),
-        }];
-      })
-    : [];
-
-  return { header, lines };
-}
 
 function parseOptionalString(
   value: unknown,
@@ -229,67 +175,6 @@ function parseScopeType(
   return value;
 }
 
-
-type LocalizationErrorCode =
-  | "TRANSLATION_TIMEOUT"
-  | "TRANSLATION_PROVIDER_ERROR"
-  | "TRANSLATION_INVALID_RESPONSE"
-  | "TRANSLATION_UNEXPECTED_ERROR";
-
-const localizationErrorCodes: Set<string> = new Set([
-  "TRANSLATION_TIMEOUT",
-  "TRANSLATION_PROVIDER_ERROR",
-  "TRANSLATION_INVALID_RESPONSE",
-  "TRANSLATION_UNEXPECTED_ERROR",
-]);
-
-function classifyLocalizationError(
-  error: unknown,
-): LocalizationErrorCode {
-  if (
-    typeof error === "object" &&
-    error !== null
-  ) {
-    const candidateCode =
-      (error as { code?: unknown }).code;
-
-    if (
-      typeof candidateCode === "string" &&
-      localizationErrorCodes.has(candidateCode)
-    ) {
-      return candidateCode as LocalizationErrorCode;
-    }
-
-    const message =
-      (error as { message?: unknown }).message;
-
-    if (typeof message === "string") {
-      const normalized =
-        message.toLowerCase();
-
-      if (normalized.includes("timeout")) {
-        return "TRANSLATION_TIMEOUT";
-      }
-
-      if (
-        normalized.includes("provider") ||
-        normalized.includes("api")
-      ) {
-        return "TRANSLATION_PROVIDER_ERROR";
-      }
-
-      if (
-        normalized.includes("invalid response") ||
-        normalized.includes("missing translation") ||
-        normalized.includes("translation missing")
-      ) {
-        return "TRANSLATION_INVALID_RESPONSE";
-      }
-    }
-  }
-
-  return "TRANSLATION_UNEXPECTED_ERROR";
-}
 
 export const PATCH = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
@@ -377,118 +262,10 @@ export const PATCH = withCompanyAuth(
       },
     );
 
-    after(async () => {
-      const startedAt =
-        performance.now();
-
-      let claim: Awaited<ReturnType<
-        typeof quotationRepository.claimLocalization
-      >> = null;
-
-      try {
-        claim = await quotationRepository.claimLocalization({
-          companyId: company.companyId,
-          quotationId,
-          leaseDurationMs: 12 * 60 * 1000,
-        });
-
-        if (!claim) {
-          console.log("[VOKA:LOCALIZATION][SKIPPED_NO_CLAIM]", {
-            quotationId,
-          });
-          return;
-        }
-
-        const current =
-          await getQuotation.execute({
-            companyId: company.companyId,
-            quotationId,
-          });
-
-        if (!current.success) {
-          console.warn(
-            "[VOKA:LOCALIZATION][SKIPPED_NOT_FOUND]",
-            { quotationId },
-          );
-          return;
-        }
-
-        const currentSnapshot = serializeQuotation(
-          current.data,
-        ) as unknown as UnknownRecord;
-        const currentAnalysis = analyzeQuotationLocalization(
-          currentSnapshot,
-          current.data.localizationSourceLocale ?? undefined,
-        );
-        const currentSignature =
-          createQuotationLocalizationSourceSignature(currentAnalysis);
-
-        if (currentSignature !== claim.sourceSignature) {
-          console.log(
-            "[VOKA:LOCALIZATION][SKIPPED_STALE]",
-            { quotationId },
-          );
-          return;
-        }
-
-        const localized = await localizeQuotationDraft({
-          ...currentSnapshot,
-          localizationSourceLocale: currentAnalysis.sourceLocale,
-        });
-        const completion = buildLocalizationCompletionPatch(localized);
-        const completed = await quotationRepository.completeLocalization({
-          companyId: company.companyId,
-          quotationId,
-          expectedSourceSignature: claim.sourceSignature,
-          expectedClaimToken: claim.claimToken,
-          header: completion.header,
-          lines: completion.lines,
-          completedAt: new Date(),
-        });
-
-        if (!completed) {
-          console.log("[VOKA:LOCALIZATION][SKIPPED_STALE]", {
-            quotationId,
-          });
-          return;
-        }
-
-        console.log(
-          "[VOKA:LOCALIZATION][COMPLETED]",
-          {
-            quotationId,
-
-            elapsedMs:
-              Math.round(
-                performance.now() -
-                startedAt,
-              ),
-          },
-        );
-      }
-      catch (error) {
-        if (!claim) {
-          console.error("[VOKA:LOCALIZATION][FAILED_CLAIM]", {
-            quotationId,
-          });
-          return;
-        }
-
-        const failed = await quotationRepository.failLocalization({
-          companyId: company.companyId,
-          quotationId,
-          expectedSourceSignature: claim.sourceSignature,
-          expectedClaimToken: claim.claimToken,
-          errorCode: classifyLocalizationError(error),
-        });
-
-        if (!failed) {
-          console.log("[VOKA:LOCALIZATION][SKIPPED_STALE]", {
-            quotationId,
-          });
-        }
-      }
-    });
+    after(() => localizationJobRunner.run({
+      companyId: company.companyId,
+      quotationId,
+    }));
 
 
 
