@@ -30,6 +30,71 @@ export type QuotationLocalizationClaim = {
   attemptCount: number;
 };
 
+export type QuotationLocalizationErrorCode =
+  | "TRANSLATION_TIMEOUT"
+  | "TRANSLATION_PROVIDER_ERROR"
+  | "TRANSLATION_INVALID_RESPONSE"
+  | "TRANSLATION_UNEXPECTED_ERROR";
+
+export type QuotationLocalizationHeaderPatch = {
+  customerNameAr?: string | null;
+  customerNameEn?: string | null;
+
+  projectNameAr?: string | null;
+  projectNameEn?: string | null;
+
+  attentionNameAr?: string | null;
+  attentionNameEn?: string | null;
+
+  subjectAr?: string | null;
+  subjectEn?: string | null;
+
+  briefAr?: string | null;
+  briefEn?: string | null;
+
+  notesAr?: string | null;
+  notesEn?: string | null;
+
+  termsAndConditionsAr?: string | null;
+  termsAndConditionsEn?: string | null;
+};
+
+export type QuotationLocalizationLinePatch = {
+  id: string;
+
+  itemNameAr?: string | null;
+  itemNameEn?: string | null;
+
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
+
+  unitNameAr?: string | null;
+  unitNameEn?: string | null;
+};
+
+export type CompleteQuotationLocalizationParams = {
+  companyId: string;
+  quotationId: string;
+
+  expectedSourceSignature: string;
+  expectedClaimToken: string;
+
+  header: QuotationLocalizationHeaderPatch;
+  lines: QuotationLocalizationLinePatch[];
+
+  completedAt: Date;
+};
+
+export type FailQuotationLocalizationParams = {
+  companyId: string;
+  quotationId: string;
+
+  expectedSourceSignature: string;
+  expectedClaimToken: string;
+
+  errorCode: QuotationLocalizationErrorCode;
+};
+
 export interface IQuotationRepository {
   existsByNumber(
     companyId: string,
@@ -62,4 +127,10 @@ export interface IQuotationRepository {
   claimLocalization(
     params: QuotationLocalizationClaimParams,
   ): Promise<QuotationLocalizationClaim | null>;
+  completeLocalization(
+    params: CompleteQuotationLocalizationParams,
+  ): Promise<boolean>;
+  failLocalization(
+    params: FailQuotationLocalizationParams,
+  ): Promise<boolean>;
 }

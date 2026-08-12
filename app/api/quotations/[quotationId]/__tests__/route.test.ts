@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
+  claimLocalization: vi.fn(),
+  completeLocalization: vi.fn(),
+  failLocalization: vi.fn(),
   localizeQuotationDraft: vi.fn(),
 
   afterTasks: [] as Array<
@@ -54,6 +57,9 @@ vi.mock(
     PrismaQuotationRepository: class {
       findById = mocks.findById;
       update = mocks.update;
+      claimLocalization = mocks.claimLocalization;
+      completeLocalization = mocks.completeLocalization;
+      failLocalization = mocks.failLocalization;
     },
   }),
 );
@@ -122,6 +128,7 @@ function createQuotation(): Quotation {
     },
     lines: [
       {
+        id: "line-1",
         position: 1,
         type: "PRODUCT",
         itemName: "Product",
@@ -137,6 +144,9 @@ describe("GET /api/quotations/[quotationId]", () => {
     mocks.afterTasks.length = 0;
     mocks.findById.mockReset();
     mocks.update.mockReset();
+    mocks.claimLocalization.mockReset();
+    mocks.completeLocalization.mockReset();
+    mocks.failLocalization.mockReset();
     mocks.localizeQuotationDraft.mockReset();
   });
 
@@ -248,7 +258,7 @@ describe("GET /api/quotations/[quotationId]", () => {
     });
   });
 
-  it("persists FAILED when AI fails and signature matches", async () => {
+  it("claims before AI and has no fallback write when the failure fence is lost", async () => {
     const quotation = createQuotation();
     quotation.markLocalizationPending(
       "en",
@@ -258,6 +268,12 @@ describe("GET /api/quotations/[quotationId]", () => {
     mocks.localizeQuotationDraft.mockRejectedValue(
       new Error("Provider unavailable"),
     );
+    mocks.claimLocalization.mockImplementation(async () => ({
+      claimToken: "claim-1",
+      sourceSignature: quotation.localizationSourceSignature!,
+      attemptCount: 1,
+    }));
+    mocks.failLocalization.mockResolvedValue(false);
 
     const updates: Array<unknown> = [];
     mocks.update.mockImplementation(async (_companyId, updatedQuotation) => {
@@ -272,6 +288,7 @@ describe("GET /api/quotations/[quotationId]", () => {
           body: JSON.stringify({
             lines: [
               {
+                id: "line-1",
                 position: 1,
                 type: "PRODUCT",
                 itemName: "Product",
@@ -287,18 +304,24 @@ describe("GET /api/quotations/[quotationId]", () => {
     await runAfterTasks();
 
     expect(response.status).toBe(200);
-    expect(updates.length).toBeGreaterThanOrEqual(2);
-    const failedUpdate = updates[updates.length - 1] as { localizationStatus: string; localizationLastError: string | null; localizationRequestedAt: Date | null; localizationSourceLocale: string | null };
-    expect(failedUpdate.localizationStatus).toBe("FAILED");
-    expect(failedUpdate.localizationLastError).toBe(
-      "TRANSLATION_PROVIDER_ERROR",
-    );
-    expect(failedUpdate.localizationRequestedAt).toBe(
-      quotation.localizationRequestedAt,
-    );
-    expect(failedUpdate.localizationSourceLocale).toBe(
-      quotation.localizationSourceLocale,
-    );
+    expect(mocks.claimLocalization).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      leaseDurationMs: 12 * 60 * 1000,
+    });
+    expect(mocks.claimLocalization.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.localizeQuotationDraft.mock.invocationCallOrder[0]);
+    expect(mocks.claimLocalization.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.findById.mock.invocationCallOrder[2]);
+    expect(mocks.failLocalization).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      expectedSourceSignature: quotation.localizationSourceSignature,
+      expectedClaimToken: "claim-1",
+      errorCode: "TRANSLATION_PROVIDER_ERROR",
+    });
+    expect(updates).toHaveLength(1);
+    expect(mocks.completeLocalization).not.toHaveBeenCalled();
   });
 
   it("does not mutate lifecycle when AI fails on stale quotation", async () => {
@@ -322,9 +345,14 @@ describe("GET /api/quotations/[quotationId]", () => {
       new Date("2026-08-04T00:00:00.000Z"),
     );
 
-    mocks.findById.mockResolvedValueOnce(quotation); // initial find
-    mocks.findById.mockResolvedValueOnce(quotation); // updated snapshot read
-    mocks.findById.mockResolvedValueOnce(staleQuotation); // stale latest
+    mocks.findById.mockResolvedValueOnce(quotation); // normal update read
+    mocks.findById.mockResolvedValueOnce(quotation); // response snapshot read
+    mocks.findById.mockResolvedValueOnce(staleQuotation); // post-claim current read
+    mocks.claimLocalization.mockResolvedValue({
+      claimToken: "claim-stale",
+      sourceSignature: "stale-signature",
+      attemptCount: 1,
+    });
     mocks.localizeQuotationDraft.mockResolvedValue(
       {} as unknown,
     );
@@ -354,9 +382,12 @@ describe("GET /api/quotations/[quotationId]", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.localizeQuotationDraft).not.toHaveBeenCalled();
+    expect(mocks.completeLocalization).not.toHaveBeenCalled();
+    expect(mocks.failLocalization).not.toHaveBeenCalled();
   });
 
-  it("completes localization with timestamp on current AI success", async () => {
+  it("uses a narrow completion patch and has no fallback when its fence is lost", async () => {
     const quotation = createQuotation();
     quotation.markLocalizationPending(
       "en",
@@ -379,6 +410,12 @@ describe("GET /api/quotations/[quotationId]", () => {
         } as unknown as typeof snapshot;
       },
     );
+    mocks.claimLocalization.mockImplementation(async () => ({
+      claimToken: "claim-success",
+      sourceSignature: quotation.localizationSourceSignature!,
+      attemptCount: 1,
+    }));
+    mocks.completeLocalization.mockResolvedValue(false);
 
     const updates: Array<unknown> = [];
     mocks.update.mockImplementation(async (_companyId, updatedQuotation) => {
@@ -393,6 +430,7 @@ describe("GET /api/quotations/[quotationId]", () => {
           body: JSON.stringify({
             lines: [
               {
+                id: "line-1",
                 position: 1,
                 type: "PRODUCT",
                 itemName: "Product",
@@ -408,9 +446,76 @@ describe("GET /api/quotations/[quotationId]", () => {
     await runAfterTasks();
 
     expect(response.status).toBe(200);
-    expect(updates.length).toBeGreaterThanOrEqual(2);
-    const completedUpdate = updates[updates.length - 1] as { localizationStatus: string; localizationCompletedAt: Date | null };
-    expect(completedUpdate.localizationStatus).toBe("COMPLETED");
-    expect(completedUpdate.localizationCompletedAt).toBeInstanceOf(Date);
+    expect(updates).toHaveLength(1);
+    expect(mocks.completeLocalization).toHaveBeenCalledOnce();
+    const completion = mocks.completeLocalization.mock.calls[0][0];
+    expect(completion).toMatchObject({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      expectedSourceSignature: quotation.localizationSourceSignature,
+      expectedClaimToken: "claim-success",
+      lines: [{
+        id: "line-1",
+        itemNameEn: "Product",
+        itemNameAr: "منتج",
+      }],
+    });
+    expect(completion.completedAt).toBeInstanceOf(Date);
+    expect(Object.keys(completion.header).sort()).toEqual([
+      "attentionNameAr",
+      "attentionNameEn",
+      "briefAr",
+      "briefEn",
+      "customerNameAr",
+      "customerNameEn",
+      "notesAr",
+      "notesEn",
+      "projectNameAr",
+      "projectNameEn",
+      "subjectAr",
+      "subjectEn",
+      "termsAndConditionsAr",
+      "termsAndConditionsEn",
+    ]);
+    expect(Object.keys(completion.lines[0]).sort()).toEqual([
+      "descriptionAr",
+      "descriptionEn",
+      "id",
+      "itemNameAr",
+      "itemNameEn",
+      "unitNameAr",
+      "unitNameEn",
+    ]);
+    expect(completion.lines[0]).not.toHaveProperty("quantity");
+    expect(completion.lines[0]).not.toHaveProperty("position");
+    expect(mocks.failLocalization).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke AI or persistence when no claim is acquired", async () => {
+    const quotation = createQuotation();
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.update.mockResolvedValue(undefined);
+    mocks.claimLocalization.mockResolvedValue(null);
+
+    const response = await PATCH(new Request(
+      "http://localhost/api/quotations/quotation-1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ lines: [{
+          id: "line-1",
+          position: 1,
+          type: "PRODUCT",
+          itemName: "Product",
+          quantity: 1,
+          unitPrice: 10,
+        }] }),
+      },
+    ));
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(mocks.localizeQuotationDraft).not.toHaveBeenCalled();
+    expect(mocks.completeLocalization).not.toHaveBeenCalled();
+    expect(mocks.failLocalization).not.toHaveBeenCalled();
   });
 });

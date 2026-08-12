@@ -11,6 +11,7 @@ function createRepository(quotation: Quotation | null): IQuotationRepository {
     existsByNumber: vi.fn(), save: vi.fn(),
     findById: vi.fn().mockResolvedValue(quotation), findAll: vi.fn(),
     update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(),
+    completeLocalization: vi.fn(), failLocalization: vi.fn(),
   };
 }
 

@@ -16,6 +16,8 @@ function createRepository(
     update: vi.fn(),
     delete: vi.fn(),
     claimLocalization: vi.fn(),
+    completeLocalization: vi.fn(),
+    failLocalization: vi.fn(),
   };
 }
 

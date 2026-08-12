@@ -34,6 +34,8 @@ function repository(value: Quotation): IQuotationRepository {
     update: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn(),
     claimLocalization: vi.fn().mockResolvedValue(null),
+    completeLocalization: vi.fn(),
+    failLocalization: vi.fn(),
   };
 }
 
