@@ -26,7 +26,7 @@ function createQuotation(): Quotation {
   });
 }
 
-function approvedQuotation(withSnapshot: boolean): Quotation {
+function approvedQuotation(withSnapshot: boolean, verificationToken: string | null = "existing-verification-token-1234567890"): Quotation {
   const base = createQuotation();
   return Quotation.restore({
     id: base.id, companyId: base.companyId, customerId: base.customerId,
@@ -34,6 +34,7 @@ function approvedQuotation(withSnapshot: boolean): Quotation {
     currencyCode: base.currencyCode, customer: base.customer.toJSON(),
     lines: [...base.lines], notes: base.notes, approvedAt: new Date("2026-08-06T00:00:00Z"),
     approvedByName: "Approver", approvedByRole: "OWNER",
+    verificationToken,
     documentBrandSnapshot: withSnapshot ? createCompanyDocumentBrandSnapshot({
       nameAr: "العلامة الأصلية", nameEn: "Original Brand",
       addressAr: "العنوان الأصلي", addressEn: "Original Address",
@@ -120,10 +121,11 @@ describe("GenerateQuotationDocumentUseCase", () => {
     const useCase = new GenerateQuotationDocumentUseCase(createRepository(approvedQuotation(true)), renderer);
     await useCase.execute({
       companyId: "company-1", quotationId: "quotation-1", locale: "en", companyName: "Changed Company",
-      companyIdentity: { nameEn: "Changed Brand", addressEn: "Changed Address", logoUrl: "data:image/png;base64,CHANGED", letterheadUrl: "data:image/png;base64,CHANGED", signatureUrl: "data:image/png;base64,CHANGED", stampUrl: "data:image/png;base64,CHANGED", brandTheme: "BURGUNDY" },
+      companyIdentity: { nameEn: "Changed Brand", addressEn: "Changed Address", logoUrl: "data:image/png;base64,CHANGED", letterheadUrl: "data:image/png;base64,CHANGED", signatureUrl: "data:image/png;base64,CHANGED", stampUrl: "data:image/png;base64,CHANGED", brandTheme: "BURGUNDY" }, publicBaseUrl: "https://voka.example/",
     });
     expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({
       company: expect.objectContaining({ name: "Original Brand", address: "Original Address", logoUrl: "data:image/png;base64,ORIGINAL", letterheadUrl: "data:image/png;base64,LETTERHEAD", signatureUrl: "data:image/png;base64,SIGNATURE", stampUrl: "data:image/png;base64,STAMP", brandTheme: "EMERALD" }),
+      verificationUrl: "https://voka.example/verify/existing-verification-token-1234567890",
     }));
   });
 
@@ -137,5 +139,12 @@ describe("GenerateQuotationDocumentUseCase", () => {
     expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({
       company: expect.objectContaining({ name: "Live Brand", brandTheme: "CHARCOAL" }),
     }));
+  });
+
+  it("does not create a verification URL for an approved legacy quotation without a token", async () => {
+    const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array()) };
+    const useCase = new GenerateQuotationDocumentUseCase(createRepository(approvedQuotation(true, null)), renderer);
+    await useCase.execute({ companyId: "company-1", quotationId: "quotation-1", locale: "en", companyName: "VOKA", publicBaseUrl: "https://voka.example" });
+    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({ verificationUrl: null }));
   });
 });

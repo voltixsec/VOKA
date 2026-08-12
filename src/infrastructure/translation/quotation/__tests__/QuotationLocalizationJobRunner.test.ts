@@ -35,4 +35,17 @@ describe("QuotationLocalizationJobRunner", () => {
     expect(await runner.run(params)).toBe("FAILED");
     expect(repo.failLocalization).toHaveBeenCalledWith({ ...params, expectedSourceSignature: signature(), expectedClaimToken: "claim-1", errorCode: "TRANSLATION_PROVIDER_ERROR" });
   });
+  it.each([
+    [Object.assign(new Error("translation timeout"), { code: "TRANSLATION_TIMEOUT" }), "TRANSLATION_TIMEOUT"],
+    [Object.assign(new Error("Ollama translation failed (500)"), { code: "TRANSLATION_PROVIDER_ERROR" }), "TRANSLATION_PROVIDER_ERROR"],
+    [new Error('Quotation localization missing translation for "line_2_item_name".'), "TRANSLATION_INVALID_RESPONSE"],
+    [new Error("unknown CUDA shared object initialization failed"), "TRANSLATION_UNEXPECTED_ERROR"],
+  ] as const)("persists safe failure classification without weakening output validation: %s", async (error, code) => {
+    const repo = repository();
+    const runner = new QuotationLocalizationJobRunner(repo, vi.fn().mockRejectedValue(error));
+    expect(await runner.run(params)).toBe("FAILED");
+    expect(repo.failLocalization).toHaveBeenCalledWith(expect.objectContaining({
+      expectedSourceSignature: signature(), expectedClaimToken: "claim-1", errorCode: code,
+    }));
+  });
 });

@@ -4,6 +4,7 @@ import {
   drawProposalCard,
 
   drawProposalHeader,
+  drawProposalLetterhead,
   drawProposalSubject,
   formatProposalDate,
   formatProposalMoney,
@@ -61,6 +62,7 @@ function drawCoverCommercialSummary(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
   y: number,
+  compactForLetterhead = false,
 ): number {
   const locale =
     snapshot.locale;
@@ -121,7 +123,7 @@ function drawCoverCommercialSummary(
 
   if (notes) {
     const notesHeight =
-      68;
+      compactForLetterhead ? 60 : 68;
 
     drawProposalCard(
       doc,
@@ -165,12 +167,12 @@ function drawCoverCommercialSummary(
       );
 
     currentY +=
-      notesHeight + 10;
+      notesHeight + (compactForLetterhead ? 6 : 10);
   }
 
   if (terms) {
     const termsHeight =
-      86;
+      compactForLetterhead ? 74 : 86;
 
     drawProposalCard(
       doc,
@@ -214,7 +216,7 @@ function drawCoverCommercialSummary(
       );
 
     currentY +=
-      termsHeight + 12;
+      termsHeight + (compactForLetterhead ? 6 : 12);
   }
 
   /*
@@ -222,7 +224,7 @@ function drawCoverCommercialSummary(
    * No subtotal / discount breakdown here.
    */
   const valueHeight =
-    58;
+    compactForLetterhead ? 50 : 58;
 
   doc
     .roundedRect(
@@ -265,7 +267,7 @@ function drawCoverCommercialSummary(
         quote.currencyCode,
       ),
       left + 16,
-      currentY + 28,
+      currentY + (compactForLetterhead ? 24 : 28),
       proposalTextOptions(
         locale === "ar"
           ? "left"
@@ -284,7 +286,7 @@ function drawCoverCommercialSummary(
 export function drawProposalCover(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
-): void {
+): boolean {
   const locale =
     snapshot.locale;
 
@@ -302,10 +304,17 @@ export function drawProposalCover(
   const width =
     doc.page.width - 76;
 
+  const hasLetterhead =
+    drawProposalLetterhead(
+      doc,
+      snapshot,
+    );
+
   let y =
     drawProposalHeader(
       doc,
       snapshot,
+      hasLetterhead,
     );
 
   y =
@@ -356,18 +365,20 @@ export function drawProposalCover(
     align,
   );
 
-  drawField(
-    doc,
-    text.expiryDate,
-    formatProposalDate(
-      quote.expiryDate,
-    ),
-    left +
-      (columnWidth + gap) * 2,
-    y + 13,
-    columnWidth - 18,
-    align,
-  );
+  if (quote.expiryDate || locale !== "en") {
+    drawField(
+      doc,
+      text.expiryDate,
+      formatProposalDate(
+        quote.expiryDate,
+      ),
+      left +
+        (columnWidth + gap) * 2,
+      y + 13,
+      columnWidth - 18,
+      align,
+    );
+  }
 
   drawField(
     doc,
@@ -500,5 +511,8 @@ export function drawProposalCover(
     doc,
     snapshot,
     y,
+    hasLetterhead && locale === "en",
   );
+
+  return hasLetterhead;
 }

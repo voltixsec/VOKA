@@ -96,6 +96,7 @@ export class PrismaQuotationMapper {
       approvedAt: quotation.approvedAt,
       approvedByName: quotation.approvedByName,
       approvedByRole: quotation.approvedByRole,
+      verificationToken: quotation.verificationToken,
       ...(quotation.documentBrandSnapshot
         ? { documentBrandSnapshot: quotation.documentBrandSnapshot as Prisma.InputJsonValue }
         : {}),
@@ -246,6 +247,7 @@ export class PrismaQuotationMapper {
       approvedByName: record.approvedByName,
       approvedByRole: record.approvedByRole,
       documentBrandSnapshot: parseCompanyDocumentBrandSnapshot(record.documentBrandSnapshot),
+      verificationToken: record.verificationToken,
       rejectedAt: record.rejectedAt,
       cancelledAt: record.cancelledAt,
     });

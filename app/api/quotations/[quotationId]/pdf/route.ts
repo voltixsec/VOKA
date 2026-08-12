@@ -206,6 +206,7 @@ export const GET =
               ),
 
             locale,
+            publicBaseUrl: process.env.VOKA_PUBLIC_URL ?? null,
           });
 
       if (!result.success) {

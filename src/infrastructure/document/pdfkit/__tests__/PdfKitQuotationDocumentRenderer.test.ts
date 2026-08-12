@@ -12,6 +12,9 @@ import {
   PdfKitQuotationDocumentRenderer,
 } from "../PdfKitQuotationDocumentRenderer";
 
+const PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
 function snapshot(
   locale: "ar" | "en",
 ): QuotationDocumentSnapshot {
@@ -310,3 +313,34 @@ describe(
     );
   },
 );
+
+describe("Proposal PDF asset integration", () => {
+  it("renders a valid letterhead on the fixed two-page proposal and approved assets safely", async () => {
+    const data = snapshot("en");
+    data.company.letterheadUrl = PNG_DATA_URL;
+    data.company.signatureUrl = PNG_DATA_URL;
+    data.company.stampUrl = PNG_DATA_URL;
+
+    const bytes = await new PdfKitQuotationDocumentRenderer().render(data);
+    const pdfSource = Buffer.from(bytes).toString("latin1");
+    expect(pdfSource.match(/\/Type\s*\/Page\b/g) ?? []).toHaveLength(2);
+    expect(bytes.length).toBeGreaterThan(1_000);
+  });
+
+  it("ignores invalid letterhead, signature, and stamp without failing generation", async () => {
+    const data = snapshot("en");
+    data.company.letterheadUrl = "data:image/png;base64,AAAA";
+    data.company.signatureUrl = "data:image/jpeg;base64,AAAA";
+    data.company.stampUrl = "data:image/webp;base64,AAAA";
+    await expect(new PdfKitQuotationDocumentRenderer().render(data)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
+  it("does not render uploaded approval assets for a pending quotation", async () => {
+    const data = snapshot("en");
+    data.quotation.status = "SENT";
+    data.quotation.approvedAt = null;
+    data.company.signatureUrl = PNG_DATA_URL;
+    data.company.stampUrl = PNG_DATA_URL;
+    await expect(new PdfKitQuotationDocumentRenderer().render(data)).resolves.toBeInstanceOf(Uint8Array);
+  });
+});

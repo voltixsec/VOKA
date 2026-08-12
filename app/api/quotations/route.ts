@@ -3,6 +3,7 @@ import {
   apiSuccess,
   withCompanyAuth,
 } from '@/lib/api';
+import { after } from "next/server";
 
 import {
   CreateQuotationUseCase,
@@ -18,16 +19,7 @@ import {
 import { PrismaQuotationRepository } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository';
 import { PrismaQuotationReferenceValidator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator';
 
-import {
-  BilingualTranslationService,
-} from '@/src/application/translation';
-
-import {
-  createTranslationPort,
-} from '@/src/infrastructure/translation/createTranslationPort';
-import {
-  localizeQuotationDraft,
-} from "@/src/infrastructure/translation/quotation/localizeQuotationDraft";
+import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
 
 import { serializeQuotation } from './serialize-quotation';
 
@@ -42,6 +34,8 @@ const createQuotation =
     quotationRepository,
     quotationReferenceValidator,
   );
+const localizationJobRunner =
+  new QuotationLocalizationJobRunner(quotationRepository);
 
 
 const listQuotations =
@@ -225,10 +219,7 @@ export const POST = withCompanyAuth(
         unknown
       >;
 
-    const body =
-      (await localizeQuotationDraft(
-        rawBody,
-      )) as CreateQuotationBody;
+    const body = rawBody as CreateQuotationBody;
 
     if (
       typeof body.customerId !== 'string' ||
@@ -310,99 +301,28 @@ export const POST = withCompanyAuth(
       'expiryDate',
     );
 
-    let localizedSubjectAr =
+    const localizedSubjectAr =
       parseOptionalString(body.subjectAr);
 
-    let localizedSubjectEn =
+    const localizedSubjectEn =
       parseOptionalString(body.subjectEn);
 
-    let localizedBriefAr =
+    const localizedBriefAr =
       parseOptionalString(body.briefAr);
 
-    let localizedBriefEn =
+    const localizedBriefEn =
       parseOptionalString(body.briefEn);
 
-    let localizedTermsAr =
+    const localizedTermsAr =
       parseOptionalString(
         body.termsAndConditionsAr,
       );
 
-    let localizedTermsEn =
+    const localizedTermsEn =
       parseOptionalString(
         body.termsAndConditionsEn,
       );
 
-    const hasArabicSource =
-      body.subjectAr !== undefined ||
-      body.briefAr !== undefined ||
-      body.termsAndConditionsAr !== undefined;
-
-    const hasEnglishSource =
-      body.subjectEn !== undefined ||
-      body.briefEn !== undefined ||
-      body.termsAndConditionsEn !== undefined;
-
-    const sourceLocale =
-      hasArabicSource && !hasEnglishSource
-        ? "ar"
-        : hasEnglishSource && !hasArabicSource
-          ? "en"
-          : null;
-    const translationPort =
-      sourceLocale
-        ? createTranslationPort()
-        : null;
-
-    if (sourceLocale && translationPort) {
-      try {
-        const translator =
-          new BilingualTranslationService(
-            translationPort,
-          );
-
-        const sourceFields =
-          sourceLocale === "ar"
-            ? {
-                subject: localizedSubjectAr,
-                brief: localizedBriefAr,
-                terms: localizedTermsAr,
-              }
-            : {
-                subject: localizedSubjectEn,
-                brief: localizedBriefEn,
-                terms: localizedTermsEn,
-              };
-
-        const translation =
-          await translator.translateSourceFields(
-            sourceLocale,
-            sourceFields,
-          );
-
-        if (sourceLocale === "ar") {
-          localizedSubjectEn =
-            translation.translated.subject;
-
-          localizedBriefEn =
-            translation.translated.brief;
-
-          localizedTermsEn =
-            translation.translated.terms;
-        } else {
-          localizedSubjectAr =
-            translation.translated.subject;
-
-          localizedBriefAr =
-            translation.translated.brief;
-
-          localizedTermsAr =
-            translation.translated.terms;
-        }
-      } catch {
-        // Keep the original source text.
-        // Translation failure must not block quotation creation.
-      }
-    }
     const dto: CreateQuotationDto = {
       ...(body as unknown as CreateQuotationDto),
       companyId: company.companyId,
@@ -482,6 +402,20 @@ export const POST = withCompanyAuth(
         result.error.code,
         result.error.message,
       );
+    }
+
+    const persistedQuotationId =
+      result.data.id;
+
+    if (
+      result.data.localizationStatus === "PENDING" &&
+      typeof persistedQuotationId === "string" &&
+      persistedQuotationId.trim().length > 0
+    ) {
+      after(() => localizationJobRunner.run({
+        companyId: company.companyId,
+        quotationId: persistedQuotationId,
+      }));
     }
 
     return apiSuccess(

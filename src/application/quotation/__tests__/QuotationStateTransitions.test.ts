@@ -62,7 +62,10 @@ describe("quotation state transition use cases", () => {
   ] as const)("%s transitions SENT inside the tenant", async (_name, UseCase, status) => {
     const value = quotation("SENT");
     const repo = repository(value);
-    const result = await new UseCase(repo).execute({
+    const useCase = _name === "approve"
+      ? new ApproveQuotationUseCase(repo, { generate: () => "verification-token-0000000000000000" })
+      : new UseCase(repo);
+    const result = await useCase.execute({
       companyId: "company-1",
       quotationId: "quotation-1",
       ...(_name === "approve" ? { documentBrandSnapshot: brand } : {}),
@@ -89,7 +92,7 @@ describe("quotation state transition use cases", () => {
   it("does not persist an invalid transition", async () => {
     const value = quotation("DRAFT");
     const repo = repository(value);
-    const result = await new ApproveQuotationUseCase(repo).execute({
+    const result = await new ApproveQuotationUseCase(repo, { generate: () => "verification-token-0000000000000000" }).execute({
       companyId: "company-1",
       quotationId: "quotation-1",
       documentBrandSnapshot: brand,

@@ -1,0 +1,206 @@
+import { describe, expect, it, vi } from "vitest";
+import type { QuotationDocumentSnapshot } from "@/src/application/document";
+import {
+  PROPOSAL_TEXT,
+  decodeProposalImageDataUrl,
+  drawProposalCompanyApproval,
+  drawProposalHeader,
+  drawProposalLetterhead,
+  type ProposalPdfDocument,
+} from "../ProposalPdfShared";
+import { decorateExistingPages, PdfKitQuotationDocumentRenderer } from "../PdfKitQuotationDocumentRenderer";
+import { shouldRenderProposalApproval } from "../ProposalPdfBoq";
+
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const JPEG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABCf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
+
+function snapshot(status = "APPROVED", locale: "ar" | "en" = "en"): QuotationDocumentSnapshot {
+  return {
+    locale,
+    company: { name: "VOKA", letterheadUrl: PNG, signatureUrl: PNG, stampUrl: PNG },
+    qrValue: "VOKA:Q-1",
+    quotation: {
+      number: "Q-1", status, issueDate: new Date("2026-08-12"), expiryDate: null,
+      currencyCode: "KWD", subjectAr: null, subjectEn: null, briefAr: null, briefEn: null,
+      projectName: null, projectNameAr: null, projectNameEn: null,
+      attentionName: null, attentionNameAr: null, attentionNameEn: null, scopeType: null,
+      customer: { name: "Customer", email: null, phone: null, taxNumber: null, billingAddress: null },
+      lines: [], discount: null,
+      totals: { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 },
+      notes: null, notesAr: null, notesEn: null,
+      termsAndConditions: null, termsAndConditionsAr: null, termsAndConditionsEn: null,
+      approvedAt: status === "APPROVED" ? new Date("2026-08-12") : null,
+      approvedByName: status === "APPROVED" ? "Approver" : null,
+      approvedByRole: status === "APPROVED" ? "OWNER" : null,
+    },
+  };
+}
+
+function fakeDocument() {
+  const texts: string[] = [];
+  const textCalls: Array<{ value: string; x: number; y: number }> = [];
+  const images: Buffer[] = [];
+  const doc: Record<string, unknown> = { page: { width: 595, height: 842 } };
+  for (const method of ["save", "restore", "rect", "roundedRect", "fill", "stroke", "lineWidth", "strokeColor", "fillColor", "fontSize", "moveTo", "lineTo"]) {
+    doc[method] = vi.fn(() => doc);
+  }
+  doc.text = vi.fn((value: string, x = 0, y = 0) => { texts.push(value); textCalls.push({ value, x, y }); return doc; });
+  doc.image = vi.fn((value: Buffer) => { images.push(value); return doc; });
+  return { doc: doc as unknown as ProposalPdfDocument, texts, textCalls, images };
+}
+
+describe("proposal PDF document assets", () => {
+  it("decodes PNG and JPEG through one safe decoder", () => {
+    expect(decodeProposalImageDataUrl(PNG)).toBeInstanceOf(Buffer);
+    expect(decodeProposalImageDataUrl(JPEG)).toBeInstanceOf(Buffer);
+  });
+
+  it.each(["data:image/webp;base64,UklGRg==", "invalid", "data:image/png;base64,AAAA"])("ignores invalid or unsupported data: %s", (value) => {
+    expect(decodeProposalImageDataUrl(value)).toBeNull();
+  });
+
+  it.each([PNG, JPEG])("draws a valid letterhead with page-fit containment", (letterheadUrl) => {
+    const target = fakeDocument();
+    const data = snapshot();
+    data.company.letterheadUrl = letterheadUrl;
+    expect(drawProposalLetterhead(target.doc, data)).toBe(true);
+    expect(target.doc.image).toHaveBeenCalledWith(expect.any(Buffer), 0, 0, expect.objectContaining({ fit: [595, 842], align: "center", valign: "center" }));
+  });
+
+  it("renders a JPEG letterhead through PDFKit", async () => {
+    const data = snapshot();
+    data.company.letterheadUrl = JPEG;
+    await expect(new PdfKitQuotationDocumentRenderer().render(data)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
+  it("does not crash for an invalid letterhead", () => {
+    const target = fakeDocument();
+    const data = snapshot();
+    data.company.letterheadUrl = "data:image/png;base64,AAAA";
+    expect(drawProposalLetterhead(target.doc, data)).toBe(false);
+    expect(target.images).toHaveLength(0);
+  });
+
+  it.each([[true, false], [false, true], [true, true], [false, false]])("renders approved signature/stamp gracefully (%s/%s)", (hasSignature, hasStamp) => {
+    const target = fakeDocument();
+    const data = snapshot();
+    data.company.signatureUrl = hasSignature ? PNG : null;
+    data.company.stampUrl = hasStamp ? PNG : null;
+    drawProposalCompanyApproval(target.doc, data, 600, 90);
+    expect(target.images).toHaveLength(Number(hasSignature) + Number(hasStamp));
+    expect(target.texts).toContain(PROPOSAL_TEXT.en.electronicApproval);
+  });
+
+  it("does not render signature, stamp, or electronic copy for an unapproved document", () => {
+    const target = fakeDocument();
+    drawProposalCompanyApproval(target.doc, snapshot("SENT"), 600, 90);
+    expect(target.images).toHaveLength(0);
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.electronicApproval);
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.approvedBy);
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.pendingApproval);
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.signature);
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.approvalStatement);
+    expect(target.doc.roundedRect).not.toHaveBeenCalled();
+    expect(target.doc.lineTo).not.toHaveBeenCalled();
+  });
+
+  it.each(["DRAFT", "SENT", "REJECTED", "CANCELLED"])("omits the entire English approval block for %s", (status) => {
+    const data = snapshot(status, "en");
+    expect(shouldRenderProposalApproval(data)).toBe(false);
+  });
+
+  it("requires both approved status and approval date for the English approval block", () => {
+    const data = snapshot("APPROVED", "en");
+    data.quotation.approvedAt = null;
+    expect(shouldRenderProposalApproval(data)).toBe(false);
+    data.quotation.approvedAt = new Date("2026-08-12");
+    expect(shouldRenderProposalApproval(data)).toBe(true);
+  });
+
+  it.each(["ar", "en"] as const)("uses the exact %s electronic approval copy", (locale) => {
+    const target = fakeDocument();
+    drawProposalCompanyApproval(target.doc, snapshot("APPROVED", locale), 600, 90);
+    expect(target.texts).toContain(PROPOSAL_TEXT[locale].electronicApproval);
+  });
+
+  it("uses an English stationery header mode below the safe area without the normal header or logo", () => {
+    const target = fakeDocument();
+    const data = snapshot("APPROVED", "en");
+    data.company.logoUrl = PNG;
+    const y = drawProposalHeader(target.doc, data, true);
+    expect(y).toBeGreaterThan(120);
+    expect(target.doc.rect).not.toHaveBeenCalled();
+    expect(target.images).toHaveLength(0);
+    expect(target.textCalls.find((call) => call.value === "QUOTATION")?.y).toBeGreaterThanOrEqual(124);
+  });
+
+  it("retains the normal English branded header and logo without letterhead mode", () => {
+    const target = fakeDocument();
+    const data = snapshot("APPROVED", "en");
+    data.company.logoUrl = PNG;
+    drawProposalHeader(target.doc, data, false);
+    expect(target.doc.rect).toHaveBeenCalled();
+    expect(target.images).toHaveLength(1);
+  });
+
+  it("uses lightweight traceability and suppresses the normal footer in English letterhead mode", () => {
+    const target = fakeDocument();
+    Object.assign(target.doc, {
+      bufferedPageRange: vi.fn(() => ({ start: 0, count: 2 })),
+      switchToPage: vi.fn(() => target.doc),
+    });
+    decorateExistingPages(target.doc, snapshot("APPROVED", "en"), Buffer.from([1]), [true, true]);
+    expect(target.texts).toContain("Q-1 · 1 / 2");
+    expect(target.texts).toContain("Q-1 · 2 / 2");
+    expect(target.texts).not.toContain("VOKA — Q-1");
+    expect(target.images).toHaveLength(0);
+  });
+
+  it("retains normal footer traceability without the former decorative QR", () => {
+    const target = fakeDocument();
+    Object.assign(target.doc, {
+      bufferedPageRange: vi.fn(() => ({ start: 0, count: 2 })),
+      switchToPage: vi.fn(() => target.doc),
+    });
+    decorateExistingPages(target.doc, snapshot("APPROVED", "en"), Buffer.from([1]), [false, false]);
+    expect(target.texts).toContain("VOKA — Q-1");
+    expect(target.images).toHaveLength(0);
+  });
+
+  it("separates the English approval date and electronic copy coordinates", () => {
+    const target = fakeDocument();
+    drawProposalCompanyApproval(target.doc, snapshot("APPROVED", "en"), 600, 112);
+    const approval = target.textCalls.find((call) => call.value === PROPOSAL_TEXT.en.electronicApproval);
+    const date = target.textCalls.find((call) => call.value.includes("12/08/2026"));
+    expect(approval).toBeDefined();
+    expect(date).toBeDefined();
+    expect((approval?.y ?? 0) - (date?.y ?? 0)).toBeGreaterThan(20);
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.approvalStatement);
+  });
+
+  it("suppresses the fallback signature line when a real signature exists", () => {
+    const target = fakeDocument();
+    drawProposalCompanyApproval(target.doc, snapshot("APPROVED", "en"), 600, 112);
+    expect(target.doc.lineTo).not.toHaveBeenCalled();
+  });
+
+  it("keeps the fallback signature line when an approved document has no signature", () => {
+    const target = fakeDocument();
+    const data = snapshot("APPROVED", "en");
+    data.company.signatureUrl = null;
+    drawProposalCompanyApproval(target.doc, data, 600, 112);
+    expect(target.doc.lineTo).toHaveBeenCalled();
+  });
+
+  it("renders a labelled official verification QR only inside an approved English block", () => {
+    const approved = fakeDocument();
+    drawProposalCompanyApproval(approved.doc, snapshot("APPROVED", "en"), 600, 112, Buffer.from([1, 2, 3]));
+    expect(approved.texts).toContain("Verify document");
+    expect(approved.images).toHaveLength(3);
+
+    const pending = fakeDocument();
+    drawProposalCompanyApproval(pending.doc, snapshot("SENT", "en"), 600, 112, Buffer.from([1, 2, 3]));
+    expect(pending.texts).not.toContain("Verify document");
+    expect(pending.images).toHaveLength(0);
+  });
+});

@@ -115,4 +115,5 @@ export type QuotationDocumentSnapshot = {
   };
 
   qrValue: string;
+  verificationUrl?: string | null;
 };

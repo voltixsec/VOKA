@@ -27,6 +27,46 @@ const brandSnapshot = createCompanyDocumentBrandSnapshot({
 describe(
   "Quotation approval snapshot",
   () => {
+    it("generates and persists an immutable verification token on approval", async () => {
+      const quotation = Quotation.restore({
+        id: "quotation-token", companyId: "company-1", customerId: "customer-1", number: "Q-TOKEN",
+        status: "SENT", customer: { name: "Customer" },
+        lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
+      });
+      const repository = {
+        existsByNumber: vi.fn(), save: vi.fn(), findById: vi.fn().mockResolvedValue(quotation),
+        findAll: vi.fn(), update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(), completeLocalization: vi.fn(), failLocalization: vi.fn(),
+      } satisfies IQuotationRepository;
+      const generator = { generate: vi.fn(() => "generated-verification-token-1234567890") };
+      await new ApproveQuotationUseCase(repository, generator).execute({ companyId: "company-1", quotationId: "quotation-token", documentBrandSnapshot: brandSnapshot });
+      expect(generator.generate).toHaveBeenCalledOnce();
+      expect(quotation.verificationToken).toBe("generated-verification-token-1234567890");
+      expect(repository.update).toHaveBeenCalledWith("company-1", quotation);
+    });
+
+    it("never replaces an existing verification token", async () => {
+      const quotation = Quotation.restore({
+        id: "quotation-token", companyId: "company-1", customerId: "customer-1", number: "Q-TOKEN",
+        status: "SENT", verificationToken: "existing-verification-token-1234567890",
+        customer: { name: "Customer" }, lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
+      });
+      const repository = { existsByNumber: vi.fn(), save: vi.fn(), findById: vi.fn().mockResolvedValue(quotation), findAll: vi.fn(), update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(), completeLocalization: vi.fn(), failLocalization: vi.fn() } satisfies IQuotationRepository;
+      const generator = { generate: vi.fn(() => "replacement-verification-token-123456") };
+      await new ApproveQuotationUseCase(repository, generator).execute({ companyId: "company-1", quotationId: "quotation-token", documentBrandSnapshot: brandSnapshot });
+      expect(generator.generate).not.toHaveBeenCalled();
+      expect(quotation.verificationToken).toBe("existing-verification-token-1234567890");
+    });
+
+    it("does not generate a verification token for a non-sent quotation", async () => {
+      const quotation = Quotation.restore({ id: "quotation-draft", companyId: "company-1", customerId: "customer-1", number: "Q-DRAFT", status: "DRAFT", customer: { name: "Customer" }, lines: [] });
+      const repository = { existsByNumber: vi.fn(), save: vi.fn(), findById: vi.fn().mockResolvedValue(quotation), findAll: vi.fn(), update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(), completeLocalization: vi.fn(), failLocalization: vi.fn() } satisfies IQuotationRepository;
+      const generator = { generate: vi.fn(() => "should-not-be-generated-token-123456") };
+      const result = await new ApproveQuotationUseCase(repository, generator).execute({ companyId: "company-1", quotationId: "quotation-draft", documentBrandSnapshot: brandSnapshot });
+      expect(result.success).toBe(false);
+      expect(generator.generate).not.toHaveBeenCalled();
+      expect(quotation.verificationToken).toBeNull();
+      expect(repository.update).not.toHaveBeenCalled();
+    });
     it(
       "stores approver name and role",
       async () => {
@@ -81,6 +121,7 @@ describe(
         const result =
           await new ApproveQuotationUseCase(
             repository,
+            { generate: () => "verification-token-0000000000000000" },
           ).execute({
             companyId: "company-1",
             quotationId: "quotation-1",
@@ -129,7 +170,7 @@ describe(
         findAll: vi.fn(), update: vi.fn(), delete: vi.fn(), claimLocalization: vi.fn(),
         completeLocalization: vi.fn(), failLocalization: vi.fn(),
       } satisfies IQuotationRepository;
-      await new ApproveQuotationUseCase(repository).execute({
+      await new ApproveQuotationUseCase(repository, { generate: () => "verification-token-0000000000000000" }).execute({
         companyId: "company-1", quotationId: "quotation-1",
         documentBrandSnapshot: { ...brandSnapshot, nameEn: "Changed Brand" },
       });

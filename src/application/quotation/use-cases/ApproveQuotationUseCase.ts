@@ -11,11 +11,13 @@ import type {
 import type {
   ApplicationResult,
 } from "../results/ApplicationResult";
+import type { DocumentVerificationTokenGenerator } from "../../../domain/document-verification/DocumentVerificationToken";
 
 export class ApproveQuotationUseCase {
   constructor(
     private readonly repository:
       IQuotationRepository,
+    private readonly tokenGenerator: DocumentVerificationTokenGenerator,
   ) {}
 
   async execute(
@@ -39,6 +41,12 @@ export class ApproveQuotationUseCase {
     }
 
     try {
+      const verificationToken = quotation.verificationToken ?? (
+        quotation.status === "SENT"
+          ? this.tokenGenerator.generate()
+          : undefined
+      );
+
       quotation.approve(dto.documentBrandSnapshot, {
         name:
           dto.approvedByName?.trim() ||
@@ -47,7 +55,7 @@ export class ApproveQuotationUseCase {
         role:
           dto.approvedByRole?.trim() ||
           "APPROVER",
-      });
+      }, new Date(), verificationToken);
 
       await this.repository.update(
         dto.companyId,

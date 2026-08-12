@@ -67,6 +67,7 @@ export interface QuotationProps
   approvedByName?: string | null;
   approvedByRole?: string | null;
   documentBrandSnapshot?: CompanyDocumentBrandSnapshot | null;
+  verificationToken?: string | null;
   rejectedAt?: Date | null;
   cancelledAt?: Date | null;
   // New localization lifecycle fields
@@ -118,6 +119,7 @@ export class Quotation {
   private _approvedByName: string | null;
   private _approvedByRole: string | null;
   private _documentBrandSnapshot: CompanyDocumentBrandSnapshot | null;
+  private _verificationToken: string | null;
   private _rejectedAt: Date | null;
   private _cancelledAt: Date | null;
   // Localization lifecycle fields
@@ -229,6 +231,7 @@ export class Quotation {
     this._documentBrandSnapshot = props.documentBrandSnapshot
       ? structuredClone(props.documentBrandSnapshot)
       : null;
+    this._verificationToken = props.verificationToken?.trim() || null;
     this._rejectedAt = props.rejectedAt ?? null;
     this._cancelledAt = props.cancelledAt ?? null;
 
@@ -428,6 +431,8 @@ export class Quotation {
       : null;
   }
 
+  get verificationToken(): string | null { return this._verificationToken; }
+
   startLocalizationGeneration(
     sourceLocale: "ar" | "en",
     sourceSignature: string,
@@ -617,6 +622,7 @@ export class Quotation {
       role: "APPROVER",
     },
     at: Date = new Date(),
+    verificationToken?: string,
   ): void {
     this.assertTransition(
       ["SENT"],
@@ -646,6 +652,9 @@ export class Quotation {
       approvedByRole;
     if (!this._documentBrandSnapshot) {
       this._documentBrandSnapshot = structuredClone(documentBrandSnapshot);
+    }
+    if (!this._verificationToken && verificationToken?.trim()) {
+      this._verificationToken = verificationToken.trim();
     }
   }
 

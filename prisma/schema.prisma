@@ -419,6 +419,7 @@ model Quotation {
   approvedByName String?
   approvedByRole String?
   documentBrandSnapshot Json?
+  verificationToken String? @unique
   rejectedAt     DateTime?
   cancelledAt    DateTime?
 

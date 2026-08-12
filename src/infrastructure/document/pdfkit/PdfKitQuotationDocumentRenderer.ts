@@ -18,6 +18,7 @@ import {
 
 import {
   PROPOSAL_COLOR,
+  LETTERHEAD_SAFE_AREA,
   type ProposalPdfDocument,
   type ProposalSnapshot,
 } from "./ProposalPdfShared";
@@ -25,7 +26,7 @@ import {
 function drawSafeFooter(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
-  qrBuffer: Buffer,
+  _qrBuffer: Buffer,
   pageNumber: number,
   pageCount: number,
 ): void {
@@ -105,23 +106,14 @@ function drawSafeFooter(
       },
     );
 
-  doc.image(
-    qrBuffer,
-    pageWidth - 62,
-    pageHeight - 68,
-    {
-      width: 18,
-      height: 18,
-    },
-  );
-
   doc.restore();
 }
 
-function decorateExistingPages(
+export function decorateExistingPages(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
   qrBuffer: Buffer,
+  letterheadPages: readonly boolean[],
 ): void {
   const range =
     doc.bufferedPageRange();
@@ -142,13 +134,27 @@ function decorateExistingPages(
       range.start + index,
     );
 
-    drawSafeFooter(
-      doc,
-      snapshot,
-      qrBuffer,
-      index + 1,
-      range.count,
-    );
+    const englishLetterheadMode = snapshot.locale === "en" && letterheadPages[index];
+
+    if (englishLetterheadMode) {
+      doc
+        .fillColor(PROPOSAL_COLOR.muted)
+        .fontSize(5.8)
+        .text(
+          snapshot.quotation.number + " · " + String(index + 1) + " / " + String(range.count),
+          38,
+          doc.page.height - LETTERHEAD_SAFE_AREA.bottom - LETTERHEAD_SAFE_AREA.traceOffset,
+          { width: doc.page.width - 76, align: "center", lineBreak: false },
+        );
+    } else {
+      drawSafeFooter(
+        doc,
+        snapshot,
+        qrBuffer,
+        index + 1,
+        range.count,
+      );
+    }
   }
 
   /*
@@ -174,31 +180,26 @@ export class PdfKitQuotationDocumentRenderer
     snapshot:
       QuotationDocumentSnapshot,
   ): Promise<Uint8Array> {
-    const qrDataUrl =
-      await QRCode.toDataURL(
-        snapshot.qrValue,
+    const qrDataUrl = snapshot.verificationUrl
+      ? await QRCode.toDataURL(
+        snapshot.verificationUrl,
         {
           margin: 1,
           width: 140,
           errorCorrectionLevel:
             "M",
         },
-      );
+      ) : null;
 
     const encodedQr =
-      qrDataUrl.split(",")[1];
+      qrDataUrl?.split(",")[1];
 
-    if (!encodedQr) {
-      throw new Error(
-        "Unable to generate quotation QR code.",
-      );
-    }
-
-    const qrBuffer =
-      Buffer.from(
+    const qrBuffer = encodedQr
+      ? Buffer.from(
         encodedQr,
         "base64",
-      );
+      )
+      : null;
 
     const fontPath =
       path.join(
@@ -289,7 +290,7 @@ export class PdfKitQuotationDocumentRenderer
      * Page 1:
      * Quotation cover and company approval.
      */
-    drawProposalCover(
+    const coverHasLetterhead = drawProposalCover(
       doc,
       snapshot,
     );
@@ -299,9 +300,10 @@ export class PdfKitQuotationDocumentRenderer
      * Repeated header, quotation items,
      * totals, terms and company approval.
      */
-    drawProposalBoq(
+    const boqHasLetterhead = drawProposalBoq(
       doc,
       snapshot,
+      qrBuffer,
     );
 
     /*
@@ -313,7 +315,8 @@ export class PdfKitQuotationDocumentRenderer
     decorateExistingPages(
       doc,
       snapshot,
-      qrBuffer,
+      qrBuffer ?? Buffer.alloc(0),
+      [coverHasLetterhead, boqHasLetterhead],
     );
 
     doc.end();

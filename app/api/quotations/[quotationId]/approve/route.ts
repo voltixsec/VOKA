@@ -12,6 +12,7 @@ import {
 } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { prisma } from "@/lib/prisma";
 import { createCompanyDocumentBrandSnapshot } from "@/src/domain/document/CompanyDocumentBrandSnapshot";
+import { CryptoDocumentVerificationTokenGenerator } from "@/src/infrastructure/document-verification/CryptoDocumentVerificationTokenGenerator";
 
 import {
   getQuotationIdFromActionUrl,
@@ -23,6 +24,7 @@ const repository =
 const approveQuotation =
   new ApproveQuotationUseCase(
     repository,
+    new CryptoDocumentVerificationTokenGenerator(),
   );
 
 export const POST = withCompanyAuth(

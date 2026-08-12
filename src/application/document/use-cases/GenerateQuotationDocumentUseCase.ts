@@ -11,6 +11,7 @@ import type {
   QuotationDocumentSnapshot,
 } from "../contracts/QuotationDocumentSnapshot";
 import { createCompanyDocumentBrandSnapshot } from "../../../domain/document/CompanyDocumentBrandSnapshot";
+import { buildDocumentVerificationUrl } from "../../../domain/document-verification/DocumentVerificationToken";
 
 export type GenerateQuotationCompanyIdentity = {
   nameAr?: string | null;
@@ -41,6 +42,7 @@ export type GenerateQuotationDocumentInput = {
 
   quotationId: string;
   locale: DocumentLocale;
+  publicBaseUrl?: string | null;
 };
 
 export type GenerateQuotationDocumentResult =
@@ -411,6 +413,10 @@ export class GenerateQuotationDocumentUseCase {
       qrValue:
         "VOKA:" +
         quotation.number.toString(),
+      verificationUrl:
+        quotation.status === "APPROVED" && quotation.approvedAt && quotation.verificationToken && input.publicBaseUrl
+          ? buildDocumentVerificationUrl(input.publicBaseUrl, quotation.verificationToken)
+          : null,
     };
 
     const bytes =

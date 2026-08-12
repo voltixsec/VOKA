@@ -4,6 +4,7 @@ import {
   drawProposalCard,
   drawProposalCompanyApproval,
   drawProposalHeader,
+  drawProposalLetterhead,
   drawProposalSubject,
   formatProposalDate,
   formatProposalMoney,
@@ -22,6 +23,18 @@ type TableColumn = {
     | "right"
     | "center";
 };
+
+export function shouldRenderProposalApproval(
+  snapshot: ProposalSnapshot,
+): boolean {
+  return (
+    snapshot.locale !== "en" ||
+    (
+      snapshot.quotation.status === "APPROVED" &&
+      Boolean(snapshot.quotation.approvedAt)
+    )
+  );
+}
 
 function drawCompactField(
   doc: ProposalPdfDocument,
@@ -454,6 +467,20 @@ function drawApprovalStatement(
   const width =
     doc.page.width - 76;
 
+  if (locale === "en") {
+    doc
+      .fillColor(PROPOSAL_COLOR.muted)
+      .fontSize(6.2)
+      .text(
+        text.continuation,
+        left + 14,
+        y + 5,
+        proposalTextOptions("center", width - 28, 12),
+      );
+
+    return y + 20;
+  }
+
   drawProposalCard(
     doc,
     left,
@@ -500,8 +527,15 @@ function drawApprovalStatement(
 export function drawProposalBoq(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
-): void {
+  verificationQr?: Buffer | null,
+): boolean {
   doc.addPage();
+
+  const hasLetterhead =
+    drawProposalLetterhead(
+      doc,
+      snapshot,
+    );
 
   const quote =
     snapshot.quotation;
@@ -529,6 +563,7 @@ export function drawProposalBoq(
     drawProposalHeader(
       doc,
       snapshot,
+      hasLetterhead,
     );
 
   y =
@@ -613,14 +648,14 @@ export function drawProposalBoq(
     TableColumn[] = [
     {
       width:
-        totalWidth * 0.42,
+        totalWidth * 0.40,
 
       align,
     },
 
     {
       width:
-        totalWidth * 0.10,
+        totalWidth * 0.11,
 
       align:
         "center",
@@ -628,7 +663,7 @@ export function drawProposalBoq(
 
     {
       width:
-        totalWidth * 0.09,
+        totalWidth * 0.10,
 
       align:
         "right",
@@ -636,7 +671,7 @@ export function drawProposalBoq(
 
     {
       width:
-        totalWidth * 0.16,
+        totalWidth * 0.17,
 
       align:
         "right",
@@ -652,7 +687,7 @@ export function drawProposalBoq(
 
     {
       width:
-        totalWidth * 0.13,
+        totalWidth * 0.12,
 
       align:
         "right",
@@ -831,13 +866,13 @@ export function drawProposalBoq(
             )
             .text(
               value,
-              positions[columnIndex] + 3,
+              positions[columnIndex] + (locale === "en" ? 6 : 3),
               y + 4,
               proposalTextOptions(
                 columns[columnIndex]
                   .align,
                 columns[columnIndex]
-                  .width - 6,
+                  .width - (locale === "en" ? 12 : 6),
                 Math.max(
                   8,
                   rowHeight - 7,
@@ -884,11 +919,15 @@ export function drawProposalBoq(
       y,
     ) + 8;
 
-  drawProposalCompanyApproval(
-    doc,
-    snapshot,
-    y,
-    90,
-  );
+  if (shouldRenderProposalApproval(snapshot)) {
+    drawProposalCompanyApproval(
+      doc,
+      snapshot,
+      y,
+      locale === "en" ? 112 : 90,
+      verificationQr,
+    );
+  }
 
+  return hasLetterhead;
 }

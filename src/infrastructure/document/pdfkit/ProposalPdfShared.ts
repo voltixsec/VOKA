@@ -32,6 +32,12 @@ export const PROPOSAL_COLOR = {
   paleAmber: "#fffbeb",
 } as const;
 
+export const LETTERHEAD_SAFE_AREA = {
+  top: 120,
+  bottom: 100,
+  traceOffset: 12,
+} as const;
+
 export function proposalBrand(
   snapshot: ProposalSnapshot,
 ) {
@@ -134,6 +140,9 @@ export const PROPOSAL_TEXT = {
 
     approvalStatement:
       "يعتمد هذا العرض بقيمته وشروطه والبيان الموضح فيه، ويصبح ساريًا وفق مدة الصلاحية المحددة.",
+
+    electronicApproval:
+      "تم اعتماد هذا المستند إلكترونيًا، وهذا الاعتماد يؤكد الموافقة على المستند ومحتوياته.",
   },
 
   en: {
@@ -229,6 +238,12 @@ export const PROPOSAL_TEXT = {
 
     approvalStatement:
       "This quotation is approved with its stated value, terms and statement of work, and remains valid for the specified validity period.",
+
+    electronicApproval:
+      "This document has been electronically approved. This approval confirms acceptance of the document and its contents.",
+
+    approvedBy:
+      "Approved by",
   },
 } as const;
 
@@ -442,7 +457,7 @@ export function drawProposalCard(
     .stroke();
 }
 
-function decodeProposalLogo(
+export function decodeProposalImageDataUrl(
   value:
     | string
     | null
@@ -453,7 +468,7 @@ function decodeProposalLogo(
   }
 
   const match =
-    /^data:image\/(?:png|jpe?g);base64,(.+)$/i.exec(
+    /^data:image\/(?:png|jpe?g);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(
       value,
     );
 
@@ -462,10 +477,13 @@ function decodeProposalLogo(
   }
 
   try {
-    return Buffer.from(
+    const buffer = Buffer.from(
       match[1],
       "base64",
     );
+    const png = buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const jpeg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    return png || jpeg ? buffer : null;
   } catch {
     return null;
   }
@@ -474,6 +492,7 @@ function decodeProposalLogo(
 export function drawProposalHeader(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
+  hasLetterhead = false,
 ): number {
   const locale =
     snapshot.locale;
@@ -499,6 +518,20 @@ export function drawProposalHeader(
 
   const headerHeight =
     132;
+
+  if (hasLetterhead && locale === "en") {
+    doc
+      .fillColor(brand.primary)
+      .fontSize(20)
+      .text(
+        PROPOSAL_TEXT.en.quotation,
+        left,
+        LETTERHEAD_SAFE_AREA.top + 4,
+        proposalTextOptions("center", usableWidth, 24),
+      );
+
+    return LETTERHEAD_SAFE_AREA.top + 38;
+  }
 
   const labels =
     locale === "ar"
@@ -559,7 +592,7 @@ export function drawProposalHeader(
       )
       .join("   |   ");
 
-  doc
+  if (!hasLetterhead) doc
     .rect(
       0,
       0,
@@ -570,7 +603,7 @@ export function drawProposalHeader(
       brand.primary,
     );
 
-  doc
+  if (!hasLetterhead) doc
     .rect(
       0,
       headerHeight - 4,
@@ -582,7 +615,7 @@ export function drawProposalHeader(
     );
 
   const logo =
-    decodeProposalLogo(
+    decodeProposalImageDataUrl(
       company.logoUrl,
     );
 
@@ -613,7 +646,7 @@ export function drawProposalHeader(
    * No background, no white box,
    * no border behind the logo.
    */
-  if (logo) {
+  if (logo && !hasLetterhead) {
     try {
       doc.image(
         logo,
@@ -641,9 +674,13 @@ export function drawProposalHeader(
       ? "right"
       : "left";
 
+  const headerTextColor = hasLetterhead
+    ? brand.primary
+    : brand.textOnPrimary;
+
   doc
     .fillColor(
-      brand.textOnPrimary,
+      headerTextColor,
     )
     .fontSize(15)
     .text(
@@ -660,7 +697,7 @@ export function drawProposalHeader(
   if (company.address) {
     doc
       .fillColor(
-        brand.textOnPrimary,
+        headerTextColor,
       )
       .fontSize(8.5)
       .text(
@@ -678,7 +715,7 @@ export function drawProposalHeader(
   if (firstContactLine) {
     doc
       .fillColor(
-        brand.textOnPrimary,
+        headerTextColor,
       )
       .fontSize(8)
       .text(
@@ -696,7 +733,7 @@ export function drawProposalHeader(
   if (secondContactLine) {
     doc
       .fillColor(
-        brand.textOnPrimary,
+        headerTextColor,
       )
       .fontSize(8)
       .text(
@@ -713,7 +750,7 @@ export function drawProposalHeader(
 
   doc
     .fillColor(
-      brand.textOnPrimary,
+      headerTextColor,
     )
     .fontSize(24)
     .text(
@@ -730,6 +767,17 @@ export function drawProposalHeader(
     );
 
   return 146;
+}
+
+export function drawProposalLetterhead(doc: ProposalPdfDocument, snapshot: ProposalSnapshot): boolean {
+  const letterhead = decodeProposalImageDataUrl(snapshot.company.letterheadUrl);
+  if (!letterhead) return false;
+  try {
+    doc.image(letterhead, 0, 0, { fit: [doc.page.width, doc.page.height], align: "center", valign: "center" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function drawProposalSubject(
@@ -1014,6 +1062,7 @@ export function drawProposalCompanyApproval(
   snapshot: ProposalSnapshot,
   y: number,
   height = 112,
+  verificationQr?: Buffer | null,
 ): number {
   const locale =
     snapshot.locale;
@@ -1032,6 +1081,10 @@ export function drawProposalCompanyApproval(
     Boolean(
       quote.approvedAt,
     );
+
+  if (locale === "en" && !approved) {
+    return y;
+  }
 
   const align =
     locale === "ar"
@@ -1066,10 +1119,12 @@ export function drawProposalCompanyApproval(
       : PROPOSAL_TEXT[locale]
           .pendingApproval;
 
-  const phone =
-    snapshot.company.mobile ||
-    snapshot.company.phone ||
-    "-";
+  const signature = approved
+    ? decodeProposalImageDataUrl(snapshot.company.signatureUrl)
+    : null;
+  const stamp = approved
+    ? decodeProposalImageDataUrl(snapshot.company.stampUrl)
+    : null;
 
   drawProposalCard(
     doc,
@@ -1082,13 +1137,20 @@ export function drawProposalCompanyApproval(
       : PROPOSAL_COLOR.pale,
   );
 
-  const contentX =
-    left + 14;
+  const assetWidth = approved ? 190 : 0;
+  const contentWidth = width - 28 - assetWidth;
+  const contentX = locale === "ar" && assetWidth
+    ? left + 14 + assetWidth
+    : left + 14;
 
-  const contentWidth =
-    width - 28;
-
-  const rows = [
+  const rows = locale === "en" && approved
+    ? [
+        { value: PROPOSAL_TEXT.en.approvedBy, size: 7, color: PROPOSAL_COLOR.muted },
+        { value: name, size: 9, color: PROPOSAL_COLOR.navy },
+        { value: role, size: 8, color: PROPOSAL_COLOR.navy },
+        { value: formatProposalDate(quote.approvedAt), size: 8, color: PROPOSAL_COLOR.navy },
+      ]
+    : [
     {
       value: name,
       size: 9,
@@ -1110,13 +1172,12 @@ export function drawProposalCompanyApproval(
           : PROPOSAL_COLOR.amber,
     },
     {
-      value:
-        phone,
+      value: formatProposalDate(quote.approvedAt),
       size: 8,
       color:
         PROPOSAL_COLOR.navy,
     },
-  ];
+      ];
 
   rows.forEach(
     (row, index) => {
@@ -1130,7 +1191,7 @@ export function drawProposalCompanyApproval(
         .text(
           row.value,
           contentX,
-          y + 11 + index * 17,
+          y + 10 + index * 15,
           proposalTextOptions(
             align,
             contentWidth,
@@ -1140,8 +1201,53 @@ export function drawProposalCompanyApproval(
     },
   );
 
+  if (approved) {
+    const assetsX = locale === "ar" ? left + 14 : left + width - 14 - assetWidth;
+    if (signature) {
+      try {
+        doc.image(signature, assetsX, y + 9, { fit: [125, 45], align: "center", valign: "center" });
+      } catch { /* Ignore invalid image payloads safely. */ }
+    }
+    if (stamp) {
+      try {
+        doc.image(stamp, assetsX + 120, y + 5, { fit: [62, 55], align: "center", valign: "center" });
+      } catch { /* Ignore invalid image payloads safely. */ }
+    }
+    if (!signature) {
+      doc
+        .fillColor(PROPOSAL_COLOR.muted)
+        .fontSize(7)
+        .text(PROPOSAL_TEXT[locale].signature, assetsX, y + 16, proposalTextOptions("center", 118, 12));
+      doc
+        .moveTo(assetsX + 10, y + 43)
+        .lineTo(assetsX + 108, y + 43)
+        .lineWidth(0.5)
+        .strokeColor(PROPOSAL_COLOR.muted)
+        .stroke();
+    }
+  }
+
+  if (approved && verificationQr && locale === "en") {
+    try {
+      doc.image(verificationQr, left + width - 72, y + height - 45, { fit: [28, 28], align: "center", valign: "center" });
+      doc.fillColor(PROPOSAL_COLOR.muted).fontSize(5.2).text("Verify document", left + width - 92, y + height - 15, proposalTextOptions("center", 68, 8));
+    } catch { /* Verification QR failure must not break document rendering. */ }
+  }
+
+  if (approved) {
+    doc
+      .fillColor(PROPOSAL_COLOR.muted)
+      .fontSize(5.8)
+      .text(
+        PROPOSAL_TEXT[locale].electronicApproval,
+        left + 14,
+        y + height - 23,
+        proposalTextOptions(align, width - 28, 16),
+      );
+  }
+
   const signatureY =
-    y + 87;
+    y + height - 20;
 
   const signatureLabelWidth =
     62;
@@ -1149,7 +1255,7 @@ export function drawProposalCompanyApproval(
   const signatureLineWidth =
     width * 0.15;
 
-  if (locale === "ar") {
+  if (!approved && locale === "ar") {
     const rightEdge =
       left + width - 14;
 
@@ -1189,7 +1295,7 @@ export function drawProposalCompanyApproval(
         PROPOSAL_COLOR.muted,
       )
       .stroke();
-  } else {
+  } else if (!approved) {
     const labelLeft =
       left + 14;
 
