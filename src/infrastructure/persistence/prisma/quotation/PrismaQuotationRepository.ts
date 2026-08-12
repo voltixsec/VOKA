@@ -8,6 +8,8 @@ import type {
   QuotationLocalizationClaimParams,
   CompleteQuotationLocalizationParams,
   FailQuotationLocalizationParams,
+  FindRecoverableQuotationLocalizationJobsParams,
+  RecoverableQuotationLocalizationJob,
 } from "../../../../application/quotation/repositories/IQuotationRepository";
 import type { Quotation } from "../../../../domain/quotation/entities/Quotation";
 import { PrismaQuotationMapper } from "./PrismaQuotationMapper";
@@ -264,6 +266,53 @@ export class PrismaQuotationRepository implements IQuotationRepository {
       sourceSignature: claimedRecord.localizationSourceSignature,
       attemptCount: claimedRecord.localizationAttemptCount,
     };
+  }
+
+  async findRecoverableLocalizationJobs(
+    params: FindRecoverableQuotationLocalizationJobsParams,
+  ): Promise<RecoverableQuotationLocalizationJob[]> {
+    const records = await this.db.quotation.findMany({
+      where: {
+        isDeleted: false,
+        localizationSourceSignature: { not: null },
+        localizationAttemptCount: { lt: 3 },
+        AND: [
+          {
+            OR: [
+              { localizationLeaseUntil: null },
+              { localizationLeaseUntil: { lt: params.now } },
+            ],
+          },
+          {
+            OR: [
+              { localizationStatus: "PENDING" },
+              {
+                localizationStatus: "FAILED",
+                localizationLastError: {
+                  in: [
+                    "TRANSLATION_TIMEOUT",
+                    "TRANSLATION_PROVIDER_ERROR",
+                    "TRANSLATION_UNEXPECTED_ERROR",
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      select: { companyId: true, id: true },
+      orderBy: [
+        { localizationRequestedAt: "asc" },
+        { updatedAt: "asc" },
+        { id: "asc" },
+      ],
+      take: params.limit,
+    });
+
+    return records.map((record) => ({
+      companyId: record.companyId,
+      quotationId: record.id,
+    }));
   }
 
   async completeLocalization(

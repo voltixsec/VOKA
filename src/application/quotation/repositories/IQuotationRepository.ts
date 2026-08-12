@@ -30,6 +30,22 @@ export type QuotationLocalizationClaim = {
   attemptCount: number;
 };
 
+export type RecoverableQuotationLocalizationJob = {
+  companyId: string;
+  quotationId: string;
+};
+
+export type FindRecoverableQuotationLocalizationJobsParams = {
+  limit: number;
+  now: Date;
+};
+
+export interface IQuotationLocalizationRecoveryRepository {
+  findRecoverableLocalizationJobs(
+    params: FindRecoverableQuotationLocalizationJobsParams,
+  ): Promise<RecoverableQuotationLocalizationJob[]>;
+}
+
 export type QuotationLocalizationErrorCode =
   | "TRANSLATION_TIMEOUT"
   | "TRANSLATION_PROVIDER_ERROR"
