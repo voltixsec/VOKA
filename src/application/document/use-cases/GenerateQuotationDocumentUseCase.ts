@@ -25,6 +25,9 @@ export type GenerateQuotationCompanyIdentity = {
   whatsapp?: string | null;
 
   logoUrl?: string | null;
+  letterheadUrl?: string | null;
+  signatureUrl?: string | null;
+  stampUrl?: string | null;
 
   brandTheme?: string | null;
 };
@@ -108,6 +111,9 @@ export class GenerateQuotationDocumentUseCase {
       mobile: input.companyIdentity?.mobile ?? null,
       whatsapp: input.companyIdentity?.whatsapp ?? null,
       logoUrl: input.companyIdentity?.logoUrl ?? null,
+      letterheadUrl: input.companyIdentity?.letterheadUrl ?? null,
+      signatureUrl: input.companyIdentity?.signatureUrl ?? null,
+      stampUrl: input.companyIdentity?.stampUrl ?? null,
       brandTheme: input.companyIdentity?.brandTheme ?? "NAVY_GOLD",
     });
     const persistedBrand = quotation.documentBrandSnapshot;
@@ -196,6 +202,10 @@ export class GenerateQuotationDocumentUseCase {
             .logoUrl
             ?.trim() ||
           null,
+
+        letterheadUrl: effectiveBrand.version === 2 ? effectiveBrand.letterheadUrl : null,
+        signatureUrl: effectiveBrand.version === 2 ? effectiveBrand.signatureUrl : null,
+        stampUrl: effectiveBrand.version === 2 ? effectiveBrand.stampUrl : null,
 
         brandTheme:
           effectiveBrand

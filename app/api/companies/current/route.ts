@@ -14,6 +14,7 @@ import {
 import {
   PrismaCompanyRepository,
 } from "@/features/company/infrastructure/prisma/PrismaCompanyRepository";
+import { validateCompanyImageAsset, type CompanyImageAssetField } from "@/features/company/domain/value-objects/CompanyImageAsset";
 
 const repository =
   new PrismaCompanyRepository(
@@ -62,6 +63,9 @@ function serializeCompany(
 
     logoUrl:
       company.logoUrl,
+    letterheadUrl: company.letterheadUrl,
+    signatureUrl: company.signatureUrl,
+    stampUrl: company.stampUrl,
 
     defaultLocale:
       company.defaultLocale,
@@ -111,6 +115,17 @@ function parseOptionalString(
   }
 
   return value;
+}
+
+function parseImageAsset(body: Record<string, unknown>, field: CompanyImageAssetField, current?: string | null) {
+  const value = parseOptionalString(body, field);
+  if (value === undefined) return undefined;
+  if (field === "logoUrl" && value === current) return value;
+  const result = validateCompanyImageAsset(value, field);
+  if (!result.valid) {
+    throw ApiError.badRequest("COMPANY_ASSET_INVALID", `${field} is invalid: ${result.reason}.`);
+  }
+  return result.value;
 }
 
 export const GET =
@@ -238,10 +253,10 @@ export const PATCH =
           ),
 
         logoUrl:
-          parseOptionalString(
-            body,
-            "logoUrl",
-          ),
+          parseImageAsset(body, "logoUrl", company.logoUrl),
+        letterheadUrl: parseImageAsset(body, "letterheadUrl"),
+        signatureUrl: parseImageAsset(body, "signatureUrl"),
+        stampUrl: parseImageAsset(body, "stampUrl"),
       });
 
       if (

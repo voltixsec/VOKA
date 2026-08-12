@@ -33,14 +33,20 @@ describe("quotation approval document brand snapshot", () => {
       name: "VOKA", nameAr: "شركة فوكا", nameEn: "VOKA", addressAr: "الكويت", addressEn: "Kuwait",
       poBox: "123", phone: "222", mobile: "333", whatsapp: "444",
       logoUrl: "data:image/png;base64,AAAA", brandTheme: "EMERALD",
+      letterheadUrl: "data:image/png;base64,BBBB",
+      signatureUrl: "data:image/jpeg;base64,CCCC",
+      stampUrl: "data:image/png;base64,DDDD",
     });
     const response = await POST(new Request("http://localhost/api/quotations/quotation-1/approve", { method: "POST" }));
     expect(response.status).toBe(200);
     expect(quotation.documentBrandSnapshot).toEqual({
-      version: 1, nameAr: "شركة فوكا", nameEn: "VOKA",
+      version: 2, nameAr: "شركة فوكا", nameEn: "VOKA",
       addressAr: "الكويت", addressEn: "Kuwait", poBox: "123",
       phone: "222", mobile: "333", whatsapp: "444",
       logoUrl: "data:image/png;base64,AAAA", brandTheme: "EMERALD",
+      letterheadUrl: "data:image/png;base64,BBBB",
+      signatureUrl: "data:image/jpeg;base64,CCCC",
+      stampUrl: "data:image/png;base64,DDDD",
     });
     expect(mocks.update).toHaveBeenCalledWith("company-1", quotation);
   });

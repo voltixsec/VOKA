@@ -57,6 +57,9 @@ model Company {
   mobile                  String?
   whatsapp                String?
   logoUrl                 String?
+  letterheadUrl           String?
+  signatureUrl            String?
+  stampUrl                String?
   slug                    String                          @unique
   defaultLocale           Locale                          @default(EN)
   brandTheme              CompanyBrandTheme               @default(NAVY_GOLD)

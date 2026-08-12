@@ -77,6 +77,9 @@ type CompanyIdentity = {
   whatsapp: string | null;
 
   logoUrl: string | null;
+  letterheadUrl: string | null;
+  signatureUrl: string | null;
+  stampUrl: string | null;
   brandTheme: BrandTheme;
 
   defaultCurrency: string;
@@ -95,6 +98,9 @@ type CompanyForm = {
   whatsapp: string;
 
   logoUrl: string;
+  letterheadUrl: string;
+  signatureUrl: string;
+  stampUrl: string;
   brandTheme: BrandTheme;
 
   defaultCurrency: string;
@@ -222,6 +228,9 @@ const EMPTY_FORM: CompanyForm = {
   whatsapp: "",
 
   logoUrl: "",
+  letterheadUrl: "",
+  signatureUrl: "",
+  stampUrl: "",
 
   brandTheme:
     "NAVY_GOLD",
@@ -259,6 +268,9 @@ function toForm(
 
     logoUrl:
       company.logoUrl ?? "",
+    letterheadUrl: company.letterheadUrl ?? "",
+    signatureUrl: company.signatureUrl ?? "",
+    stampUrl: company.stampUrl ?? "",
 
     brandTheme:
       company.brandTheme ??
@@ -725,9 +737,11 @@ export default function CompanySettingsPage() {
     );
   }
 
-  function handleLogo(
+  function handleAsset(
     event:
       ChangeEvent<HTMLInputElement>,
+    field: "logoUrl" | "letterheadUrl" | "signatureUrl" | "stampUrl",
+    maxBytes: number,
   ) {
     const file =
       event.target
@@ -743,7 +757,6 @@ export default function CompanySettingsPage() {
     const allowedTypes = [
       "image/png",
       "image/jpeg",
-      "image/webp",
     ];
 
     if (
@@ -753,8 +766,8 @@ export default function CompanySettingsPage() {
     ) {
       setError(
         isArabic
-          ? "تم حفظ إعدادات الشركة بنجاح"
-          : "Logo must be PNG, JPG or WebP.",
+          ? "يجب أن تكون الصورة بصيغة PNG أو JPG."
+            : "Image must be PNG or JPG.",
       );
 
       return;
@@ -762,12 +775,12 @@ export default function CompanySettingsPage() {
 
     if (
       file.size >
-      750 * 1024
+      maxBytes
     ) {
       setError(
         isArabic
-          ? "تم حفظ إعدادات الشركة بنجاح"
-          : "Logo size must not exceed 750 KB.",
+          ? `يجب ألا يتجاوز حجم الصورة ${maxBytes / 1024} كيلوبايت.`
+            : `Image size must not exceed ${maxBytes / 1024} KB.`,
       );
 
       return;
@@ -783,7 +796,7 @@ export default function CompanySettingsPage() {
           "string"
         ) {
           updateField(
-            "logoUrl",
+            field,
             reader.result,
           );
 
@@ -795,8 +808,8 @@ export default function CompanySettingsPage() {
       () => {
         setError(
           isArabic
-            ? "تم حفظ إعدادات الشركة بنجاح"
-            : "Unable to read the logo file.",
+            ? "تعذر قراءة ملف الصورة."
+            : "Unable to read the image file.",
         );
       };
 
@@ -884,6 +897,9 @@ export default function CompanySettingsPage() {
                   optional(
                     form.logoUrl,
                   ),
+                letterheadUrl: optional(form.letterheadUrl),
+                signatureUrl: optional(form.signatureUrl),
+                stampUrl: optional(form.stampUrl),
 
                 brandTheme:
                   form.brandTheme,
@@ -977,7 +993,14 @@ export default function CompanySettingsPage() {
             "\u062d\u0630\u0641 \u0627\u0644\u0644\u0648\u062c\u0648",
 
           logoHelp:
-            "PNG \u0623\u0648 JPG \u0623\u0648 WebP\u060c \u0628\u062d\u062f \u0623\u0642\u0635\u0649 750 \u0643\u064a\u0644\u0648\u0628\u0627\u064a\u062a.",
+            "PNG \u0623\u0648 JPG\u060c \u0628\u062d\u062f \u0623\u0642\u0635\u0649 750 \u0643\u064a\u0644\u0648\u0628\u0627\u064a\u062a.",
+          documentAssets: "\u0623\u0635\u0648\u0644 \u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0629",
+          letterhead: "\u0627\u0644\u0648\u0631\u0642 \u0627\u0644\u0631\u0633\u0645\u064a",
+          signature: "\u062a\u0648\u0642\u064a\u0639 \u0627\u0644\u0634\u0631\u0643\u0629",
+          stamp: "\u062e\u062a\u0645 \u0627\u0644\u0634\u0631\u0643\u0629",
+          chooseAsset: "\u0627\u062e\u062a\u064a\u0627\u0631 \u0635\u0648\u0631\u0629",
+          removeAsset: "\u0625\u0632\u0627\u0644\u0629",
+          noAsset: "\u0644\u0645 \u064a\u062a\u0645 \u0631\u0641\u0639 \u0635\u0648\u0631\u0629",
 
           currency:
             "\u0627\u0644\u0639\u0645\u0644\u0629",
@@ -1065,7 +1088,14 @@ export default function CompanySettingsPage() {
             "Remove Logo",
 
           logoHelp:
-            "PNG, JPG or WebP. Maximum size 750 KB.",
+            "PNG or JPG. Maximum size 750 KB.",
+          documentAssets: "Company Document Assets",
+          letterhead: "Letterhead",
+          signature: "Company Signature",
+          stamp: "Company Stamp",
+          chooseAsset: "Choose Image",
+          removeAsset: "Remove",
+          noAsset: "No image uploaded",
 
           currency:
             "Currency",
@@ -1439,9 +1469,9 @@ export default function CompanySettingsPage() {
 
               <input
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept="image/png,image/jpeg"
                 onChange={
-                  handleLogo
+                  (event) => handleAsset(event, "logoUrl", 750 * 1024)
                 }
                 className="hidden"
               />
@@ -1466,6 +1496,33 @@ export default function CompanySettingsPage() {
               {labels.logoHelp}
             </p>
           </aside>
+        </section>
+
+        <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-xl font-bold">{labels.documentAssets}</h2>
+          <div className="mt-5 grid gap-5 md:grid-cols-3">
+            {([
+              ["letterheadUrl", labels.letterhead, 1536 * 1024, "1.5 MB"],
+              ["signatureUrl", labels.signature, 500 * 1024, "500 KB"],
+              ["stampUrl", labels.stamp, 500 * 1024, "500 KB"],
+            ] as const).map(([field, label, maxBytes, limit]) => (
+              <div key={field} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="font-semibold">{label}</h3>
+                <div className="mt-3 flex min-h-36 items-center justify-center rounded-xl border border-dashed border-slate-700 p-3">
+                  {form[field] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form[field]} alt={label} className="max-h-28 max-w-full object-contain" />
+                  ) : <span className="text-center text-sm text-slate-500">{labels.noAsset}</span>}
+                </div>
+                <label className="mt-3 block cursor-pointer rounded-xl bg-sky-600 px-3 py-2 text-center text-sm font-semibold hover:bg-sky-500">
+                  {labels.chooseAsset}
+                  <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => handleAsset(event, field, maxBytes)} />
+                </label>
+                {form[field] ? <button type="button" onClick={() => updateField(field, "")} className="mt-2 w-full rounded-xl border border-red-800 px-3 py-2 text-sm text-red-300 hover:bg-red-950">{labels.removeAsset}</button> : null}
+                <p className="mt-3 text-xs leading-5 text-slate-500">PNG / JPG · {limit}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">

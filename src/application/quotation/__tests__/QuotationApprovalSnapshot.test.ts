@@ -110,7 +110,14 @@ describe(
     );
 
     it("does not overwrite an existing document brand snapshot", async () => {
-      const original = { ...brandSnapshot, nameEn: "Original Brand" };
+      const original = {
+        version: 1 as const,
+        nameAr: brandSnapshot.nameAr, nameEn: "Original Brand",
+        addressAr: brandSnapshot.addressAr, addressEn: brandSnapshot.addressEn,
+        poBox: brandSnapshot.poBox, phone: brandSnapshot.phone,
+        mobile: brandSnapshot.mobile, whatsapp: brandSnapshot.whatsapp,
+        logoUrl: brandSnapshot.logoUrl, brandTheme: brandSnapshot.brandTheme,
+      };
       const quotation = Quotation.restore({
         id: "quotation-1", companyId: "company-1", customerId: "customer-1",
         number: "Q-001", status: "SENT", customer: { name: "Customer" },

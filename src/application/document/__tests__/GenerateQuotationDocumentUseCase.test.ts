@@ -39,6 +39,9 @@ function approvedQuotation(withSnapshot: boolean): Quotation {
       addressAr: "العنوان الأصلي", addressEn: "Original Address",
       poBox: "111", phone: "222", mobile: "333", whatsapp: "444",
       logoUrl: "data:image/png;base64,ORIGINAL", brandTheme: "EMERALD",
+      letterheadUrl: "data:image/png;base64,LETTERHEAD",
+      signatureUrl: "data:image/png;base64,SIGNATURE",
+      stampUrl: "data:image/png;base64,STAMP",
     }) : null,
   });
 }
@@ -117,10 +120,10 @@ describe("GenerateQuotationDocumentUseCase", () => {
     const useCase = new GenerateQuotationDocumentUseCase(createRepository(approvedQuotation(true)), renderer);
     await useCase.execute({
       companyId: "company-1", quotationId: "quotation-1", locale: "en", companyName: "Changed Company",
-      companyIdentity: { nameEn: "Changed Brand", addressEn: "Changed Address", logoUrl: "data:image/png;base64,CHANGED", brandTheme: "BURGUNDY" },
+      companyIdentity: { nameEn: "Changed Brand", addressEn: "Changed Address", logoUrl: "data:image/png;base64,CHANGED", letterheadUrl: "data:image/png;base64,CHANGED", signatureUrl: "data:image/png;base64,CHANGED", stampUrl: "data:image/png;base64,CHANGED", brandTheme: "BURGUNDY" },
     });
     expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({
-      company: expect.objectContaining({ name: "Original Brand", address: "Original Address", logoUrl: "data:image/png;base64,ORIGINAL", brandTheme: "EMERALD" }),
+      company: expect.objectContaining({ name: "Original Brand", address: "Original Address", logoUrl: "data:image/png;base64,ORIGINAL", letterheadUrl: "data:image/png;base64,LETTERHEAD", signatureUrl: "data:image/png;base64,SIGNATURE", stampUrl: "data:image/png;base64,STAMP", brandTheme: "EMERALD" }),
     }));
   });
 

@@ -15,6 +15,9 @@ export type QuotationDocumentSnapshot = {
     whatsapp?: string | null;
 
     logoUrl?: string | null;
+    letterheadUrl?: string | null;
+    signatureUrl?: string | null;
+    stampUrl?: string | null;
 
     brandTheme?: string | null;
   };

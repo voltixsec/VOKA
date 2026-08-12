@@ -30,6 +30,9 @@ export type CompanyProps = {
   whatsapp?: string | null;
 
   logoUrl?: string | null;
+  letterheadUrl?: string | null;
+  signatureUrl?: string | null;
+  stampUrl?: string | null;
   brandTheme: CompanyBrandTheme;
 
   slug: string;
@@ -56,6 +59,9 @@ export type CreateCompanyProps = {
   whatsapp?: string | null;
 
   logoUrl?: string | null;
+  letterheadUrl?: string | null;
+  signatureUrl?: string | null;
+  stampUrl?: string | null;
   brandTheme?: CompanyBrandTheme;
 
   slug?: string;
@@ -108,6 +114,10 @@ export class Company extends Entity<CompanyProps> {
   public get logoUrl(): string | null {
     return this.props.logoUrl ?? null;
   }
+
+  public get letterheadUrl(): string | null { return this.props.letterheadUrl ?? null; }
+  public get signatureUrl(): string | null { return this.props.signatureUrl ?? null; }
+  public get stampUrl(): string | null { return this.props.stampUrl ?? null; }
 
   public displayName(
     locale: CompanyLocale,
@@ -258,6 +268,9 @@ export class Company extends Entity<CompanyProps> {
           logoUrl: Company.normalizeOptional(
             input.logoUrl,
           ),
+          letterheadUrl: Company.normalizeOptional(input.letterheadUrl),
+          signatureUrl: Company.normalizeOptional(input.signatureUrl),
+          stampUrl: Company.normalizeOptional(input.stampUrl),
 
           slug,
           defaultLocale: input.defaultLocale ?? 'EN',
@@ -316,6 +329,9 @@ export class Company extends Entity<CompanyProps> {
       whatsapp?: string | null;
 
       logoUrl?: string | null;
+      letterheadUrl?: string | null;
+      signatureUrl?: string | null;
+      stampUrl?: string | null;
     },
   ): void {
     const fields = [
@@ -328,6 +344,9 @@ export class Company extends Entity<CompanyProps> {
       'mobile',
       'whatsapp',
       'logoUrl',
+      'letterheadUrl',
+      'signatureUrl',
+      'stampUrl',
     ] as const;
 
     for (const field of fields) {

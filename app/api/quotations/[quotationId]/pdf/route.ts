@@ -139,6 +139,9 @@ export const GET =
               whatsapp: true,
 
               logoUrl: true,
+              letterheadUrl: true,
+              signatureUrl: true,
+              stampUrl: true,
 
               brandTheme: true,
             },
@@ -189,6 +192,9 @@ export const GET =
 
               logoUrl:
                 company.logoUrl,
+              letterheadUrl: company.letterheadUrl,
+              signatureUrl: company.signatureUrl,
+              stampUrl: company.stampUrl,
 
               brandTheme:
                 company.brandTheme,

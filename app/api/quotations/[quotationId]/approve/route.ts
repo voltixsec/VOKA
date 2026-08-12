@@ -45,7 +45,7 @@ export const POST = withCompanyAuth(
       select: {
         name: true, nameAr: true, nameEn: true, addressAr: true, addressEn: true,
         poBox: true, phone: true, mobile: true, whatsapp: true,
-        logoUrl: true, brandTheme: true,
+        logoUrl: true, letterheadUrl: true, signatureUrl: true, stampUrl: true, brandTheme: true,
       },
     });
 

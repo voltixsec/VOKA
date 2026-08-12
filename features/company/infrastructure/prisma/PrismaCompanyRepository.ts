@@ -23,6 +23,9 @@ type CompanyRecord = {
   whatsapp: string | null;
 
   logoUrl: string | null;
+  letterheadUrl: string | null;
+  signatureUrl: string | null;
+  stampUrl: string | null;
   brandTheme: string;
 
   slug: string;
@@ -108,6 +111,9 @@ export class PrismaCompanyRepository
 
       logoUrl:
         company.logoUrl,
+      letterheadUrl: company.letterheadUrl,
+      signatureUrl: company.signatureUrl,
+      stampUrl: company.stampUrl,
 
       brandTheme:
         company.brandTheme,
@@ -174,6 +180,9 @@ export class PrismaCompanyRepository
 
         logoUrl:
           record.logoUrl,
+        letterheadUrl: record.letterheadUrl,
+        signatureUrl: record.signatureUrl,
+        stampUrl: record.stampUrl,
 
         slug: record.slug,
         defaultLocale:
