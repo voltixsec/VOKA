@@ -1,4 +1,5 @@
 import type { IQuotationRepository } from "@/src/application/quotation";
+import type { QuotationDocumentProvider } from "@/src/application/document";
 import {
   isQuotationDeliveryChannel,
   QuotationDelivery,
@@ -7,6 +8,7 @@ import {
 
 import type { QuotationDeliveryGateway } from "./QuotationDeliveryGateway";
 import type { QuotationDeliveryRepository } from "./QuotationDeliveryRepository";
+import { createQuotationDeliveryProviderRequestKey } from "./createQuotationDeliveryProviderRequestKey";
 
 export type DeliverQuotationInput = {
   companyId: string;
@@ -24,6 +26,7 @@ export class DeliverQuotationUseCase {
   constructor(
     private readonly quotations: IQuotationRepository,
     private readonly deliveries: QuotationDeliveryRepository,
+    private readonly documents: QuotationDocumentProvider,
     private readonly gateway: QuotationDeliveryGateway,
     private readonly now: () => Date = () => new Date(),
     private readonly createId: () => string = () => crypto.randomUUID(),
@@ -60,14 +63,45 @@ export class DeliverQuotationUseCase {
 
     await this.deliveries.create(delivery);
 
+    let documentResult;
+    try {
+      documentResult = await this.documents.generate({
+        companyId: input.companyId,
+        quotationId: input.quotationId,
+        locale: input.locale,
+      });
+    } catch {
+      delivery.markFailed(
+        "DELIVERY_DOCUMENT_PROVIDER_ERROR",
+        "Quotation delivery document could not be generated.",
+        this.now(),
+      );
+      await this.deliveries.update(delivery);
+      return { success: true, data: delivery };
+    }
+
+    if (!documentResult.success) {
+      delivery.markFailed(
+        `DELIVERY_DOCUMENT_${documentResult.error.code}`,
+        "Quotation delivery document could not be generated.",
+        this.now(),
+      );
+      await this.deliveries.update(delivery);
+      return { success: true, data: delivery };
+    }
+
     let result;
     try {
       result = await this.gateway.deliver({
+        deliveryId: delivery.id,
+        providerRequestKey:
+          createQuotationDeliveryProviderRequestKey(delivery.id),
         companyId: input.companyId,
         quotationId: input.quotationId,
         channel: input.channel,
         recipient,
         locale: input.locale,
+        document: documentResult.data,
       });
     } catch {
       result = {

@@ -4,10 +4,6 @@ import {
 } from "@/lib/api";
 
 import {
-  prisma,
-} from "@/lib/prisma";
-
-import {
   GenerateQuotationDocumentUseCase,
   type DocumentLocale,
 } from "@/src/application/document";
@@ -15,6 +11,9 @@ import {
 import {
   PdfKitQuotationDocumentRenderer,
 } from "@/src/infrastructure/document/pdfkit/PdfKitQuotationDocumentRenderer";
+import {
+  PrismaQuotationDocumentProvider,
+} from "@/src/infrastructure/document/PrismaQuotationDocumentProvider";
 
 import {
   PrismaQuotationRepository,
@@ -30,11 +29,12 @@ export const runtime =
 export const dynamic =
   "force-dynamic";
 
-const generateDocument =
+const documentProvider = new PrismaQuotationDocumentProvider(
   new GenerateQuotationDocumentUseCase(
     new PrismaQuotationRepository(),
     new PdfKitQuotationDocumentRenderer(),
-  );
+  ),
+);
 
 function getQuotationId(
   request: Request,
@@ -147,98 +147,17 @@ export const GET =
       const disposition =
         getDisposition(request);
 
-      const company =
-        await prisma.company
-          .findUnique({
-            where: {
-              id:
-                companyContext
-                  .companyId,
-            },
-
-            select: {
-              name: true,
-
-              nameAr: true,
-              nameEn: true,
-
-              addressAr: true,
-              addressEn: true,
-
-              poBox: true,
-              phone: true,
-              mobile: true,
-              whatsapp: true,
-
-              logoUrl: true,
-              letterheadUrl: true,
-              signatureUrl: true,
-              stampUrl: true,
-
-              brandTheme: true,
-            },
-          });
-
-      if (!company) {
-        throw ApiError.notFound(
-          "COMPANY_NOT_FOUND",
-          "Company not found.",
-        );
-      }
-
       const result =
-        await generateDocument
-          .execute({
+        await documentProvider
+          .generate({
             companyId:
               companyContext
                 .companyId,
-
-            companyName:
-              company.name ||
-              "VOKA",
-
-            companyIdentity: {
-              nameAr:
-                company.nameAr,
-
-              nameEn:
-                company.nameEn,
-
-              addressAr:
-                company.addressAr,
-
-              addressEn:
-                company.addressEn,
-
-              poBox:
-                company.poBox,
-
-              phone:
-                company.phone,
-
-              mobile:
-                company.mobile,
-
-              whatsapp:
-                company.whatsapp,
-
-              logoUrl:
-                company.logoUrl,
-              letterheadUrl: company.letterheadUrl,
-              signatureUrl: company.signatureUrl,
-              stampUrl: company.stampUrl,
-
-              brandTheme:
-                company.brandTheme,
-            },
-
             quotationId:
               getQuotationId(
                 request,
               ),
-
             locale,
-            publicBaseUrl: process.env.VOKA_PUBLIC_URL ?? null,
           });
 
       if (!result.success) {

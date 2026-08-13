@@ -3,9 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   findById: vi.fn(),
+  generateDocument: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
 }));
+
+vi.mock(
+  "@/src/infrastructure/document/PrismaQuotationDocumentProvider",
+  () => ({
+    PrismaQuotationDocumentProvider: class {
+      generate = mocks.generateDocument;
+    },
+  }),
+);
 
 vi.mock(
   "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository",
@@ -84,6 +94,14 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     mocks.findById.mockResolvedValue(quotation());
     mocks.create.mockResolvedValue(undefined);
     mocks.update.mockResolvedValue(undefined);
+    mocks.generateDocument.mockResolvedValue({
+      success: true,
+      data: {
+        filename: "quotation-Q-001.pdf",
+        contentType: "application/pdf",
+        bytes: new Uint8Array([37, 80, 68, 70]),
+      },
+    });
   });
 
   it("allows write roles but excludes VIEWER", () => {
