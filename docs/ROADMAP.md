@@ -47,7 +47,7 @@ be mixed into Sprint 10 implementation.
 
 ## Sprint 10B — Quotation Proposal Composer
 
-Status: **Approved / Pending Documentation Merge**
+Status: **Document foundation delivered through Phase 1.4 / UX finalization pending assessment**
 
 ### Goal
 
@@ -61,17 +61,40 @@ Evolve the quotation document into a professional bilingual commercial proposal.
 - Add project name and customer attention fields where required.
 - Add a dedicated commercial cover page.
 - Move BOQ, totals and terms to following pages.
-- Allow BOQ content to continue across additional pages.
+- Allow BOQ content to continue across additional pages. This remains deferred;
+  the current renderer has a cover plus BOQ page, not general dynamic
+  continuation pagination.
 - Place the approval/signature block on the final page.
 - Place the block on the right for Arabic and the left for English.
 
 ## Phase 1.4 Close - 2026-08-13
 
-Branded proposal delivery is implementation-complete on
-`feature/branded-proposal-delivery`, including English/Arabic stationery parity,
+Branded proposal delivery was merged through PR #18 at `d5599b2`, including
+English/Arabic stationery parity,
 approval assets and verification, asynchronous localization resilience, approval
-localization fencing, and Unicode bidi-aware Arabic PDF layout. Next work is CTO
-review and merge; no additional proposal features are authorized by this close.
+localization fencing, and Unicode bidi-aware Arabic PDF layout. PR #19 then
+merged the safe transitive dependency patch at `23c2d2f`.
+
+Delivered items that supersede the earlier first-slice plan include bilingual
+subject and brief, structured scope type, commercial cover, BOQ/terms page,
+approval identity and signature/stamp block, approval-time branding snapshot,
+and human approval fencing.
+
+Still deferred:
+
+- WebP company-image compatibility; current validation supports PNG/JPEG and
+  rejects WebP.
+- Custom primary/accent branding; current delivery uses preset brand themes.
+- General dynamic multi-page BOQ pagination.
+- Next 16 security migration for remaining nested PostCSS/Sharp findings; this
+  is a separate engineering workstream, not a product feature.
+
+The next product frontier is Proposal Composer UX finalization / Phase 3
+assessment. No additional proposal feature is authorized by this documentation
+realignment alone.
+
+Continuing guardrails:
+
 - Preserve tenant isolation and role authorization.
 - Require human review before final PDF generation.
 
@@ -106,7 +129,7 @@ review and merge; no additional proposal features are authorized by this close.
 - Advanced Import / Export Center.
 - Unnecessary Prisma changes.
 
-### Entry Condition
+### Historical Entry Condition
 
 Sprint 10A was merged into `main` through Pull Request #15.
 
@@ -114,9 +137,6 @@ Verified merge commit:
 
 `9d6db831373d13b2ea7a6f269c1cc903f23617fb`
 
-Before implementation begins:
-
-1. Merge the approved Sprint 10B documentation through Pull Request #16.
-2. Update local `main`.
-3. Create a dedicated Sprint 10B feature branch from the updated `main`.
-4. Confirm the detailed implementation acceptance criteria.
+These entry conditions are retained as history and have been superseded by the
+merged Phase 1.4 implementation. Any new UX slice requires a fresh assessment
+and CTO-approved acceptance criteria from current `main`.

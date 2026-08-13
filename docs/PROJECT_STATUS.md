@@ -1,10 +1,11 @@
 # Project Status
 
-Current Sprint: Phase 1.4 - Branded Proposal Delivery
+Current Product Frontier: Proposal Composer UX finalization / Phase 3 assessment
 
-Status: Implementation complete on `feature/branded-proposal-delivery`; awaiting CTO review/merge
+Status: Phase 1.4 and its safe dependency-hardening follow-up are merged and
+closed. No next implementation slice has started.
 
-Verified baseline: `73bb875` on `main` (2026-08-04)
+Verified baseline: `23c2d2f` on `main` (2026-08-13)
 
 ## Sprint 09A - Quotation API
 
@@ -74,7 +75,7 @@ company branding requires a separate schema/migration decision.
 
 ## Approved Next Product Direction — Quotation Proposal Composer
 
-Status: **Approved / Not Started**
+Status: **Document foundation delivered / UX finalization pending assessment**
 
 Proposed Sprint:
 
@@ -112,13 +113,14 @@ Verified merge commit:
 
 `9d6db831373d13b2ea7a6f269c1cc903f23617fb`
 
-Sprint 10B documentation is being reviewed through Pull Request #16.
-
-Implementation must begin only after this approved direction is merged and a dedicated feature branch is created from the updated `main`.
+The Phase 1.4 merge superseded the earlier pending-documentation state and
+delivered the proposal document foundation. The next product decision is a
+Proposal Composer UX gap assessment and bounded acceptance criteria; no next
+feature implementation has started.
 
 ## Phase 1.4 - Branded Proposal Delivery
 
-Status: Completed and validated on 2026-08-13.
+Status: Closed and merged through PR #18 at `d5599b2` on 2026-08-13.
 
 Delivered:
 
@@ -134,4 +136,15 @@ Delivered:
   embedded English phrases.
 
 Validated: Prisma schema/client/status, TypeScript, 251 tests across 47 files,
-diff checks, and rendered English/Arabic PDF visual QA.
+diff checks, rendered English/Arabic PDF visual QA, and CI Quality.
+
+## Safe Dependency Hardening
+
+Status: Closed and merged through PR #19 at `23c2d2f` on 2026-08-13.
+
+- Updated transitive `nanoid` from 3.3.16 to 3.3.18.
+- Updated dev-only transitive `js-yaml` from 4.3.0 to 4.3.1.
+- Changed `package-lock.json` only.
+- Remaining Next 15 nested PostCSS and Sharp findings are tracked for a planned
+  Next 16 security migration. That migration is a separate engineering
+  workstream, not the next product feature.

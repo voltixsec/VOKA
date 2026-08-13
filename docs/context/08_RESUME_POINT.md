@@ -2,109 +2,56 @@
 
 Verified on: 2026-08-13 (Asia/Kuwait)
 
-## Current verified resume point - Phase 1.4
+## Current Verified State
 
-- Branch: `feature/branded-proposal-delivery`.
-- Previous implementation baseline: `46f7e83`.
-- English and Arabic branded proposal delivery is complete and validated.
-- Approval is fenced until required localization is `COMPLETED`.
-- Quotation create remains asynchronous and resilient to localization-provider
-  availability.
-- Arabic mixed RTL/LTR PDF layout uses Unicode bidi run resolution and rendered
-  QA confirms natural sentence order, spacing, percentages, currencies, IDs,
-  and embedded English phrases.
-- Close checks: Prisma valid/up to date/generated, TypeScript passed, 251 tests
-  across 47 files passed, and diff checks passed.
+- Branch: `main`.
+- Verified HEAD: `23c2d2f`.
+- Phase 1.4 is closed and merged through PR #18 at `d5599b2`.
+- Safe dependency hardening is closed and merged through PR #19 at `23c2d2f`.
+- The worktree was clean at the start of this documentation realignment.
 
-First next task: CTO review and merge `feature/branded-proposal-delivery`; do not
-add new proposal features during the review.
+## Closed Delivery
 
-## Last completed point
+Phase 1.4 delivered English and Arabic branded proposal documents, letterhead
+safe areas, draft-versus-approved behavior, approval identity, company signature
+and stamp, immutable approval-time branding snapshots, official public
+verification QR, asynchronous quotation creation, localization approval fencing,
+and Unicode bidi-aware Arabic PDF layout.
 
-- PR #12 merged Sprint 09B functionality into main at merge commit 73bb875.
-- PR #13 merged the official Sprint 09B close documentation at merge commit 1af1b1c.
-- GitHub Actions passed on both pull requests and on main after each merge.
-- Post-merge TypeScript, Prisma generation/validation, 49 tests, and production build passed.
-- Sprint 09B - Quotation Workspace is completed.
-- Current branch after session close: main.
+The merged delivery passed Prisma validation and migration status, TypeScript,
+251 tests across 47 files, diff checks, rendered English/Arabic PDF QA and CI
+Quality.
 
-## Current product frontier
+PR #19 updated only the lockfile entries for `nanoid` 3.3.18 and `js-yaml`
+4.3.1. Remaining Next 15 nested PostCSS/Sharp findings are tracked for a planned
+Next 16 security migration outside the product-feature sequence.
 
-Sprint 10 - Quotation Documents and Sharing remains proposed. Its candidate
-scope is branded bilingual PDF, QR code, download/print, email, and a
-human-approved WhatsApp integration foundation.
+## Current Product Frontier
 
-## First recommended next task
+The next recommended product work is Proposal Composer UX finalization / Phase
+3 assessment. The assessment should compare the current create/edit experience
+with the intended single-active-language workflow, localization status clarity,
+line editing, discounts, tax, scope, notes, terms, preview, PDF and approval
+state before defining an implementation slice.
 
-Implement the first Sprint 10A slice from the approved
-[Document Engine Blueprint](../blueprints/03_DOCUMENT_ENGINE.md): define the
-document snapshot and renderer contracts, select a bilingual PDF/font/QR stack,
-and add focused contract tests before exposing the authenticated download route.
+Verified deferred document items:
 
-## Open questions for owner/CTO
+- WebP company-image compatibility; current validation rejects WebP.
+- Arbitrary custom branding; current implementation provides preset themes.
+- General dynamic multi-page BOQ pagination.
 
-- Is src/ the approved target architecture for future migrations?
-- Should the detailed historical status ledger be restored?
-- Should the Next 16 security migration precede Sprint 10?
+## First Recommended Next Task
 
-## Approved Resume Point — Quotation Proposal Composer
+Perform a read-only Proposal Composer UX gap assessment against the current
+implementation and Phase 3 roadmap. Produce CTO-reviewable acceptance criteria
+and a bounded implementation slice. Do not begin implementation or combine the
+assessment with the planned Next 16 security migration.
 
-### Current Verified Delivery
+## Continuing Guardrails
 
-Sprint 10A is available on:
-
-`feature/sprint-10a-quotation-documents`
-
-Verified commit:
-
-`9254eadc871e7ae8b79e85d7a76277cfc0300a58`
-
-Commit message:
-
-`feat(documents): add bilingual quotation PDF generation`
-
-The branch was pushed successfully and local/remote equality was verified.
-
-Sprint 10A was merged into `main` through Pull Request #15.
-
-Verified merge commit:
-
-`9d6db831373d13b2ea7a6f269c1cc903f23617fb`
-
-### Newly Approved Product Direction
-
-Epic:
-
-**Quotation Proposal Composer — Cover, Brief, Voice and Signature**
-
-Proposed next sprint:
-
-**Sprint 10B — Quotation Proposal Composer**
-
-First implementation slice:
-
-- Subject.
-- Brief.
-- Scope Type.
-- Commercial Cover Page.
-- Multi-page BOQ and terms.
-- Final-page Signature Block.
-- Human approval.
-
-Deferred:
-
-- Voice.
-- AI extraction.
-- Autonomous generation.
-- Certificate-based digital signature.
-- Email and WhatsApp delivery.
-
-### Required Next Action
-
-1. Review and merge Pull Request #16 containing the approved Sprint 10B direction.
-2. Update local `main` after the merge.
-3. Create a dedicated Sprint 10B feature branch from the updated `main`.
-4. Convert the approved direction into detailed acceptance criteria.
-5. Begin implementation with Subject, Brief, Scope Type, Commercial Cover Page and Final-page Signature Block.
-
-Do not implement Sprint 10B on the old Sprint 10A branch or on the documentation branch.
+- Start future work from current `main` only after scope approval.
+- Preserve the canonical quotation implementation under `src/`.
+- Keep PDF rendering deterministic and AI-free.
+- Preserve tenant isolation, human approval and immutable approved-document
+  history.
+- Treat Next 16 migration as a separate planned engineering/security workstream.
