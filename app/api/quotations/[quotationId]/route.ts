@@ -120,6 +120,7 @@ type UpdateQuotationBody = {
   projectName?: unknown;
   attentionName?: unknown;
   scopeType?: unknown;
+  expiryDate?: unknown;
 };
 
 
@@ -175,6 +176,39 @@ function parseScopeType(
   return value;
 }
 
+function parseOptionalDate(
+  value: unknown,
+  field: string,
+): Date | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw ApiError.badRequest(
+      "INVALID_DATE",
+      `${field} must be a valid ISO date string.`,
+      { field },
+    );
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw ApiError.badRequest(
+      "INVALID_DATE",
+      `${field} must be a valid ISO date string.`,
+      { field },
+    );
+  }
+
+  return date;
+}
+
 
 export const PATCH = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
@@ -188,6 +222,11 @@ export const PATCH = withCompanyAuth(
 
     const body =
       rawBody as UpdateQuotationBody;
+
+    const expiryDate = parseOptionalDate(
+      body.expiryDate,
+      "expiryDate",
+    );
 
     if (
       !Array.isArray(body.lines) ||
@@ -209,6 +248,7 @@ export const PATCH = withCompanyAuth(
       >),
       companyId: company.companyId,
       quotationId,
+      expiryDate,
     } as unknown as UpdateQuotationDto;
 
     const result =

@@ -89,11 +89,11 @@ export class Quotation {
   public readonly priceListId: string | null;
   public readonly number: QuotationNumber;
   public readonly issueDate: Date;
-  public readonly expiryDate: Date | null;
   public readonly currencyCode: string;
   public readonly customer: CustomerSnapshot;
 
   private _status: QuotationStatus;
+  private _expiryDate: Date | null;
   private _lines: CalculatedQuotationLine[];
   private _discount: Discount | null;
   private _totals: QuotationTotals;
@@ -159,14 +159,10 @@ export class Quotation {
     this._localizationAttemptCount = props.localizationAttemptCount ?? 0;
     const expiryDate = props.expiryDate ?? null;
 
-    if (
-      expiryDate &&
-      expiryDate.getTime() < issueDate.getTime()
-    ) {
-      throw new QuotationDomainError(
-        "Quotation expiry date cannot be before issue date.",
-      );
-    }
+    this.assertValidExpiryDate(
+      expiryDate,
+      issueDate,
+    );
 
     this.id = props.id;
     this.companyId = props.companyId.trim();
@@ -174,7 +170,7 @@ export class Quotation {
     this.priceListId = props.priceListId?.trim() || null;
     this.number = QuotationNumber.create(props.number);
     this.issueDate = issueDate;
-    this.expiryDate = expiryDate;
+    this._expiryDate = expiryDate;
     this.currencyCode = currencyCode;
     this.customer = new CustomerSnapshot(props.customer);
 
@@ -455,6 +451,21 @@ export class Quotation {
     if (completedAt !== undefined) {
       this._localizationCompletedAt = completedAt;
     }
+  }
+
+  get expiryDate(): Date | null {
+    return this._expiryDate;
+  }
+
+  updateExpiryDate(
+    expiryDate: Date | null,
+  ): void {
+    this.assertDraft();
+    this.assertValidExpiryDate(
+      expiryDate,
+      this.issueDate,
+    );
+    this._expiryDate = expiryDate;
   }
 
   setLocalizationSourceLocale(sourceLocale: "ar" | "en"): void {
@@ -748,6 +759,20 @@ export class Quotation {
     if (this._status !== "DRAFT") {
       throw new QuotationDomainError(
         "Only draft quotations can be modified.",
+      );
+    }
+  }
+
+  private assertValidExpiryDate(
+    expiryDate: Date | null,
+    issueDate: Date,
+  ): void {
+    if (
+      expiryDate &&
+      expiryDate.getTime() < issueDate.getTime()
+    ) {
+      throw new QuotationDomainError(
+        "Quotation expiry date cannot be before issue date.",
       );
     }
   }

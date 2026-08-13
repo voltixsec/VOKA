@@ -70,6 +70,12 @@ export class UpdateQuotationUseCase {
     }
 
     try {
+      if (processedDto.expiryDate !== undefined) {
+        quotation.updateExpiryDate(
+          processedDto.expiryDate,
+        );
+      }
+
       quotation.replaceLines(processedDto.lines);
 
       quotation.setDiscount(processedDto.discount ?? null);

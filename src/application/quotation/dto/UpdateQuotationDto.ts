@@ -14,6 +14,8 @@ export interface UpdateQuotationDto
 
   discount?: Discount | null;
 
+  expiryDate?: Date | null;
+
   notes?: string | null;
   notesAr?: string | null;
   notesEn?: string | null;
