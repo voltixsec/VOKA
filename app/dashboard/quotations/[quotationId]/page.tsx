@@ -82,6 +82,14 @@ type Quote = {
   localizationStatus: "PENDING" | "COMPLETED" | "FAILED";
 };
 
+type Delivery = {
+  id: string;
+  channel: "EMAIL" | "WHATSAPP";
+  recipient: string;
+  status: "PENDING" | "SENT" | "FAILED";
+  attemptedAt: string;
+};
+
 const arabicStatuses:
   Record<string, string> = {
     DRAFT: "\u0645\u0633\u0648\u062f\u0629",
@@ -94,8 +102,8 @@ const arabicStatuses:
 
 const lifecycleLabels = {
   send: {
-    ar: "\u0625\u0631\u0633\u0627\u0644",
-    en: "Send",
+    ar: "\u062a\u062d\u062f\u064a\u062f \u0643\u0645\u0631\u0633\u0644",
+    en: "Mark as sent",
   },
   approve: {
     ar: "\u0627\u0639\u062a\u0645\u0627\u062f",
@@ -109,6 +117,12 @@ const lifecycleLabels = {
     ar: "\u0625\u0644\u063a\u0627\u0621",
     en: "Cancel",
   },
+} as const;
+
+const deliveryStatusLabels = {
+  PENDING: { ar: "\u0642\u064a\u062f \u0627\u0644\u0625\u0631\u0633\u0627\u0644", en: "Pending" },
+  SENT: { ar: "\u062a\u0645 \u0627\u0644\u0625\u0631\u0633\u0627\u0644", en: "Sent" },
+  FAILED: { ar: "\u062a\u0639\u0630\u0631 \u0627\u0644\u0625\u0631\u0633\u0627\u0644", en: "Failed" },
 } as const;
 
 const localizationLabels = {
@@ -187,6 +201,9 @@ export default function QuotationDetailsPage() {
   const [acting, setActing] =
     useState("");
 
+  const [deliveries, setDeliveries] =
+    useState<Delivery[]>([]);
+
   const load = useCallback(
     async () => {
       try {
@@ -263,6 +280,24 @@ export default function QuotationDetailsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch(
+          "/api/quotations/" +
+            encodeURIComponent(params.quotationId) +
+            "/deliveries",
+        );
+
+        if (!response.ok) return;
+        const json = await response.json();
+        setDeliveries(Array.isArray(json.data) ? json.data : []);
+      } catch {
+        // Delivery history is supplementary to quotation details.
+      }
+    })();
+  }, [params.quotationId]);
 
   async function action(
     name: string,
@@ -734,6 +769,57 @@ export default function QuotationDetailsPage() {
           </p>
         </Card>
       </div>
+
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold">
+              {t(
+                "\u0627\u0644\u0625\u0631\u0633\u0627\u0644 \u0644\u0644\u0639\u0645\u064a\u0644",
+                "Delivery",
+              )}
+            </h3>
+
+            <p className="mt-1 text-sm text-amber-300">
+              {t(
+                "\u0645\u0632\u0648\u062f \u0627\u0644\u0625\u0631\u0633\u0627\u0644 \u063a\u064a\u0631 \u0645\u0647\u064a\u0623",
+                "Provider not configured",
+              )}
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" disabled>
+              {t("\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a", "Email")}
+            </Button>
+            <Button size="sm" variant="secondary" disabled>
+              {t("\u0648\u0627\u062a\u0633\u0627\u0628", "WhatsApp")}
+            </Button>
+          </div>
+        </div>
+
+        {deliveries.length > 0 && (
+          <div className="mt-5 divide-y divide-white/5 border-t border-white/10">
+            {deliveries.map((delivery) => (
+              <div
+                key={delivery.id}
+                className="grid gap-2 py-3 text-sm md:grid-cols-[110px_1fr_100px_180px]"
+              >
+                <span>{delivery.channel === "EMAIL" ? "Email" : "WhatsApp"}</span>
+                <span className="text-slate-300">{delivery.recipient}</span>
+                <Badge>
+                  {deliveryStatusLabels[delivery.status][isArabic ? "ar" : "en"]}
+                </Badge>
+                <span className="text-slate-500">
+                  {new Date(delivery.attemptedAt).toLocaleString(
+                    isArabic ? "ar-KW" : "en-GB",
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card padding="none">
         <div className="border-b border-white/10 px-6 py-4 font-semibold">
