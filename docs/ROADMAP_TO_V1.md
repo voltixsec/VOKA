@@ -6,9 +6,16 @@ This document is the continuation plan after Sprint 10B.
 
 # Phase 1 — Finish localization lifecycle
 
+Status: **Delivered through Phase 1.4 / PR #18 (`d5599b2`)**
+
+Changed-field invalidation, localization states, retry/recovery and provider
+abstraction are implemented. Quotation creation remains independent from AI
+latency, and approval is fenced until required localization completes.
+
 ## 1. Changed-fields-only localization
 
-Implement target invalidation.
+Delivered: target invalidation clears and retranslates only changed target
+fields.
 
 Example:
 
@@ -39,13 +46,15 @@ one changed text field → one AI item.
 
 ## 2. Localization status
 
-Add a proper localization state if needed:
+Delivered localization states:
 
 - PENDING
 - COMPLETED
 - FAILED
 
-Possible metadata:
+Delivered lifecycle metadata includes requested/completed timestamps, source
+generation/signature and failure state; provider-specific details remain an
+infrastructure concern.
 
 - localization requested at
 - localization completed at
@@ -61,7 +70,8 @@ Do not block commercial Save.
 
 Background AI failure must be retryable.
 
-Possible V1 behavior:
+Delivered V1 behavior includes controlled retry/recovery and atomic concurrency
+protection:
 
 - manual Retry localization action
 - controlled automatic retry
@@ -90,9 +100,15 @@ Provider choice must not leak into quotation domain logic.
 
 # Phase 2 — Quotation/PDF final polish
 
+Status: **Partially delivered through Phase 1.4**
+
+Delivered: Unicode bidi-aware Arabic mixed text and money/percentage rendering,
+approval identity, signature/stamp assets, preset branding themes, letterhead
+safe areas, approval snapshots and public verification QR.
+
 ## 1. Arabic money direction
 
-Deferred issue:
+Delivered in Phase 1.4:
 
 Arabic PDF totals may visually reorder:
 
@@ -100,19 +116,17 @@ Arabic PDF totals may visually reorder:
 - minus sign
 - amount
 
-Recommended final solution:
-
-draw currency, sign and amount as separate explicit LTR PDF text runs.
-
-Do not continue experimenting with bidi control characters.
+The Unicode bidi-aware renderer preserves Arabic reading order and LTR numeric,
+currency and percentage runs without reversing whole strings.
 
 ---
 
 ## 2. Approver identity
 
-Remove temporary hardcoded/fallback identity.
+Delivered in Phase 1.4 using approval identity and company-configured signature
+and stamp assets, with safe fallback behavior when an image is absent.
 
-Add Company Settings fields:
+Still optional for a future configurable approver profile:
 
 - approver name Arabic
 - approver name English
@@ -131,18 +145,17 @@ Current guarantee:
 
 VOKA draws no background/card behind company logo.
 
-Future:
+Still deferred:
 
-- verify PNG
-- JPEG
-- WebP decoding consistency in PDF pipeline
+- WebP decoding compatibility in the PDF pipeline. PNG/JPEG are supported;
+  WebP is currently rejected by company image validation.
 - optional transparency validation
 
 ---
 
 ## 4. Custom branding
 
-After five preset themes are stable:
+Still deferred. Preset themes are delivered; arbitrary custom branding is not.
 
 - custom primary HEX
 - custom accent HEX
@@ -157,7 +170,17 @@ Use same branding system for future:
 
 ---
 
+## 5. Dynamic BOQ pagination
+
+Still deferred. The current branded proposal intentionally renders exactly two
+pages (cover plus BOQ/terms). General continuation across additional BOQ pages
+requires a separate layout and acceptance-test slice.
+
+---
+
 # Phase 3 — Proposal composer UX
+
+Status: **Next recommended product assessment**
 
 Finalize quotation creation/editing flow:
 
@@ -179,6 +202,8 @@ Remove temporary bilingual editing controls where they conflict with the final o
 
 # Phase 4 — Approval and document lifecycle
 
+Status: **Partially delivered**
+
 Complete:
 
 Draft
@@ -193,6 +218,10 @@ Audit:
 - when
 - snapshot/version
 - PDF used at approval
+
+Approval identity, timestamps, immutable approval-time brand snapshots and the
+verified document path are delivered. Downstream commercial document creation
+remains future work.
 
 Do not regenerate historical approved documents from mutable live data without a snapshot/version strategy.
 
@@ -320,6 +349,11 @@ Review:
 - file/logo validation
 - upload limits
 
+Safe transitive hardening was merged through PR #19 at `23c2d2f`. Remaining
+Next 15 nested PostCSS/Sharp findings require a planned Next 16 migration or
+unsupported overrides. Track the supported framework migration as an
+engineering/security workstream; do not treat it as the next product feature.
+
 ---
 
 # Phase 11 — Final UX / design pass
@@ -339,7 +373,8 @@ Only after functionality is stable:
 - money formatting
 - visual consistency
 
-Revisit the deferred Arabic PDF totals issue here.
+Re-verify Arabic PDF typography and money formatting during the final UX pass;
+the Phase 1.4 bidi defect itself is closed.
 
 ---
 
@@ -363,8 +398,6 @@ Release checklist:
 14. release
 15. monitor logs/errors
 
-Important:
-
-Do not merge the checkpoint branch directly to main.
-
-Prepare a clean feature branch / PR from the verified work when Sprint 10B is formally closed.
+Important: Phase 1.4 is closed on `main`. Start any subsequent implementation
+from the current verified main after its scope and acceptance criteria are
+approved.
