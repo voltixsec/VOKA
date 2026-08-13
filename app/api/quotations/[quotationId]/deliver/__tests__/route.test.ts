@@ -4,9 +4,19 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   findById: vi.fn(),
   generateDocument: vi.fn(),
+  gatewayDeliver: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
 }));
+
+vi.mock(
+  "@/src/infrastructure/delivery/createQuotationDeliveryGateway",
+  () => ({
+    createQuotationDeliveryGateway: () => ({
+      deliver: mocks.gatewayDeliver,
+    }),
+  }),
+);
 
 vi.mock(
   "@/src/infrastructure/document/PrismaQuotationDocumentProvider",
@@ -102,6 +112,11 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
         bytes: new Uint8Array([37, 80, 68, 70]),
       },
     });
+    mocks.gatewayDeliver.mockResolvedValue({
+      success: false,
+      errorCode: "DELIVERY_PROVIDER_NOT_CONFIGURED",
+      errorMessage: "Quotation delivery provider is not configured.",
+    });
   });
 
   it("allows write roles but excludes VIEWER", () => {
@@ -139,6 +154,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     [{ channel: "SMS", recipient: "x", locale: "en" }, "DELIVERY_CHANNEL_INVALID"],
     [{ channel: "EMAIL", recipient: "", locale: "en" }, "DELIVERY_RECIPIENT_REQUIRED"],
     [{ channel: "EMAIL", recipient: "x", locale: "fr" }, "DELIVERY_LOCALE_INVALID"],
+    [{ channel: "EMAIL", recipient: "not-an-email", locale: "en" }, "DELIVERY_EMAIL_RECIPIENT_INVALID"],
   ])("rejects invalid input", async (invalid, code) => {
     const response = await POST(request(invalid));
     const body = await response.json();
@@ -146,6 +162,38 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     expect(response.status).toBe(400);
     expect(body).toMatchObject({ success: false, error: { code } });
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("persists SENT and the provider message ID from a configured email gateway", async () => {
+    const value = quotation();
+    mocks.findById.mockResolvedValue(value);
+    mocks.gatewayDeliver.mockResolvedValue({
+      success: true,
+      providerMessageId: "resend-email-1",
+    });
+
+    const response = await POST(request({
+      channel: "EMAIL",
+      recipient: "customer@example.com",
+      locale: "en",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.data).toMatchObject({
+      status: "SENT",
+      providerMessageId: "resend-email-1",
+    });
+    expect(mocks.gatewayDeliver).toHaveBeenCalledWith(expect.objectContaining({
+      providerRequestKey: expect.stringMatching(/^quotation-delivery\//),
+      recipient: "customer@example.com",
+      document: expect.objectContaining({
+        filename: "quotation-Q-001.pdf",
+        contentType: "application/pdf",
+      }),
+    }));
+    expect(value.status).toBe("DRAFT");
+    expect(mocks.update).toHaveBeenCalledOnce();
   });
 
   it("returns the same not-found result for a cross-tenant quotation id", async () => {

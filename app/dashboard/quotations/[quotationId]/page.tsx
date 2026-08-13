@@ -14,6 +14,7 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   SectionHeader,
 } from "../../../../components/ui";
 import {
@@ -88,6 +89,11 @@ type Delivery = {
   recipient: string;
   status: "PENDING" | "SENT" | "FAILED";
   attemptedAt: string;
+};
+
+type DeliveryChannelAvailability = {
+  EMAIL: { configured: boolean };
+  WHATSAPP: { configured: boolean };
 };
 
 const arabicStatuses:
@@ -204,6 +210,18 @@ export default function QuotationDetailsPage() {
   const [deliveries, setDeliveries] =
     useState<Delivery[]>([]);
 
+  const [deliveryChannels, setDeliveryChannels] =
+    useState<DeliveryChannelAvailability>({
+      EMAIL: { configured: false },
+      WHATSAPP: { configured: false },
+    });
+
+  const [emailRecipient, setEmailRecipient] =
+    useState("");
+
+  const [deliveryFeedback, setDeliveryFeedback] =
+    useState<{ kind: "success" | "error"; message: string } | null>(null);
+
   const load = useCallback(
     async () => {
       try {
@@ -261,6 +279,9 @@ export default function QuotationDetailsPage() {
           await response.json();
 
         setQuote(json.data);
+        setEmailRecipient((current) =>
+          current || json.data.customer?.email || "",
+        );
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -281,23 +302,92 @@ export default function QuotationDetailsPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const response = await fetch(
-          "/api/quotations/" +
-            encodeURIComponent(params.quotationId) +
-            "/deliveries",
-        );
+  const loadDeliveries = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "/api/quotations/" +
+          encodeURIComponent(params.quotationId) +
+          "/deliveries",
+      );
 
-        if (!response.ok) return;
-        const json = await response.json();
-        setDeliveries(Array.isArray(json.data) ? json.data : []);
-      } catch {
-        // Delivery history is supplementary to quotation details.
-      }
-    })();
+      if (!response.ok) return;
+      const json = await response.json();
+      setDeliveries(Array.isArray(json.data) ? json.data : []);
+      if (json.meta?.channels) setDeliveryChannels(json.meta.channels);
+    } catch {
+      // Delivery history and availability are supplementary.
+    }
   }, [params.quotationId]);
+
+  useEffect(() => {
+    void loadDeliveries();
+  }, [loadDeliveries]);
+
+  async function sendEmail() {
+    if (!quote || !emailRecipient.trim()) {
+      setDeliveryFeedback({
+        kind: "error",
+        message: t(
+          "أدخل البريد الإلكتروني للعميل أولًا",
+          "Enter the customer email first",
+        ),
+      });
+      return;
+    }
+
+    try {
+      setActing("deliver-email");
+      setDeliveryFeedback(null);
+      const response = await fetch(
+        `/api/quotations/${encodeURIComponent(quote.id)}/deliver`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel: "EMAIL",
+            recipient: emailRecipient.trim(),
+            locale: isArabic ? "ar" : "en",
+          }),
+        },
+      );
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error?.message ??
+            t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
+        );
+      }
+
+      if (json?.data?.status === "SENT") {
+        setDeliveryFeedback({
+          kind: "success",
+          message: t(
+            "تم إرسال البريد الإلكتروني",
+            "Email sent",
+          ),
+        });
+      } else {
+        setDeliveryFeedback({
+          kind: "error",
+          message:
+            json?.data?.errorMessage ??
+            t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
+        });
+      }
+
+      await loadDeliveries();
+    } catch (caught) {
+      setDeliveryFeedback({
+        kind: "error",
+        message: caught instanceof Error
+          ? caught.message
+          : t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
+      });
+    } finally {
+      setActing("");
+    }
+  }
 
   async function action(
     name: string,
@@ -780,23 +870,72 @@ export default function QuotationDetailsPage() {
               )}
             </h3>
 
-            <p className="mt-1 text-sm text-amber-300">
+            <p className={`mt-1 text-sm ${
+              deliveryChannels.EMAIL.configured
+                ? "text-emerald-300"
+                : "text-amber-300"
+            }`}>
               {t(
-                "\u0645\u0632\u0648\u062f \u0627\u0644\u0625\u0631\u0633\u0627\u0644 \u063a\u064a\u0631 \u0645\u0647\u064a\u0623",
-                "Provider not configured",
+                deliveryChannels.EMAIL.configured
+                  ? "البريد الإلكتروني متاح؛ واتساب غير متاح"
+                  : "مزود البريد الإلكتروني غير مهيأ؛ واتساب غير متاح",
+                deliveryChannels.EMAIL.configured
+                  ? "Email delivery available; WhatsApp unavailable"
+                  : "Email provider not configured; WhatsApp unavailable",
               )}
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" disabled>
-              {t("\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a", "Email")}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={
+                !deliveryChannels.EMAIL.configured ||
+                !emailRecipient.trim() ||
+                Boolean(acting)
+              }
+              onClick={() => void sendEmail()}
+            >
+              {acting === "deliver-email"
+                ? t("جاري الإرسال...", "Sending...")
+                : t("إرسال بالبريد الإلكتروني", "Send by email")}
             </Button>
             <Button size="sm" variant="secondary" disabled>
               {t("\u0648\u0627\u062a\u0633\u0627\u0628", "WhatsApp")}
             </Button>
           </div>
         </div>
+
+        {deliveryChannels.EMAIL.configured && (
+          <div className="mt-4 max-w-md">
+            <Input
+              type="email"
+              value={emailRecipient}
+              onChange={(event) => setEmailRecipient(event.target.value)}
+              placeholder={t("البريد الإلكتروني للعميل", "Customer email")}
+              aria-label={t("البريد الإلكتروني للعميل", "Customer email")}
+            />
+            {!emailRecipient.trim() && (
+              <p className="mt-2 text-sm text-amber-300">
+                {t(
+                  "لا يوجد بريد إلكتروني للعميل. أدخله لإرسال العرض.",
+                  "Customer email is missing. Enter one to send the proposal.",
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
+        {deliveryFeedback && (
+          <p className={`mt-4 text-sm ${
+            deliveryFeedback.kind === "success"
+              ? "text-emerald-300"
+              : "text-red-300"
+          }`}>
+            {deliveryFeedback.message}
+          </p>
+        )}
 
         {deliveries.length > 0 && (
           <div className="mt-5 divide-y divide-white/5 border-t border-white/10">

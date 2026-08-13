@@ -40,7 +40,7 @@ function quotation(
     issueDate: "2026-08-14T00:00:00.000Z",
     expiryDate: null,
     currencyCode: "KWD",
-    customer: { name: "Acme" },
+    customer: { name: "Acme", email: "customer@example.com" },
     lines: [],
     totals: {
       subtotal: 0,
@@ -52,11 +52,11 @@ function quotation(
   };
 }
 
-function response(data: unknown) {
+function response(data: unknown, meta?: unknown) {
   return {
     ok: true,
     status: 200,
-    json: async () => ({ data }),
+    json: async () => ({ data, ...(meta === undefined ? {} : { meta }) }),
   };
 }
 
@@ -225,16 +225,92 @@ describe("QuotationDetailsPage localization visibility", () => {
     render(createElement(QuotationDetailsPage));
 
     expect(await screen.findByText("Delivery")).toBeTruthy();
-    expect(screen.getByText("Provider not configured")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Email" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Email provider not configured; WhatsApp unavailable")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Send by email" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/api/quotations/quotation-1/deliver",
       expect.anything(),
     );
-    expect(await screen.findByText("customer@example.com")).toBeTruthy();
+    expect((await screen.findAllByText("customer@example.com")).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("+96590000000")).toBeTruthy();
     expect(screen.getByText("Failed")).toBeTruthy();
     expect(screen.getByText("Sent")).toBeTruthy();
+  });
+
+  it("enables configured EMAIL, uses the active locale, and refreshes history after SENT", async () => {
+    let historyLoads = 0;
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) {
+        historyLoads += 1;
+        return response([], {
+          channels: {
+            EMAIL: { configured: true, provider: "RESEND" },
+            WHATSAPP: { configured: false, provider: null },
+          },
+        });
+      }
+      if (input.endsWith("/deliver") && init?.method === "POST") {
+        return response({
+          id: "delivery-1",
+          status: "SENT",
+          channel: "EMAIL",
+          recipient: "customer@example.com",
+        });
+      }
+      return response(quotation("COMPLETED", "DRAFT"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+
+    const send = await screen.findByRole("button", { name: "Send by email" });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    expect(await screen.findByText("Email sent")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/quotations/quotation-1/deliver",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          channel: "EMAIL",
+          recipient: "customer@example.com",
+          locale: "en",
+        }),
+      }),
+    );
+    expect(historyLoads).toBeGreaterThanOrEqual(2);
+    expect((screen.getByRole("button", { name: "WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows a safe FAILED result without claiming email success", async () => {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) {
+        return response([], {
+          channels: {
+            EMAIL: { configured: true, provider: "RESEND" },
+            WHATSAPP: { configured: false, provider: null },
+          },
+        });
+      }
+      if (input.endsWith("/deliver") && init?.method === "POST") {
+        return response({
+          id: "delivery-1",
+          status: "FAILED",
+          errorMessage: "Email provider rate limit was reached.",
+        });
+      }
+      return response(quotation("COMPLETED", "DRAFT"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+    const send = await screen.findByRole("button", { name: "Send by email" });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    expect(await screen.findByText("Email provider rate limit was reached.")).toBeTruthy();
+    expect(screen.queryByText("Email sent")).toBeNull();
   });
 });

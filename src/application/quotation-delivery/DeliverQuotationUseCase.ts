@@ -5,6 +5,7 @@ import {
   QuotationDelivery,
   type QuotationDeliveryChannel,
 } from "@/src/domain/quotation-delivery";
+import { CustomerEmail } from "@/src/domain/customer/value-objects/CustomerEmail";
 
 import type { QuotationDeliveryGateway } from "./QuotationDeliveryGateway";
 import type { QuotationDeliveryRepository } from "./QuotationDeliveryRepository";
@@ -37,9 +38,23 @@ export class DeliverQuotationUseCase {
       return { success: false, error: { code: "DELIVERY_CHANNEL_INVALID", message: "Delivery channel is invalid." } };
     }
 
-    const recipient = input.recipient?.trim();
+    let recipient = input.recipient?.trim();
     if (!recipient) {
       return { success: false, error: { code: "DELIVERY_RECIPIENT_REQUIRED", message: "Delivery recipient is required." } };
+    }
+
+    if (input.channel === "EMAIL") {
+      try {
+        recipient = CustomerEmail.create(recipient).toString();
+      } catch {
+        return {
+          success: false,
+          error: {
+            code: "DELIVERY_EMAIL_RECIPIENT_INVALID",
+            message: "Delivery email recipient is invalid.",
+          },
+        };
+      }
     }
 
     if (input.locale !== "ar" && input.locale !== "en") {

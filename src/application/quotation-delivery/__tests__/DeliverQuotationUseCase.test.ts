@@ -249,7 +249,7 @@ describe("DeliverQuotationUseCase", () => {
   it.each([
     [{ channel: "SMS", recipient: "x", locale: "en" }, "DELIVERY_CHANNEL_INVALID"],
     [{ channel: "EMAIL", recipient: " ", locale: "en" }, "DELIVERY_RECIPIENT_REQUIRED"],
-    [{ channel: "EMAIL", recipient: "x", locale: "fr" }, "DELIVERY_LOCALE_INVALID"],
+    [{ channel: "EMAIL", recipient: "customer@example.com", locale: "fr" }, "DELIVERY_LOCALE_INVALID"],
   ] as const)("rejects invalid delivery input", async (invalid, code) => {
     const context = useCase();
     const result = await context.execute.execute({
@@ -259,6 +259,61 @@ describe("DeliverQuotationUseCase", () => {
 
     expect(result).toMatchObject({ success: false, error: { code } });
     expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid EMAIL recipient before document generation or gateway call", async () => {
+    const context = useCase();
+
+    const result = await context.execute.execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      channel: "EMAIL",
+      recipient: "not-an-email",
+      locale: "en",
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "DELIVERY_EMAIL_RECIPIENT_INVALID" },
+    });
+    expect(context.documents.generate).not.toHaveBeenCalled();
+    expect(context.gateway.deliver).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+  });
+
+  it("normalizes a valid EMAIL recipient before persistence and provider delivery", async () => {
+    const context = useCase();
+
+    const result = await context.execute.execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      channel: "EMAIL",
+      recipient: " Customer@Example.COM ",
+      locale: "en",
+    });
+
+    expect(result.success && result.data.recipient).toBe("customer@example.com");
+    expect(context.gateway.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: "customer@example.com" }),
+    );
+  });
+
+  it("preserves WHATSAPP recipient validation semantics", async () => {
+    const context = useCase();
+
+    const result = await context.execute.execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      channel: "WHATSAPP",
+      recipient: "+96590000000",
+      locale: "ar",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.providerMessageId).toBe("provider-1");
+    expect(context.gateway.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: "+96590000000" }),
+    );
   });
 
   it("does not create an attempt for a missing or cross-tenant quotation", async () => {

@@ -116,6 +116,12 @@ describe("GET /api/quotations/[quotationId]/deliveries", () => {
     expect(body.data[0]).not.toHaveProperty("bytes");
     expect(body.data[0]).not.toHaveProperty("providerRequestKey");
     expect(body.data[0]).not.toHaveProperty("accessToken");
+    expect(body.meta.channels).toMatchObject({
+      EMAIL: { configured: false },
+      WHATSAPP: { configured: false },
+    });
+    expect(JSON.stringify(body.meta)).not.toContain("RESEND_API_KEY");
+    expect(JSON.stringify(body.meta)).not.toContain("ACCESS_TOKEN");
   });
 
   it("does not query or leak history for a cross-tenant quotation id", async () => {
