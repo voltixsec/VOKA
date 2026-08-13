@@ -9,7 +9,7 @@ index 52e2d59..deb5fe3 100644
 +++ b/prisma/schema.prisma
 @@ -38,22 +38,32 @@ enum CustomerStatus {
  }
- 
+
  model Company {
 -  id                String            @id @default(cuid())
 -  name              String
@@ -53,13 +53,13 @@ index 52e2d59..deb5fe3 100644
 +  quotationTermsTemplates CompanyQuotationTermsTemplate[]
 +  createdAt               DateTime                        @default(now())
 +  updatedAt               DateTime                        @updatedAt
- 
+
    @@index([name])
    @@index([isActive])
 @@ -141,6 +151,16 @@ enum QuotationStatus {
    CANCELLED
  }
- 
+
 +enum QuotationScopeType {
 +  SUPPLY_ONLY
 +  SUPPLY_AND_INSTALLATION
@@ -76,7 +76,7 @@ index 52e2d59..deb5fe3 100644
 @@ -301,6 +321,25 @@ model PriceListItem {
    @@index([catalogItemId])
  }
- 
+
 +model CompanyQuotationTermsTemplate {
 +  id        String @id @default(cuid())
 +  companyId String
@@ -98,7 +98,7 @@ index 52e2d59..deb5fe3 100644
 +
  model Quotation {
    id String @id @default(cuid())
- 
+
 @@ -314,11 +353,25 @@ model Quotation {
    expiryDate     DateTime?
    currencyCode   String          @default("KWD")
@@ -109,7 +109,7 @@ index 52e2d59..deb5fe3 100644
    customerPhone  String?
    customerTaxNo  String?
    billingAddress String?
- 
+
 +  subjectAr       String?
 +  subjectEn       String?
 +  briefAr         String?
@@ -128,7 +128,7 @@ index 52e2d59..deb5fe3 100644
 @@ -326,13 +379,19 @@ model Quotation {
    taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
    totalAmount    Decimal       @default(0) @db.Decimal(18, 3)
- 
+
 -  notes              String?
 -  termsAndConditions String?
 +  notes                String?
@@ -137,7 +137,7 @@ index 52e2d59..deb5fe3 100644
 +  notesEn              String?
 +  termsAndConditionsAr String?
 +  termsAndConditionsEn String?
- 
+
 -  sentAt      DateTime?
 -  approvedAt  DateTime?
 -  rejectedAt  DateTime?
@@ -148,13 +148,13 @@ index 52e2d59..deb5fe3 100644
 +  approvedByRole String?
 +  rejectedAt     DateTime?
 +  cancelledAt    DateTime?
- 
+
    isDeleted Boolean   @default(false)
    deletedAt DateTime?
 @@ -366,10 +425,14 @@ model QuotationLine {
    position Int
    type     CatalogItemType
- 
+
 -  itemCode    String?
 -  itemName    String
 -  description String?
@@ -167,7 +167,7 @@ index 52e2d59..deb5fe3 100644
 +  descriptionAr String?
 +  descriptionEn String?
 +  unitName      String?
- 
+
    quantity  Decimal @db.Decimal(18, 3)
    unitPrice Decimal @db.Decimal(18, 3)
 
@@ -191,9 +191,9 @@ index 3c918e7..3abe352 100644
  import {
    CustomerSnapshot,
 @@ -17,7 +21,23 @@ import { QuotationNumber } from "../value-objects/QuotationNumber";
- 
+
  const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
- 
+
 -export interface QuotationProps {
 +export interface QuotationProposalProps {
 +  subjectAr?: string | null;
@@ -247,7 +247,7 @@ index 3c918e7..3abe352 100644
 +  private _approvedByRole: string | null;
    private _rejectedAt: Date | null;
    private _cancelledAt: Date | null;
- 
+
 @@ -101,8 +136,30 @@ export class Quotation {
      this._notes = props.notes?.trim() || null;
      this._termsAndConditions =
@@ -278,11 +278,11 @@ index 3c918e7..3abe352 100644
 +      props.approvedByRole?.trim() || null;
      this._rejectedAt = props.rejectedAt ?? null;
      this._cancelledAt = props.cancelledAt ?? null;
- 
+
 @@ -166,6 +223,42 @@ export class Quotation {
      return this._termsAndConditions;
    }
- 
+
 +  get termsAndConditionsAr(): string | null {
 +    return this._termsAndConditionsAr;
 +  }
@@ -325,7 +325,7 @@ index 3c918e7..3abe352 100644
 @@ -174,6 +267,14 @@ export class Quotation {
      return this._approvedAt;
    }
- 
+
 +  get approvedByName(): string | null {
 +    return this._approvedByName;
 +  }
@@ -408,12 +408,12 @@ index 3c918e7..3abe352 100644
 +        this.normalizeScopeType(proposal.scopeType);
 +    }
    }
- 
+
    send(at: Date = new Date()): void {
 @@ -223,10 +385,39 @@ export class Quotation {
      this._sentAt = at;
    }
- 
+
 -  approve(at: Date = new Date()): void {
 -    this.assertTransition(["SENT"], "APPROVED");
 +  approve(
@@ -450,12 +450,12 @@ index 3c918e7..3abe352 100644
 +    this._approvedByRole =
 +      approvedByRole;
    }
- 
+
    reject(at: Date = new Date()): void {
 @@ -287,6 +478,28 @@ export class Quotation {
      this._totals = calculated.totals;
    }
- 
+
 +  private normalizeOptionalText(
 +    value: string | null | undefined,
 +  ): string | null {
@@ -496,7 +496,7 @@ index 1b763c7..be079b3 100644
    QuotationLineInput,
 +  QuotationProposalProps,
  } from "../../../domain/quotation";
- 
+
 -export interface CreateQuotationDto {
 +export interface CreateQuotationDto
 +  extends QuotationProposalProps {
@@ -505,13 +505,13 @@ index 1b763c7..be079b3 100644
    priceListId?: string | null;
 @@ -22,6 +24,8 @@ export interface CreateQuotationDto {
    notes?: string | null;
- 
+
    termsAndConditions?: string | null;
 +  termsAndConditionsAr?: string | null;
 +  termsAndConditionsEn?: string | null;
- 
+
    issueDate?: Date;
- 
+
 
 ================================================
 === UPDATE DTO DIFF ===
@@ -527,16 +527,16 @@ index e486930..9a7eacb 100644
    QuotationLineInput,
 +  QuotationProposalProps,
  } from "../../../domain/quotation";
- 
+
 -export interface UpdateQuotationDto {
 +export interface UpdateQuotationDto
 +  extends QuotationProposalProps {
    companyId: string;
- 
+
    quotationId: string;
 @@ -15,4 +17,6 @@ export interface UpdateQuotationDto {
    notes?: string | null;
- 
+
    termsAndConditions?: string | null;
 +  termsAndConditionsAr?: string | null;
 +  termsAndConditionsEn?: string | null;
@@ -583,7 +583,7 @@ index 9bf5c61..15001ec 100644
 +        dto.termsAndConditionsAr,
 +        dto.termsAndConditionsEn,
        );
- 
+
 +      quotation.updateProposal({
 +        subjectAr: dto.subjectAr,
 +        subjectEn: dto.subjectEn,
@@ -1324,4 +1324,3 @@ CREATE UNIQUE INDEX "CompanyQuotationTermsTemplate_companyId_scopeType_key" ON "
 
 -- AddForeignKey
 ALTER TABLE "CompanyQuotationTermsTemplate" ADD CONSTRAINT "CompanyQuotationTermsTemplate_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
