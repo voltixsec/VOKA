@@ -30,6 +30,15 @@ type ScopeType =
   | "CONSULTATION"
   | "CUSTOM";
 
+type Item = {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  salePrice: number;
+  taxRateId?: string | null;
+};
+
 type Line = {
   id?: string;
   catalogItemId?: string | null;
@@ -143,6 +152,12 @@ export default function EditQuotationPage() {
 
   const [lines, setLines] =
     useState<Line[]>([]);
+
+  const [items, setItems] =
+    useState<Item[]>([]);
+
+  const [catalogError, setCatalogError] =
+    useState(false);
 
   const [projectName, setProjectName] =
     useState("");
@@ -307,6 +322,30 @@ export default function EditQuotationPage() {
     params.quotationId,
   ]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch(
+          "/api/catalog/items?pageSize=100&isActive=true",
+        );
+
+        if (!response.ok) {
+          setCatalogError(true);
+          return;
+        }
+
+        const json = await response.json();
+        setItems(
+          Array.isArray(json.data)
+            ? json.data
+            : [],
+        );
+      } catch {
+        setCatalogError(true);
+      }
+    })();
+  }, []);
+
   const subtotal = useMemo(
     () =>
       lines.reduce(
@@ -333,6 +372,71 @@ export default function EditQuotationPage() {
 
   const total =
     subtotal - discountAmount;
+
+  function activeLocalizedText(
+    itemName: string,
+  ): Partial<Line> {
+    return isArabic
+      ? {
+          itemNameAr: itemName,
+          unitNameAr: "PCS",
+        }
+      : {
+          itemNameEn: itemName,
+          unitNameEn: "PCS",
+        };
+  }
+
+  function addItem(id: string) {
+    setDirty(true);
+
+    if (id === "__custom") {
+      const itemName = t(
+        "\u0628\u0646\u062f \u0645\u062e\u0635\u0635",
+        "Custom line",
+      );
+
+      setLines((current) => [
+        ...current,
+        {
+          position: current.length + 1,
+          catalogItemId: null,
+          type: "CUSTOM",
+          itemCode: "",
+          itemName,
+          unitName: "PCS",
+          quantity: 1,
+          unitPrice: 0,
+          ...activeLocalizedText(itemName),
+        },
+      ]);
+      return;
+    }
+
+    const item = items.find(
+      (candidate) => candidate.id === id,
+    );
+
+    if (!item) {
+      return;
+    }
+
+    setLines((current) => [
+      ...current,
+      {
+        position: current.length + 1,
+        catalogItemId: item.id,
+        taxRateId: item.taxRateId,
+        type: item.type,
+        itemCode: item.code,
+        itemName: item.name,
+        unitName: "PCS",
+        quantity: 1,
+        unitPrice: item.salePrice,
+        ...activeLocalizedText(item.name),
+      },
+    ]);
+  }
 
   function changeLine(
     index: number,
@@ -761,6 +865,60 @@ export default function EditQuotationPage() {
               "Quotation lines",
             )}
           </h3>
+
+          <label className="mt-4 block space-y-2">
+            <span className="text-sm text-slate-400">
+              {t(
+                "\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c \u0623\u0648 \u062e\u062f\u0645\u0629",
+                "Add product or service",
+              )}
+            </span>
+
+            <select
+              aria-label={t(
+                "\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c \u0623\u0648 \u062e\u062f\u0645\u0629",
+                "Add product or service",
+              )}
+              defaultValue=""
+              onChange={(event) => {
+                addItem(event.target.value);
+                event.target.value = "";
+              }}
+              className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4"
+            >
+              <option value="">
+                {t(
+                  "\u0627\u062e\u062a\u0631 \u0628\u0646\u062f\u064b\u0627",
+                  "Select a line",
+                )}
+              </option>
+
+              <option value="__custom">
+                {t(
+                  "+ \u0628\u0646\u062f \u0645\u062e\u0635\u0635",
+                  "+ Custom line",
+                )}
+              </option>
+
+              {items.map((item) => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                >
+                  {item.code} - {item.name}
+                </option>
+              ))}
+            </select>
+
+            {catalogError && (
+              <span className="text-xs text-amber-300">
+                {t(
+                  "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0643\u062a\u0627\u0644\u0648\u062c. \u064a\u0645\u0643\u0646\u0643 \u0625\u0636\u0627\u0641\u0629 \u0628\u0646\u062f \u0645\u062e\u0635\u0635.",
+                  "Catalog unavailable. You can still add a custom line.",
+                )}
+              </span>
+            )}
+          </label>
 
           <div className="mt-4 space-y-3">
             {lines.map(
