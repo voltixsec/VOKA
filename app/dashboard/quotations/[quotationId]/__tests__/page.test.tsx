@@ -100,16 +100,20 @@ describe("QuotationDetailsPage localization visibility", () => {
   });
 
   it("uses bilingual labels while preserving lifecycle API action names", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(response(quotation("COMPLETED", "DRAFT")))
-      .mockResolvedValueOnce(response({}))
-      .mockResolvedValueOnce(response(quotation("COMPLETED", "SENT")));
+    let status = "DRAFT";
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) return response([]);
+      if (init?.method === "POST") {
+        status = "SENT";
+        return response({});
+      }
+      return response(quotation("COMPLETED", status));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(createElement(QuotationDetailsPage));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark as sent" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -117,7 +121,7 @@ describe("QuotationDetailsPage localization visibility", () => {
         { method: "POST" },
       );
     });
-    expect(screen.queryByRole("button", { name: "send" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
   });
 
   it("renders Arabic lifecycle labels", async () => {
@@ -186,9 +190,47 @@ describe("QuotationDetailsPage localization visibility", () => {
     );
     expect(downloadLink?.getAttribute("href")).not.toContain("disposition");
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/quotations/quotation-1?locale=${locale}`,
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/quotations/quotation-1/deliveries",
+    );
+  });
+
+  it("truthfully presents disabled channels and renders delivery history", async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith("/deliveries")) {
+        return response([
+          {
+            id: "delivery-1",
+            channel: "EMAIL",
+            recipient: "customer@example.com",
+            status: "FAILED",
+            attemptedAt: "2026-08-14T10:00:00.000Z",
+          },
+          {
+            id: "delivery-2",
+            channel: "WHATSAPP",
+            recipient: "+96590000000",
+            status: "SENT",
+            attemptedAt: "2026-08-14T11:00:00.000Z",
+          },
+        ]);
+      }
+      return response(quotation("COMPLETED", "DRAFT"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+
+    expect(await screen.findByText("Delivery")).toBeTruthy();
+    expect(screen.getByText("Provider not configured")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Email" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByText("customer@example.com")).toBeTruthy();
+    expect(screen.getByText("+96590000000")).toBeTruthy();
+    expect(screen.getByText("Failed")).toBeTruthy();
+    expect(screen.getByText("Sent")).toBeTruthy();
   });
 });

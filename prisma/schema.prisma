@@ -73,6 +73,7 @@ model Company {
   taxRates                TaxRate[]
   priceLists              PriceList[]
   quotations              Quotation[]
+  quotationDeliveries     QuotationDelivery[]
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
@@ -166,6 +167,17 @@ enum QuotationStatus {
 enum LocalizationStatus {
   PENDING
   COMPLETED
+  FAILED
+}
+
+enum QuotationDeliveryChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum QuotationDeliveryStatus {
+  PENDING
+  SENT
   FAILED
 }
 
@@ -430,6 +442,7 @@ model Quotation {
   customer  Customer        @relation(fields: [customerId], references: [id])
   priceList PriceList?      @relation(fields: [priceListId], references: [id], onDelete: SetNull)
   lines     QuotationLine[]
+  deliveries QuotationDelivery[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -444,6 +457,33 @@ model Quotation {
   @@index([companyId, localizationStatus, localizationLeaseUntil])
   @@index([customerId])
   @@index([priceListId])
+}
+
+model QuotationDelivery {
+  id String @id @default(cuid())
+
+  companyId   String
+  quotationId String
+
+  channel   QuotationDeliveryChannel
+  recipient String
+  status    QuotationDeliveryStatus  @default(PENDING)
+
+  providerMessageId String?
+  errorCode         String?
+  errorMessage      String?
+
+  attemptedAt DateTime
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, quotationId])
+  @@index([quotationId, createdAt])
+  @@index([companyId, status])
 }
 
 model QuotationLine {
