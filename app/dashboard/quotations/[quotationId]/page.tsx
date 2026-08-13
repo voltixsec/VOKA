@@ -422,6 +422,32 @@ export default function QuotationDetailsPage() {
                 "/pdf?locale=" +
                 (isArabic
                   ? "ar"
+                  : "en") +
+                "&disposition=inline"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button
+                size="sm"
+                variant="secondary"
+              >
+                {t(
+                  "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0639\u0631\u0636",
+                  "Preview proposal",
+                )}
+              </Button>
+            </a>
+
+            <a
+              href={
+                "/api/quotations/" +
+                encodeURIComponent(
+                  quote.id,
+                ) +
+                "/pdf?locale=" +
+                (isArabic
+                  ? "ar"
                   : "en")
               }
             >

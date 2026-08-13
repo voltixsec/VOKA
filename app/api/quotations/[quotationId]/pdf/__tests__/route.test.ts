@@ -135,6 +135,46 @@ describe("GET /api/quotations/[quotationId]/pdf", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["?locale=en", "attachment"],
+    ["?locale=en&disposition=attachment", "attachment"],
+    ["?locale=en&disposition=inline", "inline"],
+  ] as const)("returns %s using %s disposition", async (query, disposition) => {
+    mocks.findById.mockResolvedValue(quotation());
+    mocks.render.mockResolvedValue(new Uint8Array([37, 80, 68, 70, 45]));
+
+    const response = await GET(new Request(
+      `http://localhost/api/quotations/quotation-1/pdf${query}`,
+    ));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Disposition")).toBe(
+      `${disposition}; filename="quotation-Q-001.pdf"`,
+    );
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(mocks.findById).toHaveBeenCalledWith("company-1", "quotation-1");
+  });
+
+  it("rejects an unsupported disposition before document generation", async () => {
+    const response = await GET(new Request(
+      "http://localhost/api/quotations/quotation-1/pdf?locale=en&disposition=preview",
+    ));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      error: {
+        code: "DOCUMENT_DISPOSITION_INVALID",
+        details: { field: "disposition" },
+      },
+    });
+    expect(mocks.findById).not.toHaveBeenCalled();
+    expect(mocks.render).not.toHaveBeenCalled();
+  });
+
   it("uses an approved quotation brand snapshot without mutating it", async () => {
     const approved = Quotation.restore({
       id: "quotation-1", companyId: "company-1", customerId: "customer-1",
