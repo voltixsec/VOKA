@@ -3,6 +3,7 @@ import {
   apiSuccess,
   withCompanyAuth,
 } from '@/lib/api';
+import { after } from "next/server";
 
 import {
   CreateQuotationUseCase,
@@ -10,10 +11,15 @@ import {
   type CreateQuotationDto,
 } from '@/src/application/quotation';
 
-import type { QuotationStatus } from '@/src/domain/quotation';
+import {
+  isQuotationScopeType,
+  type QuotationStatus,
+} from '@/src/domain/quotation';
 
 import { PrismaQuotationRepository } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository';
 import { PrismaQuotationReferenceValidator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator';
+
+import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
 
 import { serializeQuotation } from './serialize-quotation';
 
@@ -28,6 +34,8 @@ const createQuotation =
     quotationRepository,
     quotationReferenceValidator,
   );
+const localizationJobRunner =
+  new QuotationLocalizationJobRunner(quotationRepository);
 
 
 const listQuotations =
@@ -42,6 +50,15 @@ type CreateQuotationBody = {
   discount?: unknown;
   notes?: unknown;
   termsAndConditions?: unknown;
+  termsAndConditionsAr?: unknown;
+  termsAndConditionsEn?: unknown;
+  subjectAr?: unknown;
+  subjectEn?: unknown;
+  briefAr?: unknown;
+  briefEn?: unknown;
+  projectName?: unknown;
+  attentionName?: unknown;
+  scopeType?: unknown;
   issueDate?: unknown;
   expiryDate?: unknown;
 };
@@ -119,6 +136,33 @@ function parsePositiveInteger(
     : undefined;
 }
 
+function parseScopeType(
+  value: unknown,
+): CreateQuotationDto['scopeType'] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (
+    value === null ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  if (!isQuotationScopeType(value)) {
+    throw ApiError.badRequest(
+      'INVALID_QUOTATION_SCOPE_TYPE',
+      'scopeType is invalid.',
+      {
+        field: 'scopeType',
+      },
+    );
+  }
+
+  return value;
+}
+
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request, _auth, company) => {
@@ -149,7 +193,7 @@ export const GET = withCompanyAuth(
     return apiSuccess(
       {
         quotations:
-          result.quotations.map(serializeQuotation),
+          result.quotations.map((quotation) => serializeQuotation(quotation)),
         pagination: result.pagination,
       },
       {
@@ -169,8 +213,13 @@ export const POST = withCompanyAuth(
     'SALES',
   ],
   async (request, _auth, company) => {
-    const body =
-      (await request.json()) as CreateQuotationBody;
+    const rawBody =
+      (await request.json()) as Record<
+        string,
+        unknown
+      >;
+
+    const body = rawBody as CreateQuotationBody;
 
     if (
       typeof body.customerId !== 'string' ||
@@ -252,7 +301,30 @@ export const POST = withCompanyAuth(
       'expiryDate',
     );
 
+    const localizedSubjectAr =
+      parseOptionalString(body.subjectAr);
+
+    const localizedSubjectEn =
+      parseOptionalString(body.subjectEn);
+
+    const localizedBriefAr =
+      parseOptionalString(body.briefAr);
+
+    const localizedBriefEn =
+      parseOptionalString(body.briefEn);
+
+    const localizedTermsAr =
+      parseOptionalString(
+        body.termsAndConditionsAr,
+      );
+
+    const localizedTermsEn =
+      parseOptionalString(
+        body.termsAndConditionsEn,
+      );
+
     const dto: CreateQuotationDto = {
+      ...(body as unknown as CreateQuotationDto),
       companyId: company.companyId,
       customerId: body.customerId.trim(),
       quotationNumber:
@@ -285,6 +357,29 @@ export const POST = withCompanyAuth(
           body.termsAndConditions,
         ),
 
+      termsAndConditionsAr: localizedTermsAr,
+
+      termsAndConditionsEn: localizedTermsEn,
+      subjectAr: localizedSubjectAr,
+
+      subjectEn: localizedSubjectEn,
+
+      briefAr: localizedBriefAr,
+
+      briefEn: localizedBriefEn,
+
+      projectName: parseOptionalString(
+        body.projectName,
+      ),
+
+      attentionName: parseOptionalString(
+        body.attentionName,
+      ),
+
+      scopeType: parseScopeType(
+        body.scopeType,
+      ),
+
       issueDate: issueDate ?? undefined,
       expiryDate,
     };
@@ -307,6 +402,20 @@ export const POST = withCompanyAuth(
         result.error.code,
         result.error.message,
       );
+    }
+
+    const persistedQuotationId =
+      result.data.id;
+
+    if (
+      result.data.localizationStatus === "PENDING" &&
+      typeof persistedQuotationId === "string" &&
+      persistedQuotationId.trim().length > 0
+    ) {
+      after(() => localizationJobRunner.run({
+        companyId: company.companyId,
+        quotationId: persistedQuotationId,
+      }));
     }
 
     return apiSuccess(

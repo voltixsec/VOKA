@@ -15,6 +15,9 @@ function createRepository(): IQuotationRepository {
     update: vi.fn(),
     findAll: vi.fn(),
     delete: vi.fn(),
+    claimLocalization: vi.fn().mockResolvedValue(null),
+    completeLocalization: vi.fn(),
+    failLocalization: vi.fn(),
   };
 }
 
@@ -48,7 +51,7 @@ describe("Quotation use case tenant isolation", () => {
     {
       name: "approve",
       create: (repository: IQuotationRepository) =>
-        new ApproveQuotationUseCase(repository),
+        new ApproveQuotationUseCase(repository, { generate: () => "verification-token-0000000000000000" }),
       dto: {
         companyId: "company-1",
         quotationId: "quotation-1",

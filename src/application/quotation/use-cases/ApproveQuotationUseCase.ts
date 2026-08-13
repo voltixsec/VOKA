@@ -1,34 +1,77 @@
-import { QuotationDomainError } from "../../../domain/quotation";
+import {
+  QuotationDomainError,
+} from "../../../domain/quotation";
 
-import type { ApproveQuotationDto } from "../dto/ApproveQuotationDto";
-import type { IQuotationRepository } from "../repositories/IQuotationRepository";
-import type { ApplicationResult } from "../results/ApplicationResult";
+import type {
+  ApproveQuotationDto,
+} from "../dto/ApproveQuotationDto";
+import type {
+  IQuotationRepository,
+} from "../repositories/IQuotationRepository";
+import type {
+  ApplicationResult,
+} from "../results/ApplicationResult";
+import type { DocumentVerificationTokenGenerator } from "../../../domain/document-verification/DocumentVerificationToken";
 
 export class ApproveQuotationUseCase {
   constructor(
-    private readonly repository: IQuotationRepository,
+    private readonly repository:
+      IQuotationRepository,
+    private readonly tokenGenerator: DocumentVerificationTokenGenerator,
   ) {}
 
   async execute(
     dto: ApproveQuotationDto,
   ): Promise<ApplicationResult<void>> {
-    const quotation = await this.repository.findById(
-      dto.companyId,
-      dto.quotationId,
-    );
+    const quotation =
+      await this.repository.findById(
+        dto.companyId,
+        dto.quotationId,
+      );
 
     if (!quotation) {
       return {
         success: false,
         error: {
           code: "QUOTATION_NOT_FOUND",
-          message: "Quotation not found.",
+          message:
+            "Quotation not found.",
+        },
+      };
+    }
+
+    if (quotation.localizationStatus !== "COMPLETED") {
+      const failed = quotation.localizationStatus === "FAILED";
+
+      return {
+        success: false,
+        error: {
+          code: failed
+            ? "QUOTATION_LOCALIZATION_FAILED"
+            : "QUOTATION_LOCALIZATION_PENDING",
+          message: failed
+            ? "Quotation localization failed and must be retried before approval."
+            : "Quotation localization is still processing. Please try approval again when it is complete.",
         },
       };
     }
 
     try {
-      quotation.approve();
+      const verificationToken = quotation.verificationToken ?? (
+        quotation.status === "SENT"
+          ? this.tokenGenerator.generate()
+          : undefined
+      );
+
+      quotation.approve(dto.documentBrandSnapshot, {
+        name:
+          dto.approvedByName?.trim() ||
+          "Authorized Approver",
+
+        role:
+          dto.approvedByRole?.trim() ||
+          "APPROVER",
+      }, new Date(), verificationToken);
 
       await this.repository.update(
         dto.companyId,
@@ -40,7 +83,10 @@ export class ApproveQuotationUseCase {
         data: undefined,
       };
     } catch (error) {
-      if (error instanceof QuotationDomainError) {
+      if (
+        error instanceof
+        QuotationDomainError
+      ) {
         return {
           success: false,
           error: {

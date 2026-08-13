@@ -6,6 +6,9 @@ import { ApproveQuotationUseCase } from "../use-cases/ApproveQuotationUseCase";
 import { CancelQuotationUseCase } from "../use-cases/CancelQuotationUseCase";
 import { RejectQuotationUseCase } from "../use-cases/RejectQuotationUseCase";
 import { SendQuotationUseCase } from "../use-cases/SendQuotationUseCase";
+import { createCompanyDocumentBrandSnapshot } from "../../../domain/document/CompanyDocumentBrandSnapshot";
+
+const brand = createCompanyDocumentBrandSnapshot({ nameAr: null, nameEn: "VOKA", addressAr: null, addressEn: null, poBox: null, phone: null, mobile: null, whatsapp: null, logoUrl: null, brandTheme: "NAVY_GOLD" });
 
 function quotation(status: "DRAFT" | "SENT"): Quotation {
   return Quotation.restore({
@@ -33,6 +36,9 @@ function repository(value: Quotation): IQuotationRepository {
     findAll: vi.fn(),
     update: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn(),
+    claimLocalization: vi.fn().mockResolvedValue(null),
+    completeLocalization: vi.fn(),
+    failLocalization: vi.fn(),
   };
 }
 
@@ -56,10 +62,14 @@ describe("quotation state transition use cases", () => {
   ] as const)("%s transitions SENT inside the tenant", async (_name, UseCase, status) => {
     const value = quotation("SENT");
     const repo = repository(value);
-    const result = await new UseCase(repo).execute({
+    const useCase = _name === "approve"
+      ? new ApproveQuotationUseCase(repo, { generate: () => "verification-token-0000000000000000" })
+      : new UseCase(repo);
+    const result = await useCase.execute({
       companyId: "company-1",
       quotationId: "quotation-1",
-    });
+      ...(_name === "approve" ? { documentBrandSnapshot: brand } : {}),
+    } as never);
 
     expect(result.success).toBe(true);
     expect(value.status).toBe(status);
@@ -82,9 +92,10 @@ describe("quotation state transition use cases", () => {
   it("does not persist an invalid transition", async () => {
     const value = quotation("DRAFT");
     const repo = repository(value);
-    const result = await new ApproveQuotationUseCase(repo).execute({
+    const result = await new ApproveQuotationUseCase(repo, { generate: () => "verification-token-0000000000000000" }).execute({
       companyId: "company-1",
       quotationId: "quotation-1",
+      documentBrandSnapshot: brand,
     });
 
     expect(result).toMatchObject({ success: false, error: { code: "DOMAIN_ERROR" } });

@@ -6,6 +6,8 @@ import {
   type QuotationLineType,
   type QuotationStatus,
 } from "../../../../domain/quotation";
+import type { LocalizationStatus } from "../../../../domain/quotation/types/LocalizationStatus";
+import { parseCompanyDocumentBrandSnapshot } from "../../../../domain/document/CompanyDocumentBrandSnapshot";
 
 type QuotationRecord = Prisma.QuotationGetPayload<{
   include: {
@@ -47,10 +49,23 @@ export class PrismaQuotationMapper {
       expiryDate: quotation.expiryDate,
       currencyCode: quotation.currencyCode,
       customerName: customer.name,
+      customerNameAr: customer.nameAr,
+      customerNameEn: customer.nameEn,
       customerEmail: customer.email,
       customerPhone: customer.phone,
       customerTaxNo: customer.taxNumber,
       billingAddress: customer.billingAddress,
+      subjectAr: quotation.subjectAr,
+      subjectEn: quotation.subjectEn,
+      briefAr: quotation.briefAr,
+      briefEn: quotation.briefEn,
+      projectName: quotation.projectName,
+      projectNameAr: quotation.projectNameAr,
+      projectNameEn: quotation.projectNameEn,
+      attentionName: quotation.attentionName,
+      attentionNameAr: quotation.attentionNameAr,
+      attentionNameEn: quotation.attentionNameEn,
+      scopeType: quotation.scopeType,
       subtotal: quotation.totals.subtotal,
       discountType: quotation.discount?.type ?? null,
       discountValue: quotation.discount?.value ?? 0,
@@ -58,9 +73,33 @@ export class PrismaQuotationMapper {
       taxAmount: quotation.totals.taxAmount,
       totalAmount: quotation.totals.totalAmount,
       notes: quotation.notes,
+      notesAr: quotation.notesAr,
+      notesEn: quotation.notesEn,
       termsAndConditions: quotation.termsAndConditions,
+      termsAndConditionsAr: quotation.termsAndConditionsAr,
+      termsAndConditionsEn: quotation.termsAndConditionsEn,
+      localizationStatus: quotation.localizationStatus,
+      localizationRequestedAt: quotation.localizationRequestedAt,
+      localizationCompletedAt: quotation.localizationCompletedAt,
+      localizationLastError: quotation.localizationLastError,
+      localizationSourceLocale:
+        quotation.localizationSourceLocale === "ar"
+          ? "AR"
+          : quotation.localizationSourceLocale === "en"
+            ? "EN"
+            : undefined,
+      localizationSourceSignature: quotation.localizationSourceSignature,
+      localizationClaimToken: quotation.localizationClaimToken,
+      localizationLeaseUntil: quotation.localizationLeaseUntil,
+      localizationAttemptCount: quotation.localizationAttemptCount,
       sentAt: quotation.sentAt,
       approvedAt: quotation.approvedAt,
+      approvedByName: quotation.approvedByName,
+      approvedByRole: quotation.approvedByRole,
+      verificationToken: quotation.verificationToken,
+      ...(quotation.documentBrandSnapshot
+        ? { documentBrandSnapshot: quotation.documentBrandSnapshot as Prisma.InputJsonValue }
+        : {}),
       rejectedAt: quotation.rejectedAt,
       cancelledAt: quotation.cancelledAt,
       lines: {
@@ -88,8 +127,16 @@ export class PrismaQuotationMapper {
           type: line.type,
           itemCode: line.itemCode ?? null,
           itemName: line.itemName,
+          itemNameAr: line.itemNameAr ?? null,
+          itemNameEn: line.itemNameEn ?? null,
           description: line.description ?? null,
+          descriptionAr:
+            line.descriptionAr ?? null,
+          descriptionEn:
+            line.descriptionEn ?? null,
           unitName: line.unitName ?? null,
+          unitNameAr: line.unitNameAr ?? null,
+          unitNameEn: line.unitNameEn ?? null,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           discountType: line.discount?.type ?? null,
@@ -122,8 +169,16 @@ export class PrismaQuotationMapper {
       type: line.type as QuotationLineType,
       itemCode: line.itemCode,
       itemName: line.itemName,
+      itemNameAr: line.itemNameAr,
+      itemNameEn: line.itemNameEn,
+
       description: line.description,
+      descriptionAr: line.descriptionAr,
+      descriptionEn: line.descriptionEn,
+
       unitName: line.unitName,
+      unitNameAr: line.unitNameAr,
+      unitNameEn: line.unitNameEn,
       quantity: Number(line.quantity),
       unitPrice: Number(line.unitPrice),
       discount: line.discountType
@@ -147,17 +202,52 @@ export class PrismaQuotationMapper {
       currencyCode: record.currencyCode,
       customer: {
         name: record.customerName,
+        nameAr: record.customerNameAr,
+        nameEn: record.customerNameEn,
         email: record.customerEmail,
         phone: record.customerPhone,
         taxNumber: record.customerTaxNo,
         billingAddress: record.billingAddress,
       },
+      subjectAr: record.subjectAr,
+      subjectEn: record.subjectEn,
+      briefAr: record.briefAr,
+      briefEn: record.briefEn,
+      projectName: record.projectName,
+      projectNameAr: record.projectNameAr,
+      projectNameEn: record.projectNameEn,
+      attentionName: record.attentionName,
+      attentionNameAr: record.attentionNameAr,
+      attentionNameEn: record.attentionNameEn,
+      scopeType: record.scopeType,
       lines,
       discount,
       notes: record.notes,
+      notesAr: record.notesAr,
+      notesEn: record.notesEn,
       termsAndConditions: record.termsAndConditions,
+      termsAndConditionsAr: record.termsAndConditionsAr,
+      termsAndConditionsEn: record.termsAndConditionsEn,
+      localizationStatus: record.localizationStatus
+        ? (record.localizationStatus as LocalizationStatus)
+        : undefined,
+      localizationRequestedAt: record.localizationRequestedAt,
+      localizationCompletedAt: record.localizationCompletedAt,
+      localizationLastError: record.localizationLastError,
+      localizationSourceLocale: record.localizationSourceLocale
+        ? record.localizationSourceLocale.toLowerCase() as
+            "ar" | "en"
+        : null,
+      localizationSourceSignature: record.localizationSourceSignature,
+      localizationClaimToken: record.localizationClaimToken,
+      localizationLeaseUntil: record.localizationLeaseUntil,
+      localizationAttemptCount: record.localizationAttemptCount ?? 0,
       sentAt: record.sentAt,
       approvedAt: record.approvedAt,
+      approvedByName: record.approvedByName,
+      approvedByRole: record.approvedByRole,
+      documentBrandSnapshot: parseCompanyDocumentBrandSnapshot(record.documentBrandSnapshot),
+      verificationToken: record.verificationToken,
       rejectedAt: record.rejectedAt,
       cancelledAt: record.cancelledAt,
     });

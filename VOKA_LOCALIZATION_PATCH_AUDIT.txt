@@ -1,0 +1,1326 @@
+﻿
+================================================
+=== PRISMA DIFF ===
+================================================
+
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 52e2d59..deb5fe3 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -38,22 +38,32 @@ enum CustomerStatus {
+ }
+
+ model Company {
+-  id                String            @id @default(cuid())
+-  name              String
+-  slug              String            @unique
+-  defaultLocale     Locale            @default(EN)
+-  defaultCurrency   String            @default("KWD")
+-  timezone          String            @default("Asia/Kuwait")
+-  isActive          Boolean           @default(true)
+-  members           CompanyMember[]
+-  customers         Customer[]
+-  catalogItems      CatalogItem[]
+-  catalogCategories CatalogCategory[]
+-  taxRates          TaxRate[]
+-  priceLists        PriceList[]
+-  quotations        Quotation[]
+-  createdAt         DateTime          @default(now())
+-  updatedAt         DateTime          @updatedAt
++  id                      String                          @id @default(cuid())
++  name                    String
++  nameAr                  String?
++  nameEn                  String?
++  addressAr               String?
++  addressEn               String?
++  poBox                   String?
++  phone                   String?
++  mobile                  String?
++  whatsapp                String?
++  logoUrl                 String?
++  slug                    String                          @unique
++  defaultLocale           Locale                          @default(EN)
++  defaultCurrency         String                          @default("KWD")
++  timezone                String                          @default("Asia/Kuwait")
++  isActive                Boolean                         @default(true)
++  members                 CompanyMember[]
++  customers               Customer[]
++  catalogItems            CatalogItem[]
++  catalogCategories       CatalogCategory[]
++  taxRates                TaxRate[]
++  priceLists              PriceList[]
++  quotations              Quotation[]
++  quotationTermsTemplates CompanyQuotationTermsTemplate[]
++  createdAt               DateTime                        @default(now())
++  updatedAt               DateTime                        @updatedAt
+
+   @@index([name])
+   @@index([isActive])
+@@ -141,6 +151,16 @@ enum QuotationStatus {
+   CANCELLED
+ }
+
++enum QuotationScopeType {
++  SUPPLY_ONLY
++  SUPPLY_AND_INSTALLATION
++  INSTALLATION_ONLY
++  SERVICE
++  MAINTENANCE
++  CONSULTATION
++  CUSTOM
++}
++
+ enum DiscountType {
+   FIXED
+   PERCENTAGE
+@@ -301,6 +321,25 @@ model PriceListItem {
+   @@index([catalogItemId])
+ }
+
++model CompanyQuotationTermsTemplate {
++  id        String @id @default(cuid())
++  companyId String
++
++  scopeType QuotationScopeType
++
++  termsAr String?
++  termsEn String?
++
++  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
++
++  createdAt DateTime @default(now())
++  updatedAt DateTime @updatedAt
++
++  @@unique([companyId, scopeType])
++  @@index([companyId])
++  @@index([companyId, scopeType])
++}
++
+ model Quotation {
+   id String @id @default(cuid())
+
+@@ -314,11 +353,25 @@ model Quotation {
+   expiryDate     DateTime?
+   currencyCode   String          @default("KWD")
+   customerName   String
++  customerNameAr String?
++  customerNameEn String?
+   customerEmail  String?
+   customerPhone  String?
+   customerTaxNo  String?
+   billingAddress String?
+
++  subjectAr       String?
++  subjectEn       String?
++  briefAr         String?
++  briefEn         String?
++  projectName     String?
++  attentionName   String?
++  projectNameAr   String?
++  projectNameEn   String?
++  attentionNameAr String?
++  attentionNameEn String?
++  scopeType       QuotationScopeType?
++
+   subtotal       Decimal       @default(0) @db.Decimal(18, 3)
+   discountType   DiscountType?
+   discountValue  Decimal       @default(0) @db.Decimal(18, 3)
+@@ -326,13 +379,19 @@ model Quotation {
+   taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
+   totalAmount    Decimal       @default(0) @db.Decimal(18, 3)
+
+-  notes              String?
+-  termsAndConditions String?
++  notes                String?
++  termsAndConditions   String?
++  notesAr              String?
++  notesEn              String?
++  termsAndConditionsAr String?
++  termsAndConditionsEn String?
+
+-  sentAt      DateTime?
+-  approvedAt  DateTime?
+-  rejectedAt  DateTime?
+-  cancelledAt DateTime?
++  sentAt         DateTime?
++  approvedAt     DateTime?
++  approvedByName String?
++  approvedByRole String?
++  rejectedAt     DateTime?
++  cancelledAt    DateTime?
+
+   isDeleted Boolean   @default(false)
+   deletedAt DateTime?
+@@ -366,10 +425,14 @@ model QuotationLine {
+   position Int
+   type     CatalogItemType
+
+-  itemCode    String?
+-  itemName    String
+-  description String?
+-  unitName    String?
++  itemCode      String?
++  itemName      String
++  description   String?
++  itemNameAr    String?
++  itemNameEn    String?
++  descriptionAr String?
++  descriptionEn String?
++  unitName      String?
+
+   quantity  Decimal @db.Decimal(18, 3)
+   unitPrice Decimal @db.Decimal(18, 3)
+
+================================================
+=== QUOTATION DOMAIN DIFF ===
+================================================
+
+diff --git a/src/domain/quotation/entities/Quotation.ts b/src/domain/quotation/entities/Quotation.ts
+index 3c918e7..3abe352 100644
+--- a/src/domain/quotation/entities/Quotation.ts
++++ b/src/domain/quotation/entities/Quotation.ts
+@@ -8,6 +8,10 @@ import type {
+   CalculatedQuotationLine,
+   QuotationLineInput,
+ } from "../types/QuotationLine";
++import {
++  isQuotationScopeType,
++  type QuotationScopeType,
++} from "../types/QuotationScopeType";
+ import type { QuotationStatus } from "../types/QuotationStatus";
+ import {
+   CustomerSnapshot,
+@@ -17,7 +21,23 @@ import { QuotationNumber } from "../value-objects/QuotationNumber";
+
+ const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
+
+-export interface QuotationProps {
++export interface QuotationProposalProps {
++  subjectAr?: string | null;
++  subjectEn?: string | null;
++  briefAr?: string | null;
++  briefEn?: string | null;
++  projectName?: string | null;
++  attentionName?: string | null;
++  scopeType?: QuotationScopeType | null;
++}
++
++export interface QuotationApprovalIdentity {
++  name: string;
++  role: string;
++}
++
++export interface QuotationProps
++  extends QuotationProposalProps {
+   id?: string;
+   companyId: string;
+   customerId: string;
+@@ -32,8 +52,12 @@ export interface QuotationProps {
+   discount?: Discount | null;
+   notes?: string | null;
+   termsAndConditions?: string | null;
++  termsAndConditionsAr?: string | null;
++  termsAndConditionsEn?: string | null;
+   sentAt?: Date | null;
+   approvedAt?: Date | null;
++  approvedByName?: string | null;
++  approvedByRole?: string | null;
+   rejectedAt?: Date | null;
+   cancelledAt?: Date | null;
+ }
+@@ -55,8 +79,19 @@ export class Quotation {
+   private _totals: QuotationTotals;
+   private _notes: string | null;
+   private _termsAndConditions: string | null;
++  private _termsAndConditionsAr: string | null;
++  private _termsAndConditionsEn: string | null;
++  private _subjectAr: string | null;
++  private _subjectEn: string | null;
++  private _briefAr: string | null;
++  private _briefEn: string | null;
++  private _projectName: string | null;
++  private _attentionName: string | null;
++  private _scopeType: QuotationScopeType | null;
+   private _sentAt: Date | null;
+   private _approvedAt: Date | null;
++  private _approvedByName: string | null;
++  private _approvedByRole: string | null;
+   private _rejectedAt: Date | null;
+   private _cancelledAt: Date | null;
+
+@@ -101,8 +136,30 @@ export class Quotation {
+     this._notes = props.notes?.trim() || null;
+     this._termsAndConditions =
+       props.termsAndConditions?.trim() || null;
++    this._termsAndConditionsAr =
++      this.normalizeOptionalText(props.termsAndConditionsAr);
++    this._termsAndConditionsEn =
++      this.normalizeOptionalText(props.termsAndConditionsEn);
++    this._subjectAr =
++      this.normalizeOptionalText(props.subjectAr);
++    this._subjectEn =
++      this.normalizeOptionalText(props.subjectEn);
++    this._briefAr =
++      this.normalizeOptionalText(props.briefAr);
++    this._briefEn =
++      this.normalizeOptionalText(props.briefEn);
++    this._projectName =
++      this.normalizeOptionalText(props.projectName);
++    this._attentionName =
++      this.normalizeOptionalText(props.attentionName);
++    this._scopeType =
++      this.normalizeScopeType(props.scopeType);
+     this._sentAt = props.sentAt ?? null;
+     this._approvedAt = props.approvedAt ?? null;
++    this._approvedByName =
++      props.approvedByName?.trim() || null;
++    this._approvedByRole =
++      props.approvedByRole?.trim() || null;
+     this._rejectedAt = props.rejectedAt ?? null;
+     this._cancelledAt = props.cancelledAt ?? null;
+
+@@ -166,6 +223,42 @@ export class Quotation {
+     return this._termsAndConditions;
+   }
+
++  get termsAndConditionsAr(): string | null {
++    return this._termsAndConditionsAr;
++  }
++
++  get termsAndConditionsEn(): string | null {
++    return this._termsAndConditionsEn;
++  }
++
++  get subjectAr(): string | null {
++    return this._subjectAr;
++  }
++
++  get subjectEn(): string | null {
++    return this._subjectEn;
++  }
++
++  get briefAr(): string | null {
++    return this._briefAr;
++  }
++
++  get briefEn(): string | null {
++    return this._briefEn;
++  }
++
++  get projectName(): string | null {
++    return this._projectName;
++  }
++
++  get attentionName(): string | null {
++    return this._attentionName;
++  }
++
++  get scopeType(): QuotationScopeType | null {
++    return this._scopeType;
++  }
++
+   get sentAt(): Date | null {
+     return this._sentAt;
+   }
+@@ -174,6 +267,14 @@ export class Quotation {
+     return this._approvedAt;
+   }
+
++  get approvedByName(): string | null {
++    return this._approvedByName;
++  }
++
++  get approvedByRole(): string | null {
++    return this._approvedByRole;
++  }
++
+   get rejectedAt(): Date | null {
+     return this._rejectedAt;
+   }
+@@ -203,11 +304,72 @@ export class Quotation {
+   updateText(
+     notes: string | null,
+     termsAndConditions: string | null,
++    termsAndConditionsAr?: string | null,
++    termsAndConditionsEn?: string | null,
+   ): void {
+     this.assertDraft();
+     this._notes = notes?.trim() || null;
+     this._termsAndConditions =
+       termsAndConditions?.trim() || null;
++
++    if (termsAndConditionsAr !== undefined) {
++      this._termsAndConditionsAr =
++        this.normalizeOptionalText(
++          termsAndConditionsAr,
++        );
++    }
++
++    if (termsAndConditionsEn !== undefined) {
++      this._termsAndConditionsEn =
++        this.normalizeOptionalText(
++          termsAndConditionsEn,
++        );
++    }
++  }
++
++  updateProposal(
++    proposal: QuotationProposalProps,
++  ): void {
++    this.assertDraft();
++
++    if (proposal.subjectAr !== undefined) {
++      this._subjectAr =
++        this.normalizeOptionalText(proposal.subjectAr);
++    }
++
++    if (proposal.subjectEn !== undefined) {
++      this._subjectEn =
++        this.normalizeOptionalText(proposal.subjectEn);
++    }
++
++    if (proposal.briefAr !== undefined) {
++      this._briefAr =
++        this.normalizeOptionalText(proposal.briefAr);
++    }
++
++    if (proposal.briefEn !== undefined) {
++      this._briefEn =
++        this.normalizeOptionalText(proposal.briefEn);
++    }
++
++    if (proposal.projectName !== undefined) {
++      this._projectName =
++        this.normalizeOptionalText(
++          proposal.projectName,
++        );
++    }
++
++    if (proposal.attentionName !== undefined) {
++      this._attentionName =
++        this.normalizeOptionalText(
++          proposal.attentionName,
++        );
++    }
++
++    if (proposal.scopeType !== undefined) {
++      this._scopeType =
++        this.normalizeScopeType(proposal.scopeType);
++    }
+   }
+
+   send(at: Date = new Date()): void {
+@@ -223,10 +385,39 @@ export class Quotation {
+     this._sentAt = at;
+   }
+
+-  approve(at: Date = new Date()): void {
+-    this.assertTransition(["SENT"], "APPROVED");
++  approve(
++    approval: QuotationApprovalIdentity = {
++      name: "Authorized Approver",
++      role: "APPROVER",
++    },
++    at: Date = new Date(),
++  ): void {
++    this.assertTransition(
++      ["SENT"],
++      "APPROVED",
++    );
++
++    const approvedByName =
++      approval.name.trim();
++
++    const approvedByRole =
++      approval.role.trim();
++
++    if (
++      !approvedByName ||
++      !approvedByRole
++    ) {
++      throw new QuotationDomainError(
++        "Approval identity is required.",
++      );
++    }
++
+     this._status = "APPROVED";
+     this._approvedAt = at;
++    this._approvedByName =
++      approvedByName;
++    this._approvedByRole =
++      approvedByRole;
+   }
+
+   reject(at: Date = new Date()): void {
+@@ -287,6 +478,28 @@ export class Quotation {
+     this._totals = calculated.totals;
+   }
+
++  private normalizeOptionalText(
++    value: string | null | undefined,
++  ): string | null {
++    return value?.trim() || null;
++  }
++
++  private normalizeScopeType(
++    value: unknown,
++  ): QuotationScopeType | null {
++    if (value === undefined || value === null) {
++      return null;
++    }
++
++    if (!isQuotationScopeType(value)) {
++      throw new QuotationDomainError(
++        "Quotation scope type is invalid.",
++      );
++    }
++
++    return value;
++  }
++
+   private assertDraft(): void {
+     if (this._status !== "DRAFT") {
+       throw new QuotationDomainError(
+
+================================================
+=== CREATE DTO DIFF ===
+================================================
+
+diff --git a/src/application/quotation/dto/CreateQuotationDto.ts b/src/application/quotation/dto/CreateQuotationDto.ts
+index 1b763c7..be079b3 100644
+--- a/src/application/quotation/dto/CreateQuotationDto.ts
++++ b/src/application/quotation/dto/CreateQuotationDto.ts
+@@ -2,9 +2,11 @@ import type {
+   CustomerSnapshotProps,
+   Discount,
+   QuotationLineInput,
++  QuotationProposalProps,
+ } from "../../../domain/quotation";
+
+-export interface CreateQuotationDto {
++export interface CreateQuotationDto
++  extends QuotationProposalProps {
+   companyId: string;
+   customerId: string;
+   priceListId?: string | null;
+@@ -22,6 +24,8 @@ export interface CreateQuotationDto {
+   notes?: string | null;
+
+   termsAndConditions?: string | null;
++  termsAndConditionsAr?: string | null;
++  termsAndConditionsEn?: string | null;
+
+   issueDate?: Date;
+
+
+================================================
+=== UPDATE DTO DIFF ===
+================================================
+
+diff --git a/src/application/quotation/dto/UpdateQuotationDto.ts b/src/application/quotation/dto/UpdateQuotationDto.ts
+index e486930..9a7eacb 100644
+--- a/src/application/quotation/dto/UpdateQuotationDto.ts
++++ b/src/application/quotation/dto/UpdateQuotationDto.ts
+@@ -1,9 +1,11 @@
+ import type {
+   Discount,
+   QuotationLineInput,
++  QuotationProposalProps,
+ } from "../../../domain/quotation";
+
+-export interface UpdateQuotationDto {
++export interface UpdateQuotationDto
++  extends QuotationProposalProps {
+   companyId: string;
+
+   quotationId: string;
+@@ -15,4 +17,6 @@ export interface UpdateQuotationDto {
+   notes?: string | null;
+
+   termsAndConditions?: string | null;
++  termsAndConditionsAr?: string | null;
++  termsAndConditionsEn?: string | null;
+ }
+\ No newline at end of file
+
+================================================
+=== CREATE USE CASE DIFF ===
+================================================
+
+diff --git a/src/application/quotation/use-cases/CreateQuotationUseCase.ts b/src/application/quotation/use-cases/CreateQuotationUseCase.ts
+index c7a1eb1..6bfa51f 100644
+--- a/src/application/quotation/use-cases/CreateQuotationUseCase.ts
++++ b/src/application/quotation/use-cases/CreateQuotationUseCase.ts
+@@ -91,6 +91,15 @@ export class CreateQuotationUseCase {
+         discount: dto.discount,
+         notes: dto.notes,
+         termsAndConditions: dto.termsAndConditions,
++        termsAndConditionsAr: dto.termsAndConditionsAr,
++        termsAndConditionsEn: dto.termsAndConditionsEn,
++        subjectAr: dto.subjectAr,
++        subjectEn: dto.subjectEn,
++        briefAr: dto.briefAr,
++        briefEn: dto.briefEn,
++        projectName: dto.projectName,
++        attentionName: dto.attentionName,
++        scopeType: dto.scopeType,
+         issueDate: dto.issueDate,
+         expiryDate: dto.expiryDate,
+       });
+
+================================================
+=== UPDATE USE CASE DIFF ===
+================================================
+
+diff --git a/src/application/quotation/use-cases/UpdateQuotationUseCase.ts b/src/application/quotation/use-cases/UpdateQuotationUseCase.ts
+index 9bf5c61..15001ec 100644
+--- a/src/application/quotation/use-cases/UpdateQuotationUseCase.ts
++++ b/src/application/quotation/use-cases/UpdateQuotationUseCase.ts
+@@ -68,8 +68,20 @@ export class UpdateQuotationUseCase {
+       quotation.updateText(
+         dto.notes ?? null,
+         dto.termsAndConditions ?? null,
++        dto.termsAndConditionsAr,
++        dto.termsAndConditionsEn,
+       );
+
++      quotation.updateProposal({
++        subjectAr: dto.subjectAr,
++        subjectEn: dto.subjectEn,
++        briefAr: dto.briefAr,
++        briefEn: dto.briefEn,
++        projectName: dto.projectName,
++        attentionName: dto.attentionName,
++        scopeType: dto.scopeType,
++      });
++
+       await this.repository.update(
+         dto.companyId,
+         quotation,
+
+================================================
+=== PRISMA MAPPER DIFF ===
+================================================
+
+diff --git a/src/infrastructure/persistence/prisma/quotation/PrismaQuotationMapper.ts b/src/infrastructure/persistence/prisma/quotation/PrismaQuotationMapper.ts
+index b927657..07678a2 100644
+--- a/src/infrastructure/persistence/prisma/quotation/PrismaQuotationMapper.ts
++++ b/src/infrastructure/persistence/prisma/quotation/PrismaQuotationMapper.ts
+@@ -51,6 +51,13 @@ export class PrismaQuotationMapper {
+       customerPhone: customer.phone,
+       customerTaxNo: customer.taxNumber,
+       billingAddress: customer.billingAddress,
++      subjectAr: quotation.subjectAr,
++      subjectEn: quotation.subjectEn,
++      briefAr: quotation.briefAr,
++      briefEn: quotation.briefEn,
++      projectName: quotation.projectName,
++      attentionName: quotation.attentionName,
++      scopeType: quotation.scopeType,
+       subtotal: quotation.totals.subtotal,
+       discountType: quotation.discount?.type ?? null,
+       discountValue: quotation.discount?.value ?? 0,
+@@ -59,8 +66,12 @@ export class PrismaQuotationMapper {
+       totalAmount: quotation.totals.totalAmount,
+       notes: quotation.notes,
+       termsAndConditions: quotation.termsAndConditions,
++      termsAndConditionsAr: quotation.termsAndConditionsAr,
++      termsAndConditionsEn: quotation.termsAndConditionsEn,
+       sentAt: quotation.sentAt,
+       approvedAt: quotation.approvedAt,
++      approvedByName: quotation.approvedByName,
++      approvedByRole: quotation.approvedByRole,
+       rejectedAt: quotation.rejectedAt,
+       cancelledAt: quotation.cancelledAt,
+       lines: {
+@@ -152,12 +163,23 @@ export class PrismaQuotationMapper {
+         taxNumber: record.customerTaxNo,
+         billingAddress: record.billingAddress,
+       },
++      subjectAr: record.subjectAr,
++      subjectEn: record.subjectEn,
++      briefAr: record.briefAr,
++      briefEn: record.briefEn,
++      projectName: record.projectName,
++      attentionName: record.attentionName,
++      scopeType: record.scopeType,
+       lines,
+       discount,
+       notes: record.notes,
+       termsAndConditions: record.termsAndConditions,
++      termsAndConditionsAr: record.termsAndConditionsAr,
++      termsAndConditionsEn: record.termsAndConditionsEn,
+       sentAt: record.sentAt,
+       approvedAt: record.approvedAt,
++      approvedByName: record.approvedByName,
++      approvedByRole: record.approvedByRole,
+       rejectedAt: record.rejectedAt,
+       cancelledAt: record.cancelledAt,
+     });
+
+================================================
+=== SERIALIZER FULL ===
+================================================
+
+import type { Quotation } from "@/src/domain/quotation";
+
+export function serializeQuotation(
+  quotation: Quotation,
+) {
+  const customer = quotation.customer.toJSON();
+
+  return {
+    id: quotation.id,
+    companyId: quotation.companyId,
+    customerId: quotation.customerId,
+    priceListId: quotation.priceListId,
+    quotationNumber: quotation.number.toString(),
+    status: quotation.status,
+    issueDate: quotation.issueDate.toISOString(),
+    expiryDate:
+      quotation.expiryDate?.toISOString() ?? null,
+    currencyCode: quotation.currencyCode,
+    customer,
+    subjectAr: quotation.subjectAr,
+    subjectEn: quotation.subjectEn,
+    briefAr: quotation.briefAr,
+    briefEn: quotation.briefEn,
+    projectName: quotation.projectName,
+    attentionName: quotation.attentionName,
+    scopeType: quotation.scopeType,
+    lines: quotation.lines.map((line) => ({
+      id: line.id,
+      catalogItemId: line.catalogItemId,
+      taxRateId: line.taxRateId,
+      position: line.position,
+      type: line.type,
+      itemCode: line.itemCode,
+      itemName: line.itemName,
+      description: line.description,
+      unitName: line.unitName,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      discount: line.discount,
+      discountAmount: line.discountAmount,
+      taxPercentage: line.taxPercentage,
+      taxAmount: line.taxAmount,
+      subtotal: line.subtotal,
+      totalAmount: line.totalAmount,
+    })),
+    discount: quotation.discount,
+    totals: {
+      subtotal: quotation.totals.subtotal,
+      discountAmount:
+        quotation.totals.discountAmount,
+      taxAmount: quotation.totals.taxAmount,
+      totalAmount: quotation.totals.totalAmount,
+    },
+    notes: quotation.notes,
+    termsAndConditions:
+      quotation.termsAndConditions,
+    termsAndConditionsAr:
+      quotation.termsAndConditionsAr,
+    termsAndConditionsEn:
+      quotation.termsAndConditionsEn,
+    sentAt:
+      quotation.sentAt?.toISOString() ?? null,
+    approvedAt:
+      quotation.approvedAt?.toISOString() ?? null,
+
+    approvedByName:
+      quotation.approvedByName,
+
+    approvedByRole:
+      quotation.approvedByRole,
+
+    rejectedAt:
+      quotation.rejectedAt?.toISOString() ?? null,
+    cancelledAt:
+      quotation.cancelledAt?.toISOString() ?? null,
+  };
+}
+
+================================================
+=== TRANSLATION PORT FULL ===
+================================================
+
+export type TranslationLocale =
+  | "ar"
+  | "en";
+
+export type TranslationItem = {
+  key: string;
+  text: string;
+};
+
+export type TranslationRequest = {
+  sourceLocale: TranslationLocale;
+  targetLocale: TranslationLocale;
+  items: readonly TranslationItem[];
+};
+
+export type TranslationResult =
+  Record<string, string>;
+
+export interface TranslationPort {
+  translateMany(
+    request: TranslationRequest,
+  ): Promise<TranslationResult>;
+}
+
+================================================
+=== CURRENT MIGRATIONS ===
+================================================
+
+C:\Dev\VOKA\prisma\migrations\20260730201642_init
+-- CreateEnum
+CREATE TYPE "Locale" AS ENUM ('EN', 'AR');
+
+-- CreateEnum
+CREATE TYPE "CompanyRole" AS ENUM ('OWNER', 'ADMIN', 'SALES', 'VIEWER');
+
+-- CreateEnum
+CREATE TYPE "MembershipStatus" AS ENUM ('ACTIVE', 'INVITED', 'SUSPENDED');
+
+-- CreateEnum
+CREATE TYPE "CustomerType" AS ENUM ('COMPANY', 'INDIVIDUAL');
+
+-- CreateEnum
+CREATE TYPE "CustomerStatus" AS ENUM ('LEAD', 'ACTIVE', 'INACTIVE', 'BLOCKED');
+
+-- CreateTable
+CREATE TABLE "Company" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "defaultLocale" "Locale" NOT NULL DEFAULT 'EN',
+    "defaultCurrency" TEXT NOT NULL DEFAULT 'KWD',
+    "timezone" TEXT NOT NULL DEFAULT 'Asia/Kuwait',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT,
+    "passwordHash" TEXT,
+    "locale" "Locale" NOT NULL DEFAULT 'EN',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CompanyMember" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "role" "CompanyRole" NOT NULL DEFAULT 'SALES',
+    "status" "MembershipStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CompanyMember_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Customer" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "type" "CustomerType" NOT NULL DEFAULT 'COMPANY',
+    "status" "CustomerStatus" NOT NULL DEFAULT 'LEAD',
+    "name" TEXT NOT NULL,
+    "legalName" TEXT,
+    "email" TEXT,
+    "phone" TEXT,
+    "mobile" TEXT,
+    "taxNumber" TEXT,
+    "addressLine1" TEXT,
+    "addressLine2" TEXT,
+    "city" TEXT,
+    "state" TEXT,
+    "postalCode" TEXT,
+    "countryCode" TEXT,
+    "preferredLocale" "Locale",
+    "preferredCurrency" TEXT,
+    "creditLimit" DECIMAL(18,3),
+    "paymentTermDays" INTEGER,
+    "notes" TEXT,
+    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+    "deletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Customer_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Company_slug_key" ON "Company"("slug");
+
+-- CreateIndex
+CREATE INDEX "Company_name_idx" ON "Company"("name");
+
+-- CreateIndex
+CREATE INDEX "Company_isActive_idx" ON "Company"("isActive");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE INDEX "User_isActive_idx" ON "User"("isActive");
+
+-- CreateIndex
+CREATE INDEX "CompanyMember_companyId_idx" ON "CompanyMember"("companyId");
+
+-- CreateIndex
+CREATE INDEX "CompanyMember_userId_idx" ON "CompanyMember"("userId");
+
+-- CreateIndex
+CREATE INDEX "CompanyMember_companyId_role_idx" ON "CompanyMember"("companyId", "role");
+
+-- CreateIndex
+CREATE INDEX "CompanyMember_companyId_status_idx" ON "CompanyMember"("companyId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CompanyMember_companyId_userId_key" ON "CompanyMember"("companyId", "userId");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_idx" ON "Customer"("companyId");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_name_idx" ON "Customer"("companyId", "name");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_status_idx" ON "Customer"("companyId", "status");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_type_idx" ON "Customer"("companyId", "type");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_isDeleted_idx" ON "Customer"("companyId", "isDeleted");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_email_idx" ON "Customer"("companyId", "email");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_phone_idx" ON "Customer"("companyId", "phone");
+
+-- CreateIndex
+CREATE INDEX "Customer_companyId_taxNumber_idx" ON "Customer"("companyId", "taxNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Customer_companyId_code_key" ON "Customer"("companyId", "code");
+
+-- AddForeignKey
+ALTER TABLE "CompanyMember" ADD CONSTRAINT "CompanyMember_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CompanyMember" ADD CONSTRAINT "CompanyMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Customer" ADD CONSTRAINT "Customer_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+C:\Dev\VOKA\prisma\migrations\20260731011359_catalog_foundation
+-- CreateEnum
+CREATE TYPE "CatalogItemType" AS ENUM ('PRODUCT', 'SERVICE', 'SHIPPING', 'LABOR', 'DISCOUNT', 'CUSTOM');
+
+-- CreateTable
+CREATE TABLE "CatalogCategory" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CatalogCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Unit" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Unit_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TaxRate" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT,
+    "name" TEXT NOT NULL,
+    "percentage" DECIMAL(5,2) NOT NULL,
+    "isSystem" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "TaxRate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CatalogItem" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "categoryId" TEXT,
+    "unitId" TEXT,
+    "taxRateId" TEXT,
+    "type" "CatalogItemType" NOT NULL,
+    "code" TEXT NOT NULL,
+    "sku" TEXT,
+    "barcode" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "purchasePrice" DECIMAL(18,3),
+    "salePrice" DECIMAL(18,3) NOT NULL,
+    "trackInventory" BOOLEAN NOT NULL DEFAULT true,
+    "allowDiscount" BOOLEAN NOT NULL DEFAULT true,
+    "imageUrl" TEXT,
+    "notes" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CatalogItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PriceList" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "currencyCode" TEXT NOT NULL DEFAULT 'KWD',
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PriceList_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PriceListItem" (
+    "id" TEXT NOT NULL,
+    "priceListId" TEXT NOT NULL,
+    "catalogItemId" TEXT NOT NULL,
+    "price" DECIMAL(18,3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PriceListItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "CatalogCategory_companyId_idx" ON "CatalogCategory"("companyId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CatalogCategory_companyId_name_key" ON "CatalogCategory"("companyId", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Unit_symbol_key" ON "Unit"("symbol");
+
+-- CreateIndex
+CREATE INDEX "Unit_name_idx" ON "Unit"("name");
+
+-- CreateIndex
+CREATE INDEX "Unit_isActive_idx" ON "Unit"("isActive");
+
+-- CreateIndex
+CREATE INDEX "TaxRate_companyId_idx" ON "TaxRate"("companyId");
+
+-- CreateIndex
+CREATE INDEX "TaxRate_isSystem_idx" ON "TaxRate"("isSystem");
+
+-- CreateIndex
+CREATE INDEX "TaxRate_isActive_idx" ON "TaxRate"("isActive");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TaxRate_companyId_name_key" ON "TaxRate"("companyId", "name");
+
+-- CreateIndex
+CREATE INDEX "CatalogItem_companyId_idx" ON "CatalogItem"("companyId");
+
+-- CreateIndex
+CREATE INDEX "CatalogItem_companyId_type_idx" ON "CatalogItem"("companyId", "type");
+
+-- CreateIndex
+CREATE INDEX "CatalogItem_companyId_name_idx" ON "CatalogItem"("companyId", "name");
+
+-- CreateIndex
+CREATE INDEX "CatalogItem_companyId_sku_idx" ON "CatalogItem"("companyId", "sku");
+
+-- CreateIndex
+CREATE INDEX "CatalogItem_barcode_idx" ON "CatalogItem"("barcode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CatalogItem_companyId_code_key" ON "CatalogItem"("companyId", "code");
+
+-- CreateIndex
+CREATE INDEX "PriceList_companyId_idx" ON "PriceList"("companyId");
+
+-- CreateIndex
+CREATE INDEX "PriceList_companyId_name_idx" ON "PriceList"("companyId", "name");
+
+-- CreateIndex
+CREATE INDEX "PriceList_companyId_isDefault_idx" ON "PriceList"("companyId", "isDefault");
+
+-- CreateIndex
+CREATE INDEX "PriceList_companyId_isActive_idx" ON "PriceList"("companyId", "isActive");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PriceList_companyId_code_key" ON "PriceList"("companyId", "code");
+
+-- CreateIndex
+CREATE INDEX "PriceListItem_priceListId_idx" ON "PriceListItem"("priceListId");
+
+-- CreateIndex
+CREATE INDEX "PriceListItem_catalogItemId_idx" ON "PriceListItem"("catalogItemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PriceListItem_priceListId_catalogItemId_key" ON "PriceListItem"("priceListId", "catalogItemId");
+
+-- AddForeignKey
+ALTER TABLE "CatalogCategory" ADD CONSTRAINT "CatalogCategory_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaxRate" ADD CONSTRAINT "TaxRate_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CatalogItem" ADD CONSTRAINT "CatalogItem_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CatalogItem" ADD CONSTRAINT "CatalogItem_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "CatalogCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CatalogItem" ADD CONSTRAINT "CatalogItem_unitId_fkey" FOREIGN KEY ("unitId") REFERENCES "Unit"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CatalogItem" ADD CONSTRAINT "CatalogItem_taxRateId_fkey" FOREIGN KEY ("taxRateId") REFERENCES "TaxRate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PriceList" ADD CONSTRAINT "PriceList_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PriceListItem" ADD CONSTRAINT "PriceListItem_priceListId_fkey" FOREIGN KEY ("priceListId") REFERENCES "PriceList"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PriceListItem" ADD CONSTRAINT "PriceListItem_catalogItemId_fkey" FOREIGN KEY ("catalogItemId") REFERENCES "CatalogItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+C:\Dev\VOKA\prisma\migrations\20260731030057_quotation_foundation
+-- CreateEnum
+CREATE TYPE "QuotationStatus" AS ENUM ('DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "DiscountType" AS ENUM ('FIXED', 'PERCENTAGE');
+
+-- CreateTable
+CREATE TABLE "Quotation" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "priceListId" TEXT,
+    "number" TEXT NOT NULL,
+    "status" "QuotationStatus" NOT NULL DEFAULT 'DRAFT',
+    "issueDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiryDate" TIMESTAMP(3),
+    "currencyCode" TEXT NOT NULL DEFAULT 'KWD',
+    "customerName" TEXT NOT NULL,
+    "customerEmail" TEXT,
+    "customerPhone" TEXT,
+    "customerTaxNo" TEXT,
+    "billingAddress" TEXT,
+    "subtotal" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "discountType" "DiscountType",
+    "discountValue" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "discountAmount" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "taxAmount" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "totalAmount" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "notes" TEXT,
+    "termsAndConditions" TEXT,
+    "sentAt" TIMESTAMP(3),
+    "approvedAt" TIMESTAMP(3),
+    "rejectedAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+    "deletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Quotation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QuotationLine" (
+    "id" TEXT NOT NULL,
+    "quotationId" TEXT NOT NULL,
+    "catalogItemId" TEXT,
+    "taxRateId" TEXT,
+    "position" INTEGER NOT NULL,
+    "type" "CatalogItemType" NOT NULL,
+    "itemCode" TEXT,
+    "itemName" TEXT NOT NULL,
+    "description" TEXT,
+    "unitName" TEXT,
+    "quantity" DECIMAL(18,3) NOT NULL,
+    "unitPrice" DECIMAL(18,3) NOT NULL,
+    "discountType" "DiscountType",
+    "discountValue" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "discountAmount" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "taxPercentage" DECIMAL(5,2) NOT NULL DEFAULT 0,
+    "taxAmount" DECIMAL(18,3) NOT NULL DEFAULT 0,
+    "subtotal" DECIMAL(18,3) NOT NULL,
+    "totalAmount" DECIMAL(18,3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "QuotationLine_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "Quotation_companyId_idx" ON "Quotation"("companyId");
+
+-- CreateIndex
+CREATE INDEX "Quotation_companyId_status_idx" ON "Quotation"("companyId", "status");
+
+-- CreateIndex
+CREATE INDEX "Quotation_companyId_customerId_idx" ON "Quotation"("companyId", "customerId");
+
+-- CreateIndex
+CREATE INDEX "Quotation_companyId_issueDate_idx" ON "Quotation"("companyId", "issueDate");
+
+-- CreateIndex
+CREATE INDEX "Quotation_companyId_expiryDate_idx" ON "Quotation"("companyId", "expiryDate");
+
+-- CreateIndex
+CREATE INDEX "Quotation_companyId_isDeleted_idx" ON "Quotation"("companyId", "isDeleted");
+
+-- CreateIndex
+CREATE INDEX "Quotation_customerId_idx" ON "Quotation"("customerId");
+
+-- CreateIndex
+CREATE INDEX "Quotation_priceListId_idx" ON "Quotation"("priceListId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Quotation_companyId_number_key" ON "Quotation"("companyId", "number");
+
+-- CreateIndex
+CREATE INDEX "QuotationLine_quotationId_idx" ON "QuotationLine"("quotationId");
+
+-- CreateIndex
+CREATE INDEX "QuotationLine_catalogItemId_idx" ON "QuotationLine"("catalogItemId");
+
+-- CreateIndex
+CREATE INDEX "QuotationLine_taxRateId_idx" ON "QuotationLine"("taxRateId");
+
+-- CreateIndex
+CREATE INDEX "QuotationLine_quotationId_type_idx" ON "QuotationLine"("quotationId", "type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "QuotationLine_quotationId_position_key" ON "QuotationLine"("quotationId", "position");
+
+-- AddForeignKey
+ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_priceListId_fkey" FOREIGN KEY ("priceListId") REFERENCES "PriceList"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuotationLine" ADD CONSTRAINT "QuotationLine_quotationId_fkey" FOREIGN KEY ("quotationId") REFERENCES "Quotation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuotationLine" ADD CONSTRAINT "QuotationLine_catalogItemId_fkey" FOREIGN KEY ("catalogItemId") REFERENCES "CatalogItem"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuotationLine" ADD CONSTRAINT "QuotationLine_taxRateId_fkey" FOREIGN KEY ("taxRateId") REFERENCES "TaxRate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+C:\Dev\VOKA\prisma\migrations\20260806182332_quotation_proposal_composer
+-- CreateEnum
+CREATE TYPE "QuotationScopeType" AS ENUM ('SUPPLY_ONLY', 'SUPPLY_AND_INSTALLATION', 'INSTALLATION_ONLY', 'SERVICE', 'MAINTENANCE', 'CONSULTATION', 'CUSTOM');
+
+-- AlterTable
+ALTER TABLE "Quotation" ADD COLUMN     "attentionName" TEXT,
+ADD COLUMN     "briefAr" TEXT,
+ADD COLUMN     "briefEn" TEXT,
+ADD COLUMN     "projectName" TEXT,
+ADD COLUMN     "scopeType" "QuotationScopeType",
+ADD COLUMN     "subjectAr" TEXT,
+ADD COLUMN     "subjectEn" TEXT;
+
+C:\Dev\VOKA\prisma\migrations\20260806200238_quotation_approval_snapshot
+-- AlterTable
+ALTER TABLE "Quotation" ADD COLUMN     "approvedByName" TEXT,
+ADD COLUMN     "approvedByRole" TEXT;
+
+C:\Dev\VOKA\prisma\migrations\20260806222307_company_commercial_identity
+-- AlterTable
+ALTER TABLE "Company" ADD COLUMN     "addressAr" TEXT,
+ADD COLUMN     "addressEn" TEXT,
+ADD COLUMN     "logoUrl" TEXT,
+ADD COLUMN     "mobile" TEXT,
+ADD COLUMN     "nameAr" TEXT,
+ADD COLUMN     "nameEn" TEXT,
+ADD COLUMN     "phone" TEXT,
+ADD COLUMN     "poBox" TEXT,
+ADD COLUMN     "whatsapp" TEXT;
+
+C:\Dev\VOKA\prisma\migrations\20260807172804_quotation_localized_content
+-- AlterTable
+ALTER TABLE "Quotation" ADD COLUMN     "attentionNameAr" TEXT,
+ADD COLUMN     "attentionNameEn" TEXT,
+ADD COLUMN     "customerNameAr" TEXT,
+ADD COLUMN     "customerNameEn" TEXT,
+ADD COLUMN     "notesAr" TEXT,
+ADD COLUMN     "notesEn" TEXT,
+ADD COLUMN     "projectNameAr" TEXT,
+ADD COLUMN     "projectNameEn" TEXT,
+ADD COLUMN     "termsAndConditionsAr" TEXT,
+ADD COLUMN     "termsAndConditionsEn" TEXT;
+
+-- AlterTable
+ALTER TABLE "QuotationLine" ADD COLUMN     "descriptionAr" TEXT,
+ADD COLUMN     "descriptionEn" TEXT,
+ADD COLUMN     "itemNameAr" TEXT,
+ADD COLUMN     "itemNameEn" TEXT;
+
+C:\Dev\VOKA\prisma\migrations\20260807174229_company_quotation_terms_templates
+-- CreateTable
+CREATE TABLE "CompanyQuotationTermsTemplate" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "scopeType" "QuotationScopeType" NOT NULL,
+    "termsAr" TEXT,
+    "termsEn" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CompanyQuotationTermsTemplate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "CompanyQuotationTermsTemplate_companyId_idx" ON "CompanyQuotationTermsTemplate"("companyId");
+
+-- CreateIndex
+CREATE INDEX "CompanyQuotationTermsTemplate_companyId_scopeType_idx" ON "CompanyQuotationTermsTemplate"("companyId", "scopeType");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CompanyQuotationTermsTemplate_companyId_scopeType_key" ON "CompanyQuotationTermsTemplate"("companyId", "scopeType");
+
+-- AddForeignKey
+ALTER TABLE "CompanyQuotationTermsTemplate" ADD CONSTRAINT "CompanyQuotationTermsTemplate_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;

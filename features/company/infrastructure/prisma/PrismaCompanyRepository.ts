@@ -2,6 +2,7 @@ import type { PrismaClient } from '../../../../lib/generated/prisma/client';
 import { UniqueEntityID } from '../../../../lib/core';
 import {
   Company,
+  type CompanyBrandTheme,
   type CompanyLocale,
 } from '../../domain/entities';
 import type { CompanyRepository } from '../../domain/repositories';
@@ -9,6 +10,24 @@ import type { CompanyRepository } from '../../domain/repositories';
 type CompanyRecord = {
   id: string;
   name: string;
+
+  nameAr: string | null;
+  nameEn: string | null;
+
+  addressAr: string | null;
+  addressEn: string | null;
+
+  poBox: string | null;
+  phone: string | null;
+  mobile: string | null;
+  whatsapp: string | null;
+
+  logoUrl: string | null;
+  letterheadUrl: string | null;
+  signatureUrl: string | null;
+  stampUrl: string | null;
+  brandTheme: string;
+
   slug: string;
   defaultLocale: string;
   defaultCurrency: string;
@@ -65,6 +84,40 @@ export class PrismaCompanyRepository
   ): Promise<Company> {
     const data = {
       name: company.name,
+
+      nameAr:
+        company.nameAr,
+
+      nameEn:
+        company.nameEn,
+
+      addressAr:
+        company.addressAr,
+
+      addressEn:
+        company.addressEn,
+
+      poBox:
+        company.poBox,
+
+      phone:
+        company.phone,
+
+      mobile:
+        company.mobile,
+
+      whatsapp:
+        company.whatsapp,
+
+      logoUrl:
+        company.logoUrl,
+      letterheadUrl: company.letterheadUrl,
+      signatureUrl: company.signatureUrl,
+      stampUrl: company.stampUrl,
+
+      brandTheme:
+        company.brandTheme,
+
       slug: company.slug,
       defaultLocale: company.defaultLocale,
       defaultCurrency: company.defaultCurrency,
@@ -100,9 +153,44 @@ export class PrismaCompanyRepository
     return Company.restore(
       {
         name: record.name,
+
+        nameAr:
+          record.nameAr,
+
+        nameEn:
+          record.nameEn,
+
+        addressAr:
+          record.addressAr,
+
+        addressEn:
+          record.addressEn,
+
+        poBox:
+          record.poBox,
+
+        phone:
+          record.phone,
+
+        mobile:
+          record.mobile,
+
+        whatsapp:
+          record.whatsapp,
+
+        logoUrl:
+          record.logoUrl,
+        letterheadUrl: record.letterheadUrl,
+        signatureUrl: record.signatureUrl,
+        stampUrl: record.stampUrl,
+
         slug: record.slug,
         defaultLocale:
           record.defaultLocale as CompanyLocale,
+
+        brandTheme:
+          record.brandTheme as CompanyBrandTheme,
+
         defaultCurrency: record.defaultCurrency,
         timezone: record.timezone,
         isActive: record.isActive,

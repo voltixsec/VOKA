@@ -11,12 +11,15 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "quality": "npm run typecheck && npm run lint && npm run test"
+        "quality": "npm run typecheck && npm run lint && npm run test",
+        "localization:backfill": "tsx scripts/backfill-quotation-localization-status.ts",
+        "localization:backfill:apply": "tsx scripts/backfill-quotation-localization-status.ts --apply"
     },
     "dependencies": {
         "@prisma/adapter-pg": "^7.9.1",
         "@prisma/client": "^7.9.1",
         "bcryptjs": "^3.0.3",
+        "bidi-js": "^1.0.3",
         "jose": "^6.2.4",
         "next": "^15.5.22",
         "pdfkit": "^0.19.1",

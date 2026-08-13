@@ -2,9 +2,11 @@ import type {
   CustomerSnapshotProps,
   Discount,
   QuotationLineInput,
+  QuotationProposalProps,
 } from "../../../domain/quotation";
 
-export interface CreateQuotationDto {
+export interface CreateQuotationDto
+  extends QuotationProposalProps {
   companyId: string;
   customerId: string;
   priceListId?: string | null;
@@ -20,8 +22,12 @@ export interface CreateQuotationDto {
   discount?: Discount | null;
 
   notes?: string | null;
+  notesAr?: string | null;
+  notesEn?: string | null;
 
   termsAndConditions?: string | null;
+  termsAndConditionsAr?: string | null;
+  termsAndConditionsEn?: string | null;
 
   issueDate?: Date;
 

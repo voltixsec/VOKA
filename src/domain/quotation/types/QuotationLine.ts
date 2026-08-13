@@ -9,8 +9,14 @@ export interface QuotationLineInput {
   type: QuotationLineType;
   itemCode?: string | null;
   itemName: string;
+  itemNameAr?: string | null;
+  itemNameEn?: string | null;
   description?: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
   unitName?: string | null;
+  unitNameAr?: string | null;
+  unitNameEn?: string | null;
   quantity: number;
   unitPrice: number;
   discount?: Discount | null;

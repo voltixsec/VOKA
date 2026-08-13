@@ -7,6 +7,14 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CompanyBrandTheme {
+  NAVY_GOLD
+  ROYAL_BLUE
+  EMERALD
+  BURGUNDY
+  CHARCOAL
+}
+
 enum Locale {
   EN
   AR
@@ -38,22 +46,36 @@ enum CustomerStatus {
 }
 
 model Company {
-  id                String            @id @default(cuid())
-  name              String
-  slug              String            @unique
-  defaultLocale     Locale            @default(EN)
-  defaultCurrency   String            @default("KWD")
-  timezone          String            @default("Asia/Kuwait")
-  isActive          Boolean           @default(true)
-  members           CompanyMember[]
-  customers         Customer[]
-  catalogItems      CatalogItem[]
-  catalogCategories CatalogCategory[]
-  taxRates          TaxRate[]
-  priceLists        PriceList[]
-  quotations        Quotation[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id                      String                          @id @default(cuid())
+  name                    String
+  nameAr                  String?
+  nameEn                  String?
+  addressAr               String?
+  addressEn               String?
+  poBox                   String?
+  phone                   String?
+  mobile                  String?
+  whatsapp                String?
+  logoUrl                 String?
+  letterheadUrl           String?
+  signatureUrl            String?
+  stampUrl                String?
+  slug                    String                          @unique
+  defaultLocale           Locale                          @default(EN)
+  brandTheme              CompanyBrandTheme               @default(NAVY_GOLD)
+  defaultCurrency         String                          @default("KWD")
+  timezone                String                          @default("Asia/Kuwait")
+  isActive                Boolean                         @default(true)
+  members                 CompanyMember[]
+  customers               Customer[]
+  catalogItems            CatalogItem[]
+  catalogCategories       CatalogCategory[]
+  taxRates                TaxRate[]
+  priceLists              PriceList[]
+  quotations              Quotation[]
+  quotationTermsTemplates CompanyQuotationTermsTemplate[]
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
 
   @@index([name])
   @@index([isActive])
@@ -139,6 +161,22 @@ enum QuotationStatus {
   REJECTED
   EXPIRED
   CANCELLED
+}
+
+enum LocalizationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum QuotationScopeType {
+  SUPPLY_ONLY
+  SUPPLY_AND_INSTALLATION
+  INSTALLATION_ONLY
+  SERVICE
+  MAINTENANCE
+  CONSULTATION
+  CUSTOM
 }
 
 enum DiscountType {
@@ -301,6 +339,25 @@ model PriceListItem {
   @@index([catalogItemId])
 }
 
+model CompanyQuotationTermsTemplate {
+  id        String @id @default(cuid())
+  companyId String
+
+  scopeType QuotationScopeType
+
+  termsAr String?
+  termsEn String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, scopeType])
+  @@index([companyId])
+  @@index([companyId, scopeType])
+}
+
 model Quotation {
   id String @id @default(cuid())
 
@@ -314,10 +371,24 @@ model Quotation {
   expiryDate     DateTime?
   currencyCode   String          @default("KWD")
   customerName   String
+  customerNameAr String?
+  customerNameEn String?
   customerEmail  String?
   customerPhone  String?
   customerTaxNo  String?
   billingAddress String?
+
+  subjectAr       String?
+  subjectEn       String?
+  briefAr         String?
+  briefEn         String?
+  projectName     String?
+  attentionName   String?
+  projectNameAr   String?
+  projectNameEn   String?
+  attentionNameAr String?
+  attentionNameEn String?
+  scopeType       QuotationScopeType?
 
   subtotal       Decimal       @default(0) @db.Decimal(18, 3)
   discountType   DiscountType?
@@ -326,13 +397,31 @@ model Quotation {
   taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
   totalAmount    Decimal       @default(0) @db.Decimal(18, 3)
 
-  notes              String?
-  termsAndConditions String?
+  notes                String?
+  termsAndConditions   String?
+  notesAr              String?
+  notesEn              String?
+  termsAndConditionsAr String?
+  termsAndConditionsEn String?
 
-  sentAt      DateTime?
-  approvedAt  DateTime?
-  rejectedAt  DateTime?
-  cancelledAt DateTime?
+  localizationStatus      LocalizationStatus?
+  localizationRequestedAt DateTime?
+  localizationCompletedAt DateTime?
+  localizationLastError   String?
+  localizationSourceLocale Locale?
+  localizationSourceSignature String?
+  localizationClaimToken      String?
+  localizationLeaseUntil      DateTime?
+  localizationAttemptCount    Int     @default(0)
+
+  sentAt         DateTime?
+  approvedAt     DateTime?
+  approvedByName String?
+  approvedByRole String?
+  documentBrandSnapshot Json?
+  verificationToken String? @unique
+  rejectedAt     DateTime?
+  cancelledAt    DateTime?
 
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
@@ -352,6 +441,7 @@ model Quotation {
   @@index([companyId, issueDate])
   @@index([companyId, expiryDate])
   @@index([companyId, isDeleted])
+  @@index([companyId, localizationStatus, localizationLeaseUntil])
   @@index([customerId])
   @@index([priceListId])
 }
@@ -366,10 +456,16 @@ model QuotationLine {
   position Int
   type     CatalogItemType
 
-  itemCode    String?
-  itemName    String
-  description String?
-  unitName    String?
+  itemCode      String?
+  itemName      String
+  description   String?
+  itemNameAr    String?
+  itemNameEn    String?
+  descriptionAr String?
+  descriptionEn String?
+  unitName      String?
+  unitNameAr    String?
+  unitNameEn    String?
 
   quantity  Decimal @db.Decimal(18, 3)
   unitPrice Decimal @db.Decimal(18, 3)

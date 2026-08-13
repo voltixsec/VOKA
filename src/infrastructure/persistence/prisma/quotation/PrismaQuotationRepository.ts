@@ -4,6 +4,12 @@ import type {
   IQuotationRepository,
   QuotationListFilters,
   QuotationListResult,
+  QuotationLocalizationClaim,
+  QuotationLocalizationClaimParams,
+  CompleteQuotationLocalizationParams,
+  FailQuotationLocalizationParams,
+  FindRecoverableQuotationLocalizationJobsParams,
+  RecoverableQuotationLocalizationJob,
 } from "../../../../application/quotation/repositories/IQuotationRepository";
 import type { Quotation } from "../../../../domain/quotation/entities/Quotation";
 import { PrismaQuotationMapper } from "./PrismaQuotationMapper";
@@ -185,6 +191,235 @@ export class PrismaQuotationRepository implements IQuotationRepository {
       },
     });
 
+  }
+
+  async claimLocalization(
+    params: QuotationLocalizationClaimParams,
+  ): Promise<QuotationLocalizationClaim | null> {
+    const { companyId, quotationId, leaseDurationMs } = params;
+    const claimToken = params.claimToken || crypto.randomUUID();
+    const now = new Date();
+    const leaseExpiresAt = new Date(now.getTime() + leaseDurationMs);
+
+    const result = await this.db.quotation.updateMany({
+      where: {
+        companyId,
+        id: quotationId,
+        isDeleted: false,
+        localizationSourceSignature: { not: null },
+        localizationAttemptCount: { lt: 3 },
+        AND: [
+          {
+            OR: [
+              { localizationLeaseUntil: null },
+              { localizationLeaseUntil: { lt: now } },
+            ],
+          },
+          {
+            OR: [
+              { localizationStatus: "PENDING" },
+              {
+                localizationStatus: "FAILED",
+                localizationLastError: {
+                  in: [
+                    "TRANSLATION_TIMEOUT",
+                    "TRANSLATION_PROVIDER_ERROR",
+                    "TRANSLATION_UNEXPECTED_ERROR",
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      data: {
+        localizationClaimToken: claimToken,
+        localizationLeaseUntil: leaseExpiresAt,
+        localizationAttemptCount: { increment: 1 },
+        localizationStatus: "PENDING",
+        localizationLastError: null,
+      },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    const claimedRecord = await this.db.quotation.findFirst({
+      where: {
+        id: quotationId,
+        companyId,
+        localizationClaimToken: claimToken,
+      },
+      select: {
+        localizationSourceSignature: true,
+        localizationAttemptCount: true,
+      },
+    });
+
+    if (!claimedRecord || !claimedRecord.localizationSourceSignature) {
+      return null;
+    }
+
+    return {
+      claimToken,
+      sourceSignature: claimedRecord.localizationSourceSignature,
+      attemptCount: claimedRecord.localizationAttemptCount,
+    };
+  }
+
+  async findRecoverableLocalizationJobs(
+    params: FindRecoverableQuotationLocalizationJobsParams,
+  ): Promise<RecoverableQuotationLocalizationJob[]> {
+    const records = await this.db.quotation.findMany({
+      where: {
+        isDeleted: false,
+        localizationSourceSignature: { not: null },
+        localizationAttemptCount: { lt: 3 },
+        AND: [
+          {
+            OR: [
+              { localizationLeaseUntil: null },
+              { localizationLeaseUntil: { lt: params.now } },
+            ],
+          },
+          {
+            OR: [
+              { localizationStatus: "PENDING" },
+              {
+                localizationStatus: "FAILED",
+                localizationLastError: {
+                  in: [
+                    "TRANSLATION_TIMEOUT",
+                    "TRANSLATION_PROVIDER_ERROR",
+                    "TRANSLATION_UNEXPECTED_ERROR",
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      select: { companyId: true, id: true },
+      orderBy: [
+        { localizationRequestedAt: "asc" },
+        { updatedAt: "asc" },
+        { id: "asc" },
+      ],
+      take: params.limit,
+    });
+
+    return records.map((record) => ({
+      companyId: record.companyId,
+      quotationId: record.id,
+    }));
+  }
+
+  async completeLocalization(
+    params: CompleteQuotationLocalizationParams,
+  ): Promise<boolean> {
+    const {
+      companyId,
+      quotationId,
+      expectedSourceSignature,
+      expectedClaimToken,
+      header,
+      lines,
+      completedAt,
+    } = params;
+
+    return await this.db.$transaction(async (tx) => {
+      const quotationUpdate = await tx.quotation.updateMany({
+        where: {
+          companyId,
+          id: quotationId,
+          isDeleted: false,
+          localizationSourceSignature: expectedSourceSignature,
+          localizationClaimToken: expectedClaimToken,
+        },
+        data: {
+          customerNameAr: header.customerNameAr,
+          customerNameEn: header.customerNameEn,
+          projectNameAr: header.projectNameAr,
+          projectNameEn: header.projectNameEn,
+          attentionNameAr: header.attentionNameAr,
+          attentionNameEn: header.attentionNameEn,
+          subjectAr: header.subjectAr,
+          subjectEn: header.subjectEn,
+          briefAr: header.briefAr,
+          briefEn: header.briefEn,
+          notesAr: header.notesAr,
+          notesEn: header.notesEn,
+          termsAndConditionsAr: header.termsAndConditionsAr,
+          termsAndConditionsEn: header.termsAndConditionsEn,
+          localizationStatus: "COMPLETED",
+          localizationCompletedAt: completedAt,
+          localizationLastError: null,
+          localizationClaimToken: null,
+          localizationLeaseUntil: null,
+        },
+      });
+
+      if (quotationUpdate.count !== 1) {
+        return false;
+      }
+
+      for (const line of lines) {
+        const lineUpdate = await tx.quotationLine.updateMany({
+          where: {
+            id: line.id,
+            quotationId,
+          },
+          data: {
+            itemNameAr: line.itemNameAr,
+            itemNameEn: line.itemNameEn,
+            descriptionAr: line.descriptionAr,
+            descriptionEn: line.descriptionEn,
+            unitNameAr: line.unitNameAr,
+            unitNameEn: line.unitNameEn,
+          },
+        });
+
+        if (lineUpdate.count !== 1) {
+          throw new Error(
+            `Failed to update localized line ${line.id}`,
+          );
+        }
+      }
+
+      return true;
+    });
+  }
+
+  async failLocalization(
+    params: FailQuotationLocalizationParams,
+  ): Promise<boolean> {
+    const {
+      companyId,
+      quotationId,
+      expectedSourceSignature,
+      expectedClaimToken,
+      errorCode,
+    } = params;
+
+    const result = await this.db.quotation.updateMany({
+      where: {
+        companyId,
+        id: quotationId,
+        isDeleted: false,
+        localizationSourceSignature: expectedSourceSignature,
+        localizationClaimToken: expectedClaimToken,
+      },
+      data: {
+        localizationStatus: "FAILED",
+        localizationLastError: errorCode,
+        localizationCompletedAt: null,
+        localizationClaimToken: null,
+        localizationLeaseUntil: null,
+      },
+    });
+
+    return result.count === 1;
   }
 
 }

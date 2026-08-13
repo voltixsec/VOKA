@@ -2,6 +2,8 @@ import {
   Quotation,
   QuotationDomainError,
 } from "../../../domain/quotation";
+import { analyzeQuotationLocalization } from "../services/QuotationLocalizationAnalyzer";
+import { createQuotationLocalizationSourceSignature } from "../services/QuotationLocalizationSourceSignature";
 
 import type { CreateQuotationDto } from "../dto/CreateQuotationDto";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
@@ -80,20 +82,103 @@ export class CreateQuotationUseCase {
       };
     }
     try {
+      const customerInfo = {
+        ...customer,
+        ...(dto.customer || {}),
+        // Preserve persisted customer name, ignore name from DTO to maintain data integrity
+        name: customer.name,
+        nameAr: dto.customer?.nameAr ?? customer.nameAr,
+        nameEn: dto.customer?.nameEn ?? customer.nameEn,
+      };
+
       const quotation = new Quotation({
         companyId: dto.companyId,
         customerId: dto.customerId,
         priceListId: dto.priceListId,
         number: dto.quotationNumber,
         currencyCode: dto.currencyCode,
-        customer,
+        customer: customerInfo,
         lines: dto.lines,
         discount: dto.discount,
         notes: dto.notes,
+        notesAr: dto.notesAr,
+        notesEn: dto.notesEn,
         termsAndConditions: dto.termsAndConditions,
+        termsAndConditionsAr: dto.termsAndConditionsAr,
+        termsAndConditionsEn: dto.termsAndConditionsEn,
+        subjectAr: dto.subjectAr,
+        subjectEn: dto.subjectEn,
+        briefAr: dto.briefAr,
+        briefEn: dto.briefEn,
+        projectName: dto.projectName,
+        projectNameAr: dto.projectNameAr,
+        projectNameEn: dto.projectNameEn,
+        attentionName: dto.attentionName,
+        attentionNameAr: dto.attentionNameAr,
+        attentionNameEn: dto.attentionNameEn,
+        scopeType: dto.scopeType,
         issueDate: dto.issueDate,
         expiryDate: dto.expiryDate,
       });
+
+      const quotationSnapshot = {
+        customer: quotation.customer.toJSON(),
+        projectName: quotation.projectName,
+        projectNameAr: quotation.projectNameAr,
+        projectNameEn: quotation.projectNameEn,
+        attentionName: quotation.attentionName,
+        attentionNameAr: quotation.attentionNameAr,
+        attentionNameEn: quotation.attentionNameEn,
+        subjectAr: quotation.subjectAr,
+        subjectEn: quotation.subjectEn,
+        briefAr: quotation.briefAr,
+        briefEn: quotation.briefEn,
+        notes: quotation.notes,
+        notesAr: quotation.notesAr,
+        notesEn: quotation.notesEn,
+        termsAndConditions: quotation.termsAndConditions,
+        termsAndConditionsAr: quotation.termsAndConditionsAr,
+        termsAndConditionsEn: quotation.termsAndConditionsEn,
+        lines: quotation.lines.map((line) => ({
+          id: line.id,
+          catalogItemId: line.catalogItemId,
+          taxRateId: line.taxRateId,
+          position: line.position,
+          type: line.type,
+          itemCode: line.itemCode,
+          itemName: line.itemName,
+          itemNameAr: line.itemNameAr,
+          itemNameEn: line.itemNameEn,
+          description: line.description,
+          descriptionAr: line.descriptionAr,
+          descriptionEn: line.descriptionEn,
+          unitName: line.unitName,
+          unitNameAr: line.unitNameAr,
+          unitNameEn: line.unitNameEn,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discount: line.discount,
+          taxPercentage: line.taxPercentage,
+        })),
+      };
+
+      const analysis = analyzeQuotationLocalization(
+        quotationSnapshot,
+      );
+      const now = new Date();
+
+      if (analysis.items.length > 0) {
+        quotation.startLocalizationGeneration(
+          analysis.sourceLocale,
+          createQuotationLocalizationSourceSignature(analysis),
+          now,
+        );
+      } else {
+        quotation.setLocalizationSourceLocale(
+          analysis.sourceLocale,
+        );
+        quotation.markLocalizationCompleted();
+      }
 
       const savedQuotation =
         await this.repository.save(quotation);
