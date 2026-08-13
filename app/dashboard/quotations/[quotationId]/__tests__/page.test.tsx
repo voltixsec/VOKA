@@ -228,6 +228,10 @@ describe("QuotationDetailsPage localization visibility", () => {
     expect(screen.getByText("Provider not configured")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Email" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/quotations/quotation-1/deliver",
+      expect.anything(),
+    );
     expect(await screen.findByText("customer@example.com")).toBeTruthy();
     expect(screen.getByText("+96590000000")).toBeTruthy();
     expect(screen.getByText("Failed")).toBeTruthy();

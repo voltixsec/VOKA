@@ -112,6 +112,10 @@ describe("GET /api/quotations/[quotationId]/deliveries", () => {
       status: "FAILED",
     });
     expect(body.data[0]).not.toHaveProperty("companyId");
+    expect(body.data[0]).not.toHaveProperty("document");
+    expect(body.data[0]).not.toHaveProperty("bytes");
+    expect(body.data[0]).not.toHaveProperty("providerRequestKey");
+    expect(body.data[0]).not.toHaveProperty("accessToken");
   });
 
   it("does not query or leak history for a cross-tenant quotation id", async () => {
