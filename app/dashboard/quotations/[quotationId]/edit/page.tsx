@@ -66,6 +66,8 @@ type Quote = {
   quotationNumber: string;
   status: string;
   currencyCode: string;
+  issueDate: string;
+  expiryDate?: string | null;
   lines: Line[];
   notes?: string | null;
   notesAr?: string | null;
@@ -134,6 +136,10 @@ const scopeOptions: Array<{
   },
 ];
 
+function expiryDateIso(value: string): string {
+  return `${value}T23:59:59.999+03:00`;
+}
+
 export default function EditQuotationPage() {
   const { isArabic } = useLanguage();
 
@@ -167,6 +173,9 @@ export default function EditQuotationPage() {
 
   const [scopeType, setScopeType] =
     useState<ScopeType | "">("");
+
+  const [expiryDate, setExpiryDate] =
+    useState("");
 
   const [subjectAr, setSubjectAr] =
     useState("");
@@ -273,6 +282,10 @@ export default function EditQuotationPage() {
 
         setScopeType(
           loaded.scopeType ?? "",
+        );
+
+        setExpiryDate(
+          loaded.expiryDate?.slice(0, 10) ?? "",
         );
 
         setSubjectAr(
@@ -528,6 +541,10 @@ export default function EditQuotationPage() {
           body: JSON.stringify({
             localizationSourceLocale:
               isArabic ? "ar" : "en",
+
+            expiryDate: expiryDate
+              ? expiryDateIso(expiryDate)
+              : null,
 
             lines: lines.map(
               (line, index) => ({
@@ -793,6 +810,27 @@ export default function EditQuotationPage() {
                   ),
                 )}
               </select>
+            </label>
+
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm text-slate-400">
+                {t(
+                  "\u062a\u0627\u0631\u064a\u062e \u0627\u0646\u062a\u0647\u0627\u0621 \u0627\u0644\u0639\u0631\u0636",
+                  "Quotation expiry date",
+                )}
+              </span>
+
+              <Input
+                type="date"
+                min={quote.issueDate.slice(0, 10)}
+                value={expiryDate}
+                onChange={(event) => {
+                  setExpiryDate(
+                    event.target.value,
+                  );
+                  setDirty(true);
+                }}
+              />
             </label>
 
             <label className="space-y-2 md:col-span-2">

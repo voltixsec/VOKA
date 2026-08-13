@@ -269,6 +269,88 @@ describe("GET /api/quotations/[quotationId]", () => {
     });
   });
 
+  it("accepts, clears, and preserves expiry date according to PATCH input", async () => {
+    const quotation = createQuotation();
+    quotation.updateExpiryDate(new Date("2026-09-01T23:59:59.999Z"));
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.update.mockResolvedValue(undefined);
+
+    const updateResponse = await PATCH(new Request(
+      "http://localhost/api/quotations/quotation-1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          expiryDate: "2026-09-15T23:59:59.999Z",
+          lines: [{
+            id: "line-1",
+            position: 1,
+            type: "PRODUCT",
+            itemName: "Product",
+            quantity: 1,
+            unitPrice: 10,
+          }],
+        }),
+      },
+    ));
+    expect(updateResponse.status).toBe(200);
+    expect(quotation.expiryDate?.toISOString()).toBe("2026-09-15T23:59:59.999Z");
+
+    const preserveResponse = await PATCH(new Request(
+      "http://localhost/api/quotations/quotation-1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ lines: [{
+          id: "line-1", position: 1, type: "PRODUCT",
+          itemName: "Product", quantity: 1, unitPrice: 10,
+        }] }),
+      },
+    ));
+    expect(preserveResponse.status).toBe(200);
+    expect(quotation.expiryDate?.toISOString()).toBe("2026-09-15T23:59:59.999Z");
+
+    const clearResponse = await PATCH(new Request(
+      "http://localhost/api/quotations/quotation-1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          expiryDate: null,
+          lines: [{
+            id: "line-1", position: 1, type: "PRODUCT",
+            itemName: "Product", quantity: 1, unitPrice: 10,
+          }],
+        }),
+      },
+    ));
+    expect(clearResponse.status).toBe(200);
+    expect(quotation.expiryDate).toBeNull();
+  });
+
+  it("rejects an invalid expiry date", async () => {
+    mocks.findById.mockResolvedValue(createQuotation());
+
+    const response = await PATCH(new Request(
+      "http://localhost/api/quotations/quotation-1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          expiryDate: "not-a-date",
+          lines: [{
+            position: 1, type: "PRODUCT",
+            itemName: "Product", quantity: 1, unitPrice: 10,
+          }],
+        }),
+      },
+    ));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      error: { code: "INVALID_DATE", details: { field: "expiryDate" } },
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it("schedules the reusable localization job after a successful save", async () => {
     const quotation = createQuotation();
     mocks.findById.mockResolvedValue(quotation);

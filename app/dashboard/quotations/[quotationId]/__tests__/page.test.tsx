@@ -130,4 +130,26 @@ describe("QuotationDetailsPage localization visibility", () => {
     expect(screen.getByRole("button", { name: "\u0631\u0641\u0636" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "\u0625\u0644\u063a\u0627\u0621" })).toBeTruthy();
   });
+
+  it("shows a localized valid-until date only when expiry is present", async () => {
+    const withExpiry = {
+      ...quotation("COMPLETED", "DRAFT"),
+      expiryDate: "2026-09-15T20:59:59.999Z",
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(withExpiry)));
+
+    render(createElement(QuotationDetailsPage));
+
+    expect(await screen.findByText("Valid until")).toBeTruthy();
+    expect(screen.getByText("15/09/2026")).toBeTruthy();
+
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      response(quotation("COMPLETED", "DRAFT")),
+    ));
+    render(createElement(QuotationDetailsPage));
+
+    await screen.findByText("QT-1001");
+    expect(screen.queryByText("Valid until")).toBeNull();
+  });
 });

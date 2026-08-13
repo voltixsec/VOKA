@@ -652,6 +652,27 @@ export default function QuotationDetailsPage() {
           </p>
         </Card>
 
+        {quote.expiryDate && (
+          <Card>
+            <p className="text-sm text-slate-500">
+              {t(
+                "\u0635\u0627\u0644\u062d \u062d\u062a\u0649",
+                "Valid until",
+              )}
+            </p>
+
+            <p className="mt-3 font-semibold">
+              {new Date(
+                quote.expiryDate,
+              ).toLocaleDateString(
+                isArabic
+                  ? "ar-KW"
+                  : "en-GB",
+              )}
+            </p>
+          </Card>
+        )}
+
         <Card>
           <p className="text-sm text-slate-500">
             {t(

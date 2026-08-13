@@ -43,6 +43,47 @@ function repository(value: Quotation): IQuotationRepository {
 }
 
 describe("quotation state transition use cases", () => {
+  it("updates and clears a valid draft expiry date", () => {
+    const value = quotation("DRAFT");
+    const expiry = new Date("2026-09-01T23:59:59.999Z");
+
+    value.updateExpiryDate(expiry);
+    expect(value.expiryDate).toEqual(expiry);
+
+    value.updateExpiryDate(null);
+    expect(value.expiryDate).toBeNull();
+  });
+
+  it("rejects an expiry date before the issue date", () => {
+    const value = Quotation.restore({
+      id: "quotation-1",
+      companyId: "company-1",
+      customerId: "customer-1",
+      number: "Q-001",
+      issueDate: new Date("2026-08-14T12:00:00.000Z"),
+      customer: { name: "Customer" },
+      lines: [{
+        position: 1,
+        type: "PRODUCT",
+        itemName: "Product",
+        quantity: 1,
+        unitPrice: 10,
+      }],
+    });
+
+    expect(() => value.updateExpiryDate(
+      new Date("2026-08-13T23:59:59.999Z"),
+    )).toThrow("Quotation expiry date cannot be before issue date.");
+  });
+
+  it("does not allow non-draft quotations to modify expiry", () => {
+    const value = quotation("SENT");
+
+    expect(() => value.updateExpiryDate(
+      new Date("2026-09-01T23:59:59.999Z"),
+    )).toThrow("Only draft quotations can be modified.");
+  });
+
   it("sends a tenant-scoped draft", async () => {
     const value = quotation("DRAFT");
     const repo = repository(value);

@@ -205,5 +205,38 @@ describe(
         ).toHaveBeenCalledOnce();
       },
     );
+
+    it.each([
+      [undefined, "2026-09-01T23:59:59.999Z"],
+      [new Date("2026-09-15T23:59:59.999Z"), "2026-09-15T23:59:59.999Z"],
+      [null, null],
+    ] as const)(
+      "applies expiry update semantics for %s",
+      async (expiryDate, expected) => {
+        const quotation = new Quotation({
+          companyId: "company-1",
+          customerId: "customer-1",
+          number: "Q-002",
+          issueDate: new Date("2026-08-14T00:00:00.000Z"),
+          expiryDate: new Date("2026-09-01T23:59:59.999Z"),
+          customer: { name: "Persisted Customer" },
+          lines,
+        });
+        const useCase = new UpdateQuotationUseCase(
+          createRepository(quotation),
+          createReferenceValidator(),
+        );
+
+        const result = await useCase.execute({
+          companyId: "company-1",
+          quotationId: "quotation-1",
+          lines,
+          ...(expiryDate === undefined ? {} : { expiryDate }),
+        });
+
+        expect(result.success).toBe(true);
+        expect(quotation.expiryDate?.toISOString() ?? null).toBe(expected);
+      },
+    );
   },
 );

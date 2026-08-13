@@ -98,6 +98,18 @@ const scopeOptions: Array<{
   },
 ];
 
+function expiryDateIso(value: string): string {
+  return `${value}T23:59:59.999+03:00`;
+}
+
+function todayDateInput(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function NewQuotationPage() {
   const { isArabic } = useLanguage();
   const router = useRouter();
@@ -120,6 +132,9 @@ export default function NewQuotationPage() {
   const [number, setNumber] = useState(
     "QT-" + Date.now().toString().slice(-6),
   );
+
+  const [expiryDate, setExpiryDate] =
+    useState("");
 
   const [projectName, setProjectName] =
     useState("");
@@ -613,6 +628,13 @@ export default function NewQuotationPage() {
             quotationNumber: number,
             currencyCode,
 
+            ...(expiryDate
+              ? {
+                  expiryDate:
+                    expiryDateIso(expiryDate),
+                }
+              : {}),
+
             customer: {
               name:
                 selectedCustomer.name,
@@ -799,6 +821,27 @@ export default function NewQuotationPage() {
                 value={number}
                 onChange={(event) => {
                   setNumber(
+                    event.target.value,
+                  );
+                  setDirty(true);
+                }}
+              />
+            </label>
+
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm text-slate-400">
+                {t(
+                  "\u062a\u0627\u0631\u064a\u062e \u0627\u0646\u062a\u0647\u0627\u0621 \u0627\u0644\u0639\u0631\u0636",
+                  "Quotation expiry date",
+                )}
+              </span>
+
+              <Input
+                type="date"
+                min={todayDateInput()}
+                value={expiryDate}
+                onChange={(event) => {
+                  setExpiryDate(
                     event.target.value,
                   );
                   setDirty(true);

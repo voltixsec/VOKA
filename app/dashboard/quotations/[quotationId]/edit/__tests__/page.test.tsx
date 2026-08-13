@@ -36,6 +36,8 @@ const quotation = {
   quotationNumber: "QT-1001",
   status: "DRAFT",
   currencyCode: "KWD",
+  issueDate: "2026-08-14T12:00:00.000Z",
+  expiryDate: "2026-09-01T23:59:59.999Z",
   lines: [
     {
       id: "line-1",
@@ -357,5 +359,24 @@ describe("EditQuotationPage active language", () => {
     expect(screen.queryByDisplayValue("Item")).toBeNull();
     expect(screen.getByDisplayValue("Custom line")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each([
+    ["2026-09-15", "2026-09-15T23:59:59.999+03:00"],
+    ["", null],
+  ] as const)("loads and PATCHes expiry as %s", async (next, expected) => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    const expiry = await screen.findByDisplayValue("2026-09-01");
+    fireEvent.change(expiry, { target: { value: next } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
+    ).toBe(true));
+    expect(patchBody(fetchMock).expiryDate).toBe(expected);
   });
 });
