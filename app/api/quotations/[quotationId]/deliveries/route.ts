@@ -5,6 +5,7 @@ import {
 } from "@/src/application/quotation-delivery";
 import { PrismaQuotationDeliveryRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationDeliveryRepository";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
+import { QuotationDeliveryProviderConfiguration } from "@/src/infrastructure/delivery/QuotationDeliveryProviderConfiguration";
 
 const useCase = new GetQuotationDeliveryHistoryUseCase(
   new PrismaQuotationRepository(),
@@ -31,9 +32,20 @@ export const GET = withCompanyAuth(
       throw ApiError.notFound(result.error.code, result.error.message);
     }
 
+    const availability = new QuotationDeliveryProviderConfiguration()
+      .getAvailability();
+
     return apiSuccess(
       result.data.map(serializeQuotationDelivery),
-      { headers: { "Cache-Control": "private, no-store" } },
+      {
+        meta: {
+          channels: {
+            EMAIL: { configured: availability.EMAIL.configured },
+            WHATSAPP: { configured: false },
+          },
+        },
+        headers: { "Cache-Control": "private, no-store" },
+      },
     );
   },
 );

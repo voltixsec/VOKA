@@ -4,12 +4,15 @@ import {
   serializeQuotationDelivery,
 } from "@/src/application/quotation-delivery";
 import { isQuotationDeliveryChannel } from "@/src/domain/quotation-delivery";
-import { UnavailableQuotationDeliveryGateway } from "@/src/infrastructure/delivery/UnavailableQuotationDeliveryGateway";
+import { createQuotationDeliveryGateway } from "@/src/infrastructure/delivery/createQuotationDeliveryGateway";
 import { GenerateQuotationDocumentUseCase } from "@/src/application/document";
 import { PrismaQuotationDocumentProvider } from "@/src/infrastructure/document/PrismaQuotationDocumentProvider";
 import { PdfKitQuotationDocumentRenderer } from "@/src/infrastructure/document/pdfkit/PdfKitQuotationDocumentRenderer";
 import { PrismaQuotationDeliveryRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationDeliveryRepository";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const useCase = new DeliverQuotationUseCase(
   new PrismaQuotationRepository(),
@@ -20,7 +23,7 @@ const useCase = new DeliverQuotationUseCase(
       new PdfKitQuotationDocumentRenderer(),
     ),
   ),
-  new UnavailableQuotationDeliveryGateway(),
+  createQuotationDeliveryGateway(),
 );
 
 function quotationId(request: Request): string {
