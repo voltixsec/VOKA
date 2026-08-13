@@ -691,82 +691,61 @@ export default function EditQuotationPage() {
               </select>
             </label>
 
-            <label className="space-y-2">
+            <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">
                 {t(
-                  "\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0639\u0631\u0636 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
-                  "Arabic subject",
+                  "\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0639\u0631\u0636",
+                  "Proposal subject",
                 )}
               </span>
 
               <Input
-                dir="rtl"
-                value={subjectAr}
+                dir={isArabic ? "rtl" : "ltr"}
+                value={
+                  isArabic
+                    ? subjectAr
+                    : subjectEn
+                }
                 onChange={(event) => {
-                  setSubjectAr(
-                    event.target.value,
-                  );
+                  if (isArabic) {
+                    setSubjectAr(
+                      event.target.value,
+                    );
+                  } else {
+                    setSubjectEn(
+                      event.target.value,
+                    );
+                  }
                   setDirty(true);
                 }}
               />
             </label>
 
-            <label className="space-y-2">
+            <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">
                 {t(
-                  "\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0639\u0631\u0636 \u0628\u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629",
-                  "English subject",
-                )}
-              </span>
-
-              <Input
-                dir="ltr"
-                value={subjectEn}
-                onChange={(event) => {
-                  setSubjectEn(
-                    event.target.value,
-                  );
-                  setDirty(true);
-                }}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-sm text-slate-400">
-                {t(
-                  "\u0645\u0644\u062e\u0635 \u0627\u0644\u0639\u0631\u0636 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
-                  "Arabic brief",
+                  "\u0645\u0644\u062e\u0635 \u0627\u0644\u0639\u0631\u0636",
+                  "Proposal brief",
                 )}
               </span>
 
               <textarea
-                dir="rtl"
-                value={briefAr}
+                dir={isArabic ? "rtl" : "ltr"}
+                value={
+                  isArabic
+                    ? briefAr
+                    : briefEn
+                }
                 onChange={(event) => {
-                  setBriefAr(
-                    event.target.value,
-                  );
-                  setDirty(true);
-                }}
-                className="min-h-32 w-full rounded-xl border border-white/10 bg-slate-950 p-4"
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-sm text-slate-400">
-                {t(
-                  "\u0645\u0644\u062e\u0635 \u0627\u0644\u0639\u0631\u0636 \u0628\u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629",
-                  "English brief",
-                )}
-              </span>
-
-              <textarea
-                dir="ltr"
-                value={briefEn}
-                onChange={(event) => {
-                  setBriefEn(
-                    event.target.value,
-                  );
+                  if (isArabic) {
+                    setBriefAr(
+                      event.target.value,
+                    );
+                  } else {
+                    setBriefEn(
+                      event.target.value,
+                    );
+                  }
                   setDirty(true);
                 }}
                 className="min-h-32 w-full rounded-xl border border-white/10 bg-slate-950 p-4"

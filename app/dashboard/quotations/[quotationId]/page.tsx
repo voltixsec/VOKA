@@ -92,6 +92,40 @@ const arabicStatuses:
     CANCELLED: "\u0645\u0644\u063a\u0649",
   };
 
+const lifecycleLabels = {
+  send: {
+    ar: "\u0625\u0631\u0633\u0627\u0644",
+    en: "Send",
+  },
+  approve: {
+    ar: "\u0627\u0639\u062a\u0645\u0627\u062f",
+    en: "Approve",
+  },
+  reject: {
+    ar: "\u0631\u0641\u0636",
+    en: "Reject",
+  },
+  cancel: {
+    ar: "\u0625\u0644\u063a\u0627\u0621",
+    en: "Cancel",
+  },
+} as const;
+
+const localizationLabels = {
+  PENDING: {
+    ar: "\u062c\u0627\u0631\u064d \u062a\u062c\u0647\u064a\u0632 \u0627\u0644\u0646\u0633\u062e\u0629 \u0627\u0644\u0645\u062a\u0631\u062c\u0645\u0629",
+    en: "Preparing translated version",
+  },
+  COMPLETED: {
+    ar: "\u0627\u0644\u0646\u0633\u062e\u062a\u0627\u0646 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0648\u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629 \u062c\u0627\u0647\u0632\u062a\u0627\u0646",
+    en: "Arabic and English versions are ready",
+  },
+  FAILED: {
+    ar: "\u062a\u0639\u0630\u0631\u062a \u0627\u0644\u062a\u0631\u062c\u0645\u0629",
+    en: "Translation failed",
+  },
+} as const;
+
 const scopeLabels:
   Record<
     ScopeType,
@@ -456,7 +490,9 @@ export default function QuotationDetailsPage() {
               >
                 {acting === name
                   ? "..."
-                  : name}
+                  : lifecycleLabels[
+                      name as keyof typeof lifecycleLabels
+                    ][isArabic ? "ar" : "en"]}
               </Button>
             ))}
           </div>
@@ -470,6 +506,23 @@ export default function QuotationDetailsPage() {
           </p>
         </Card>
       )}
+
+      <div
+        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm"
+        data-testid="localization-status"
+      >
+        <Badge>
+          {quote.localizationStatus}
+        </Badge>
+
+        <span className="text-slate-300">
+          {
+            localizationLabels[
+              quote.localizationStatus
+            ][isArabic ? "ar" : "en"]
+          }
+        </span>
+      </div>
 
       {quote.status === "SENT" && quote.localizationStatus !== "COMPLETED" && (
         <Card className="border-amber-400/20 bg-amber-400/5">
