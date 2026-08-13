@@ -152,4 +152,43 @@ describe("QuotationDetailsPage localization visibility", () => {
     await screen.findByText("QT-1001");
     expect(screen.queryByText("Valid until")).toBeNull();
   });
+
+  it.each([
+    [false, "Preview proposal", "en"],
+    [true, "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0639\u0631\u0636", "ar"],
+  ] as const)("renders the active-language preview action", async (
+    arabic,
+    label,
+    locale,
+  ) => {
+    isArabic = arabic;
+    const fetchMock = vi.fn().mockResolvedValue(
+      response(quotation("COMPLETED", "DRAFT")),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+
+    const previewButton = await screen.findByRole("button", { name: label });
+    const previewLink = previewButton.closest("a");
+    expect(previewLink?.getAttribute("href")).toBe(
+      `/api/quotations/quotation-1/pdf?locale=${locale}&disposition=inline`,
+    );
+    expect(previewLink?.getAttribute("target")).toBe("_blank");
+    expect(previewLink?.getAttribute("rel")).toBe("noopener noreferrer");
+
+    const downloadButton = screen.getByRole("button", {
+      name: arabic ? "\u062a\u0646\u0632\u064a\u0644 PDF" : "Download PDF",
+    });
+    const downloadLink = downloadButton.closest("a");
+    expect(downloadLink?.getAttribute("href")).toBe(
+      `/api/quotations/quotation-1/pdf?locale=${locale}`,
+    );
+    expect(downloadLink?.getAttribute("href")).not.toContain("disposition");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/quotations/quotation-1?locale=${locale}`,
+    );
+  });
 });

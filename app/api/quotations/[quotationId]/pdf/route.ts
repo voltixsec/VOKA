@@ -96,6 +96,35 @@ function getLocale(
   );
 }
 
+function getDisposition(
+  request: Request,
+): "attachment" | "inline" {
+  const disposition =
+    new URL(request.url)
+      .searchParams
+      .get("disposition")
+      ?.toLowerCase();
+
+  if (!disposition) {
+    return "attachment";
+  }
+
+  if (
+    disposition !== "attachment" &&
+    disposition !== "inline"
+  ) {
+    throw ApiError.badRequest(
+      "DOCUMENT_DISPOSITION_INVALID",
+      "disposition must be attachment or inline.",
+      {
+        field: "disposition",
+      },
+    );
+  }
+
+  return disposition;
+}
+
 export const GET =
   withCompanyAuth(
     [
@@ -114,6 +143,9 @@ export const GET =
           request,
           auth.user.locale,
         );
+
+      const disposition =
+        getDisposition(request);
 
       const company =
         await prisma.company
@@ -228,7 +260,7 @@ export const GET =
               "application/pdf",
 
             "Content-Disposition":
-              `attachment; filename="${result.data.filename}"`,
+              `${disposition}; filename="${result.data.filename}"`,
 
             "Cache-Control":
               "private, no-store",
