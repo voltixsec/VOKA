@@ -4,13 +4,11 @@ import {
   withCompanyAuth,
 } from "@/lib/api";
 import { CancelQuotationUseCase } from "@/src/application/quotation";
-import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
-import { PrismaSalesOrderRepository } from "@/src/infrastructure/persistence/prisma/sales-order/PrismaSalesOrderRepository";
+import { PrismaQuotationCancellationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationCancellationRepository";
 import { getQuotationIdFromActionUrl } from "../quotation-action";
 
 const cancelQuotation = new CancelQuotationUseCase(
-  new PrismaQuotationRepository(),
-  new PrismaSalesOrderRepository(),
+  new PrismaQuotationCancellationRepository(),
 );
 
 export const POST = withCompanyAuth(

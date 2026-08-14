@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { Quotation } from "../../../domain/quotation";
+import { Quotation, QuotationDomainError } from "../../../domain/quotation";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
 import { ApproveQuotationUseCase } from "../use-cases/ApproveQuotationUseCase";
 import { CancelQuotationUseCase } from "../use-cases/CancelQuotationUseCase";
@@ -117,26 +117,34 @@ describe("quotation state transition use cases", () => {
     expect(repo.update).toHaveBeenCalledWith("company-1", value);
   });
 
-  it("cancels a tenant-scoped draft", async () => {
-    const value = quotation("DRAFT");
-    const repo = repository(value);
-    const guard = { existsBySourceQuotation: vi.fn().mockResolvedValue(false) };
-    const result = await new CancelQuotationUseCase(repo, guard).execute({
+  it("maps an atomic tenant-scoped cancellation success", async () => {
+    const cancellationRepository = {
+      cancel: vi.fn().mockResolvedValue({ kind: "CANCELLED" as const }),
+    };
+    const result = await new CancelQuotationUseCase(
+      cancellationRepository,
+    ).execute({
       companyId: "company-1",
       quotationId: "quotation-1",
     });
 
     expect(result.success).toBe(true);
-    expect(value.status).toBe("CANCELLED");
-    expect(repo.update).toHaveBeenCalledWith("company-1", value);
+    expect(cancellationRepository.cancel).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
   });
 
   it("blocks cancellation when the tenant quotation has a Sales Order", async () => {
-    const value = quotation("DRAFT");
-    const repo = repository(value);
-    const guard = { existsBySourceQuotation: vi.fn().mockResolvedValue(true) };
+    const cancellationRepository = {
+      cancel: vi.fn().mockResolvedValue({
+        kind: "QUOTATION_HAS_SALES_ORDER" as const,
+      }),
+    };
 
-    const result = await new CancelQuotationUseCase(repo, guard).execute({
+    const result = await new CancelQuotationUseCase(
+      cancellationRepository,
+    ).execute({
       companyId: "company-1",
       quotationId: "quotation-1",
     });
@@ -148,12 +156,43 @@ describe("quotation state transition use cases", () => {
         message: "A quotation with a Sales Order cannot be cancelled.",
       },
     });
-    expect(guard.existsBySourceQuotation).toHaveBeenCalledWith(
-      "company-1",
-      "quotation-1",
-    );
-    expect(value.status).toBe("DRAFT");
-    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it("maps cancellation domain transition failures without relabeling them", async () => {
+    const cancellationRepository = {
+      cancel: vi.fn().mockRejectedValue(
+        new QuotationDomainError("Invalid quotation transition."),
+      ),
+    };
+
+    const result = await new CancelQuotationUseCase(
+      cancellationRepository,
+    ).execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: {
+        code: "DOMAIN_ERROR",
+        message: "Invalid quotation transition.",
+      },
+    });
+  });
+
+  it("keeps unexpected cancellation persistence errors visible", async () => {
+    const unexpected = new Error("database unavailable");
+    const cancellationRepository = {
+      cancel: vi.fn().mockRejectedValue(unexpected),
+    };
+
+    await expect(new CancelQuotationUseCase(
+      cancellationRepository,
+    ).execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    })).rejects.toBe(unexpected);
   });
 
   it("does not persist an invalid transition", async () => {

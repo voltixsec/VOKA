@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Prisma } from "../../../../../../lib/generated/prisma/client";
+import { CancelQuotationUseCase } from "../../../../../application/quotation";
+import { PrismaQuotationCancellationRepository } from "../../quotation/PrismaQuotationCancellationRepository";
 import { PrismaSalesOrderRepository } from "../PrismaSalesOrderRepository";
 import { PrismaSalesOrderMapper } from "../PrismaSalesOrderMapper";
 
@@ -171,10 +173,12 @@ function salesOrderRecord(overrides: Record<string, unknown> = {}) {
 }
 
 function conversionDb(source = sourceQuotation()) {
+  const lockQuotation = vi.fn().mockResolvedValue([{ id: "quotation-1" }]);
   const findExisting = vi.fn().mockResolvedValue(null);
   const findQuotation = vi.fn().mockResolvedValue(source);
   const create = vi.fn().mockResolvedValue(salesOrderRecord());
   const tx = {
+    $queryRaw: lockQuotation,
     salesOrder: { findFirst: findExisting, create },
     quotation: { findFirst: findQuotation },
   };
@@ -186,6 +190,7 @@ function conversionDb(source = sourceQuotation()) {
       salesOrder: { findFirst: vi.fn() },
     },
     tx,
+    lockQuotation,
   };
 }
 
@@ -197,6 +202,56 @@ const command = {
   createdByRole: "SALES",
 };
 
+function serializedConversionCancellationDb() {
+  const state: {
+    status: string;
+    salesOrder: ReturnType<typeof salesOrderRecord> | null;
+  } = {
+    status: "APPROVED",
+    salesOrder: null,
+  };
+  const queryRaw = vi.fn().mockResolvedValue([{ id: "quotation-1" }]);
+  const findQuotation = vi.fn().mockImplementation(() =>
+    Promise.resolve(sourceQuotation(state.status)),
+  );
+  const findSalesOrder = vi.fn().mockImplementation(() =>
+    Promise.resolve(state.salesOrder),
+  );
+  const createSalesOrder = vi.fn().mockImplementation(() => {
+    state.salesOrder = salesOrderRecord();
+    return Promise.resolve(state.salesOrder);
+  });
+  const updateQuotation = vi.fn().mockImplementation((args) => {
+    state.status = args.data.status;
+    return Promise.resolve({ count: 1 });
+  });
+  const tx = {
+    $queryRaw: queryRaw,
+    quotation: {
+      findFirst: findQuotation,
+      updateMany: updateQuotation,
+    },
+    salesOrder: {
+      findFirst: findSalesOrder,
+      create: createSalesOrder,
+    },
+  };
+  const db = {
+    $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) =>
+      callback(tx),
+    ),
+    salesOrder: { findFirst: findSalesOrder },
+  };
+
+  return {
+    state,
+    db,
+    queryRaw,
+    createSalesOrder,
+    updateQuotation,
+  };
+}
+
 describe("PrismaSalesOrderRepository conversion", () => {
   it("copies the complete persisted approved snapshot atomically without live lookups", async () => {
     const { db, tx } = conversionDb();
@@ -206,6 +261,15 @@ describe("PrismaSalesOrderRepository conversion", () => {
 
     expect(result.kind).toBe("CREATED");
     expect(db.$transaction).toHaveBeenCalledOnce();
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.salesOrder.findFirst.mock.invocationCallOrder[0],
+    );
+    expect(tx.salesOrder.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.quotation.findFirst.mock.invocationCallOrder[0],
+    );
+    expect(tx.quotation.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.salesOrder.create.mock.invocationCallOrder[0],
+    );
     expect(tx.quotation.findFirst).toHaveBeenCalledWith({
       where: {
         id: "quotation-1",
@@ -237,16 +301,39 @@ describe("PrismaSalesOrderRepository conversion", () => {
     expect(data.lines.create[0].totalAmount.toString()).toBe("104.566");
     expect(data.lines.create[1]).not.toHaveProperty("catalogItem");
     expect(data.lines.create[1]).not.toHaveProperty("taxRate");
-    expect(Object.keys(tx)).toEqual(["salesOrder", "quotation"]);
+    expect(Object.keys(tx)).toEqual(["$queryRaw", "salesOrder", "quotation"]);
   });
 
-  it("returns the existing tenant order before loading mutable source data", async () => {
+  it("locks before returning the existing tenant order without loading source data", async () => {
     const { db, tx } = conversionDb();
     tx.salesOrder.findFirst.mockResolvedValue(salesOrderRecord());
     const result = await new PrismaSalesOrderRepository(db as never)
       .convertApprovedQuotation(command);
 
     expect(result.kind).toBe("EXISTING");
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.salesOrder.findFirst.mock.invocationCallOrder[0],
+    );
+    expect(tx.quotation.findFirst).not.toHaveBeenCalled();
+    expect(tx.salesOrder.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing", "company-1"],
+    ["soft-deleted", "company-1"],
+    ["cross-tenant", "other-company"],
+  ])("returns not found before any order decision for a %s source", async (_case, companyId) => {
+    const { db, tx, lockQuotation } = conversionDb();
+    lockQuotation.mockResolvedValue([]);
+
+    const result = await new PrismaSalesOrderRepository(db as never)
+      .convertApprovedQuotation({
+        ...command,
+        companyId,
+      });
+
+    expect(result).toEqual({ kind: "QUOTATION_NOT_FOUND" });
+    expect(tx.salesOrder.findFirst).not.toHaveBeenCalled();
     expect(tx.quotation.findFirst).not.toHaveBeenCalled();
     expect(tx.salesOrder.create).not.toHaveBeenCalled();
   });
@@ -341,6 +428,52 @@ describe("PrismaSalesOrderRepository conversion", () => {
       new PrismaSalesOrderRepository(db as never)
         .convertApprovedQuotation(command),
     ).rejects.toBe(unexpected);
+  });
+
+  it("models the conversion-wins serialized outcome", async () => {
+    const context = serializedConversionCancellationDb();
+    const conversion = await new PrismaSalesOrderRepository(
+      context.db as never,
+    ).convertApprovedQuotation(command);
+    const cancellation = await new CancelQuotationUseCase(
+      new PrismaQuotationCancellationRepository(context.db as never),
+    ).execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+
+    expect(conversion.kind).toBe("CREATED");
+    expect(cancellation).toMatchObject({
+      success: false,
+      error: { code: "QUOTATION_HAS_SALES_ORDER" },
+    });
+    expect(context.state.salesOrder).not.toBeNull();
+    expect(context.state.status).toBe("APPROVED");
+    expect(context.updateQuotation).not.toHaveBeenCalled();
+    expect(context.queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it("models the cancellation-wins serialized outcome", async () => {
+    const context = serializedConversionCancellationDb();
+    const cancellation = await new CancelQuotationUseCase(
+      new PrismaQuotationCancellationRepository(context.db as never),
+    ).execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+    const conversion = await new PrismaSalesOrderRepository(
+      context.db as never,
+    ).convertApprovedQuotation(command);
+
+    expect(cancellation.success).toBe(true);
+    expect(context.state.status).toBe("CANCELLED");
+    expect(conversion).toEqual({
+      kind: "INVALID_QUOTATION_STATUS",
+      status: "CANCELLED",
+    });
+    expect(context.state.salesOrder).toBeNull();
+    expect(context.createSalesOrder).not.toHaveBeenCalled();
+    expect(context.queryRaw).toHaveBeenCalledTimes(2);
   });
 });
 
