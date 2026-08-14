@@ -20,6 +20,7 @@ import {
 import QuotationDetailsPage from "../page";
 
 let isArabic = false;
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
 
 type QuotationTestLine = {
   id?: string;
@@ -45,6 +46,7 @@ vi.mock("@/components/i18n/LanguageProvider", () => ({
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ quotationId: "quotation-1" }),
+  useRouter: () => ({ push: navigation.push }),
 }));
 
 function quotation(
@@ -80,6 +82,7 @@ function response(data: unknown, meta?: unknown) {
 
 beforeEach(() => {
   isArabic = false;
+  navigation.push.mockReset();
   vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 
@@ -90,6 +93,85 @@ afterEach(() => {
 });
 
 describe("QuotationDetailsPage localization visibility", () => {
+  it("shows conversion only for APPROVED and redirects new or existing orders", async () => {
+    for (const created of [true, false]) {
+      cleanup();
+      navigation.push.mockReset();
+      const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+        if (input.endsWith("/deliveries")) return response([]);
+        if (input.endsWith("/convert-to-sales-order") && init?.method === "POST") {
+          return response({ created, salesOrderId: "sales-order-1" });
+        }
+        return response(quotation("COMPLETED", "APPROVED"));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(createElement(QuotationDetailsPage));
+
+      fireEvent.click(await screen.findByRole("button", { name: "Create Sales Order" }));
+      await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
+        "/dashboard/sales-orders/sales-order-1",
+      ));
+    }
+
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn(async (input: string) =>
+      input.endsWith("/deliveries")
+        ? response([])
+        : response(quotation("COMPLETED", "SENT")),
+    ));
+    render(createElement(QuotationDetailsPage));
+    await screen.findByText("QT-1001");
+    expect(screen.queryByRole("button", { name: "Create Sales Order" })).toBeNull();
+  });
+
+  it("prevents duplicate conversion clicks while processing", async () => {
+    let resolveConversion!: (value: ReturnType<typeof response>) => void;
+    const pending = new Promise<ReturnType<typeof response>>((resolve) => {
+      resolveConversion = resolve;
+    });
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) return Promise.resolve(response([]));
+      if (input.endsWith("/convert-to-sales-order") && init?.method === "POST") {
+        return pending;
+      }
+      return Promise.resolve(response(quotation("COMPLETED", "APPROVED")));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(QuotationDetailsPage));
+
+    const button = await screen.findByRole("button", { name: "Create Sales Order" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(fetchMock.mock.calls.filter(([url]) =>
+      String(url).endsWith("/convert-to-sales-order"),
+    )).toHaveLength(1);
+    resolveConversion(response({ created: true, salesOrderId: "sales-order-1" }));
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledOnce());
+  });
+
+  it("renders a localized safe conversion error", async () => {
+    isArabic = true;
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) return response([]);
+      if (input.endsWith("/convert-to-sales-order") && init?.method === "POST") {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ error: { code: "QUOTATION_NOT_APPROVED" } }),
+        };
+      }
+      return response(quotation("COMPLETED", "APPROVED"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(QuotationDetailsPage));
+
+    fireEvent.click(await screen.findByRole("button", { name: "إنشاء أمر بيع" }));
+    expect(await screen.findByText(
+      "يجب اعتماد عرض السعر قبل إنشاء أمر البيع.",
+    )).toBeTruthy();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
   it("shows aggregate tax in the commercial totals summary", async () => {
     const value = quotation("COMPLETED", "DRAFT");
     value.totals = {

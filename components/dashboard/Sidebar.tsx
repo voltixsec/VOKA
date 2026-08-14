@@ -97,6 +97,21 @@ const navigationItems: NavigationItem[] = [
     ),
   },
   {
+    labelEn: "Sales Orders",
+    labelAr: "أوامر البيع",
+    descriptionEn: "Approved deals",
+    descriptionAr: "الصفقات المعتمدة",
+    href: "/dashboard/sales-orders",
+    icon: (
+      <Icon>
+        <path d="M6 2h9l5 5v15H6z" />
+        <path d="M14 2v6h6" />
+        <path d="M9 13h6" />
+        <path d="m9 17 2 2 4-4" />
+      </Icon>
+    ),
+  },
+  {
     labelEn: "Contracts / Invoices",
     labelAr: "العقود والفواتير",
     descriptionEn: "Approved deals",

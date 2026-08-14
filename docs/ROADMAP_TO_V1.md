@@ -205,7 +205,7 @@ configuration remain deferred; the provider implementation itself is complete.
 
 # Phase 4 — Approval and document lifecycle
 
-Status: **Partially delivered; next read-only assessment frontier**
+Status: **Partially delivered through Phase 4.1**
 
 Complete:
 
@@ -223,10 +223,27 @@ Audit:
 - PDF used at approval
 
 Approval identity, timestamps, immutable approval-time brand snapshots and the
-verified document path are delivered. Downstream commercial document creation
-remains future work.
+verified document path are delivered. Phase 4.1 adds the first downstream
+commercial document: exactly one read-only DRAFT Sales Order copied from an
+APPROVED quotation.
 
-Next action: assess the remaining approval-to-contract/order/invoice lifecycle,
+## Phase 4.1 delivered boundary
+
+- deterministic `SO-{quotation.number}` numbering;
+- database-enforced one Sales Order per source quotation;
+- idempotent/concurrency-safe transactional conversion;
+- persisted customer, bilingual line/proposal, discount, historical tax and
+  total snapshot copying without live repricing;
+- creator and source-approval audit snapshots;
+- cancellation fencing once a Sales Order exists;
+- tenant-scoped convert/list/detail APIs and localized read UI.
+
+Not delivered: Sales Order editing, confirmation, cancellation, fulfillment,
+inventory, warehouse/shipping, Sales Order PDF, contracts, invoices or
+payments. Approval-time PDF binary/hash storage also remains future work.
+
+Next action: assess the remaining Sales Order operational and
+approval-to-contract/invoice lifecycle,
 state transitions, snapshots and audit requirements. Produce bounded
 CTO-reviewable acceptance criteria before authorizing implementation.
 
@@ -253,10 +270,14 @@ Avoid retranslating the same catalog product for every quotation.
 
 This can dramatically reduce AI usage.
 
-Current quotation flows already consume tenant-safe customer, catalog and tax
-sources. The next assessment must verify where canonical customer/catalog
-values and reusable localized variants should be referenced downstream without
-claiming that broader reuse is already complete.
+Current quotation and Phase 4.1 conversion flows preserve tenant-safe customer,
+catalog, tax and optional Price List references while copied Sales Order
+snapshots remain authoritative. The next assessment must verify where canonical
+customer/catalog values and reusable localized variants should be referenced
+downstream without claiming that broader reuse is already complete.
+
+Canonical catalog localization and live Price List integration in the composer
+remain future work; Phase 4.1 deliberately performs neither lookup nor repricing.
 
 ---
 

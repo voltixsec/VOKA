@@ -73,6 +73,7 @@ model Company {
   taxRates                TaxRate[]
   priceLists              PriceList[]
   quotations              Quotation[]
+  salesOrders             SalesOrder[]
   quotationDeliveries     QuotationDelivery[]
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
   createdAt               DateTime                        @default(now())
@@ -83,15 +84,16 @@ model Company {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
-  name         String?
-  passwordHash String?
-  locale       Locale          @default(EN)
-  isActive     Boolean         @default(true)
-  memberships  CompanyMember[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id                 String          @id @default(cuid())
+  email              String          @unique
+  name               String?
+  passwordHash       String?
+  locale             Locale          @default(EN)
+  isActive           Boolean         @default(true)
+  memberships        CompanyMember[]
+  createdSalesOrders SalesOrder[]    @relation("SalesOrderCreatedBy")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   @@index([isActive])
 }
@@ -141,6 +143,7 @@ model Customer {
   deletedAt         DateTime?
   company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quotations        Quotation[]
+  salesOrders       SalesOrder[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -162,6 +165,10 @@ enum QuotationStatus {
   REJECTED
   EXPIRED
   CANCELLED
+}
+
+enum SalesOrderStatus {
+  DRAFT
 }
 
 enum LocalizationStatus {
@@ -246,9 +253,10 @@ model TaxRate {
   isSystem   Boolean @default(false)
   isActive   Boolean @default(true)
 
-  company        Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  items          CatalogItem[]
-  quotationLines QuotationLine[]
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items           CatalogItem[]
+  quotationLines  QuotationLine[]
+  salesOrderLines SalesOrderLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -298,10 +306,11 @@ model CatalogItem {
 
   taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
 
-  priceListItems PriceListItem[]
-  quotationLines QuotationLine[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  priceListItems  PriceListItem[]
+  quotationLines  QuotationLine[]
+  salesOrderLines SalesOrderLine[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -320,9 +329,10 @@ model PriceList {
   isDefault    Boolean @default(false)
   isActive     Boolean @default(true)
 
-  company    Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  items      PriceListItem[]
-  quotations Quotation[]
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items       PriceListItem[]
+  quotations  Quotation[]
+  salesOrders SalesOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -416,33 +426,34 @@ model Quotation {
   termsAndConditionsAr String?
   termsAndConditionsEn String?
 
-  localizationStatus      LocalizationStatus?
-  localizationRequestedAt DateTime?
-  localizationCompletedAt DateTime?
-  localizationLastError   String?
-  localizationSourceLocale Locale?
+  localizationStatus          LocalizationStatus?
+  localizationRequestedAt     DateTime?
+  localizationCompletedAt     DateTime?
+  localizationLastError       String?
+  localizationSourceLocale    Locale?
   localizationSourceSignature String?
   localizationClaimToken      String?
   localizationLeaseUntil      DateTime?
-  localizationAttemptCount    Int     @default(0)
+  localizationAttemptCount    Int                 @default(0)
 
-  sentAt         DateTime?
-  approvedAt     DateTime?
-  approvedByName String?
-  approvedByRole String?
+  sentAt                DateTime?
+  approvedAt            DateTime?
+  approvedByName        String?
+  approvedByRole        String?
   documentBrandSnapshot Json?
-  verificationToken String? @unique
-  rejectedAt     DateTime?
-  cancelledAt    DateTime?
+  verificationToken     String?   @unique
+  rejectedAt            DateTime?
+  cancelledAt           DateTime?
 
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
 
-  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer  Customer        @relation(fields: [customerId], references: [id])
-  priceList PriceList?      @relation(fields: [priceListId], references: [id], onDelete: SetNull)
-  lines     QuotationLine[]
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer   Customer            @relation(fields: [customerId], references: [id])
+  priceList  PriceList?          @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  lines      QuotationLine[]
   deliveries QuotationDelivery[]
+  salesOrder SalesOrder?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -520,9 +531,10 @@ model QuotationLine {
   subtotal    Decimal @db.Decimal(18, 3)
   totalAmount Decimal @db.Decimal(18, 3)
 
-  quotation   Quotation    @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
-  taxRate     TaxRate?     @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+  quotation      Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  catalogItem    CatalogItem?    @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  taxRate        TaxRate?        @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+  salesOrderLine SalesOrderLine?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -532,4 +544,125 @@ model QuotationLine {
   @@index([catalogItemId])
   @@index([taxRateId])
   @@index([quotationId, type])
+}
+
+model SalesOrder {
+  id String @id @default(cuid())
+
+  companyId             String
+  sourceQuotationId     String           @unique
+  sourceQuotationNumber String
+  number                String
+  status                SalesOrderStatus @default(DRAFT)
+  customerId            String
+  priceListId           String?
+  currencyCode          String
+  orderDate             DateTime         @default(now())
+
+  customerName   String
+  customerNameAr String?
+  customerNameEn String?
+  customerEmail  String?
+  customerPhone  String?
+  customerTaxNo  String?
+  billingAddress String?
+
+  subjectAr       String?
+  subjectEn       String?
+  briefAr         String?
+  briefEn         String?
+  projectName     String?
+  projectNameAr   String?
+  projectNameEn   String?
+  attentionName   String?
+  attentionNameAr String?
+  attentionNameEn String?
+  scopeType       QuotationScopeType?
+
+  subtotal       Decimal       @db.Decimal(18, 3)
+  discountType   DiscountType?
+  discountValue  Decimal       @default(0) @db.Decimal(18, 3)
+  discountAmount Decimal       @default(0) @db.Decimal(18, 3)
+  taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
+  totalAmount    Decimal       @default(0) @db.Decimal(18, 3)
+
+  notes                String?
+  notesAr              String?
+  notesEn              String?
+  termsAndConditions   String?
+  termsAndConditionsAr String?
+  termsAndConditionsEn String?
+
+  sourceApprovedAt     DateTime
+  sourceApprovedByName String
+  sourceApprovedByRole String
+  createdByUserId      String?
+  createdByName        String
+  createdByRole        String
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceQuotation Quotation        @relation(fields: [sourceQuotationId], references: [id], onDelete: Restrict)
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  priceList       PriceList?       @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  createdByUser   User?            @relation("SalesOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  lines           SalesOrderLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, number])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, customerId])
+  @@index([companyId, orderDate])
+  @@index([customerId])
+  @@index([priceListId])
+  @@index([createdByUserId])
+}
+
+model SalesOrderLine {
+  id String @id @default(cuid())
+
+  salesOrderId          String
+  sourceQuotationLineId String  @unique
+  catalogItemId         String?
+  taxRateId             String?
+
+  position Int
+  type     CatalogItemType
+
+  itemCode      String?
+  itemName      String
+  itemNameAr    String?
+  itemNameEn    String?
+  description   String?
+  descriptionAr String?
+  descriptionEn String?
+  unitName      String?
+  unitNameAr    String?
+  unitNameEn    String?
+
+  quantity  Decimal @db.Decimal(18, 3)
+  unitPrice Decimal @db.Decimal(18, 3)
+
+  discountType   DiscountType?
+  discountValue  Decimal       @default(0) @db.Decimal(18, 3)
+  discountAmount Decimal       @default(0) @db.Decimal(18, 3)
+  taxPercentage  Decimal       @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
+  subtotal       Decimal       @db.Decimal(18, 3)
+  totalAmount    Decimal       @db.Decimal(18, 3)
+
+  salesOrder          SalesOrder    @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  sourceQuotationLine QuotationLine @relation(fields: [sourceQuotationLineId], references: [id], onDelete: Restrict)
+  catalogItem         CatalogItem?  @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  taxRate             TaxRate?      @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([salesOrderId, position])
+  @@index([salesOrderId])
+  @@index([catalogItemId])
+  @@index([taxRateId])
 }
