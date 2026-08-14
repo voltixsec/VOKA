@@ -29,12 +29,12 @@ Acceptance criteria:
 
 ## Sprint 10 - Quotation Documents and Sharing
 
-Status: Approved as two delivery stages on 2026-08-05.
+Status: Document, composer and delivery stages are delivered through Phase 3.
 
 - Sprint 10A: Document Engine architecture, branded bilingual/RTL quotation PDF,
   safe QR content, authenticated download, browser print, and automated tests.
-- Sprint 10B: Email and human-approved WhatsApp integration foundation with a
-  delivery audit trail.
+- Sprint 10B: Proposal composer, preview, email and human-approved WhatsApp
+  delivery with a delivery audit trail.
 
 Next.js 16 compatibility/security migration is a separate workstream and must not
 be mixed into Sprint 10 implementation.
@@ -47,7 +47,7 @@ be mixed into Sprint 10 implementation.
 
 ## Sprint 10B — Quotation Proposal Composer
 
-Status: **Document foundation delivered through Phase 1.4 / UX finalization pending assessment**
+Status: **Delivered and closed through PR #31 at `6ff9762` on 2026-08-14**
 
 ### Goal
 
@@ -89,9 +89,31 @@ Still deferred:
 - Next 16 security migration for remaining nested PostCSS/Sharp findings; this
   is a separate engineering workstream, not a product feature.
 
-The next product frontier is Proposal Composer UX finalization / Phase 3
-assessment. No additional proposal feature is authorized by this documentation
-realignment alone.
+Phase 3 delivery then closed the remaining composer and delivery UX through:
+
+1. PR #21 (`627d467`) - active-language UX and localization visibility.
+2. PR #22 (`40314bc`) - edit-line catalog/custom parity.
+3. PR #23 (`8a4cbdf`) - quotation validity UX.
+4. PR #24 (`44b7464`) - proposal PDF preview.
+5. PR #25 (`a878ca4`) - delivery foundation and audit trail.
+6. PR #26 (`fe0a1d6`) - provider readiness.
+7. PR #27 (`0c6c3a4`) - Resend email delivery.
+8. PR #28 (`29cc4e1`) - Meta WhatsApp Cloud API delivery code.
+9. PR #29 (`421b3d2`) - Email + WhatsApp delivery and failed-channel retry.
+10. PR #30 (`97577fb`) - canonical tax and totals integrity.
+11. PR #31 (`6ff9762`) - line descriptions, accessible reordering and final
+    Create/Edit parity.
+
+The delivered composer now provides a single-active-language workflow,
+localization-state visibility, catalog/custom lines, localized descriptions,
+stable reordering, validity, canonical discounts/tax/totals, preview, PDF and
+approval behavior. Email, Both-channel and failed-channel retry are available.
+The Meta provider code is complete; live Meta credentials, phone-number and
+approved-template configuration remain deferred environment work.
+
+The next product frontier is a read-only Phase 4/5 assessment covering
+approval/downstream commercial-document lifecycle and canonical
+customer/catalog reuse. This roadmap close does not authorize implementation.
 
 Continuing guardrails:
 
@@ -114,7 +136,8 @@ Continuing guardrails:
 2. AI-assisted subject and brief generation.
 3. Voice quotation capture and intent extraction.
 4. AI-assisted scope and commercial terms.
-5. Email and WhatsApp delivery.
+5. Email and WhatsApp delivery. Delivered in Phase 3; live Meta account
+   configuration remains deferred.
 6. Certificate-based cryptographic PDF signatures.
 
 ### Out of Scope for the First Slice
@@ -138,5 +161,6 @@ Verified merge commit:
 `9d6db831373d13b2ea7a6f269c1cc903f23617fb`
 
 These entry conditions are retained as history and have been superseded by the
-merged Phase 1.4 implementation. Any new UX slice requires a fresh assessment
-and CTO-approved acceptance criteria from current `main`.
+merged Phase 1.4 and Phase 3 implementation. Any Phase 4/5 slice requires a
+fresh read-only assessment and CTO-approved acceptance criteria from current
+`main`.

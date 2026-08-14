@@ -1,11 +1,11 @@
 # Project Status
 
-Current Product Frontier: Proposal Composer UX finalization / Phase 3 assessment
+Current Product Frontier: Read-only Phase 4/5 lifecycle and canonical-reuse assessment
 
-Status: Phase 1.4 and its safe dependency-hardening follow-up are merged and
-closed. No next implementation slice has started.
+Status: Phase 3 Proposal Composer UX is merged and closed. No Phase 4/5
+implementation slice has started.
 
-Verified baseline: `23c2d2f` on `main` (2026-08-13)
+Verified baseline: `6ff9762` on `main` (2026-08-14)
 
 ## Sprint 09A - Quotation API
 
@@ -75,7 +75,7 @@ company branding requires a separate schema/migration decision.
 
 ## Approved Next Product Direction — Quotation Proposal Composer
 
-Status: **Document foundation delivered / UX finalization pending assessment**
+Status: **Delivered and closed through Phase 3 on 2026-08-14**
 
 Proposed Sprint:
 
@@ -97,13 +97,15 @@ Approved first slice:
 - Arabic and English layout positioning.
 - Human approval before final document generation.
 
-Deferred:
+Originally deferred from the first slice:
 
 - Voice capture.
 - AI intent extraction.
 - AI-generated scope and terms.
 - Certificate-based cryptographic PDF signing.
-- Email and WhatsApp delivery.
+- Email and WhatsApp delivery. Production email delivery and the Meta WhatsApp
+  code path were subsequently delivered in Phase 3; live Meta account
+  configuration remains deferred.
 
 Important:
 
@@ -114,9 +116,8 @@ Verified merge commit:
 `9d6db831373d13b2ea7a6f269c1cc903f23617fb`
 
 The Phase 1.4 merge superseded the earlier pending-documentation state and
-delivered the proposal document foundation. The next product decision is a
-Proposal Composer UX gap assessment and bounded acceptance criteria; no next
-feature implementation has started.
+delivered the proposal document foundation. Phase 3 subsequently completed the
+approved composer, preview, tax-integrity and delivery UX slices listed below.
 
 ## Phase 1.4 - Branded Proposal Delivery
 
@@ -148,3 +149,55 @@ Status: Closed and merged through PR #19 at `23c2d2f` on 2026-08-13.
 - Remaining Next 15 nested PostCSS and Sharp findings are tracked for a planned
   Next 16 security migration. That migration is a separate engineering
   workstream, not the next product feature.
+
+## Phase 3 - Proposal Composer UX
+
+Status: Closed and merged through PR #31 at `6ff9762` on 2026-08-14.
+
+Merged delivery sequence:
+
+- PR #21 (`627d467`): active-language composer and localization visibility.
+- PR #22 (`40314bc`): draft-edit catalog/custom line parity.
+- PR #23 (`8a4cbdf`): quotation validity UX.
+- PR #24 (`44b7464`): authenticated proposal PDF preview.
+- PR #25 (`a878ca4`): quotation delivery foundation and audit trail.
+- PR #26 (`fe0a1d6`): provider-readiness boundaries and configuration state.
+- PR #27 (`0c6c3a4`): Resend email delivery.
+- PR #28 (`29cc4e1`): Meta WhatsApp Cloud API delivery code path.
+- PR #29 (`421b3d2`): combined Email + WhatsApp delivery and failed-channel retry.
+- PR #30 (`97577fb`): canonical quotation tax and totals integrity.
+- PR #31 (`6ff9762`): localized line descriptions, line reordering and final
+  Create/Edit composer parity.
+
+Delivered:
+
+- A single-active-language Create/Edit composer that preserves inactive
+  localized values and exposes localization state safely.
+- Catalog and custom line workflows, localized line descriptions, stable line
+  identity, contiguous positions, accessible reordering and final-line safety.
+- Canonical server-owned tax percentages and totals with explicit historical
+  snapshot preservation and intentional refresh to active current rates.
+- Proposal preview, deterministic PDF/approval behavior and localized line
+  descriptions in quotation detail and BOQ output.
+- Email, Both-channel and retry-failed-channel UX with a delivery audit trail.
+- Resend email delivery and a complete Meta WhatsApp provider code path. Meta
+  live-account credentials/template configuration remain an environment task.
+
+Validated at the final feature close: Prisma validation and migration status,
+TypeScript, production build, 444/444 tests across 68 files, diff checks and CI
+Quality.
+
+Still deferred:
+
+- Contracts, sales orders, invoices and payments.
+- Voice capture and AI-assisted proposal composition.
+- Live Meta account/template configuration.
+- WebP branding compatibility, arbitrary custom HEX branding and general
+  dynamic multi-page BOQ pagination.
+- Certificate-based cryptographic PDF signatures.
+- The planned Next 16 security migration.
+
+The next recommended product action is a read-only Phase 4/5 assessment of
+approval/downstream document lifecycle and canonical customer/catalog reuse.
+That assessment must produce bounded CTO-reviewable acceptance criteria before
+any implementation begins.

@@ -180,29 +180,32 @@ requires a separate layout and acceptance-test slice.
 
 # Phase 3 — Proposal composer UX
 
-Status: **Next recommended product assessment**
+Status: **Delivered and closed through PR #31 (`6ff9762`)**
 
-Finalize quotation creation/editing flow:
+Delivered quotation creation/editing flow:
 
-- single active language experience
+- single active language experience with inactive-locale preservation
 - clear localization status
-- line editor
-- discounts
-- tax
-- scope
-- notes
-- terms
-- preview
-- PDF
-- approval state
+- catalog/custom line editor with descriptions and accessible reordering
+- discounts and canonical tax/totals integrity
+- scope, notes, terms and quotation validity
+- authenticated preview and deterministic PDF
+- approval state and approval-time document behavior
+- email, combined Email + WhatsApp, and failed-channel retry UX
 
-Remove temporary bilingual editing controls where they conflict with the final one-language-at-a-time UX.
+Delivery history: PRs #21-#31, from active-language UX (`627d467`) through
+final Create/Edit line parity (`6ff9762`). The sequence also delivered validity,
+preview, delivery audit/provider readiness, Resend email, Meta WhatsApp provider
+code, Both/retry UX and tax/totals integrity.
+
+Meta live-account credentials, phone-number setup and approved-template
+configuration remain deferred; the provider implementation itself is complete.
 
 ---
 
 # Phase 4 — Approval and document lifecycle
 
-Status: **Partially delivered**
+Status: **Partially delivered; next read-only assessment frontier**
 
 Complete:
 
@@ -223,11 +226,17 @@ Approval identity, timestamps, immutable approval-time brand snapshots and the
 verified document path are delivered. Downstream commercial document creation
 remains future work.
 
+Next action: assess the remaining approval-to-contract/order/invoice lifecycle,
+state transitions, snapshots and audit requirements. Produce bounded
+CTO-reviewable acceptance criteria before authorizing implementation.
+
 Do not regenerate historical approved documents from mutable live data without a snapshot/version strategy.
 
 ---
 
 # Phase 5 — Customer and catalog integration
+
+Status: **Partially delivered; next read-only assessment frontier**
 
 Quotation composer should use canonical:
 
@@ -243,6 +252,11 @@ Localization variants should belong to their appropriate entities when reusable.
 Avoid retranslating the same catalog product for every quotation.
 
 This can dramatically reduce AI usage.
+
+Current quotation flows already consume tenant-safe customer, catalog and tax
+sources. The next assessment must verify where canonical customer/catalog
+values and reusable localized variants should be referenced downstream without
+claiming that broader reuse is already complete.
 
 ---
 
@@ -279,13 +293,22 @@ After quotation approval:
 
 # Phase 8 — Notifications and sending
 
-Add production sending workflow:
+Status: **Partially delivered through PRs #25-#29**
 
-- email
-- optional WhatsApp integration later
-- sending status
-- failure/retry history
-- sent document snapshot
+Delivered sending workflow:
+
+- Resend email delivery
+- Meta WhatsApp Cloud API provider code
+- Email, WhatsApp and Both-channel orchestration
+- sending status and delivery audit records
+- failure history and retry of failed channels
+- approved/sent document snapshot safeguards
+
+Still deferred:
+
+- live Meta account credentials, phone-number registration and approved
+  template configuration
+- production environment rollout/monitoring decisions outside application code
 
 Never silently mark a document sent if external delivery failed.
 
@@ -398,6 +421,6 @@ Release checklist:
 14. release
 15. monitor logs/errors
 
-Important: Phase 1.4 is closed on `main`. Start any subsequent implementation
-from the current verified main after its scope and acceptance criteria are
-approved.
+Important: Phase 3 is closed on `main` at `6ff9762`. The next recommended work
+is a read-only Phase 4/5 assessment. Start any subsequent implementation only
+after its scope and acceptance criteria are approved.
