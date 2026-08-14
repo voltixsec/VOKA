@@ -68,17 +68,6 @@ describe("Quotation use case tenant isolation", () => {
         quotationId: "quotation-1",
       },
     },
-    {
-      name: "cancel",
-      create: (repository: IQuotationRepository) =>
-        new CancelQuotationUseCase(repository, {
-          existsBySourceQuotation: vi.fn().mockResolvedValue(false),
-        }),
-      dto: {
-        companyId: "company-1",
-        quotationId: "quotation-1",
-      },
-    },
   ])(
     "scopes $name lookup to the active company",
     async ({ create, dto }) => {
@@ -101,4 +90,31 @@ describe("Quotation use case tenant isolation", () => {
       });
     },
   );
+
+  it("passes the active tenant identity to atomic cancellation", async () => {
+    const cancellationRepository = {
+      cancel: vi.fn().mockResolvedValue({
+        kind: "QUOTATION_NOT_FOUND" as const,
+      }),
+    };
+
+    const result = await new CancelQuotationUseCase(
+      cancellationRepository,
+    ).execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+
+    expect(cancellationRepository.cancel).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+    expect(result).toEqual({
+      success: false,
+      error: {
+        code: "QUOTATION_NOT_FOUND",
+        message: "Quotation not found.",
+      },
+    });
+  });
 });

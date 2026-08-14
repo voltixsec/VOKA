@@ -235,7 +235,8 @@ APPROVED quotation.
 - persisted customer, bilingual line/proposal, discount, historical tax and
   total snapshot copying without live repricing;
 - creator and source-approval audit snapshots;
-- cancellation fencing once a Sales Order exists;
+- tenant-scoped source-row locking that serializes conversion and cancellation,
+  with cancellation fencing once a Sales Order exists and no line rewrites;
 - tenant-scoped convert/list/detail APIs and localized read UI.
 
 Not delivered: Sales Order editing, confirmation, cancellation, fulfillment,

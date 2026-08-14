@@ -214,19 +214,28 @@ Delivered:
 - Database uniqueness enforces the source one-to-one relationship and
   company-scoped order number. Repeated and concurrent conversions return the
   existing order without exposing a raw database conflict.
+- Conversion and cancellation acquire the same tenant-scoped active quotation
+  row lock before checking Sales Order state, so whichever operation commits
+  first determines the other operation's stable lifecycle result.
 - Conversion copies the persisted approved quotation customer, localized
   content, ordered line, discount, historical tax and totals snapshots inside
   one Prisma transaction. It does not reload or reprice from mutable customer,
   catalog, Price List or TaxRate records and does not invoke localization/AI.
 - Creator identity and source approval identity/date are stored as historical
   audit snapshots, with a nullable creator user reference for retention.
-- A quotation with a downstream Sales Order can no longer be cancelled.
+- A quotation with a downstream Sales Order can no longer be cancelled, and
+  cancellation updates lifecycle fields without rewriting quotation lines or
+  commercial snapshots.
 - Authenticated convert/list/detail APIs and localized, responsive Sales Order
   list/detail UI are available. The Sales Order is read-only after conversion.
 
 Validated: 105 focused tests across 12 files, 501/501 full regression tests
 across 77 files, TypeScript, Prisma format/validate/generate and 17-migration
 status, lint, production build and diff checks.
+
+P0 conversion/cancellation serialization correction validation: 69 focused
+tests across 7 files and 518/518 full regression tests across 78 files, with
+TypeScript, Prisma, lint, production build and diff checks passing.
 
 Still deferred:
 

@@ -20,6 +20,9 @@ Verified on: 2026-08-14 (Asia/Kuwait)
   within its company.
 - Source quotation uniqueness, a Prisma transaction and targeted uniqueness
   recovery make conversion idempotent and concurrency-safe.
+- Conversion and cancellation acquire the same tenant-scoped active quotation
+  row lock before deciding; the first committed lifecycle outcome controls the
+  waiting operation without rewriting quotation lines.
 - The Sales Order copies persisted customer, bilingual proposal/line,
   commercial discount, historical tax and total values. It never reloads or
   reprices from current customer, catalog, Price List or TaxRate data and does
@@ -35,7 +38,8 @@ Verified on: 2026-08-14 (Asia/Kuwait)
 ## Validation State
 
 - 105 focused Phase 4.1 and cancellation tests pass across 12 files.
-- Full suite passes 501/501 tests across 77 files, above the 444-test baseline.
+- 69 focused conversion/cancellation serialization tests pass across 7 files.
+- Full suite passes 518/518 tests across 78 files, above the 444-test baseline.
 - TypeScript and repository lint pass.
 - Prisma schema formatting, validation, generation and migration application
   pass; the local database is current.

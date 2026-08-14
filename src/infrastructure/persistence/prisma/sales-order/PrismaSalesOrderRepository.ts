@@ -14,6 +14,7 @@ import {
   PrismaSalesOrderMapper,
   type PrismaSalesOrderRecord,
 } from "./PrismaSalesOrderMapper";
+import { lockActiveQuotationForUpdate } from "../quotation/lockActiveQuotationForUpdate";
 
 const salesOrderInclude = {
   lines: {
@@ -37,6 +38,16 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
   ): Promise<SalesOrderConversionPersistenceResult> {
     try {
       return await this.db.$transaction(async (tx) => {
+        const locked = await lockActiveQuotationForUpdate(
+          tx,
+          params.companyId,
+          params.quotationId,
+        );
+
+        if (!locked) {
+          return { kind: "QUOTATION_NOT_FOUND" as const };
+        }
+
         const existing = await tx.salesOrder.findFirst({
           where: {
             companyId: params.companyId,

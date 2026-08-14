@@ -179,7 +179,8 @@ This bounded slice delivers the first downstream commercial snapshot:
 - No live customer/catalog/Price List/TaxRate repricing or client commercial
   authority.
 - Tenant-scoped conversion/list/detail APIs and localized read-only UI.
-- Quotation cancellation conflict after a Sales Order exists.
+- Tenant-scoped source-row locking serializes conversion against cancellation;
+  cancellation conflicts after an order exists and never rewrites source lines.
 
 Future slices require separate approval for Sales Order operations,
 confirmation, cancellation, fulfillment, inventory, PDF, contracts, invoices
