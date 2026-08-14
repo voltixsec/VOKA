@@ -56,23 +56,49 @@ describe("createQuotationDeliveryGateway", () => {
     expect(createTransport).not.toHaveBeenCalled();
   });
 
-  it("keeps WHATSAPP unavailable despite Meta-looking configuration", async () => {
+  it("routes fully configured WHATSAPP independently of email", async () => {
     const send = vi.fn();
+    const uploadDocument = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { id: "media-1" } });
+    const sendTemplate = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { messages: [{ id: "wamid.1" }] } });
+    const createMetaTransport = vi.fn(() => ({ uploadDocument, sendTemplate }));
     const gateway = createQuotationDeliveryGateway({
-      VOKA_EMAIL_PROVIDER: "resend",
-      RESEND_API_KEY: "test-only-key",
-      VOKA_EMAIL_FROM: "sales@example.invalid",
       VOKA_WHATSAPP_PROVIDER: "meta",
       META_WHATSAPP_ACCESS_TOKEN: "test-token",
       META_WHATSAPP_PHONE_NUMBER_ID: "test-phone",
-    }, () => ({ send }));
+      META_WHATSAPP_GRAPH_API_VERSION: "v23.0",
+      META_WHATSAPP_TEMPLATE_EN: "quotation_en",
+      META_WHATSAPP_TEMPLATE_LANGUAGE_EN: "en_US",
+    }, () => ({ send }), createMetaTransport);
 
-    const result = await gateway.deliver({ ...input, channel: "WHATSAPP" });
+    const result = await gateway.deliver({
+      ...input,
+      channel: "WHATSAPP",
+      recipient: "96590000000",
+    });
 
-    expect(result).toMatchObject({
+    expect(createMetaTransport).toHaveBeenCalledWith({
+      accessToken: "test-token",
+      phoneNumberId: "test-phone",
+      graphApiVersion: "v23.0",
+    });
+    expect(result).toEqual({ success: true, providerMessageId: "wamid.1" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("keeps WHATSAPP unavailable when its selected locale lacks a language/template pair", async () => {
+    const createMetaTransport = vi.fn();
+    const gateway = createQuotationDeliveryGateway({
+      VOKA_WHATSAPP_PROVIDER: "meta",
+      META_WHATSAPP_ACCESS_TOKEN: "test-token",
+      META_WHATSAPP_PHONE_NUMBER_ID: "test-phone",
+      META_WHATSAPP_GRAPH_API_VERSION: "v23.0",
+      META_WHATSAPP_TEMPLATE_AR: "quotation_ar",
+    }, vi.fn(), createMetaTransport);
+
+    expect(await gateway.deliver({ ...input, channel: "WHATSAPP" })).toMatchObject({
       success: false,
       errorCode: "DELIVERY_PROVIDER_NOT_CONFIGURED",
     });
-    expect(send).not.toHaveBeenCalled();
+    expect(createMetaTransport).not.toHaveBeenCalled();
   });
 });

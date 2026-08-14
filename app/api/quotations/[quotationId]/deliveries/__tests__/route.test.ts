@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
@@ -94,6 +94,10 @@ describe("GET /api/quotations/[quotationId]/deliveries", () => {
     mocks.findHistory.mockResolvedValue([failedDelivery()]);
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("allows VIEWER and returns safe tenant-scoped history", async () => {
     const response = await GET(new Request(
       "http://localhost/api/quotations/quotation-1/deliveries",
@@ -118,10 +122,32 @@ describe("GET /api/quotations/[quotationId]/deliveries", () => {
     expect(body.data[0]).not.toHaveProperty("accessToken");
     expect(body.meta.channels).toMatchObject({
       EMAIL: { configured: false },
-      WHATSAPP: { configured: false },
+      WHATSAPP: { configured: false, locales: { ar: false, en: false } },
     });
     expect(JSON.stringify(body.meta)).not.toContain("RESEND_API_KEY");
     expect(JSON.stringify(body.meta)).not.toContain("ACCESS_TOKEN");
+  });
+
+  it("reports only safe Meta base and locale readiness booleans", async () => {
+    vi.stubEnv("VOKA_WHATSAPP_PROVIDER", "meta");
+    vi.stubEnv("META_WHATSAPP_ACCESS_TOKEN", "secret-token");
+    vi.stubEnv("META_WHATSAPP_PHONE_NUMBER_ID", "secret-phone-id");
+    vi.stubEnv("META_WHATSAPP_GRAPH_API_VERSION", "v23.0");
+    vi.stubEnv("META_WHATSAPP_TEMPLATE_AR", "quotation_ar");
+    vi.stubEnv("META_WHATSAPP_TEMPLATE_LANGUAGE_AR", "ar");
+
+    const response = await GET(new Request(
+      "http://localhost/api/quotations/quotation-1/deliveries",
+    ));
+    const body = await response.json();
+
+    expect(body.meta.channels.WHATSAPP).toEqual({
+      configured: true,
+      locales: { ar: true, en: false },
+    });
+    expect(JSON.stringify(body.meta)).not.toContain("secret-token");
+    expect(JSON.stringify(body.meta)).not.toContain("secret-phone-id");
+    expect(JSON.stringify(body.meta)).not.toContain("quotation_ar");
   });
 
   it("does not query or leak history for a cross-tenant quotation id", async () => {

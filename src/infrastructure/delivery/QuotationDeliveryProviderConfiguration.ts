@@ -6,8 +6,11 @@ export type QuotationDeliveryProviderEnvironment = {
   VOKA_WHATSAPP_PROVIDER?: string;
   META_WHATSAPP_ACCESS_TOKEN?: string;
   META_WHATSAPP_PHONE_NUMBER_ID?: string;
+  META_WHATSAPP_GRAPH_API_VERSION?: string;
   META_WHATSAPP_TEMPLATE_AR?: string;
   META_WHATSAPP_TEMPLATE_EN?: string;
+  META_WHATSAPP_TEMPLATE_LANGUAGE_AR?: string;
+  META_WHATSAPP_TEMPLATE_LANGUAGE_EN?: string;
 };
 
 export type QuotationDeliveryProviderAvailability = {
@@ -22,11 +25,22 @@ export type QuotationDeliveryProviderAvailability = {
       arConfigured: boolean;
       enConfigured: boolean;
     };
+    locales: {
+      ar: boolean;
+      en: boolean;
+    };
   };
 };
 
 function value(input: string | undefined): string | null {
   return input?.trim() || null;
+}
+
+function graphApiVersion(input: string | undefined): string | null {
+  const normalized = value(input);
+  return normalized && /^v\d+\.\d+$/.test(normalized)
+    ? normalized
+    : null;
 }
 
 export class QuotationDeliveryProviderConfiguration {
@@ -44,6 +58,20 @@ export class QuotationDeliveryProviderConfiguration {
       value(this.environment.VOKA_WHATSAPP_PROVIDER)?.toLowerCase() === "meta"
         ? "META"
         : null;
+    const whatsappBaseConfigured = Boolean(
+      whatsappProvider &&
+      value(this.environment.META_WHATSAPP_ACCESS_TOKEN) &&
+      value(this.environment.META_WHATSAPP_PHONE_NUMBER_ID) &&
+      graphApiVersion(this.environment.META_WHATSAPP_GRAPH_API_VERSION),
+    );
+    const arConfigured = Boolean(
+      value(this.environment.META_WHATSAPP_TEMPLATE_AR) &&
+      value(this.environment.META_WHATSAPP_TEMPLATE_LANGUAGE_AR),
+    );
+    const enConfigured = Boolean(
+      value(this.environment.META_WHATSAPP_TEMPLATE_EN) &&
+      value(this.environment.META_WHATSAPP_TEMPLATE_LANGUAGE_EN),
+    );
 
     return {
       EMAIL: {
@@ -56,18 +84,14 @@ export class QuotationDeliveryProviderConfiguration {
       },
       WHATSAPP: {
         provider: whatsappProvider,
-        configured: Boolean(
-          whatsappProvider &&
-          value(this.environment.META_WHATSAPP_ACCESS_TOKEN) &&
-          value(this.environment.META_WHATSAPP_PHONE_NUMBER_ID),
-        ),
+        configured: whatsappBaseConfigured,
         templates: {
-          arConfigured: Boolean(
-            value(this.environment.META_WHATSAPP_TEMPLATE_AR),
-          ),
-          enConfigured: Boolean(
-            value(this.environment.META_WHATSAPP_TEMPLATE_EN),
-          ),
+          arConfigured,
+          enConfigured,
+        },
+        locales: {
+          ar: whatsappBaseConfigured && arConfigured,
+          en: whatsappBaseConfigured && enConfigured,
         },
       },
     };
@@ -79,5 +103,17 @@ export class QuotationDeliveryProviderConfiguration {
         ? this.environment.META_WHATSAPP_TEMPLATE_AR
         : this.environment.META_WHATSAPP_TEMPLATE_EN,
     );
+  }
+
+  getWhatsAppTemplateLanguage(locale: "ar" | "en"): string | null {
+    return value(
+      locale === "ar"
+        ? this.environment.META_WHATSAPP_TEMPLATE_LANGUAGE_AR
+        : this.environment.META_WHATSAPP_TEMPLATE_LANGUAGE_EN,
+    );
+  }
+
+  getWhatsAppGraphApiVersion(): string | null {
+    return graphApiVersion(this.environment.META_WHATSAPP_GRAPH_API_VERSION);
   }
 }

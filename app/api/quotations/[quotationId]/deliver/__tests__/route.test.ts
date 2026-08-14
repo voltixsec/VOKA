@@ -155,6 +155,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     [{ channel: "EMAIL", recipient: "", locale: "en" }, "DELIVERY_RECIPIENT_REQUIRED"],
     [{ channel: "EMAIL", recipient: "x", locale: "fr" }, "DELIVERY_LOCALE_INVALID"],
     [{ channel: "EMAIL", recipient: "not-an-email", locale: "en" }, "DELIVERY_EMAIL_RECIPIENT_INVALID"],
+    [{ channel: "WHATSAPP", recipient: "0501234567", locale: "ar" }, "DELIVERY_WHATSAPP_RECIPIENT_INVALID"],
   ])("rejects invalid input", async (invalid, code) => {
     const response = await POST(request(invalid));
     const body = await response.json();
@@ -194,6 +195,60 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     }));
     expect(value.status).toBe("DRAFT");
     expect(mocks.update).toHaveBeenCalledOnce();
+  });
+
+  it("persists a normalized WhatsApp recipient and Meta message ID without changing lifecycle", async () => {
+    const value = quotation();
+    mocks.findById.mockResolvedValue(value);
+    mocks.gatewayDeliver.mockResolvedValue({
+      success: true,
+      providerMessageId: "wamid.1",
+    });
+
+    const response = await POST(request({
+      channel: "WHATSAPP",
+      recipient: "+965 9000-0000",
+      locale: "ar",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.data).toMatchObject({
+      channel: "WHATSAPP",
+      recipient: "96590000000",
+      status: "SENT",
+      providerMessageId: "wamid.1",
+    });
+    expect(mocks.gatewayDeliver).toHaveBeenCalledWith(expect.objectContaining({
+      channel: "WHATSAPP",
+      recipient: "96590000000",
+      locale: "ar",
+    }));
+    expect(value.status).toBe("DRAFT");
+  });
+
+  it("truthfully persists a failed Meta send without changing quotation lifecycle", async () => {
+    const value = quotation();
+    mocks.findById.mockResolvedValue(value);
+    mocks.gatewayDeliver.mockResolvedValue({
+      success: false,
+      errorCode: "DELIVERY_WHATSAPP_RATE_LIMITED",
+      errorMessage: "WhatsApp delivery is temporarily rate limited.",
+    });
+
+    const response = await POST(request({
+      channel: "WHATSAPP",
+      recipient: "96590000000",
+      locale: "en",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.data).toMatchObject({
+      status: "FAILED",
+      errorCode: "DELIVERY_WHATSAPP_RATE_LIMITED",
+    });
+    expect(value.status).toBe("DRAFT");
   });
 
   it("returns the same not-found result for a cross-tenant quotation id", async () => {
