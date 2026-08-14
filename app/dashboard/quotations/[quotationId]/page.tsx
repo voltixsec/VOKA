@@ -90,7 +90,14 @@ type Delivery = {
   channel: "EMAIL" | "WHATSAPP";
   recipient: string;
   status: "PENDING" | "SENT" | "FAILED";
+  errorMessage?: string | null;
   attemptedAt: string;
+};
+
+type DeliveryAttemptClientResult = {
+  channel: "EMAIL" | "WHATSAPP";
+  sent: boolean;
+  errorMessage?: string;
 };
 
 type DeliveryChannelAvailability = {
@@ -343,6 +350,49 @@ export default function QuotationDetailsPage() {
     void loadDeliveries();
   }, [loadDeliveries]);
 
+  const activeLocale = isArabic ? "ar" : "en";
+  const whatsappReady = deliveryChannels.WHATSAPP.configured &&
+    deliveryChannels.WHATSAPP.locales[activeLocale];
+  const bothReady = deliveryChannels.EMAIL.configured &&
+    Boolean(emailRecipient.trim()) && whatsappReady &&
+    Boolean(whatsappRecipient.trim());
+
+  function channelFailure(channel: "EMAIL" | "WHATSAPP") {
+    return channel === "EMAIL"
+      ? t("تعذر إرسال البريد الإلكتروني", "Email delivery failed")
+      : t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed");
+  }
+
+  async function deliverChannel(
+    channel: "EMAIL" | "WHATSAPP",
+    recipient: string,
+  ): Promise<DeliveryAttemptClientResult> {
+    if (!quote) return { channel, sent: false, errorMessage: channelFailure(channel) };
+
+    try {
+      const response = await fetch(
+        `/api/quotations/${encodeURIComponent(quote.id)}/deliver`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel, recipient: recipient.trim(), locale: activeLocale }),
+        },
+      );
+      const json = await response.json().catch(() => null);
+      if (!response.ok || json?.data?.status !== "SENT") {
+        return {
+          channel,
+          sent: false,
+          errorMessage: json?.data?.errorMessage ??
+            json?.error?.message ?? channelFailure(channel),
+        };
+      }
+      return { channel, sent: true };
+    } catch {
+      return { channel, sent: false, errorMessage: channelFailure(channel) };
+    }
+  }
+
   async function sendEmail() {
     if (!quote || !emailRecipient.trim()) {
       setDeliveryFeedback({
@@ -355,58 +405,14 @@ export default function QuotationDetailsPage() {
       return;
     }
 
-    try {
-      setActing("deliver-email");
-      setDeliveryFeedback(null);
-      const response = await fetch(
-        `/api/quotations/${encodeURIComponent(quote.id)}/deliver`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channel: "EMAIL",
-            recipient: emailRecipient.trim(),
-            locale: isArabic ? "ar" : "en",
-          }),
-        },
-      );
-      const json = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          json?.error?.message ??
-            t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
-        );
-      }
-
-      if (json?.data?.status === "SENT") {
-        setDeliveryFeedback({
-          kind: "success",
-          message: t(
-            "تم إرسال البريد الإلكتروني",
-            "Email sent",
-          ),
-        });
-      } else {
-        setDeliveryFeedback({
-          kind: "error",
-          message:
-            json?.data?.errorMessage ??
-            t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
-        });
-      }
-
-      await loadDeliveries();
-    } catch (caught) {
-      setDeliveryFeedback({
-        kind: "error",
-        message: caught instanceof Error
-          ? caught.message
-          : t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
-      });
-    } finally {
-      setActing("");
-    }
+    setActing("deliver-email");
+    setDeliveryFeedback(null);
+    const result = await deliverChannel("EMAIL", emailRecipient);
+    setDeliveryFeedback(result.sent
+      ? { kind: "success", message: t("تم إرسال البريد الإلكتروني", "Email sent") }
+      : { kind: "error", message: result.errorMessage ?? channelFailure("EMAIL") });
+    await loadDeliveries();
+    setActing("");
   }
 
   async function sendWhatsApp() {
@@ -418,42 +424,88 @@ export default function QuotationDetailsPage() {
       return;
     }
 
-    try {
-      setActing("deliver-whatsapp");
-      setDeliveryFeedback(null);
-      const response = await fetch(
-        `/api/quotations/${encodeURIComponent(quote.id)}/deliver`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channel: "WHATSAPP",
-            recipient: whatsappRecipient.trim(),
-            locale: isArabic ? "ar" : "en",
-          }),
-        },
-      );
-      const json = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(json?.error?.message ?? t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed"));
-      }
-      setDeliveryFeedback(json?.data?.status === "SENT"
-        ? { kind: "success", message: t("تم الإرسال عبر واتساب", "WhatsApp sent") }
-        : {
-          kind: "error",
-          message: json?.data?.errorMessage ?? t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed"),
-        });
-      await loadDeliveries();
-    } catch (caught) {
+    setActing("deliver-whatsapp");
+    setDeliveryFeedback(null);
+    const result = await deliverChannel("WHATSAPP", whatsappRecipient);
+    setDeliveryFeedback(result.sent
+      ? { kind: "success", message: t("تم الإرسال عبر واتساب", "WhatsApp sent") }
+      : { kind: "error", message: result.errorMessage ?? channelFailure("WHATSAPP") });
+    await loadDeliveries();
+    setActing("");
+  }
+
+  async function sendBoth() {
+    if (!bothReady) return;
+    setActing("deliver-both");
+    setDeliveryFeedback(null);
+    const settled = await Promise.allSettled([
+      deliverChannel("EMAIL", emailRecipient),
+      deliverChannel("WHATSAPP", whatsappRecipient),
+    ]);
+    const emailSent = settled[0].status === "fulfilled" && settled[0].value.sent;
+    const whatsappSent = settled[1].status === "fulfilled" && settled[1].value.sent;
+
+    if (emailSent && whatsappSent) {
+      setDeliveryFeedback({
+        kind: "success",
+        message: t(
+          "تم إرسال العرض بالبريد الإلكتروني وواتساب",
+          "Quotation sent by email and WhatsApp",
+        ),
+      });
+    } else if (emailSent) {
       setDeliveryFeedback({
         kind: "error",
-        message: caught instanceof Error
-          ? caught.message
-          : t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed"),
+        message: t(
+          "تم الإرسال بالبريد الإلكتروني، وتعذر الإرسال عبر واتساب",
+          "Email sent; WhatsApp delivery failed",
+        ),
       });
-    } finally {
-      setActing("");
+    } else if (whatsappSent) {
+      setDeliveryFeedback({
+        kind: "error",
+        message: t(
+          "تم الإرسال عبر واتساب، وتعذر إرسال البريد الإلكتروني",
+          "WhatsApp sent; email delivery failed",
+        ),
+      });
+    } else {
+      setDeliveryFeedback({
+        kind: "error",
+        message: t(
+          "تعذر إرسال العرض بالبريد الإلكتروني وواتساب",
+          "Email and WhatsApp delivery failed",
+        ),
+      });
     }
+    await loadDeliveries();
+    setActing("");
+  }
+
+  function retryAvailable(delivery: Delivery) {
+    return delivery.channel === "EMAIL"
+      ? deliveryChannels.EMAIL.configured
+      : whatsappReady;
+  }
+
+  async function retryDelivery(delivery: Delivery) {
+    if (!retryAvailable(delivery)) return;
+    setActing(`retry-${delivery.id}`);
+    setDeliveryFeedback(null);
+    const result = await deliverChannel(delivery.channel, delivery.recipient);
+    setDeliveryFeedback(result.sent
+      ? {
+        kind: "success",
+        message: delivery.channel === "EMAIL"
+          ? t("تمت إعادة إرسال البريد الإلكتروني", "Email resent")
+          : t("تمت إعادة الإرسال عبر واتساب", "WhatsApp resent"),
+      }
+      : {
+        kind: "error",
+        message: result.errorMessage ?? channelFailure(delivery.channel),
+      });
+    await loadDeliveries();
+    setActing("");
   }
 
   async function action(
@@ -994,8 +1046,7 @@ export default function QuotationDetailsPage() {
               size="sm"
               variant="secondary"
               disabled={
-                !deliveryChannels.WHATSAPP.configured ||
-                !deliveryChannels.WHATSAPP.locales[isArabic ? "ar" : "en"] ||
+                !whatsappReady ||
                 !whatsappRecipient.trim() ||
                 Boolean(acting)
               }
@@ -1004,6 +1055,16 @@ export default function QuotationDetailsPage() {
               {acting === "deliver-whatsapp"
                 ? t("جاري الإرسال...", "Sending...")
                 : t("إرسال عبر واتساب", "Send by WhatsApp")}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!bothReady || Boolean(acting)}
+              onClick={() => void sendBoth()}
+            >
+              {acting === "deliver-both"
+                ? t("جاري الإرسال...", "Sending...")
+                : t("إرسال بالبريد وواتساب", "Send by both")}
             </Button>
           </div>
         </div>
@@ -1063,16 +1124,37 @@ export default function QuotationDetailsPage() {
             {deliveries.map((delivery) => (
               <div
                 key={delivery.id}
-                className="grid gap-2 py-3 text-sm md:grid-cols-[110px_1fr_100px_180px]"
+                className="grid gap-2 py-3 text-sm md:grid-cols-[110px_1fr_100px_180px_100px]"
               >
                 <span>{delivery.channel === "EMAIL" ? "Email" : "WhatsApp"}</span>
-                <span className="text-slate-300">{delivery.recipient}</span>
+                <span className="text-slate-300">
+                  {delivery.recipient}
+                  {delivery.status === "FAILED" && delivery.errorMessage && (
+                    <span className="mt-1 block text-xs text-red-300">
+                      {delivery.errorMessage}
+                    </span>
+                  )}
+                </span>
                 <Badge>
                   {deliveryStatusLabels[delivery.status][isArabic ? "ar" : "en"]}
                 </Badge>
                 <span className="text-slate-500">
                   {new Date(delivery.attemptedAt).toLocaleString(
                     isArabic ? "ar-KW" : "en-GB",
+                  )}
+                </span>
+                <span>
+                  {delivery.status === "FAILED" && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!retryAvailable(delivery) || Boolean(acting)}
+                      onClick={() => void retryDelivery(delivery)}
+                    >
+                      {acting === `retry-${delivery.id}`
+                        ? t("جاري الإرسال...", "Sending...")
+                        : t("إعادة المحاولة", "Retry")}
+                    </Button>
                   )}
                 </span>
               </div>
