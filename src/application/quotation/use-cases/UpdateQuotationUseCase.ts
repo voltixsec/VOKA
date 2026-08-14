@@ -69,6 +69,58 @@ export class UpdateQuotationUseCase {
       };
     }
 
+    const refreshLineIds = new Set(processedDto.taxRateRefreshLineIds ?? []);
+    const taxRateIds = processedDto.lines.flatMap((line) => {
+      const taxRateId = line.taxRateId?.trim();
+      if (!taxRateId) return [];
+      const existingLine = line.id
+        ? quotation.lines.find((candidate) => candidate.id === line.id)
+        : undefined;
+      const unchangedHistoricalRate = Boolean(
+        existingLine &&
+        (existingLine.taxRateId ?? null) === taxRateId &&
+        typeof line.id === "string" &&
+        !refreshLineIds.has(line.id),
+      );
+      return unchangedHistoricalRate ? [] : [taxRateId];
+    });
+    const taxPercentages =
+      await this.referenceValidator.resolveTaxRatePercentages(
+        processedDto.companyId,
+        taxRateIds,
+        { activeOnly: true },
+      );
+    if (taxRateIds.some((id) => !taxPercentages.has(id))) {
+      return {
+        success: false,
+        error: {
+          code: "TAX_RATE_NOT_FOUND",
+          message: "A tax rate was not found for the active company.",
+        },
+      };
+    }
+    const canonicalLines = processedDto.lines.map((line) => {
+      const taxRateId = line.taxRateId?.trim() || null;
+      const existingLine = line.id
+        ? quotation.lines.find((candidate) => candidate.id === line.id)
+        : undefined;
+      const preservesHistoricalSnapshot = Boolean(
+        existingLine &&
+        (existingLine.taxRateId ?? null) === taxRateId &&
+        typeof line.id === "string" &&
+        !refreshLineIds.has(line.id),
+      );
+      return {
+        ...line,
+        taxRateId,
+        taxPercentage: !taxRateId
+          ? 0
+          : preservesHistoricalSnapshot
+            ? existingLine?.taxPercentage ?? 0
+            : taxPercentages.get(taxRateId) ?? 0,
+      };
+    });
+
     try {
       if (processedDto.expiryDate !== undefined) {
         quotation.updateExpiryDate(
@@ -76,7 +128,7 @@ export class UpdateQuotationUseCase {
         );
       }
 
-      quotation.replaceLines(processedDto.lines);
+      quotation.replaceLines(canonicalLines);
 
       quotation.setDiscount(processedDto.discount ?? null);
 

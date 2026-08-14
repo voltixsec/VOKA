@@ -20,6 +20,11 @@ import {
 import {
   useLanguage,
 } from "../../../../../components/i18n/LanguageProvider";
+import {
+  QuotationCalculator,
+  type Discount,
+  type QuotationLineType,
+} from "@/src/domain/quotation";
 
 type ScopeType =
   | "SUPPLY_ONLY"
@@ -34,7 +39,7 @@ type Item = {
   id: string;
   name: string;
   code: string;
-  type: string;
+  type: QuotationLineType;
   salePrice: number;
   taxRateId?: string | null;
 };
@@ -44,7 +49,7 @@ type Line = {
   catalogItemId?: string | null;
   taxRateId?: string | null;
   position: number;
-  type: string;
+  type: QuotationLineType;
   itemCode?: string | null;
   itemName: string;
   itemNameAr?: string | null;
@@ -58,7 +63,15 @@ type Line = {
   quantity: number;
   unitPrice: number;
   taxPercentage?: number;
-  discount?: unknown;
+  discount?: Discount | null;
+  taxUnavailable?: boolean;
+};
+
+type TaxRate = {
+  id: string;
+  name: string;
+  percentage: number;
+  isSystem: boolean;
 };
 
 type Quote = {
@@ -162,7 +175,16 @@ export default function EditQuotationPage() {
   const [items, setItems] =
     useState<Item[]>([]);
 
+  const [taxRates, setTaxRates] =
+    useState<TaxRate[]>([]);
+
+  const [taxRateRefreshLineIds, setTaxRateRefreshLineIds] =
+    useState<string[]>([]);
+
   const [catalogError, setCatalogError] =
+    useState(false);
+
+  const [taxRateError, setTaxRateError] =
     useState(false);
 
   const [projectName, setProjectName] =
@@ -338,53 +360,49 @@ export default function EditQuotationPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch(
-          "/api/catalog/items?pageSize=100&isActive=true",
-        );
+        const [catalogResponse, taxRateResponse] = await Promise.all([
+          fetch("/api/catalog/items?pageSize=100&isActive=true"),
+          fetch("/api/tax-rates"),
+        ]);
 
-        if (!response.ok) {
+        if (!catalogResponse.ok) {
           setCatalogError(true);
-          return;
+        } else {
+          const json = await catalogResponse.json();
+          setItems(Array.isArray(json.data) ? json.data : []);
         }
-
-        const json = await response.json();
-        setItems(
-          Array.isArray(json.data)
-            ? json.data
-            : [],
-        );
+        if (!taxRateResponse.ok) {
+          setTaxRateError(true);
+        } else {
+          const json = await taxRateResponse.json();
+          setTaxRates(Array.isArray(json.data) ? json.data : []);
+        }
       } catch {
         setCatalogError(true);
+        setTaxRateError(true);
       }
     })();
   }, []);
 
-  const subtotal = useMemo(
-    () =>
-      lines.reduce(
-        (sum, line) =>
-          sum +
-          line.quantity *
-            line.unitPrice,
-        0,
-      ),
-    [lines],
-  );
-
-  const discountAmount =
-    discountType === "PERCENTAGE"
-      ? subtotal *
-        Math.min(100, discountValue) /
-        100
-      : discountType === "FIXED"
-        ? Math.min(
-            subtotal,
-            discountValue,
-          )
-        : 0;
-
-  const total =
-    subtotal - discountAmount;
+  const preview = useMemo(() => {
+    if (lines.length === 0) {
+      return {
+        lines: [],
+        totals: { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 },
+      };
+    }
+    try {
+      return QuotationCalculator.calculate(
+        lines.map((line, index) => ({ ...line, position: index + 1 })),
+        discountType ? { type: discountType, value: discountValue } : null,
+      );
+    } catch {
+      return {
+        lines: [],
+        totals: { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 },
+      };
+    }
+  }, [discountType, discountValue, lines]);
 
   function activeLocalizedText(
     itemName: string,
@@ -420,6 +438,8 @@ export default function EditQuotationPage() {
           unitName: "PCS",
           quantity: 1,
           unitPrice: 0,
+          taxRateId: null,
+          taxPercentage: 0,
           ...activeLocalizedText(itemName),
         },
       ]);
@@ -434,21 +454,73 @@ export default function EditQuotationPage() {
       return;
     }
 
+    const catalogTaxRate = item.taxRateId
+      ? taxRates.find((rate) => rate.id === item.taxRateId)
+      : undefined;
+
     setLines((current) => [
       ...current,
       {
         position: current.length + 1,
         catalogItemId: item.id,
-        taxRateId: item.taxRateId,
+        taxRateId: catalogTaxRate?.id ?? null,
         type: item.type,
         itemCode: item.code,
         itemName: item.name,
         unitName: "PCS",
         quantity: 1,
         unitPrice: item.salePrice,
+        taxPercentage: catalogTaxRate?.percentage ?? 0,
+        taxUnavailable: Boolean(item.taxRateId && !catalogTaxRate),
         ...activeLocalizedText(item.name),
       },
     ]);
+  }
+
+  function changeTaxRate(index: number, selection: string) {
+    const [selectionType, taxRateId = ""] = selection.split(":", 2);
+    const selected = selectionType === "active"
+      ? taxRates.find((rate) => rate.id === taxRateId)
+      : undefined;
+    setLines((current) => current.map((line, lineIndex) =>
+      lineIndex !== index
+        ? line
+        : selectionType === "saved" && line.id
+          ? {
+              ...line,
+              taxRateId: quote?.lines.find((candidate) => candidate.id === line.id)?.taxRateId ?? null,
+              taxPercentage: quote?.lines.find((candidate) => candidate.id === line.id)?.taxPercentage ?? 0,
+              taxUnavailable: false,
+            }
+          : {
+              ...line,
+              taxRateId: selected?.id ?? null,
+              taxPercentage: selected?.percentage ?? 0,
+              taxUnavailable: false,
+            },
+    ));
+    const lineId = lines[index]?.id;
+    if (lineId) {
+      setTaxRateRefreshLineIds((current) =>
+        selectionType === "active"
+          ? [...new Set([...current, lineId])]
+          : current.filter((id) => id !== lineId),
+      );
+    }
+    setDirty(true);
+  }
+
+  function taxSelectionValue(line: Line): string {
+    const originalLine = line.id
+      ? quote?.lines.find((candidate) => candidate.id === line.id)
+      : undefined;
+    const usesSavedSnapshot = Boolean(
+      originalLine?.taxRateId &&
+      originalLine.taxRateId === line.taxRateId &&
+      !taxRateRefreshLineIds.includes(line.id ?? ""),
+    );
+    if (usesSavedSnapshot) return `saved:${line.taxRateId}`;
+    return line.taxRateId ? `active:${line.taxRateId}` : "";
   }
 
   function changeLine(
@@ -547,11 +619,12 @@ export default function EditQuotationPage() {
               : null,
 
             lines: lines.map(
-              (line, index) => ({
+              ({ taxUnavailable: _taxUnavailable, ...line }, index) => ({
                 ...line,
                 position: index + 1,
               }),
             ),
+            taxRateRefreshLineIds,
 
             projectName,
 
@@ -956,14 +1029,28 @@ export default function EditQuotationPage() {
                 )}
               </span>
             )}
+            {taxRateError && (
+              <span className="text-xs text-amber-300">
+                {t("تعذر تحميل الضرائب المتاحة.", "Available tax rates could not be loaded.")}
+              </span>
+            )}
           </label>
 
           <div className="mt-4 space-y-3">
+            <div className="hidden gap-3 px-4 text-xs text-slate-500 md:grid md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]">
+              <span>{t("الصنف", "Item")}</span>
+              <span>{t("الوحدة", "Unit")}</span>
+              <span>{t("الكمية", "Quantity")}</span>
+              <span>{t("سعر الوحدة", "Unit price")}</span>
+              <span>{t("الضريبة", "Tax")}</span>
+              <span>{t("إجمالي البند", "Line total")}</span>
+              <span />
+            </div>
             {lines.map(
               (line, index) => (
                 <div
                   key={line.id ?? index}
-                  className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_120px_140px_140px_auto]"
+                  className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]"
                 >
                   <Input
                     required
@@ -1024,11 +1111,40 @@ export default function EditQuotationPage() {
                     }
                   />
 
+                  <label className="space-y-1">
+                    <span className="text-xs text-slate-500">
+                      {t("الضريبة", "Tax")}
+                    </span>
+                    <select
+                      aria-label={`${t("الضريبة", "Tax")} ${index + 1}`}
+                      value={taxSelectionValue(line)}
+                      onChange={(event) => changeTaxRate(index, event.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
+                    >
+                      <option value="">{t("بدون ضريبة", "No tax")}</option>
+                      {line.id && quote?.lines.find((candidate) => candidate.id === line.id)?.taxRateId && (
+                        <option value={`saved:${quote.lines.find((candidate) => candidate.id === line.id)?.taxRateId}`}>
+                          {t("ضريبة محفوظة", "Saved tax")} ({(quote.lines.find((candidate) => candidate.id === line.id)?.taxPercentage ?? 0).toFixed(2)}%)
+                        </option>
+                      )}
+                      {taxRates.map((rate) => (
+                        <option key={rate.id} value={`active:${rate.id}`}>
+                          {rate.name} ({rate.percentage.toFixed(2)}%){line.id && quote?.lines.find((candidate) => candidate.id === line.id)?.taxRateId === rate.id ? ` — ${t("استخدام الحالي", "Use current")}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {line.taxUnavailable && (
+                      <span className="block text-xs text-amber-300">
+                        {t(
+                          "ضريبة الكتالوج غير متاحة. اختر ضريبة نشطة.",
+                          "Catalog tax is unavailable. Select an active tax rate.",
+                        )}
+                      </span>
+                    )}
+                  </label>
+
                   <div className="flex min-h-11 items-center rounded-xl border border-white/10 bg-white/[0.03] px-3 font-semibold text-emerald-300">
-                    {(
-                      line.quantity *
-                      line.unitPrice
-                    ).toFixed(3)}
+                    {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
                   <Button
@@ -1184,18 +1300,25 @@ export default function EditQuotationPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
-            <div>
-              <p className="text-sm text-slate-500">
-                {t(
-                  "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u062a\u0648\u0642\u0639",
-                  "Estimated total",
-                )}
-              </p>
-
-              <p className="mt-1 text-2xl font-semibold text-emerald-300">
-                {total.toFixed(3)}{" "}
-                {quote.currencyCode}
-              </p>
+            <div className="min-w-72 space-y-1 text-sm">
+              <div className="flex justify-between gap-6">
+                <span>{t("الإجمالي قبل الخصم والضريبة", "Subtotal")}</span>
+                <span>{preview.totals.subtotal.toFixed(3)} {quote.currencyCode}</span>
+              </div>
+              {preview.totals.discountAmount > 0 && (
+                <div className="flex justify-between gap-6 text-amber-300">
+                  <span>{t("الخصم", "Discount")}</span>
+                  <span>- {preview.totals.discountAmount.toFixed(3)} {quote.currencyCode}</span>
+                </div>
+              )}
+              <div className="flex justify-between gap-6">
+                <span>{t("الضريبة", "Tax")}</span>
+                <span>{preview.totals.taxAmount.toFixed(3)} {quote.currencyCode}</span>
+              </div>
+              <div className="flex justify-between gap-6 pt-1 text-lg font-semibold text-emerald-300">
+                <span>{t("الإجمالي النهائي", "Total")}</span>
+                <span>{preview.totals.totalAmount.toFixed(3)} {quote.currencyCode}</span>
+              </div>
             </div>
 
             <div className="flex gap-3">

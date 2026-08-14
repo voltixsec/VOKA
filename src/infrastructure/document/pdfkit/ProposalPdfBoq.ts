@@ -109,7 +109,7 @@ export function columnPositions(
   );
 }
 
-function drawTotals(
+export function drawTotals(
   doc: ProposalPdfDocument,
   snapshot: ProposalSnapshot,
   y: number,
@@ -137,6 +137,10 @@ const left = 38;
 
   const hasDiscount =
     quote.totals.discountAmount >
+    0;
+
+  const hasTax =
+    quote.totals.taxAmount >
     0;
 
   const rows = hasDiscount
@@ -184,6 +188,17 @@ const left = 38;
             false,
         },
 
+        ...(hasTax
+          ? [{
+              label: text.tax,
+              value: formatProposalMoney(
+                quote.totals.taxAmount,
+                quote.currencyCode,
+              ),
+              strong: false,
+            }]
+          : []),
+
         {
           label:
             text.netProposalValue,
@@ -199,7 +214,34 @@ const left = 38;
             true,
         },
       ]
-    : [
+    : hasTax
+      ? [
+          {
+            label: text.valueBeforeDiscount,
+            value: formatProposalMoney(
+              quote.totals.subtotal,
+              quote.currencyCode,
+            ),
+            strong: false,
+          },
+          {
+            label: text.tax,
+            value: formatProposalMoney(
+              quote.totals.taxAmount,
+              quote.currencyCode,
+            ),
+            strong: false,
+          },
+          {
+            label: text.totalProposalValue,
+            value: formatProposalMoney(
+              quote.totals.totalAmount,
+              quote.currencyCode,
+            ),
+            strong: true,
+          },
+        ]
+      : [
         {
           label:
             text.totalProposalValue,
@@ -214,7 +256,7 @@ const left = 38;
           strong:
             true,
         },
-      ];
+        ];
 
   const rowHeight =
     22;

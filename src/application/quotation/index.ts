@@ -15,6 +15,7 @@ export * from "./use-cases/CreateQuotationUseCase";
 export * from "./dto/UpdateQuotationDto";
 export * from "./use-cases/UpdateQuotationUseCase";
 export * from "./use-cases/SendQuotationUseCase";
+export * from "./use-cases/ListAvailableQuotationTaxRatesUseCase";
 
 export * from "./dto/ApproveQuotationDto";
 

@@ -121,6 +121,7 @@ type UpdateQuotationBody = {
   attentionName?: unknown;
   scopeType?: unknown;
   expiryDate?: unknown;
+  taxRateRefreshLineIds?: unknown;
 };
 
 
@@ -209,6 +210,18 @@ function parseOptionalDate(
   return date;
 }
 
+function parseTaxRateRefreshLineIds(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !id.trim())) {
+    throw ApiError.badRequest(
+      "INVALID_TAX_RATE_REFRESH_LINES",
+      "taxRateRefreshLineIds must contain valid quotation line IDs.",
+      { field: "taxRateRefreshLineIds" },
+    );
+  }
+  return [...new Set(value.map((id) => (id as string).trim()))];
+}
+
 
 export const PATCH = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
@@ -226,6 +239,9 @@ export const PATCH = withCompanyAuth(
     const expiryDate = parseOptionalDate(
       body.expiryDate,
       "expiryDate",
+    );
+    const taxRateRefreshLineIds = parseTaxRateRefreshLineIds(
+      body.taxRateRefreshLineIds,
     );
 
     if (
@@ -249,6 +265,7 @@ export const PATCH = withCompanyAuth(
       companyId: company.companyId,
       quotationId,
       expiryDate,
+      taxRateRefreshLineIds,
     } as unknown as UpdateQuotationDto;
 
     const result =
