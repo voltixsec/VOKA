@@ -167,7 +167,7 @@ fresh read-only assessment and CTO-approved acceptance criteria from current
 
 ## Phase 4.1 - Approved Quotation to Sales Order Draft
 
-Status: **Implemented and validated; merge metadata pending**
+Status: **Closed and merged through PR #33 at `9a22302`**
 
 This bounded slice delivers the first downstream commercial snapshot:
 

@@ -1,12 +1,11 @@
 # Project Status
 
-Current Product Frontier: Phase 4.1 Approved Quotation to Sales Order Draft
+Current Product Frontier: Phase 4/5 read-only assessment
 
-Status: Phase 3 is closed. The approved Phase 4.1 Sales Order Draft slice is
-implemented and validated on its feature branch; final merge metadata is
-recorded only after the pull request merges.
+Status: Phase 3 is closed. Phase 4.1 Approved Quotation to Sales Order Draft is
+closed and merged through PR #33 at `9a22302`.
 
-Starting verified baseline: `9062aa6` on `main` (2026-08-14)
+Phase 4.1 starting baseline: `9062aa6` on `main` (2026-08-14)
 
 ## Sprint 09A - Quotation API
 
@@ -206,7 +205,7 @@ any implementation begins.
 
 ## Phase 4.1 - Approved Quotation to Sales Order Draft
 
-Status: Implemented and validated; merge metadata pending.
+Status: Closed and merged through PR #33 at `9a22302`.
 
 Delivered:
 

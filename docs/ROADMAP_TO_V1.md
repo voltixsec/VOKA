@@ -205,7 +205,7 @@ configuration remain deferred; the provider implementation itself is complete.
 
 # Phase 4 — Approval and document lifecycle
 
-Status: **Partially delivered through Phase 4.1**
+Status: **Partially delivered through merged Phase 4.1 (PR #33 at `9a22302`)**
 
 Complete:
 
