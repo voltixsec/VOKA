@@ -44,6 +44,7 @@ function createDto(): CreateQuotationDto {
     customerId: "customer-1",
     priceListId: "price-list-1",
     quotationNumber: "Q-001",
+    localizationSourceLocale: "en",
     customer: {
       name: "First United",
     },
@@ -90,6 +91,9 @@ describe("CreateQuotationUseCase reference isolation", () => {
       taxRateIds: ["tax-1"],
     });
     expect(repository.save).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(repository.save).mock.calls[0][0].localizationSourceLocale,
+    ).toBe("en");
     expect(referenceValidator.resolveTaxRatePercentages).toHaveBeenCalledWith(
       "company-1",
       ["tax-1"],

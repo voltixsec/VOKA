@@ -25,6 +25,10 @@ import {
   type Discount,
   type QuotationLineType,
 } from "@/src/domain/quotation";
+import {
+  moveQuotationLine,
+  normalizeQuotationLinePositions,
+} from "../../quotation-line-order";
 
 type ScopeType =
   | "SUPPLY_ONLY"
@@ -42,9 +46,11 @@ type Item = {
   type: QuotationLineType;
   salePrice: number;
   taxRateId?: string | null;
+  description?: string | null;
 };
 
 type Line = {
+  editorKey?: string;
   id?: string;
   catalogItemId?: string | null;
   taxRateId?: string | null;
@@ -66,6 +72,13 @@ type Line = {
   discount?: Discount | null;
   taxUnavailable?: boolean;
 };
+
+let editorLineSequence = 0;
+
+function createEditorLineKey(): string {
+  editorLineSequence += 1;
+  return `edit-line-${editorLineSequence}`;
+}
 
 type TaxRate = {
   id: string;
@@ -406,15 +419,18 @@ export default function EditQuotationPage() {
 
   function activeLocalizedText(
     itemName: string,
+    description: string,
   ): Partial<Line> {
     return isArabic
       ? {
           itemNameAr: itemName,
           unitNameAr: "PCS",
+          ...(description ? { descriptionAr: description } : {}),
         }
       : {
           itemNameEn: itemName,
           unitNameEn: "PCS",
+          ...(description ? { descriptionEn: description } : {}),
         };
   }
 
@@ -430,17 +446,19 @@ export default function EditQuotationPage() {
       setLines((current) => [
         ...current,
         {
+          editorKey: createEditorLineKey(),
           position: current.length + 1,
           catalogItemId: null,
           type: "CUSTOM",
           itemCode: "",
           itemName,
+          description: "",
           unitName: "PCS",
           quantity: 1,
           unitPrice: 0,
           taxRateId: null,
           taxPercentage: 0,
-          ...activeLocalizedText(itemName),
+          ...activeLocalizedText(itemName, ""),
         },
       ]);
       return;
@@ -461,18 +479,20 @@ export default function EditQuotationPage() {
     setLines((current) => [
       ...current,
       {
+        editorKey: createEditorLineKey(),
         position: current.length + 1,
         catalogItemId: item.id,
         taxRateId: catalogTaxRate?.id ?? null,
         type: item.type,
         itemCode: item.code,
         itemName: item.name,
+        description: item.description ?? "",
         unitName: "PCS",
         quantity: 1,
         unitPrice: item.salePrice,
         taxPercentage: catalogTaxRate?.percentage ?? 0,
         taxUnavailable: Boolean(item.taxRateId && !catalogTaxRate),
-        ...activeLocalizedText(item.name),
+        ...activeLocalizedText(item.name, item.description ?? ""),
       },
     ]);
   }
@@ -529,7 +549,8 @@ export default function EditQuotationPage() {
       | "itemName"
       | "unitName"
       | "quantity"
-      | "unitPrice",
+      | "unitPrice"
+      | "description",
     value: string | number,
   ) {
     setDirty(true);
@@ -550,6 +571,10 @@ export default function EditQuotationPage() {
                 ? isArabic
                   ? "unitNameAr"
                   : "unitNameEn"
+                : key === "description"
+                  ? isArabic
+                    ? "descriptionAr"
+                    : "descriptionEn"
                 : null;
 
           return {
@@ -565,6 +590,11 @@ export default function EditQuotationPage() {
         },
       ),
     );
+  }
+
+  function moveLine(index: number, direction: "up" | "down") {
+    setLines((current) => moveQuotationLine(current, index, direction));
+    setDirty(true);
   }
 
   function cancel() {
@@ -619,7 +649,11 @@ export default function EditQuotationPage() {
               : null,
 
             lines: lines.map(
-              ({ taxUnavailable: _taxUnavailable, ...line }, index) => ({
+              ({
+                editorKey: _editorKey,
+                taxUnavailable: _taxUnavailable,
+                ...line
+              }, index) => ({
                 ...line,
                 position: index + 1,
               }),
@@ -1044,16 +1078,17 @@ export default function EditQuotationPage() {
               <span>{t("سعر الوحدة", "Unit price")}</span>
               <span>{t("الضريبة", "Tax")}</span>
               <span>{t("إجمالي البند", "Line total")}</span>
-              <span />
+              <span>{t("الإجراءات", "Actions")}</span>
             </div>
             {lines.map(
               (line, index) => (
                 <div
-                  key={line.id ?? index}
+                  key={line.id ?? line.editorKey ?? index}
                   className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]"
                 >
                   <Input
                     required
+                    aria-label={`${t("الصنف", "Item")} ${index + 1}`}
                     value={line.itemName}
                     onChange={(event) =>
                       changeLine(
@@ -1065,6 +1100,7 @@ export default function EditQuotationPage() {
                   />
 
                   <Input
+                    aria-label={`${t("الوحدة", "Unit")} ${index + 1}`}
                     value={
                       line.unitName ?? ""
                     }
@@ -1078,6 +1114,7 @@ export default function EditQuotationPage() {
                   />
 
                   <Input
+                    aria-label={`${t("الكمية", "Quantity")} ${index + 1}`}
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -1095,6 +1132,7 @@ export default function EditQuotationPage() {
                   />
 
                   <Input
+                    aria-label={`${t("سعر الوحدة", "Unit price")} ${index + 1}`}
                     type="number"
                     min="0"
                     step="0.001"
@@ -1147,33 +1185,62 @@ export default function EditQuotationPage() {
                     {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    disabled={
-                      lines.length === 1
-                    }
-                    onClick={() => {
-                      setLines(
-                        (current) =>
-                          current.filter(
-                            (
-                              _,
-                              lineIndex,
-                            ) =>
-                              lineIndex !==
-                              index,
-                          ),
-                      );
-                      setDirty(true);
-                    }}
-                  >
-                    {t(
-                      "\u062d\u0630\u0641",
-                      "Remove",
-                    )}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`${t("تحريك لأعلى", "Move up")} ${index + 1}`}
+                      disabled={index === 0}
+                      onClick={() => moveLine(index, "up")}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`${t("تحريك لأسفل", "Move down")} ${index + 1}`}
+                      disabled={index === lines.length - 1}
+                      onClick={() => moveLine(index, "down")}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      disabled={lines.length === 1}
+                      onClick={() => {
+                        const removedLineId = line.id;
+                        setLines((current) => normalizeQuotationLinePositions(
+                          current.filter((_line, lineIndex) => lineIndex !== index),
+                        ));
+                        if (removedLineId) {
+                          setTaxRateRefreshLineIds((current) =>
+                            current.filter((id) => id !== removedLineId),
+                          );
+                        }
+                        setDirty(true);
+                      }}
+                    >
+                      {t("\u062d\u0630\u0641", "Remove")}
+                    </Button>
+                  </div>
+
+                  <label className="space-y-1 md:col-span-7">
+                    <span className="text-xs text-slate-400">
+                      {t("الوصف", "Description")}
+                    </span>
+                    <textarea
+                      aria-label={`${t("الوصف", "Description")} ${index + 1}`}
+                      value={line.description ?? ""}
+                      onChange={(event) => changeLine(index, "description", event.target.value)}
+                      placeholder={t("وصف اختياري", "Optional description")}
+                      rows={2}
+                      className="w-full resize-y rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-sky-400/50 focus:ring-4 focus:ring-sky-400/10"
+                    />
+                  </label>
                 </div>
               ),
             )}

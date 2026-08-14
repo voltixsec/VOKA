@@ -190,6 +190,7 @@ export class CreateQuotationUseCase {
 
       const analysis = analyzeQuotationLocalization(
         quotationSnapshot,
+        dto.localizationSourceLocale,
       );
       const now = new Date();
 

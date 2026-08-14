@@ -24,6 +24,25 @@ type TableColumn = {
     | "center";
 };
 
+export function proposalBoqItemText(
+  line: ProposalSnapshot["quotation"]["lines"][number],
+  locale: ProposalSnapshot["locale"],
+): string {
+  const localizedItemName =
+    locale === "ar"
+      ? line.itemNameAr || line.itemName
+      : line.itemNameEn || line.itemName;
+  const localizedDescription = (
+    locale === "ar"
+      ? line.descriptionAr || line.description
+      : line.descriptionEn || line.description
+  )?.trim();
+
+  return `${line.position}. ${localizedItemName}${
+    localizedDescription ? `\n${localizedDescription}` : ""
+  }`;
+}
+
 export function shouldRenderProposalApproval(
   snapshot: ProposalSnapshot,
 ): boolean {
@@ -778,17 +797,7 @@ export function drawProposalBoq(
           .fill("#fbfdff");
       }
 
-      const localizedItemName =
-        locale === "ar"
-          ? line.itemNameAr || line.itemName
-          : line.itemNameEn || line.itemName;
-
-      const itemText =
-        String(
-          line.position,
-        ) +
-        ". " +
-        localizedItemName;
+      const itemText = proposalBoqItemText(line, locale);
 
       doc
         .fillColor(

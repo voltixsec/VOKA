@@ -12,7 +12,12 @@ import {
   type ProposalPdfDocument,
 } from "../ProposalPdfShared";
 import { decorateExistingPages, PdfKitQuotationDocumentRenderer } from "../PdfKitQuotationDocumentRenderer";
-import { columnPositions, drawTotals, shouldRenderProposalApproval } from "../ProposalPdfBoq";
+import {
+  columnPositions,
+  drawTotals,
+  proposalBoqItemText,
+  shouldRenderProposalApproval,
+} from "../ProposalPdfBoq";
 
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const JPEG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABCf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
@@ -53,6 +58,37 @@ function fakeDocument() {
 }
 
 describe("proposal PDF document assets", () => {
+  it("renders localized BOQ descriptions compactly and omits an empty description row", () => {
+    const line: QuotationDocumentSnapshot["quotation"]["lines"][number] = {
+      position: 1,
+      type: "PRODUCT",
+      itemCode: "SKU-1",
+      itemName: "Item",
+      itemNameAr: "بند",
+      itemNameEn: "Item",
+      description: "English description",
+      descriptionAr: "وصف عربي",
+      descriptionEn: "English description",
+      unitName: "piece",
+      unitNameAr: "قطعة",
+      unitNameEn: "piece",
+      quantity: 1,
+      unitPrice: 10,
+      discountAmount: 0,
+      taxAmount: 0,
+      totalAmount: 10,
+    };
+
+    expect(proposalBoqItemText(line, "en")).toBe("1. Item\nEnglish description");
+    expect(proposalBoqItemText(line, "ar")).toBe("1. بند\nوصف عربي");
+    expect(proposalBoqItemText({
+      ...line,
+      description: null,
+      descriptionAr: null,
+      descriptionEn: "  ",
+    }, "en")).toBe("1. Item");
+  });
+
   it("decodes PNG and JPEG through one safe decoder", () => {
     expect(decodeProposalImageDataUrl(PNG)).toBeInstanceOf(Buffer);
     expect(decodeProposalImageDataUrl(JPEG)).toBeInstanceOf(Buffer);

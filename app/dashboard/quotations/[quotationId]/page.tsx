@@ -36,6 +36,9 @@ type Line = {
   itemName: string;
   itemNameAr?: string | null;
   itemNameEn?: string | null;
+  description?: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
   quantity: number;
   unitPrice: number;
   unitName?: string | null;
@@ -1184,6 +1187,16 @@ export default function QuotationDetailsPage() {
                 <p className="font-medium">
                   {(isArabic ? (line.itemNameAr ?? line.itemName) : (line.itemNameEn ?? line.itemName))}
                 </p>
+
+                {(isArabic
+                  ? line.descriptionAr ?? line.description
+                  : line.descriptionEn ?? line.description) && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-400">
+                    {isArabic
+                      ? line.descriptionAr ?? line.description
+                      : line.descriptionEn ?? line.description}
+                  </p>
+                )}
 
                 <p className="mt-1 text-sm text-slate-500">
                   {line.quantity}{" "}

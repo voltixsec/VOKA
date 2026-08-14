@@ -21,6 +21,24 @@ import QuotationDetailsPage from "../page";
 
 let isArabic = false;
 
+type QuotationTestLine = {
+  id?: string;
+  position: number;
+  itemName: string;
+  itemNameAr?: string | null;
+  itemNameEn?: string | null;
+  description?: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
+  quantity: number;
+  unitPrice: number;
+  unitName?: string | null;
+  unitNameAr?: string | null;
+  unitNameEn?: string | null;
+  taxAmount: number;
+  totalAmount: number;
+};
+
 vi.mock("@/components/i18n/LanguageProvider", () => ({
   useLanguage: () => ({ isArabic }),
 }));
@@ -41,7 +59,7 @@ function quotation(
     expiryDate: null,
     currencyCode: "KWD",
     customer: { name: "Acme", email: "customer@example.com" },
-    lines: [],
+    lines: [] as QuotationTestLine[],
     totals: {
       subtotal: 0,
       discountAmount: 0,
@@ -86,6 +104,36 @@ describe("QuotationDetailsPage localization visibility", () => {
 
     expect(await screen.findByText("Tax")).toBeTruthy();
     expect(screen.getByText(/KWD\s*5\.000/)).toBeTruthy();
+  });
+
+  it.each([
+    [false, "English line description"],
+    [true, "وصف البند العربي"],
+  ] as const)("shows the active localized line description for Arabic=%s", async (arabic, expected) => {
+    isArabic = arabic;
+    const value = quotation("COMPLETED", "DRAFT");
+    value.lines = [{
+      id: "line-1",
+      position: 1,
+      itemName: arabic ? "بند" : "Item",
+      itemNameAr: "بند",
+      itemNameEn: "Item",
+      description: expected,
+      descriptionAr: "وصف البند العربي",
+      descriptionEn: "English line description",
+      quantity: 1,
+      unitPrice: 10,
+      unitName: arabic ? "قطعة" : "piece",
+      unitNameAr: "قطعة",
+      unitNameEn: "piece",
+      taxAmount: 0,
+      totalAmount: 10,
+    }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(value)));
+
+    render(createElement(QuotationDetailsPage));
+
+    expect(await screen.findByText(expected)).toBeTruthy();
   });
 
   it.each([
