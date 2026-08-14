@@ -66,6 +66,32 @@ export class CreateQuotationUseCase {
       };
     }
 
+    const taxPercentages =
+      await this.referenceValidator.resolveTaxRatePercentages(
+        dto.companyId,
+        taxRateIds,
+        { activeOnly: true },
+      );
+    if (taxRateIds.some((id) => !taxPercentages.has(id))) {
+      return {
+        success: false,
+        error: {
+          code: "TAX_RATE_NOT_FOUND",
+          message: "A tax rate was not found for the active company.",
+        },
+      };
+    }
+    const canonicalLines = dto.lines.map((line) => {
+      const taxRateId = line.taxRateId?.trim() || null;
+      return {
+        ...line,
+        taxRateId,
+        taxPercentage: taxRateId
+          ? taxPercentages.get(taxRateId) ?? 0
+          : 0,
+      };
+    });
+
     const customer =
       await this.referenceValidator.getCustomerSnapshot(
         dto.companyId,
@@ -98,7 +124,7 @@ export class CreateQuotationUseCase {
         number: dto.quotationNumber,
         currencyCode: dto.currencyCode,
         customer: customerInfo,
-        lines: dto.lines,
+        lines: canonicalLines,
         discount: dto.discount,
         notes: dto.notes,
         notesAr: dto.notesAr,

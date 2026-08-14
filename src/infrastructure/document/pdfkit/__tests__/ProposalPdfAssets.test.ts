@@ -12,7 +12,7 @@ import {
   type ProposalPdfDocument,
 } from "../ProposalPdfShared";
 import { decorateExistingPages, PdfKitQuotationDocumentRenderer } from "../PdfKitQuotationDocumentRenderer";
-import { columnPositions, shouldRenderProposalApproval } from "../ProposalPdfBoq";
+import { columnPositions, drawTotals, shouldRenderProposalApproval } from "../ProposalPdfBoq";
 
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const JPEG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABCf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
@@ -105,6 +105,40 @@ describe("proposal PDF document assets", () => {
     expect(target.texts).not.toContain(PROPOSAL_TEXT.en.approvalStatement);
     expect(target.doc.roundedRect).not.toHaveBeenCalled();
     expect(target.doc.lineTo).not.toHaveBeenCalled();
+  });
+
+  it("renders a separate tax row and authoritative final total when tax is positive", () => {
+    const target = fakeDocument();
+    const data = snapshot();
+    data.quotation.totals = {
+      subtotal: 100,
+      discountAmount: 20,
+      taxAmount: 8,
+      totalAmount: 88,
+    };
+    data.quotation.discount = { type: "FIXED", value: 20 };
+
+    drawTotals(target.doc, data, 500);
+
+    expect(target.texts).toContain(PROPOSAL_TEXT.en.tax);
+    expect(target.texts).toContain("KWD 8.000");
+    expect(target.texts).toContain("KWD 88.000");
+  });
+
+  it("keeps the PDF totals summary clean when tax is zero", () => {
+    const target = fakeDocument();
+    const data = snapshot();
+    data.quotation.totals = {
+      subtotal: 100,
+      discountAmount: 0,
+      taxAmount: 0,
+      totalAmount: 100,
+    };
+
+    drawTotals(target.doc, data, 500);
+
+    expect(target.texts).not.toContain(PROPOSAL_TEXT.en.tax);
+    expect(target.texts).toContain("KWD 100.000");
   });
 
   it.each(["DRAFT", "SENT", "REJECTED", "CANCELLED"])("omits the entire English approval block for %s", (status) => {

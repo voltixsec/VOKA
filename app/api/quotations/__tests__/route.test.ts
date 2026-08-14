@@ -3,6 +3,7 @@ import { Quotation } from "@/src/domain/quotation";
 
 const mocks = vi.hoisted(() => ({
   existsByNumber: vi.fn(), save: vi.fn(), findInvalidReference: vi.fn(), getCustomerSnapshot: vi.fn(),
+  resolveTaxRatePercentages: vi.fn(),
   afterCallbacks: [] as Array<() => unknown>, claimLocalization: vi.fn(), findById: vi.fn(),
   completeLocalization: vi.fn(), failLocalization: vi.fn(), translationPort: vi.fn(),
 }));
@@ -21,6 +22,8 @@ vi.mock("@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReposi
 vi.mock("@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator", () => ({
   PrismaQuotationReferenceValidator: class {
     findInvalidReference = mocks.findInvalidReference; getCustomerSnapshot = mocks.getCustomerSnapshot;
+    resolveTaxRatePercentages = mocks.resolveTaxRatePercentages;
+    listAvailableTaxRates = vi.fn();
   },
 }));
 vi.mock("@/src/infrastructure/translation/createTranslationPort", () => ({ createTranslationPort: mocks.translationPort }));
@@ -52,6 +55,7 @@ describe("POST /api/quotations localization resilience", () => {
     mocks.existsByNumber.mockResolvedValue(false);
     mocks.findInvalidReference.mockResolvedValue(null);
     mocks.getCustomerSnapshot.mockResolvedValue({ name: "Persisted Customer" });
+    mocks.resolveTaxRatePercentages.mockResolvedValue(new Map());
     savedQuotation = null;
     mocks.save.mockImplementation(async (quotation: Quotation) => {
       savedQuotation = Quotation.restore({

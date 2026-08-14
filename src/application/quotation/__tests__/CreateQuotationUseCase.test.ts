@@ -56,6 +56,7 @@ function createDto(): CreateQuotationDto {
         itemName: "Product",
         quantity: 1,
         unitPrice: 10,
+        taxPercentage: 99,
       },
     ],
   };
@@ -69,6 +70,8 @@ describe("CreateQuotationUseCase reference isolation", () => {
       getCustomerSnapshot: vi.fn().mockResolvedValue({
         name: "Persisted Customer",
       }),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map([["tax-1", 5]])),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
     };
     const useCase = new CreateQuotationUseCase(
       repository,
@@ -87,6 +90,11 @@ describe("CreateQuotationUseCase reference isolation", () => {
       taxRateIds: ["tax-1"],
     });
     expect(repository.save).toHaveBeenCalledOnce();
+    expect(referenceValidator.resolveTaxRatePercentages).toHaveBeenCalledWith(
+      "company-1",
+      ["tax-1"],
+      { activeOnly: true },
+    );
     expect(
       referenceValidator.getCustomerSnapshot,
     ).toHaveBeenCalledWith("company-1", "customer-1");
@@ -97,6 +105,12 @@ describe("CreateQuotationUseCase reference isolation", () => {
         "Persisted Customer",
       );
       expect(result.data.customer.name).not.toBe("First United");
+      expect(result.data.lines[0]).toMatchObject({
+        taxRateId: "tax-1",
+        taxPercentage: 5,
+        taxAmount: 0.5,
+        totalAmount: 10.5,
+      });
     }
   });
 
@@ -125,6 +139,8 @@ describe("CreateQuotationUseCase reference isolation", () => {
         findInvalidReference:
           vi.fn().mockResolvedValue(invalidReference),
         getCustomerSnapshot: vi.fn(),
+        resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()),
+        listAvailableTaxRates: vi.fn().mockResolvedValue([]),
       };
       const useCase = new CreateQuotationUseCase(
         repository,
@@ -140,4 +156,77 @@ describe("CreateQuotationUseCase reference isolation", () => {
       expect(repository.save).not.toHaveBeenCalled();
     },
   );
+
+  it("sets new lines without a tax rate to zero tax", async () => {
+    const repository = createRepository();
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn().mockResolvedValue({ name: "Customer" }),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
+    };
+    const dto = createDto();
+    dto.lines[0].taxRateId = null;
+    dto.lines[0].taxPercentage = 88;
+
+    const result = await new CreateQuotationUseCase(repository, referenceValidator)
+      .execute(dto);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.lines[0]).toMatchObject({
+        taxRateId: null,
+        taxPercentage: 0,
+        taxAmount: 0,
+        totalAmount: 10,
+      });
+    }
+  });
+
+  it("rejects an inactive rate even when it belongs to the company", async () => {
+    const repository = createRepository();
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn(),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
+    };
+
+    const result = await new CreateQuotationUseCase(repository, referenceValidator)
+      .execute(createDto());
+
+    expect(result).toMatchObject({ success: false, error: { code: "TAX_RATE_NOT_FOUND" } });
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(referenceValidator.resolveTaxRatePercentages).toHaveBeenCalledWith(
+      "company-1",
+      ["tax-1"],
+      { activeOnly: true },
+    );
+  });
+
+  it("uses canonical tax with document-discount calculator semantics", async () => {
+    const repository = createRepository();
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn().mockResolvedValue({ name: "Customer" }),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map([["tax-1", 10]])),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
+    };
+    const dto = createDto();
+    dto.lines[0].unitPrice = 100;
+    dto.discount = { type: "FIXED", value: 20 };
+
+    const result = await new CreateQuotationUseCase(repository, referenceValidator)
+      .execute(dto);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.totals).toEqual({
+        subtotal: 100,
+        discountAmount: 20,
+        taxAmount: 8,
+        totalAmount: 88,
+      });
+    }
+  });
 });

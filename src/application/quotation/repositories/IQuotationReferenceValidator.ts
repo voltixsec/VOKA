@@ -17,6 +17,13 @@ export type InvalidQuotationReference = {
   message: string;
 };
 
+export type AvailableQuotationTaxRate = {
+  id: string;
+  name: string;
+  percentage: number;
+  isSystem: boolean;
+};
+
 export interface IQuotationReferenceValidator {
   findInvalidReference(
     input: QuotationReferenceValidationInput,
@@ -25,4 +32,12 @@ export interface IQuotationReferenceValidator {
     companyId: string,
     customerId: string,
   ): Promise<CustomerSnapshotProps | null>;
+  resolveTaxRatePercentages(
+    companyId: string,
+    taxRateIds: string[],
+    options?: { activeOnly?: boolean },
+  ): Promise<ReadonlyMap<string, number>>;
+  listAvailableTaxRates(
+    companyId: string,
+  ): Promise<AvailableQuotationTaxRate[]>;
 }

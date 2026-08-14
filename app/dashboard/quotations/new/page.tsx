@@ -16,6 +16,10 @@ import {
 import {
   useLanguage,
 } from "../../../../components/i18n/LanguageProvider";
+import {
+  QuotationCalculator,
+  type QuotationLineType,
+} from "@/src/domain/quotation";
 
 type Customer = {
   id: string;
@@ -26,20 +30,29 @@ type Item = {
   id: string;
   name: string;
   code: string;
-  type: string;
+  type: QuotationLineType;
   salePrice: number;
   taxRateId?: string | null;
 };
 
 type Line = {
   catalogItemId: string;
-  type: string;
+  type: QuotationLineType;
   itemCode: string;
   itemName: string;
   unitName: string;
   quantity: number;
   unitPrice: number;
   taxRateId?: string | null;
+  taxPercentage?: number;
+  taxUnavailable?: boolean;
+};
+
+type TaxRate = {
+  id: string;
+  name: string;
+  percentage: number;
+  isSystem: boolean;
 };
 
 type ScopeType =
@@ -122,6 +135,9 @@ export default function NewQuotationPage() {
 
   const [items, setItems] =
     useState<Item[]>([]);
+
+  const [taxRates, setTaxRates] =
+    useState<TaxRate[]>([]);
 
   const [customerId, setCustomerId] =
     useState("");
@@ -376,7 +392,7 @@ export default function NewQuotationPage() {
           );
         }
 
-        const [customerResponse, itemResponse] =
+        const [customerResponse, itemResponse, taxRateResponse] =
           await Promise.all([
             fetch(
               "/api/customers?companyId=" +
@@ -386,11 +402,13 @@ export default function NewQuotationPage() {
             fetch(
               "/api/catalog/items?pageSize=100&isActive=true",
             ),
+            fetch("/api/tax-rates"),
           ]);
 
         if (
           !customerResponse.ok ||
-          !itemResponse.ok
+          !itemResponse.ok ||
+          !taxRateResponse.ok
         ) {
           throw new Error(
             t(
@@ -406,11 +424,19 @@ export default function NewQuotationPage() {
         const itemJson =
           await itemResponse.json();
 
+        const taxRateJson =
+          await taxRateResponse.json();
+
         setCustomers(
           customerJson.data.customers,
         );
 
         setItems(itemJson.data);
+        setTaxRates(
+          Array.isArray(taxRateJson.data)
+            ? taxRateJson.data
+            : [],
+        );
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -483,32 +509,25 @@ export default function NewQuotationPage() {
         customer.id === customerId,
     );
 
-  const subtotal = useMemo(
-    () =>
-      lines.reduce(
-        (sum, line) =>
-          sum +
-          line.quantity *
-            line.unitPrice,
-        0,
-      ),
-    [lines],
-  );
-
-  const discountAmount =
-    discountType === "PERCENTAGE"
-      ? subtotal *
-        Math.min(100, discountValue) /
-        100
-      : discountType === "FIXED"
-        ? Math.min(
-            subtotal,
-            discountValue,
-          )
-        : 0;
-
-  const total =
-    subtotal - discountAmount;
+  const preview = useMemo(() => {
+    if (lines.length === 0) {
+      return {
+        lines: [],
+        totals: { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 },
+      };
+    }
+    try {
+      return QuotationCalculator.calculate(
+        lines.map((line, index) => ({ ...line, position: index + 1 })),
+        discountType ? { type: discountType, value: discountValue } : null,
+      );
+    } catch {
+      return {
+        lines: [],
+        totals: { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 },
+      };
+    }
+  }, [discountType, discountValue, lines]);
 
   function addItem(id: string) {
     setDirty(true);
@@ -527,6 +546,8 @@ export default function NewQuotationPage() {
           unitName: "PCS",
           quantity: 1,
           unitPrice: 0,
+          taxRateId: null,
+          taxPercentage: 0,
         },
       ]);
 
@@ -543,6 +564,10 @@ export default function NewQuotationPage() {
       return;
     }
 
+    const catalogTaxRate = item.taxRateId
+      ? taxRates.find((rate) => rate.id === item.taxRateId)
+      : undefined;
+
     setLines((current) => [
       ...current,
       {
@@ -553,9 +578,26 @@ export default function NewQuotationPage() {
         unitName: "PCS",
         quantity: 1,
         unitPrice: item.salePrice,
-        taxRateId: item.taxRateId,
+        taxRateId: catalogTaxRate?.id ?? null,
+        taxPercentage: catalogTaxRate?.percentage ?? 0,
+        taxUnavailable: Boolean(item.taxRateId && !catalogTaxRate),
       },
     ]);
+  }
+
+  function changeTaxRate(index: number, taxRateId: string) {
+    const selected = taxRates.find((rate) => rate.id === taxRateId);
+    setLines((current) => current.map((line, lineIndex) =>
+      lineIndex === index
+        ? {
+          ...line,
+          taxRateId: selected?.id ?? null,
+          taxPercentage: selected?.percentage ?? 0,
+          taxUnavailable: false,
+        }
+        : line,
+    ));
+    setDirty(true);
   }
 
   function changeLine(
@@ -657,7 +699,7 @@ export default function NewQuotationPage() {
                 }),
 
             lines: lines.map(
-              (line, index) => ({
+              ({ taxUnavailable: _taxUnavailable, ...line }, index) => ({
                 ...line,
                 catalogItemId:
                   line.catalogItemId ||
@@ -1059,6 +1101,15 @@ export default function NewQuotationPage() {
           </label>
 
           <div className="mt-4 space-y-3">
+            <div className="hidden gap-3 px-4 text-xs text-slate-500 md:grid md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]">
+              <span>{t("الصنف", "Item")}</span>
+              <span>{t("الوحدة", "Unit")}</span>
+              <span>{t("الكمية", "Quantity")}</span>
+              <span>{t("سعر الوحدة", "Unit price")}</span>
+              <span>{t("الضريبة", "Tax")}</span>
+              <span>{t("إجمالي البند", "Line total")}</span>
+              <span />
+            </div>
             {lines.length === 0 && (
               <p className="py-6 text-center text-sm text-slate-500">
                 {t(
@@ -1072,7 +1123,7 @@ export default function NewQuotationPage() {
               (line, index) => (
                 <div
                   key={index}
-                  className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_120px_140px_140px_auto]"
+                  className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]"
                 >
                   <div>
                     <Input
@@ -1146,11 +1197,35 @@ export default function NewQuotationPage() {
                     }
                   />
 
+                  <label className="space-y-1">
+                    <span className="text-xs text-slate-500">
+                      {t("الضريبة", "Tax")}
+                    </span>
+                    <select
+                      aria-label={`${t("الضريبة", "Tax")} ${index + 1}`}
+                      value={line.taxRateId ?? ""}
+                      onChange={(event) => changeTaxRate(index, event.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
+                    >
+                      <option value="">{t("بدون ضريبة", "No tax")}</option>
+                      {taxRates.map((rate) => (
+                        <option key={rate.id} value={rate.id}>
+                          {rate.name} ({rate.percentage.toFixed(2)}%)
+                        </option>
+                      ))}
+                    </select>
+                    {line.taxUnavailable && (
+                      <span className="block text-xs text-amber-300">
+                        {t(
+                          "ضريبة الكتالوج غير متاحة. اختر ضريبة نشطة.",
+                          "Catalog tax is unavailable. Select an active tax rate.",
+                        )}
+                      </span>
+                    )}
+                  </label>
+
                   <div className="flex min-h-11 items-center rounded-xl border border-white/10 bg-white/[0.03] px-3 font-semibold text-emerald-300">
-                    {(
-                      line.quantity *
-                      line.unitPrice
-                    ).toFixed(3)}
+                    {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
                   <Button
@@ -1321,17 +1396,25 @@ export default function NewQuotationPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
-            <div>
-              <p className="text-sm text-slate-500">
-                {t(
-                  "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u062a\u0648\u0642\u0639",
-                  "Estimated total",
-                )}
-              </p>
-
-              <p className="mt-1 text-2xl font-semibold text-emerald-300">
-                {total.toFixed(3)} {currencyCode}
-              </p>
+            <div className="min-w-72 space-y-1 text-sm">
+              <div className="flex justify-between gap-6">
+                <span>{t("الإجمالي قبل الخصم والضريبة", "Subtotal")}</span>
+                <span>{preview.totals.subtotal.toFixed(3)} {currencyCode}</span>
+              </div>
+              {preview.totals.discountAmount > 0 && (
+                <div className="flex justify-between gap-6 text-amber-300">
+                  <span>{t("الخصم", "Discount")}</span>
+                  <span>- {preview.totals.discountAmount.toFixed(3)} {currencyCode}</span>
+                </div>
+              )}
+              <div className="flex justify-between gap-6">
+                <span>{t("الضريبة", "Tax")}</span>
+                <span>{preview.totals.taxAmount.toFixed(3)} {currencyCode}</span>
+              </div>
+              <div className="flex justify-between gap-6 pt-1 text-lg font-semibold text-emerald-300">
+                <span>{t("الإجمالي النهائي", "Total")}</span>
+                <span>{preview.totals.totalAmount.toFixed(3)} {currencyCode}</span>
+              </div>
             </div>
 
             <div className="flex gap-3">

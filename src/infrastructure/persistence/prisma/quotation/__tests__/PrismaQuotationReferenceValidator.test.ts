@@ -23,6 +23,7 @@ function createDb() {
     },
     taxRate: {
       count: vi.fn().mockResolvedValue(1),
+      findMany: vi.fn().mockResolvedValue([]),
     },
   };
 }
@@ -139,5 +140,82 @@ describe("PrismaQuotationReferenceValidator", () => {
       await validator.findInvalidReference(input);
 
     expect(result?.code).toBe("TAX_RATE_NOT_FOUND");
+  });
+
+  it("resolves canonical percentages only for company or system rates", async () => {
+    const db = createDb();
+    db.taxRate.findMany.mockResolvedValue([
+      { id: "tax-company", percentage: 5 },
+      { id: "tax-system", percentage: 10 },
+    ]);
+    const validator = new PrismaQuotationReferenceValidator(db as never);
+
+    const result = await validator.resolveTaxRatePercentages(
+      "company-1",
+      ["tax-company", "tax-system"],
+    );
+
+    expect([...result.entries()]).toEqual([
+      ["tax-company", 5],
+      ["tax-system", 10],
+    ]);
+    expect(db.taxRate.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["tax-company", "tax-system"] },
+        OR: [
+          { companyId: "company-1" },
+          { companyId: null, isSystem: true },
+        ],
+      },
+      select: { id: true, percentage: true },
+    });
+  });
+
+  it("lists only active company and active system composer choices", async () => {
+    const db = createDb();
+    db.taxRate.findMany.mockResolvedValue([
+      { id: "tax-system", name: "VAT", percentage: 5, isSystem: true },
+    ]);
+    const validator = new PrismaQuotationReferenceValidator(db as never);
+
+    const result = await validator.listAvailableTaxRates("company-1");
+
+    expect(result).toEqual([
+      { id: "tax-system", name: "VAT", percentage: 5, isSystem: true },
+    ]);
+    expect(db.taxRate.findMany).toHaveBeenCalledWith({
+      where: {
+        isActive: true,
+        OR: [
+          { companyId: "company-1" },
+          { companyId: null, isSystem: true },
+        ],
+      },
+      select: { id: true, name: true, percentage: true, isSystem: true },
+      orderBy: [{ isSystem: "desc" }, { name: "asc" }],
+    });
+  });
+
+  it("limits canonical resolution to active rates when requested for a new selection", async () => {
+    const db = createDb();
+    const validator = new PrismaQuotationReferenceValidator(db as never);
+
+    await validator.resolveTaxRatePercentages(
+      "company-1",
+      ["tax-1"],
+      { activeOnly: true },
+    );
+
+    expect(db.taxRate.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["tax-1"] },
+        isActive: true,
+        OR: [
+          { companyId: "company-1" },
+          { companyId: null, isSystem: true },
+        ],
+      },
+      select: { id: true, percentage: true },
+    });
   });
 });

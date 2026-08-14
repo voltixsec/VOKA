@@ -50,6 +50,8 @@ function createRepository(quotation: Quotation): IQuotationRepository {
 const referenceValidator: IQuotationReferenceValidator = {
   findInvalidReference: vi.fn().mockResolvedValue(null),
   getCustomerSnapshot: vi.fn(),
+  resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()),
+  listAvailableTaxRates: vi.fn().mockResolvedValue([]),
 };
 
 function restoreWithLifecycle(

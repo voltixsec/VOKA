@@ -24,4 +24,5 @@ export interface UpdateQuotationDto
   termsAndConditionsAr?: string | null;
   termsAndConditionsEn?: string | null;
   localizationSourceLocale?: "ar" | "en";
+  taxRateRefreshLineIds?: string[];
 }

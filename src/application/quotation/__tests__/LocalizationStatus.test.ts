@@ -12,6 +12,8 @@ function createReferenceValidator(): IQuotationReferenceValidator {
   return {
     findInvalidReference: vi.fn().mockResolvedValue(null),
     getCustomerSnapshot: vi.fn().mockResolvedValue({ name: "Persisted Customer" }),
+    resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()),
+    listAvailableTaxRates: vi.fn().mockResolvedValue([]),
   };
 }
 

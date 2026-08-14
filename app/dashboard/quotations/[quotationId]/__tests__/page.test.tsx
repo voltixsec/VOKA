@@ -72,6 +72,22 @@ afterEach(() => {
 });
 
 describe("QuotationDetailsPage localization visibility", () => {
+  it("shows aggregate tax in the commercial totals summary", async () => {
+    const value = quotation("COMPLETED", "DRAFT");
+    value.totals = {
+      subtotal: 100,
+      discountAmount: 0,
+      taxAmount: 5,
+      totalAmount: 105,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(value)));
+
+    render(createElement(QuotationDetailsPage));
+
+    expect(await screen.findByText("Tax")).toBeTruthy();
+    expect(screen.getByText(/KWD\s*5\.000/)).toBeTruthy();
+  });
+
   it.each([
     ["PENDING", "Preparing translated version"],
     ["COMPLETED", "Arabic and English versions are ready"],

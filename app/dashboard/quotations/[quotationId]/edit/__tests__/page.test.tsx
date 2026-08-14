@@ -51,6 +51,8 @@ const quotation = {
       unitNameEn: "unit",
       quantity: 1,
       unitPrice: 10,
+      taxRateId: "tax-1",
+      taxPercentage: 5,
     },
   ],
   projectName: "Project",
@@ -81,6 +83,11 @@ const catalogItem = {
   taxRateId: "tax-1",
 };
 
+const taxRates = [
+  { id: "tax-1", name: "VAT 5", percentage: 5, isSystem: false },
+  { id: "tax-10", name: "VAT 10", percentage: 10, isSystem: true },
+];
+
 function response(data: unknown) {
   return {
     ok: true,
@@ -94,6 +101,10 @@ function fetchForEdit() {
     (input: string, init?: RequestInit) => {
       if (input.startsWith("/api/catalog/items")) {
         return Promise.resolve(response([catalogItem]));
+      }
+
+      if (input === "/api/tax-rates") {
+        return Promise.resolve(response(taxRates));
       }
 
       if (init?.method === "PATCH") {
@@ -296,6 +307,7 @@ describe("EditQuotationPage active language", () => {
       unitNameEn: "PCS",
       quantity: 1,
       unitPrice: 25.5,
+      taxPercentage: 5,
       position: 2,
     });
     expect(body.lines[1]).not.toHaveProperty("itemNameAr");
@@ -334,10 +346,123 @@ describe("EditQuotationPage active language", () => {
       unitNameAr: "PCS",
       quantity: 1,
       unitPrice: 0,
+      taxRateId: null,
+      taxPercentage: 0,
       position: 2,
     });
     expect(added).not.toHaveProperty("itemNameEn");
     expect(added).not.toHaveProperty("unitNameEn");
+  });
+
+  it("loads the existing tax snapshot, updates tax selection, and previews final totals", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    const tax = await screen.findByRole("combobox", { name: "Tax 1" });
+    expect((tax as HTMLSelectElement).value).toBe("saved:tax-1");
+    expect(screen.getByRole("option", { name: /VAT 5 \(5\.00%\).*Use current/ })).toBeTruthy();
+    expect(screen.getByText("0.500 KWD")).toBeTruthy();
+    expect(screen.getByText("10.500 KWD")).toBeTruthy();
+
+    fireEvent.change(tax, { target: { value: "active:tax-10" } });
+    expect((tax as HTMLSelectElement).value).toBe("active:tax-10");
+    expect(screen.getByText("1.000 KWD")).toBeTruthy();
+    expect(screen.getByText("11.000 KWD")).toBeTruthy();
+
+    const beforeUnload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
+    ).toBe(true));
+    expect(patchBody(fetchMock).lines[0]).toMatchObject({
+      taxRateId: "tax-10",
+      taxPercentage: 10,
+    });
+    expect(patchBody(fetchMock).taxRateRefreshLineIds).toEqual(["line-1"]);
+  });
+
+  it("loads available tax rates and catalog lines inherit their selected rate", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    expect(await screen.findByText("VAT 10 (10.00%)")).toBeTruthy();
+    fireEvent.change(screen.getByRole("combobox", { name: "Add product or service" }), {
+      target: { value: "catalog-1" },
+    });
+    const taxes = await screen.findAllByRole("combobox", { name: /Tax \d/ });
+    expect((taxes[1] as HTMLSelectElement).value).toBe("active:tax-1");
+    expect(fetchMock).toHaveBeenCalledWith("/api/tax-rates");
+  });
+
+  it("shows the saved snapshot separately and intentionally refreshes the same active rate", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
+      if (input === "/api/tax-rates") {
+        return Promise.resolve(response([
+          { id: "tax-1", name: "VAT current", percentage: 10, isSystem: false },
+        ]));
+      }
+      if (init?.method === "PATCH") return Promise.resolve(response(quotation));
+      return Promise.resolve(response(quotation));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    const tax = await screen.findByRole("combobox", { name: "Tax 1" });
+    expect((tax as HTMLSelectElement).value).toBe("saved:tax-1");
+    expect(screen.getByRole("option", { name: "Saved tax (5.00%)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /VAT current \(10\.00%\).*Use current/ })).toBeTruthy();
+    expect(screen.getByText("0.500 KWD")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    expect(patchBody(fetchMock).taxRateRefreshLineIds).toEqual([]);
+    expect(patchBody(fetchMock).lines[0]).toMatchObject({ taxRateId: "tax-1", taxPercentage: 5 });
+
+    fireEvent.change(tax, { target: { value: "active:tax-1" } });
+    expect((tax as HTMLSelectElement).value).toBe("active:tax-1");
+    expect(screen.getByText("1.000 KWD")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH"),
+    ).toHaveLength(2));
+    const lastPatch = fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH").at(-1);
+    const refreshedBody = JSON.parse(String(lastPatch?.[1]?.body));
+    expect(refreshedBody.taxRateRefreshLineIds).toEqual(["line-1"]);
+    expect(refreshedBody.lines[0]).toMatchObject({ taxRateId: "tax-1", taxPercentage: 10 });
+  });
+
+  it("drops an unavailable catalog tax from preview and payload with a visible warning", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (input.startsWith("/api/catalog/items")) {
+        return Promise.resolve(response([{ ...catalogItem, taxRateId: "tax-inactive" }]));
+      }
+      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
+      if (init?.method === "PATCH") return Promise.resolve(response(quotation));
+      return Promise.resolve(response(quotation));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Add product or service" }), {
+      target: { value: "catalog-1" },
+    });
+    expect(await screen.findByText("Catalog tax is unavailable. Select an active tax rate.")).toBeTruthy();
+    const taxes = screen.getAllByRole("combobox", { name: /Tax \d/ });
+    expect((taxes[1] as HTMLSelectElement).value).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    expect(patchBody(fetchMock).lines[1]).toMatchObject({
+      taxRateId: null,
+      taxPercentage: 0,
+    });
+    expect(patchBody(fetchMock).lines[1]).not.toHaveProperty("taxUnavailable");
   });
 
   it("preserves final-line safety and existing remove behavior", async () => {

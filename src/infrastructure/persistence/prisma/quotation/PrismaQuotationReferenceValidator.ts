@@ -151,4 +151,58 @@ implements IQuotationReferenceValidator {
       billingAddress,
     };
   }
+
+  async resolveTaxRatePercentages(
+    companyId: string,
+    taxRateIds: string[],
+    options?: { activeOnly?: boolean },
+  ): Promise<ReadonlyMap<string, number>> {
+    const ids = [...new Set(taxRateIds.map((id) => id.trim()).filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    const taxRates = await this.db.taxRate.findMany({
+      where: {
+        id: { in: ids },
+        ...(options?.activeOnly ? { isActive: true } : {}),
+        OR: [
+          { companyId },
+          { companyId: null, isSystem: true },
+        ],
+      },
+      select: { id: true, percentage: true },
+    });
+
+    return new Map(
+      taxRates.map((taxRate) => [taxRate.id, Number(taxRate.percentage)]),
+    );
+  }
+
+  async listAvailableTaxRates(companyId: string) {
+    const taxRates = await this.db.taxRate.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { companyId },
+          { companyId: null, isSystem: true },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        percentage: true,
+        isSystem: true,
+      },
+      orderBy: [
+        { isSystem: "desc" },
+        { name: "asc" },
+      ],
+    });
+
+    return taxRates.map((taxRate) => ({
+      id: taxRate.id,
+      name: taxRate.name,
+      percentage: Number(taxRate.percentage),
+      isSystem: taxRate.isSystem,
+    }));
+  }
 }

@@ -31,6 +31,8 @@ describe("Quotation use case tenant isolation", () => {
           {
             findInvalidReference: vi.fn(),
             getCustomerSnapshot: vi.fn(),
+            resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()),
+            listAvailableTaxRates: vi.fn().mockResolvedValue([]),
           },
         ),
       dto: {

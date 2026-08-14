@@ -79,6 +79,8 @@ vi.mock(
     PrismaQuotationReferenceValidator: class {
       findInvalidReference = vi.fn();
       getCustomerSnapshot = vi.fn();
+      resolveTaxRatePercentages = vi.fn().mockResolvedValue(new Map());
+      listAvailableTaxRates = vi.fn();
     },
   }),
 );

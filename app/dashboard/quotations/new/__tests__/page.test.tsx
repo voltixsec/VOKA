@@ -47,7 +47,20 @@ function fetchForCreate() {
       }));
     }
     if (input.startsWith("/api/catalog/items")) {
-      return Promise.resolve(response([]));
+      return Promise.resolve(response([{
+        id: "catalog-1",
+        name: "Taxed service",
+        code: "SRV-1",
+        type: "SERVICE",
+        salePrice: 100,
+        taxRateId: "tax-10",
+      }]));
+    }
+    if (input === "/api/tax-rates") {
+      return Promise.resolve(response([
+        { id: "tax-5", name: "VAT 5", percentage: 5, isSystem: false },
+        { id: "tax-10", name: "VAT 10", percentage: 10, isSystem: true },
+      ]));
     }
     if (input === "/api/companies/current/quotation-terms") {
       return Promise.resolve(response({ templates: [] }));
@@ -116,5 +129,84 @@ describe("NewQuotationPage expiry date", () => {
     } else {
       expect(body.expiryDate).toBe(expected);
     }
+  });
+
+  it("loads taxes, defaults catalog tax, previews calculator totals, and submits taxRateId", async () => {
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(NewQuotationPage));
+
+    await screen.findByText("Quotation information");
+    expect(fetchMock).toHaveBeenCalledWith("/api/tax-rates");
+    fireEvent.change(selectFor("Customer"), { target: { value: "customer-1" } });
+    fireEvent.change(selectFor("Add product or service"), {
+      target: { value: "catalog-1" },
+    });
+
+    const tax = await screen.findByRole("combobox", { name: "Tax 1" });
+    expect((tax as HTMLSelectElement).value).toBe("tax-10");
+    expect(screen.getByText("VAT 10 (10.00%)")).toBeTruthy();
+    expect(screen.getAllByText("10.000 KWD").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("110.000 KWD")).toBeTruthy();
+
+    fireEvent.change(selectFor("Discount type"), { target: { value: "PERCENTAGE" } });
+    fireEvent.change(inputFor("Discount value"), { target: { value: "10" } });
+    expect(await screen.findByText("9.000 KWD")).toBeTruthy();
+    expect(screen.getByText("99.000 KWD")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create proposal" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(
+      ([input, init]) => input === "/api/quotations" && init?.method === "POST",
+    )).toBe(true));
+    const call = fetchMock.mock.calls.find(
+      ([input, init]) => input === "/api/quotations" && init?.method === "POST",
+    );
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.lines[0]).toMatchObject({ taxRateId: "tax-10" });
+  });
+
+  it("defaults a custom line to No tax and permits selecting an available rate", async () => {
+    vi.stubGlobal("fetch", fetchForCreate());
+    render(createElement(NewQuotationPage));
+
+    await screen.findByText("Quotation information");
+    fireEvent.change(selectFor("Add product or service"), {
+      target: { value: "__custom" },
+    });
+    const tax = await screen.findByRole("combobox", { name: "Tax 1" });
+    expect((tax as HTMLSelectElement).value).toBe("");
+    fireEvent.change(tax, { target: { value: "tax-5" } });
+    expect((tax as HTMLSelectElement).value).toBe("tax-5");
+  });
+
+  it("drops an unavailable catalog tax from preview and submission with a visible warning", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (input === "/api/auth/me") return Promise.resolve(response({ activeCompanyId: "company-1" }));
+      if (input.startsWith("/api/customers")) return Promise.resolve(response({ customers: [{ id: "customer-1", name: "Acme" }] }));
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([{
+        id: "catalog-1", name: "Taxed service", code: "SRV-1", type: "SERVICE", salePrice: 100, taxRateId: "tax-inactive",
+      }]));
+      if (input === "/api/tax-rates") return Promise.resolve(response([{ id: "tax-10", name: "VAT 10", percentage: 10, isSystem: true }]));
+      if (input === "/api/companies/current/quotation-terms") return Promise.resolve(response({ templates: [] }));
+      if (input === "/api/companies/current") return Promise.resolve(response({ defaultCurrency: "KWD" }));
+      if (input === "/api/quotations" && init?.method === "POST") return Promise.resolve(response({ id: "quotation-1" }));
+      throw new Error(`Unexpected fetch: ${input}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(NewQuotationPage));
+
+    await screen.findByText("Quotation information");
+    fireEvent.change(selectFor("Customer"), { target: { value: "customer-1" } });
+    fireEvent.change(selectFor("Add product or service"), { target: { value: "catalog-1" } });
+    expect(await screen.findByText("Catalog tax is unavailable. Select an active tax rate.")).toBeTruthy();
+    expect((screen.getByRole("combobox", { name: "Tax 1" }) as HTMLSelectElement).value).toBe("");
+    expect(screen.getAllByText("100.000 KWD").length).toBeGreaterThanOrEqual(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create proposal" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => input === "/api/quotations" && init?.method === "POST")).toBe(true));
+    const call = fetchMock.mock.calls.find(([input, init]) => input === "/api/quotations" && init?.method === "POST");
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.lines[0]).toMatchObject({ taxRateId: null, taxPercentage: 0 });
+    expect(body.lines[0]).not.toHaveProperty("taxUnavailable");
   });
 });
