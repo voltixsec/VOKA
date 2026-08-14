@@ -41,7 +41,10 @@ export const GET = withCompanyAuth(
         meta: {
           channels: {
             EMAIL: { configured: availability.EMAIL.configured },
-            WHATSAPP: { configured: false },
+            WHATSAPP: {
+              configured: availability.WHATSAPP.configured,
+              locales: availability.WHATSAPP.locales,
+            },
           },
         },
         headers: { "Cache-Control": "private, no-store" },

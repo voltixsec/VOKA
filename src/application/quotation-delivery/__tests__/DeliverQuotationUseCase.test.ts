@@ -82,7 +82,11 @@ describe("DeliverQuotationUseCase", () => {
 
     expect(context.quotations.findById).toHaveBeenCalledWith("company-1", "quotation-1");
     expect(result.success).toBe(true);
-    expect(context.deliveries.values[0]).toMatchObject({ channel, recipient, status: "SENT" });
+    expect(context.deliveries.values[0]).toMatchObject({
+      channel,
+      recipient: channel === "WHATSAPP" ? "96590000000" : recipient,
+      status: "SENT",
+    });
     expect(context.deliveries.repository.create).toHaveBeenCalledOnce();
     expect(context.deliveries.repository.update).toHaveBeenCalledOnce();
     expect(context.documents.generate).toHaveBeenCalledWith({
@@ -298,22 +302,42 @@ describe("DeliverQuotationUseCase", () => {
     );
   });
 
-  it("preserves WHATSAPP recipient validation semantics", async () => {
+  it("normalizes a valid WHATSAPP recipient before persistence and delivery", async () => {
     const context = useCase();
 
     const result = await context.execute.execute({
       companyId: "company-1",
       quotationId: "quotation-1",
       channel: "WHATSAPP",
-      recipient: "+96590000000",
+      recipient: "+965 9000-0000",
       locale: "ar",
     });
 
     expect(result.success).toBe(true);
     expect(result.success && result.data.providerMessageId).toBe("provider-1");
     expect(context.gateway.deliver).toHaveBeenCalledWith(
-      expect.objectContaining({ recipient: "+96590000000" }),
+      expect.objectContaining({ recipient: "96590000000" }),
     );
+    expect(result.success && result.data.recipient).toBe("96590000000");
+  });
+
+  it("rejects an invalid WHATSAPP recipient before persistence or provider work", async () => {
+    const context = useCase();
+    const result = await context.execute.execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      channel: "WHATSAPP",
+      recipient: "0501234567",
+      locale: "ar",
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "DELIVERY_WHATSAPP_RECIPIENT_INVALID" },
+    });
+    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.documents.generate).not.toHaveBeenCalled();
+    expect(context.gateway.deliver).not.toHaveBeenCalled();
   });
 
   it("does not create an attempt for a missing or cross-tenant quotation", async () => {

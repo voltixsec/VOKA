@@ -225,9 +225,10 @@ describe("QuotationDetailsPage localization visibility", () => {
     render(createElement(QuotationDetailsPage));
 
     expect(await screen.findByText("Delivery")).toBeTruthy();
-    expect(screen.getByText("Email provider not configured; WhatsApp unavailable")).toBeTruthy();
+    expect(screen.getByText("Email provider not configured")).toBeTruthy();
+    expect(screen.getByText("WhatsApp provider not configured")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Send by email" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Send by WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/api/quotations/quotation-1/deliver",
       expect.anything(),
@@ -281,7 +282,7 @@ describe("QuotationDetailsPage localization visibility", () => {
       }),
     );
     expect(historyLoads).toBeGreaterThanOrEqual(2);
-    expect((screen.getByRole("button", { name: "WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Send by WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows a safe FAILED result without claiming email success", async () => {
@@ -312,5 +313,110 @@ describe("QuotationDetailsPage localization visibility", () => {
 
     expect(await screen.findByText("Email provider rate limit was reached.")).toBeTruthy();
     expect(screen.queryByText("Email sent")).toBeNull();
+  });
+
+  it("uses the editable customer phone and active locale for configured WhatsApp delivery", async () => {
+    let historyLoads = 0;
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) {
+        historyLoads += 1;
+        return response([], {
+          channels: {
+            EMAIL: { configured: false },
+            WHATSAPP: { configured: true, locales: { ar: true, en: true } },
+          },
+        });
+      }
+      if (input.endsWith("/deliver") && init?.method === "POST") {
+        return response({ status: "SENT", providerMessageId: "wamid.1" });
+      }
+      return response({
+        ...quotation("COMPLETED", "DRAFT"),
+        customer: { name: "Acme", phone: "+965 9000-0000" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+    const recipient = await screen.findByRole("textbox", { name: "Customer WhatsApp number" });
+    expect((recipient as HTMLInputElement).value).toBe("+965 9000-0000");
+    fireEvent.change(recipient, { target: { value: "00965 9111 1111" } });
+    const send = screen.getByRole("button", { name: "Send by WhatsApp" });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    expect(await screen.findByText("WhatsApp sent")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/quotations/quotation-1/deliver",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          channel: "WHATSAPP",
+          recipient: "00965 9111 1111",
+          locale: "en",
+        }),
+      }),
+    );
+    expect(historyLoads).toBeGreaterThanOrEqual(2);
+    expect((screen.getByRole("button", { name: "Send by email" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps WhatsApp disabled when the active locale template is unavailable", async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith("/deliveries")) {
+        return response([], {
+          channels: {
+            EMAIL: { configured: false },
+            WHATSAPP: { configured: true, locales: { ar: true, en: false } },
+          },
+        });
+      }
+      return response({
+        ...quotation("COMPLETED", "DRAFT"),
+        customer: { name: "Acme", phone: "+96590000000" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+
+    expect(await screen.findByText("WhatsApp template is not configured for English")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Send by WhatsApp" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/quotations/quotation-1/deliver",
+      expect.anything(),
+    );
+  });
+
+  it("shows a truthful WhatsApp FAILED response without claiming success", async () => {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) {
+        return response([], {
+          channels: {
+            EMAIL: { configured: false },
+            WHATSAPP: { configured: true, locales: { ar: false, en: true } },
+          },
+        });
+      }
+      if (input.endsWith("/deliver") && init?.method === "POST") {
+        return response({
+          status: "FAILED",
+          errorMessage: "WhatsApp delivery is temporarily rate limited.",
+        });
+      }
+      return response({
+        ...quotation("COMPLETED", "DRAFT"),
+        customer: { name: "Acme", phone: "+96590000000" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+    const send = await screen.findByRole("button", { name: "Send by WhatsApp" });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+
+    expect(await screen.findByText("WhatsApp delivery is temporarily rate limited.")).toBeTruthy();
+    expect(screen.queryByText("WhatsApp sent")).toBeNull();
   });
 });

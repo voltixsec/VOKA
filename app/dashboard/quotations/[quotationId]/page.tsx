@@ -57,6 +57,8 @@ type Quote = {
     name: string;
     email?: string | null;
     phone?: string | null;
+    mobile?: string | null;
+    whatsapp?: string | null;
   };
 
   projectName?: string | null;
@@ -93,7 +95,7 @@ type Delivery = {
 
 type DeliveryChannelAvailability = {
   EMAIL: { configured: boolean };
-  WHATSAPP: { configured: boolean };
+  WHATSAPP: { configured: boolean; locales: { ar: boolean; en: boolean } };
 };
 
 const arabicStatuses:
@@ -213,10 +215,13 @@ export default function QuotationDetailsPage() {
   const [deliveryChannels, setDeliveryChannels] =
     useState<DeliveryChannelAvailability>({
       EMAIL: { configured: false },
-      WHATSAPP: { configured: false },
+      WHATSAPP: { configured: false, locales: { ar: false, en: false } },
     });
 
   const [emailRecipient, setEmailRecipient] =
+    useState("");
+
+  const [whatsappRecipient, setWhatsAppRecipient] =
     useState("");
 
   const [deliveryFeedback, setDeliveryFeedback] =
@@ -282,6 +287,10 @@ export default function QuotationDetailsPage() {
         setEmailRecipient((current) =>
           current || json.data.customer?.email || "",
         );
+        setWhatsAppRecipient((current) =>
+          current || json.data.customer?.whatsapp ||
+            json.data.customer?.mobile || json.data.customer?.phone || "",
+        );
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -313,7 +322,18 @@ export default function QuotationDetailsPage() {
       if (!response.ok) return;
       const json = await response.json();
       setDeliveries(Array.isArray(json.data) ? json.data : []);
-      if (json.meta?.channels) setDeliveryChannels(json.meta.channels);
+      if (json.meta?.channels) {
+        setDeliveryChannels({
+          EMAIL: { configured: Boolean(json.meta.channels.EMAIL?.configured) },
+          WHATSAPP: {
+            configured: Boolean(json.meta.channels.WHATSAPP?.configured),
+            locales: {
+              ar: Boolean(json.meta.channels.WHATSAPP?.locales?.ar),
+              en: Boolean(json.meta.channels.WHATSAPP?.locales?.en),
+            },
+          },
+        });
+      }
     } catch {
       // Delivery history and availability are supplementary.
     }
@@ -383,6 +403,53 @@ export default function QuotationDetailsPage() {
         message: caught instanceof Error
           ? caught.message
           : t("تعذر إرسال البريد الإلكتروني", "Email delivery failed"),
+      });
+    } finally {
+      setActing("");
+    }
+  }
+
+  async function sendWhatsApp() {
+    if (!quote || !whatsappRecipient.trim()) {
+      setDeliveryFeedback({
+        kind: "error",
+        message: t("أدخل رقم واتساب العميل أولًا", "Enter the customer WhatsApp number first"),
+      });
+      return;
+    }
+
+    try {
+      setActing("deliver-whatsapp");
+      setDeliveryFeedback(null);
+      const response = await fetch(
+        `/api/quotations/${encodeURIComponent(quote.id)}/deliver`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel: "WHATSAPP",
+            recipient: whatsappRecipient.trim(),
+            locale: isArabic ? "ar" : "en",
+          }),
+        },
+      );
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(json?.error?.message ?? t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed"));
+      }
+      setDeliveryFeedback(json?.data?.status === "SENT"
+        ? { kind: "success", message: t("تم الإرسال عبر واتساب", "WhatsApp sent") }
+        : {
+          kind: "error",
+          message: json?.data?.errorMessage ?? t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed"),
+        });
+      await loadDeliveries();
+    } catch (caught) {
+      setDeliveryFeedback({
+        kind: "error",
+        message: caught instanceof Error
+          ? caught.message
+          : t("تعذر الإرسال عبر واتساب", "WhatsApp delivery failed"),
       });
     } finally {
       setActing("");
@@ -875,15 +942,37 @@ export default function QuotationDetailsPage() {
                 ? "text-emerald-300"
                 : "text-amber-300"
             }`}>
+              {isArabic
+                ? deliveryChannels.EMAIL.configured
+                  ? "البريد الإلكتروني متاح"
+                  : "مزود البريد الإلكتروني غير مهيأ"
+                : deliveryChannels.EMAIL.configured
+                  ? "Email delivery available"
+                  : "Email provider not configured"}
+            </p>
+            <p className={`mt-1 text-sm ${
+              deliveryChannels.WHATSAPP.configured
+                ? "text-emerald-300"
+                : "text-amber-300"
+            }`}>
               {t(
-                deliveryChannels.EMAIL.configured
-                  ? "البريد الإلكتروني متاح؛ واتساب غير متاح"
-                  : "مزود البريد الإلكتروني غير مهيأ؛ واتساب غير متاح",
-                deliveryChannels.EMAIL.configured
-                  ? "Email delivery available; WhatsApp unavailable"
-                  : "Email provider not configured; WhatsApp unavailable",
+                deliveryChannels.WHATSAPP.configured
+                  ? "واتساب متاح"
+                  : "مزود واتساب غير مهيأ",
+                deliveryChannels.WHATSAPP.configured
+                  ? "WhatsApp delivery available"
+                  : "WhatsApp provider not configured",
               )}
             </p>
+            {deliveryChannels.WHATSAPP.configured &&
+              !deliveryChannels.WHATSAPP.locales[isArabic ? "ar" : "en"] && (
+              <p className="mt-1 text-sm text-amber-300">
+                {t(
+                  "قالب واتساب العربي غير مهيأ",
+                  "WhatsApp template is not configured for English",
+                )}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -901,8 +990,20 @@ export default function QuotationDetailsPage() {
                 ? t("جاري الإرسال...", "Sending...")
                 : t("إرسال بالبريد الإلكتروني", "Send by email")}
             </Button>
-            <Button size="sm" variant="secondary" disabled>
-              {t("\u0648\u0627\u062a\u0633\u0627\u0628", "WhatsApp")}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={
+                !deliveryChannels.WHATSAPP.configured ||
+                !deliveryChannels.WHATSAPP.locales[isArabic ? "ar" : "en"] ||
+                !whatsappRecipient.trim() ||
+                Boolean(acting)
+              }
+              onClick={() => void sendWhatsApp()}
+            >
+              {acting === "deliver-whatsapp"
+                ? t("جاري الإرسال...", "Sending...")
+                : t("إرسال عبر واتساب", "Send by WhatsApp")}
             </Button>
           </div>
         </div>
@@ -921,6 +1022,26 @@ export default function QuotationDetailsPage() {
                 {t(
                   "لا يوجد بريد إلكتروني للعميل. أدخله لإرسال العرض.",
                   "Customer email is missing. Enter one to send the proposal.",
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
+        {deliveryChannels.WHATSAPP.configured && (
+          <div className="mt-4 max-w-md">
+            <Input
+              type="tel"
+              value={whatsappRecipient}
+              onChange={(event) => setWhatsAppRecipient(event.target.value)}
+              placeholder={t("رقم واتساب بصيغة دولية", "WhatsApp number in international format")}
+              aria-label={t("رقم واتساب للعميل", "Customer WhatsApp number")}
+            />
+            {!whatsappRecipient.trim() && (
+              <p className="mt-2 text-sm text-amber-300">
+                {t(
+                  "رقم واتساب العميل مفقود. أدخله بصيغة دولية لإرسال العرض.",
+                  "Customer WhatsApp number is missing. Enter it in international format to send the proposal.",
                 )}
               </p>
             )}

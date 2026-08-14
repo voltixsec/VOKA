@@ -10,6 +10,7 @@ import { CustomerEmail } from "@/src/domain/customer/value-objects/CustomerEmail
 import type { QuotationDeliveryGateway } from "./QuotationDeliveryGateway";
 import type { QuotationDeliveryRepository } from "./QuotationDeliveryRepository";
 import { createQuotationDeliveryProviderRequestKey } from "./createQuotationDeliveryProviderRequestKey";
+import { normalizeWhatsAppRecipient } from "./normalizeWhatsAppRecipient";
 
 export type DeliverQuotationInput = {
   companyId: string;
@@ -52,6 +53,20 @@ export class DeliverQuotationUseCase {
           error: {
             code: "DELIVERY_EMAIL_RECIPIENT_INVALID",
             message: "Delivery email recipient is invalid.",
+          },
+        };
+      }
+    }
+
+    if (input.channel === "WHATSAPP") {
+      try {
+        recipient = normalizeWhatsAppRecipient(recipient);
+      } catch {
+        return {
+          success: false,
+          error: {
+            code: "DELIVERY_WHATSAPP_RECIPIENT_INVALID",
+            message: "Delivery WhatsApp recipient is invalid.",
           },
         };
       }
