@@ -32,4 +32,6 @@ export interface CreateQuotationDto
   issueDate?: Date;
 
   expiryDate?: Date | null;
+
+  localizationSourceLocale?: "ar" | "en";
 }

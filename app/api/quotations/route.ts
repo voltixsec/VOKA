@@ -61,6 +61,7 @@ type CreateQuotationBody = {
   scopeType?: unknown;
   issueDate?: unknown;
   expiryDate?: unknown;
+  localizationSourceLocale?: unknown;
 };
 
 function parseOptionalString(
@@ -301,6 +302,12 @@ export const POST = withCompanyAuth(
       'expiryDate',
     );
 
+    const localizationSourceLocale =
+      body.localizationSourceLocale === "ar" ||
+      body.localizationSourceLocale === "en"
+        ? body.localizationSourceLocale
+        : undefined;
+
     const localizedSubjectAr =
       parseOptionalString(body.subjectAr);
 
@@ -382,6 +389,7 @@ export const POST = withCompanyAuth(
 
       issueDate: issueDate ?? undefined,
       expiryDate,
+      localizationSourceLocale,
     };
 
     const result =

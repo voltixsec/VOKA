@@ -10,6 +10,7 @@ import {
 import { createElement } from "react";
 import {
   afterEach,
+  beforeEach,
   describe,
   expect,
   it,
@@ -19,9 +20,10 @@ import {
 import NewQuotationPage from "../page";
 
 const push = vi.fn();
+let isArabic = false;
 
 vi.mock("@/components/i18n/LanguageProvider", () => ({
-  useLanguage: () => ({ isArabic: false }),
+  useLanguage: () => ({ isArabic }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -54,6 +56,7 @@ function fetchForCreate() {
         type: "SERVICE",
         salePrice: 100,
         taxRateId: "tax-10",
+        description: "Catalog scope",
       }]));
     }
     if (input === "/api/tax-rates") {
@@ -86,6 +89,18 @@ function inputFor(label: string): HTMLInputElement {
   if (!input) throw new Error(`Input missing for ${label}`);
   return input;
 }
+
+function postBody(fetchMock: ReturnType<typeof vi.fn>) {
+  const call = fetchMock.mock.calls.find(
+    ([input, init]) => input === "/api/quotations" && init?.method === "POST",
+  );
+  if (!call) throw new Error("POST request missing");
+  return JSON.parse(String(call[1]?.body));
+}
+
+beforeEach(() => {
+  isArabic = false;
+});
 
 afterEach(() => {
   cleanup();
@@ -175,8 +190,116 @@ describe("NewQuotationPage expiry date", () => {
     });
     const tax = await screen.findByRole("combobox", { name: "Tax 1" });
     expect((tax as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("textbox", { name: "Description 1" }) as HTMLTextAreaElement).value).toBe("");
+    expect((screen.getByRole("button", { name: "Move up 1" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Move down 1" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(tax, { target: { value: "tax-5" } });
     expect((tax as HTMLSelectElement).value).toBe("tax-5");
+  });
+
+  it.each([
+    {
+      arabic: false,
+      descriptionLabel: "Description 1",
+      description: "English optional scope",
+      locale: "en",
+      localizedKey: "descriptionEn",
+      inactiveKey: "descriptionAr",
+      createLabel: "Create proposal",
+      customOption: "+ Custom line",
+    },
+    {
+      arabic: true,
+      descriptionLabel: "الوصف 1",
+      description: "وصف عربي اختياري",
+      locale: "ar",
+      localizedKey: "descriptionAr",
+      inactiveKey: "descriptionEn",
+      createLabel: "إنشاء العرض",
+      customOption: "+ بند مخصص",
+    },
+  ])("submits the active $locale line description without populating the inactive locale", async ({
+    arabic,
+    descriptionLabel,
+    description,
+    locale,
+    localizedKey,
+    inactiveKey,
+    createLabel,
+    customOption,
+  }) => {
+    isArabic = arabic;
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(NewQuotationPage));
+
+    await screen.findByText(arabic ? "بيانات العرض" : "Quotation information");
+    const customerOption = screen.getByRole("option", { name: "Acme" });
+    fireEvent.change(customerOption.parentElement as HTMLSelectElement, { target: { value: "customer-1" } });
+    const option = screen.getByRole("option", { name: customOption });
+    fireEvent.change(option.parentElement as HTMLSelectElement, { target: { value: "__custom" } });
+    fireEvent.change(screen.getByRole("textbox", { name: descriptionLabel }), {
+      target: { value: description },
+    });
+    fireEvent.click(screen.getByRole("button", { name: createLabel }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(
+      ([input, init]) => input === "/api/quotations" && init?.method === "POST",
+    )).toBe(true));
+    const body = postBody(fetchMock);
+    expect(body.localizationSourceLocale).toBe(locale);
+    expect(body.lines[0]).toMatchObject({
+      description,
+      [localizedKey]: description,
+      position: 1,
+    });
+    expect(body.lines[0]).not.toHaveProperty(inactiveKey);
+  });
+
+  it("inherits a present catalog description and preserves line fields through reordering", async () => {
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(NewQuotationPage));
+
+    await screen.findByText("Quotation information");
+    fireEvent.change(selectFor("Customer"), { target: { value: "customer-1" } });
+    fireEvent.change(selectFor("Add product or service"), { target: { value: "catalog-1" } });
+    expect((screen.getByRole("textbox", { name: "Description 1" }) as HTMLTextAreaElement).value).toBe("Catalog scope");
+    fireEvent.change(selectFor("Add product or service"), { target: { value: "__custom" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Item 2" }), { target: { value: "Custom second" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Description 2" }), { target: { value: "Second scope" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Unit price 2" }), { target: { value: "20" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Tax 2" }), { target: { value: "tax-5" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Move up 2" }));
+    expect((screen.getByRole("textbox", { name: "Item 1" }) as HTMLInputElement).value).toBe("Custom second");
+    expect((screen.getByRole("textbox", { name: "Description 1" }) as HTMLTextAreaElement).value).toBe("Second scope");
+    const firstRow = screen.getByRole("textbox", { name: "Item 1" }).closest("div.grid");
+    expect(firstRow?.textContent).toContain("21.000");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create proposal" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(
+      ([input, init]) => input === "/api/quotations" && init?.method === "POST",
+    )).toBe(true));
+    const body = postBody(fetchMock);
+    expect(body.lines.map((line: { itemName: string }) => line.itemName)).toEqual([
+      "Custom second",
+      "Taxed service",
+    ]);
+    expect(body.lines[0]).toMatchObject({
+      position: 1,
+      description: "Second scope",
+      taxRateId: "tax-5",
+      taxPercentage: 5,
+    });
+    expect(body.lines[1]).toMatchObject({
+      position: 2,
+      catalogItemId: "catalog-1",
+      description: "Catalog scope",
+      taxRateId: "tax-10",
+      taxPercentage: 10,
+    });
   });
 
   it("drops an unavailable catalog tax from preview and submission with a visible warning", async () => {
@@ -200,6 +323,7 @@ describe("NewQuotationPage expiry date", () => {
     fireEvent.change(selectFor("Add product or service"), { target: { value: "catalog-1" } });
     expect(await screen.findByText("Catalog tax is unavailable. Select an active tax rate.")).toBeTruthy();
     expect((screen.getByRole("combobox", { name: "Tax 1" }) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("textbox", { name: "Description 1" }) as HTMLTextAreaElement).value).toBe("");
     expect(screen.getAllByText("100.000 KWD").length).toBeGreaterThanOrEqual(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Create proposal" }));
@@ -208,5 +332,26 @@ describe("NewQuotationPage expiry date", () => {
     const body = JSON.parse(String(call?.[1]?.body));
     expect(body.lines[0]).toMatchObject({ taxRateId: null, taxPercentage: 0 });
     expect(body.lines[0]).not.toHaveProperty("taxUnavailable");
+  });
+
+  it("keeps custom-line creation usable when optional catalog and tax choices fail", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string) => {
+      if (input === "/api/auth/me") return Promise.resolve(response({ activeCompanyId: "company-1" }));
+      if (input.startsWith("/api/customers")) return Promise.resolve(response({ customers: [{ id: "customer-1", name: "Acme" }] }));
+      if (input.startsWith("/api/catalog/items") || input === "/api/tax-rates") {
+        return Promise.resolve({ ok: false, status: 503, json: async () => ({}) });
+      }
+      if (input === "/api/companies/current/quotation-terms") return Promise.resolve(response({ templates: [] }));
+      if (input === "/api/companies/current") return Promise.resolve(response({ defaultCurrency: "KWD" }));
+      throw new Error(`Unexpected fetch: ${input}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(NewQuotationPage));
+
+    expect(await screen.findByText("Catalog unavailable. You can still add a custom line.")).toBeTruthy();
+    expect(screen.getByText("Available tax rates could not be loaded.")).toBeTruthy();
+    fireEvent.change(selectFor("Add product or service"), { target: { value: "__custom" } });
+    expect(screen.getByDisplayValue("Custom line")).toBeTruthy();
+    expect((screen.getByRole("combobox", { name: "Tax 1" }) as HTMLSelectElement).value).toBe("");
   });
 });

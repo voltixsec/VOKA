@@ -20,6 +20,10 @@ import {
   QuotationCalculator,
   type QuotationLineType,
 } from "@/src/domain/quotation";
+import {
+  moveQuotationLine,
+  normalizeQuotationLinePositions,
+} from "../quotation-line-order";
 
 type Customer = {
   id: string;
@@ -33,20 +37,37 @@ type Item = {
   type: QuotationLineType;
   salePrice: number;
   taxRateId?: string | null;
+  description?: string | null;
 };
 
 type Line = {
+  editorKey: string;
+  position: number;
   catalogItemId: string;
   type: QuotationLineType;
   itemCode: string;
   itemName: string;
+  itemNameAr?: string | null;
+  itemNameEn?: string | null;
+  description?: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
   unitName: string;
+  unitNameAr?: string | null;
+  unitNameEn?: string | null;
   quantity: number;
   unitPrice: number;
   taxRateId?: string | null;
   taxPercentage?: number;
   taxUnavailable?: boolean;
 };
+
+let editorLineSequence = 0;
+
+function createEditorLineKey(): string {
+  editorLineSequence += 1;
+  return `new-line-${editorLineSequence}`;
+}
 
 type TaxRate = {
   id: string;
@@ -138,6 +159,12 @@ export default function NewQuotationPage() {
 
   const [taxRates, setTaxRates] =
     useState<TaxRate[]>([]);
+
+  const [catalogError, setCatalogError] =
+    useState(false);
+
+  const [taxRateError, setTaxRateError] =
+    useState(false);
 
   const [customerId, setCustomerId] =
     useState("");
@@ -392,8 +419,8 @@ export default function NewQuotationPage() {
           );
         }
 
-        const [customerResponse, itemResponse, taxRateResponse] =
-          await Promise.all([
+        const [customerResult, itemResult, taxRateResult] =
+          await Promise.allSettled([
             fetch(
               "/api/customers?companyId=" +
                 companyId +
@@ -406,9 +433,8 @@ export default function NewQuotationPage() {
           ]);
 
         if (
-          !customerResponse.ok ||
-          !itemResponse.ok ||
-          !taxRateResponse.ok
+          customerResult.status === "rejected" ||
+          !customerResult.value.ok
         ) {
           throw new Error(
             t(
@@ -419,24 +445,25 @@ export default function NewQuotationPage() {
         }
 
         const customerJson =
-          await customerResponse.json();
-
-        const itemJson =
-          await itemResponse.json();
-
-        const taxRateJson =
-          await taxRateResponse.json();
+          await customerResult.value.json();
 
         setCustomers(
           customerJson.data.customers,
         );
 
-        setItems(itemJson.data);
-        setTaxRates(
-          Array.isArray(taxRateJson.data)
-            ? taxRateJson.data
-            : [],
-        );
+        if (itemResult.status === "fulfilled" && itemResult.value.ok) {
+          const itemJson = await itemResult.value.json();
+          setItems(Array.isArray(itemJson.data) ? itemJson.data : []);
+        } else {
+          setCatalogError(true);
+        }
+
+        if (taxRateResult.status === "fulfilled" && taxRateResult.value.ok) {
+          const taxRateJson = await taxRateResult.value.json();
+          setTaxRates(Array.isArray(taxRateJson.data) ? taxRateJson.data : []);
+        } else {
+          setTaxRateError(true);
+        }
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -529,6 +556,23 @@ export default function NewQuotationPage() {
     }
   }, [discountType, discountValue, lines]);
 
+  function activeLocalizedLineText(
+    itemName: string,
+    description: string,
+  ): Partial<Line> {
+    return isArabic
+      ? {
+          itemNameAr: itemName,
+          unitNameAr: "PCS",
+          ...(description ? { descriptionAr: description } : {}),
+        }
+      : {
+          itemNameEn: itemName,
+          unitNameEn: "PCS",
+          ...(description ? { descriptionEn: description } : {}),
+        };
+  }
+
   function addItem(id: string) {
     setDirty(true);
 
@@ -536,6 +580,8 @@ export default function NewQuotationPage() {
       setLines((current) => [
         ...current,
         {
+          editorKey: createEditorLineKey(),
+          position: current.length + 1,
           catalogItemId: "",
           type: "CUSTOM",
           itemCode: "",
@@ -543,11 +589,19 @@ export default function NewQuotationPage() {
             "\u0628\u0646\u062f \u0645\u062e\u0635\u0635",
             "Custom line",
           ),
+          description: "",
           unitName: "PCS",
           quantity: 1,
           unitPrice: 0,
           taxRateId: null,
           taxPercentage: 0,
+          ...activeLocalizedLineText(
+            t(
+              "\u0628\u0646\u062f \u0645\u062e\u0635\u0635",
+              "Custom line",
+            ),
+            "",
+          ),
         },
       ]);
 
@@ -571,16 +625,20 @@ export default function NewQuotationPage() {
     setLines((current) => [
       ...current,
       {
+        editorKey: createEditorLineKey(),
+        position: current.length + 1,
         catalogItemId: item.id,
         type: item.type,
         itemCode: item.code,
         itemName: item.name,
+        description: item.description ?? "",
         unitName: "PCS",
         quantity: 1,
         unitPrice: item.salePrice,
         taxRateId: catalogTaxRate?.id ?? null,
         taxPercentage: catalogTaxRate?.percentage ?? 0,
         taxUnavailable: Boolean(item.taxRateId && !catalogTaxRate),
+        ...activeLocalizedLineText(item.name, item.description ?? ""),
       },
     ]);
   }
@@ -606,22 +664,37 @@ export default function NewQuotationPage() {
       | "quantity"
       | "unitPrice"
       | "itemName"
-      | "unitName",
+      | "unitName"
+      | "description",
     value: number | string,
   ) {
     setDirty(true);
 
     setLines((current) =>
       current.map(
-        (line, lineIndex) =>
-          lineIndex === index
-            ? {
-                ...line,
-                [key]: value,
-              }
-            : line,
+        (line, lineIndex) => {
+          if (lineIndex !== index) return line;
+          const localizedKey =
+            key === "itemName"
+              ? isArabic ? "itemNameAr" : "itemNameEn"
+              : key === "unitName"
+                ? isArabic ? "unitNameAr" : "unitNameEn"
+                : key === "description"
+                  ? isArabic ? "descriptionAr" : "descriptionEn"
+                  : null;
+          return {
+            ...line,
+            [key]: value,
+            ...(localizedKey ? { [localizedKey]: value } : {}),
+          };
+        },
       ),
     );
+  }
+
+  function moveLine(index: number, direction: "up" | "down") {
+    setLines((current) => moveQuotationLine(current, index, direction));
+    setDirty(true);
   }
 
   function cancel() {
@@ -666,6 +739,8 @@ export default function NewQuotationPage() {
               "application/json",
           },
           body: JSON.stringify({
+            localizationSourceLocale:
+              isArabic ? "ar" : "en",
             customerId,
             quotationNumber: number,
             currencyCode,
@@ -699,7 +774,11 @@ export default function NewQuotationPage() {
                 }),
 
             lines: lines.map(
-              ({ taxUnavailable: _taxUnavailable, ...line }, index) => ({
+              ({
+                editorKey: _editorKey,
+                taxUnavailable: _taxUnavailable,
+                ...line
+              }, index) => ({
                 ...line,
                 catalogItemId:
                   line.catalogItemId ||
@@ -1098,6 +1177,22 @@ export default function NewQuotationPage() {
                 </option>
               ))}
             </select>
+            {catalogError && (
+              <span className="text-xs text-amber-300">
+                {t(
+                  "تعذر تحميل الكتالوج. يمكنك إضافة بند مخصص.",
+                  "Catalog unavailable. You can still add a custom line.",
+                )}
+              </span>
+            )}
+            {taxRateError && (
+              <span className="text-xs text-amber-300">
+                {t(
+                  "تعذر تحميل الضرائب المتاحة.",
+                  "Available tax rates could not be loaded.",
+                )}
+              </span>
+            )}
           </label>
 
           <div className="mt-4 space-y-3">
@@ -1108,7 +1203,7 @@ export default function NewQuotationPage() {
               <span>{t("سعر الوحدة", "Unit price")}</span>
               <span>{t("الضريبة", "Tax")}</span>
               <span>{t("إجمالي البند", "Line total")}</span>
-              <span />
+              <span>{t("الإجراءات", "Actions")}</span>
             </div>
             {lines.length === 0 && (
               <p className="py-6 text-center text-sm text-slate-500">
@@ -1122,11 +1217,12 @@ export default function NewQuotationPage() {
             {lines.map(
               (line, index) => (
                 <div
-                  key={index}
+                  key={line.editorKey}
                   className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]"
                 >
                   <div>
                     <Input
+                      aria-label={`${t("الصنف", "Item")} ${index + 1}`}
                       value={
                         line.itemName
                       }
@@ -1149,6 +1245,7 @@ export default function NewQuotationPage() {
                   </div>
 
                   <Input
+                    aria-label={`${t("الوحدة", "Unit")} ${index + 1}`}
                     value={line.unitName}
                     onChange={(event) =>
                       changeLine(
@@ -1164,6 +1261,7 @@ export default function NewQuotationPage() {
                   />
 
                   <Input
+                    aria-label={`${t("الكمية", "Quantity")} ${index + 1}`}
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -1181,6 +1279,7 @@ export default function NewQuotationPage() {
                   />
 
                   <Input
+                    aria-label={`${t("سعر الوحدة", "Unit price")} ${index + 1}`}
                     type="number"
                     min="0"
                     step="0.001"
@@ -1228,30 +1327,56 @@ export default function NewQuotationPage() {
                     {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    onClick={() => {
-                      setLines(
-                        (current) =>
-                          current.filter(
-                            (
-                              _,
-                              lineIndex,
-                            ) =>
-                              lineIndex !==
-                              index,
-                          ),
-                      );
-                      setDirty(true);
-                    }}
-                  >
-                    {t(
-                      "\u062d\u0630\u0641",
-                      "Remove",
-                    )}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`${t("تحريك لأعلى", "Move up")} ${index + 1}`}
+                      disabled={index === 0}
+                      onClick={() => moveLine(index, "up")}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`${t("تحريك لأسفل", "Move down")} ${index + 1}`}
+                      disabled={index === lines.length - 1}
+                      onClick={() => moveLine(index, "down")}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      disabled={lines.length === 1}
+                      onClick={() => {
+                        setLines((current) => normalizeQuotationLinePositions(
+                          current.filter((_line, lineIndex) => lineIndex !== index),
+                        ));
+                        setDirty(true);
+                      }}
+                    >
+                      {t("\u062d\u0630\u0641", "Remove")}
+                    </Button>
+                  </div>
+
+                  <label className="space-y-1 md:col-span-7">
+                    <span className="text-xs text-slate-400">
+                      {t("الوصف", "Description")}
+                    </span>
+                    <textarea
+                      aria-label={`${t("الوصف", "Description")} ${index + 1}`}
+                      value={line.description ?? ""}
+                      onChange={(event) => changeLine(index, "description", event.target.value)}
+                      placeholder={t("وصف اختياري", "Optional description")}
+                      rows={2}
+                      className="w-full resize-y rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-sky-400/50 focus:ring-4 focus:ring-sky-400/10"
+                    />
+                  </label>
                 </div>
               ),
             )}

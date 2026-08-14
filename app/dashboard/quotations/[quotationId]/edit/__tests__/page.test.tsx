@@ -46,6 +46,9 @@ const quotation = {
       itemName: "Item",
       itemNameAr: "\u0635\u0646\u0641",
       itemNameEn: "Item",
+      description: "English detail",
+      descriptionAr: "تفاصيل عربية",
+      descriptionEn: "English detail",
       unitName: "unit",
       unitNameAr: "\u0648\u062d\u062f\u0629",
       unitNameEn: "unit",
@@ -81,6 +84,7 @@ const catalogItem = {
   type: "PRODUCT",
   salePrice: 25.5,
   taxRateId: "tax-1",
+  description: "Catalog description",
 };
 
 const taxRates = [
@@ -303,6 +307,8 @@ describe("EditQuotationPage active language", () => {
       itemCode: "CAM-1",
       itemName: "Catalog camera",
       itemNameEn: "Catalog camera",
+      description: "Catalog description",
+      descriptionEn: "Catalog description",
       unitName: "PCS",
       unitNameEn: "PCS",
       quantity: 1,
@@ -312,6 +318,154 @@ describe("EditQuotationPage active language", () => {
     });
     expect(body.lines[1]).not.toHaveProperty("itemNameAr");
     expect(body.lines[1]).not.toHaveProperty("unitNameAr");
+  });
+
+  it.each([
+    [false, "English detail"],
+    [true, "تفاصيل عربية"],
+  ] as const)("loads the active line description for locale Arabic=%s", async (arabic, expected) => {
+    isArabic = arabic;
+    const localized = {
+      ...quotation,
+      lines: quotation.lines.map((line) => ({
+        ...line,
+        description: arabic ? line.descriptionAr : line.descriptionEn,
+      })),
+    };
+    const fetchMock = vi.fn().mockImplementation((input: string) => {
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
+      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
+      return Promise.resolve(response(localized));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    expect((await screen.findByRole("textbox", {
+      name: arabic ? "الوصف 1" : "Description 1",
+    }) as HTMLTextAreaElement).value).toBe(expected);
+  });
+
+  it.each([
+    {
+      arabic: false,
+      label: "Description 1",
+      next: "Updated English detail",
+      generic: "Updated English detail",
+      expected: {
+        descriptionAr: "تفاصيل عربية",
+        descriptionEn: "Updated English detail",
+      },
+    },
+    {
+      arabic: true,
+      label: "الوصف 1",
+      next: "تفاصيل عربية محدثة",
+      generic: "تفاصيل عربية محدثة",
+      expected: {
+        descriptionAr: "تفاصيل عربية محدثة",
+        descriptionEn: "English detail",
+      },
+    },
+  ])("edits only the active description and marks the draft dirty", async ({
+    arabic,
+    label,
+    next,
+    generic,
+    expected,
+  }) => {
+    isArabic = arabic;
+    const localized = {
+      ...quotation,
+      lines: quotation.lines.map((line) => ({
+        ...line,
+        description: arabic ? line.descriptionAr : line.descriptionEn,
+      })),
+    };
+    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
+      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
+      if (init?.method === "PATCH") return Promise.resolve(response(localized));
+      return Promise.resolve(response(localized));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    fireEvent.change(await screen.findByRole("textbox", { name: label }), {
+      target: { value: next },
+    });
+    const beforeUnload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole("button", {
+      name: arabic ? "حفظ التعديلات" : "Save changes",
+    }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    expect(patchBody(fetchMock).lines[0]).toMatchObject({
+      description: generic,
+      ...expected,
+    });
+  });
+
+  it("reorders complete existing/catalog lines without creating tax refresh intent", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    expect((await screen.findByRole("button", { name: "Move up 1" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Move down 1" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole("combobox", { name: "Add product or service" }), {
+      target: { value: "catalog-1" },
+    });
+    expect((screen.getByRole("button", { name: "Move up 1" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Move down 2" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Move up 2" }));
+
+    expect((screen.getByRole("textbox", { name: "Item 1" }) as HTMLInputElement).value).toBe("Catalog camera");
+    expect((screen.getByRole("textbox", { name: "Description 1" }) as HTMLTextAreaElement).value).toBe("Catalog description");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    const body = patchBody(fetchMock);
+    expect(body.taxRateRefreshLineIds).toEqual([]);
+    expect(body.lines[0]).toMatchObject({
+      position: 1,
+      catalogItemId: "catalog-1",
+      description: "Catalog description",
+      taxRateId: "tax-1",
+      taxPercentage: 5,
+    });
+    expect(body.lines[1]).toMatchObject({
+      id: "line-1",
+      position: 2,
+      description: "English detail",
+      descriptionAr: "تفاصيل عربية",
+      descriptionEn: "English detail",
+      taxRateId: "tax-1",
+      taxPercentage: 5,
+    });
+  });
+
+  it("keeps add, reorder, and delete operations normalized", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+
+    const selector = await screen.findByRole("combobox", { name: "Add product or service" });
+    fireEvent.change(selector, { target: { value: "__custom" } });
+    fireEvent.change(selector, { target: { value: "__custom" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Item 3" }), { target: { value: "Third line" } });
+    fireEvent.click(screen.getByRole("button", { name: "Move up 3" }));
+    const removes = screen.getAllByRole("button", { name: "Remove" });
+    fireEvent.click(removes[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    const body = patchBody(fetchMock);
+    expect(body.lines).toHaveLength(2);
+    expect(body.lines.map((line: { position: number }) => line.position)).toEqual([1, 2]);
+    expect(body.lines.map((line: { itemName: string }) => line.itemName)).toEqual(["Item", "Custom line"]);
   });
 
   it("adds a custom line with active-language values only", async () => {
