@@ -120,7 +120,8 @@ describe("quotation state transition use cases", () => {
   it("cancels a tenant-scoped draft", async () => {
     const value = quotation("DRAFT");
     const repo = repository(value);
-    const result = await new CancelQuotationUseCase(repo).execute({
+    const guard = { existsBySourceQuotation: vi.fn().mockResolvedValue(false) };
+    const result = await new CancelQuotationUseCase(repo, guard).execute({
       companyId: "company-1",
       quotationId: "quotation-1",
     });
@@ -128,6 +129,31 @@ describe("quotation state transition use cases", () => {
     expect(result.success).toBe(true);
     expect(value.status).toBe("CANCELLED");
     expect(repo.update).toHaveBeenCalledWith("company-1", value);
+  });
+
+  it("blocks cancellation when the tenant quotation has a Sales Order", async () => {
+    const value = quotation("DRAFT");
+    const repo = repository(value);
+    const guard = { existsBySourceQuotation: vi.fn().mockResolvedValue(true) };
+
+    const result = await new CancelQuotationUseCase(repo, guard).execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: {
+        code: "QUOTATION_HAS_SALES_ORDER",
+        message: "A quotation with a Sales Order cannot be cancelled.",
+      },
+    });
+    expect(guard.existsBySourceQuotation).toHaveBeenCalledWith(
+      "company-1",
+      "quotation-1",
+    );
+    expect(value.status).toBe("DRAFT");
+    expect(repo.update).not.toHaveBeenCalled();
   });
 
   it("does not persist an invalid transition", async () => {

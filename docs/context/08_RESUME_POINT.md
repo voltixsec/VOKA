@@ -4,72 +4,59 @@ Verified on: 2026-08-14 (Asia/Kuwait)
 
 ## Current Verified State
 
-- Branch: `main`.
-- Verified HEAD: `6ff9762`.
-- Phase 1.4 branded proposal delivery is closed through PR #18 at `d5599b2`.
-- Safe dependency hardening is closed through PR #19 at `23c2d2f`.
-- Phase 3 Proposal Composer UX is closed through PR #31 at `6ff9762`.
-- The feature close passed Prisma validation/migration status, TypeScript,
-  production build, 444/444 tests across 68 files, diff checks and CI Quality.
+- Starting branch: `main` at `9062aa6`, matching `origin/main` with a clean
+  worktree.
+- Active delivery branch: `feature/approved-quotation-sales-order-draft`.
+- Phase 3 Proposal Composer UX remains closed through PR #31 at `6ff9762`.
+- Phase 4.1 Approved Quotation to Sales Order Draft is implemented and locally
+  validated. Final PR and merge identifiers must be recorded only after they
+  exist.
 
-## Closed Phase 3 Delivery
+## Phase 4.1 Delivered Boundary
 
-The merged sequence from PR #21 through PR #31 delivered:
+- Authenticated OWNER, ADMIN and SALES users can convert an APPROVED quotation
+  to exactly one DRAFT Sales Order; VIEWER remains read-only.
+- The order number is deterministically `SO-{quotation.number}` and unique
+  within its company.
+- Source quotation uniqueness, a Prisma transaction and targeted uniqueness
+  recovery make conversion idempotent and concurrency-safe.
+- The Sales Order copies persisted customer, bilingual proposal/line,
+  commercial discount, historical tax and total values. It never reloads or
+  reprices from current customer, catalog, Price List or TaxRate data and does
+  not accept browser commercial values.
+- Creator ID/name/role and source approval name/role/date are audited as
+  snapshots. Optional canonical references can be cleared later without losing
+  historical content.
+- A quotation with a Sales Order cannot be cancelled.
+- Tenant-scoped Sales Order list/detail APIs and localized responsive read-only
+  pages are available.
+- One additive Prisma migration introduces the Sales Order foundation.
 
-- PR #21 (`627d467`): active-language composer and localization visibility.
-- PR #22 (`40314bc`): draft-edit catalog/custom line parity.
-- PR #23 (`8a4cbdf`): quotation validity UX.
-- PR #24 (`44b7464`): authenticated proposal PDF preview.
-- PR #25 (`a878ca4`): delivery foundation and delivery audit trail.
-- PR #26 (`fe0a1d6`): provider readiness and safe configuration boundaries.
-- PR #27 (`0c6c3a4`): Resend quotation email delivery.
-- PR #28 (`29cc4e1`): Meta WhatsApp Cloud API delivery code path.
-- PR #29 (`421b3d2`): Email + WhatsApp delivery and failed-channel retry UX.
-- PR #30 (`97577fb`): canonical quotation tax and totals integrity.
-- PR #31 (`6ff9762`): localized line descriptions, accessible reordering and
-  final Create/Edit line-editor parity.
+## Validation State
 
-The composer now uses a single active language while preserving inactive
-localized content. It supports catalog and custom lines, stable positions,
-line descriptions, discounts, canonical server-owned tax/totals, validity,
-preview, deterministic PDF and approval state. Delivery supports Email, Both
-channels and failed-channel retry with audit history.
-
-Meta provider application code is complete. Live Meta credentials,
-phone-number registration and approved-template configuration remain deferred
-environment work.
-
-## Current Product Frontier
-
-Perform a read-only Phase 4/5 assessment covering:
-
-- the remaining approval-to-contract/order/invoice lifecycle;
-- downstream state, snapshot, audit and idempotency requirements;
-- canonical customer/catalog reuse across downstream commercial documents;
-- ownership of reusable localized catalog/customer values.
-
-The output should be CTO-reviewable gaps, acceptance criteria, dependencies and
-a bounded recommended implementation slice. This resume point does not
-authorize Phase 4/5 implementation.
+- 105 focused Phase 4.1 and cancellation tests pass across 12 files.
+- Full suite passes 501/501 tests across 77 files, above the 444-test baseline.
+- TypeScript and repository lint pass.
+- Prisma schema formatting, validation, generation and migration application
+  pass; the local database is current.
+- Production build and final diff/safety checks pass.
 
 ## Intentionally Deferred
 
-- Contracts, sales orders, invoices and payments.
-- Voice capture and AI-assisted proposal composition.
-- Live Meta account/template configuration.
-- WebP company-image compatibility.
-- Arbitrary custom primary/accent HEX branding.
-- General dynamic multi-page BOQ pagination.
-- Certificate-based cryptographic PDF signatures.
-- The planned Next 16 security migration for remaining nested dependency risk.
+- Sales Order editing, confirmation, cancellation, fulfillment, inventory,
+  warehouse, shipping and Sales Order PDF.
+- Contracts, invoices and payments.
+- Approval-time PDF binary storage, hash/manifest and cryptographic signatures.
+- Canonical catalog-localization schema and live Price List composer use.
+- Voice/AI composition, dynamic document pagination, WebP and custom HEX branding.
+- Next 16 migration and dependency upgrades.
+- Meta live configuration and all delivery-provider architecture changes.
 
 ## Continuing Guardrails
 
-- Start future implementation from current `main` only after scope approval.
-- Preserve the canonical quotation implementation under `src/`.
-- Keep PDF rendering deterministic and AI-free.
-- Preserve tenant isolation, human approval and immutable approved-document
-  history.
-- Preserve canonical server-side tax and totals calculation.
-- Treat the Next 16 migration as a separate engineering/security workstream,
-  not the next product feature.
+- The approved quotation snapshot is the Sales Order commercial source.
+- Preserve tenant isolation, database-enforced idempotency and server authority
+  over commercial values.
+- Do not add Sales Order lifecycle transitions without a separately approved
+  bounded slice.
+- Keep Meta/provider configuration outside this workstream.

@@ -2,11 +2,13 @@ import { QuotationDomainError } from "../../../domain/quotation";
 
 import type { CancelQuotationDto } from "../dto/CancelQuotationDto";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
+import type { IQuotationSalesOrderGuard } from "../repositories/IQuotationSalesOrderGuard";
 import type { ApplicationResult } from "../results/ApplicationResult";
 
 export class CancelQuotationUseCase {
   constructor(
     private readonly repository: IQuotationRepository,
+    private readonly salesOrderGuard: IQuotationSalesOrderGuard,
   ) {}
 
   async execute(
@@ -24,6 +26,21 @@ export class CancelQuotationUseCase {
         error: {
           code: "QUOTATION_NOT_FOUND",
           message: "Quotation not found.",
+        },
+      };
+    }
+
+    if (
+      await this.salesOrderGuard.existsBySourceQuotation(
+        dto.companyId,
+        dto.quotationId,
+      )
+    ) {
+      return {
+        success: false,
+        error: {
+          code: "QUOTATION_HAS_SALES_ORDER",
+          message: "A quotation with a Sales Order cannot be cancelled.",
         },
       };
     }

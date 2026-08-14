@@ -3,10 +3,12 @@
 import Link from "next/link";
 import {
   useParams,
+  useRouter,
 } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -198,6 +200,7 @@ const scopeLabels:
 
 export default function QuotationDetailsPage() {
   const { isArabic } = useLanguage();
+  const router = useRouter();
 
   const params =
     useParams<{
@@ -218,6 +221,7 @@ export default function QuotationDetailsPage() {
 
   const [acting, setActing] =
     useState("");
+  const conversionInFlight = useRef(false);
 
   const [deliveries, setDeliveries] =
     useState<Delivery[]>([]);
@@ -564,6 +568,47 @@ export default function QuotationDetailsPage() {
     }
   }
 
+  async function createSalesOrder() {
+    if (!quote || conversionInFlight.current) return;
+
+    conversionInFlight.current = true;
+    try {
+      setActing("convert-to-sales-order");
+      setError("");
+      const response = await fetch(
+        `/api/quotations/${encodeURIComponent(quote.id)}/convert-to-sales-order`,
+        { method: "POST" },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.data?.salesOrderId) {
+        const code = body?.error?.code;
+        throw new Error(
+          code === "QUOTATION_NOT_APPROVED"
+            ? t(
+                "يجب اعتماد عرض السعر قبل إنشاء أمر البيع.",
+                "The quotation must be approved before creating a Sales Order.",
+              )
+            : t(
+                "تعذر إنشاء أمر البيع. يرجى المحاولة مرة أخرى.",
+                "Could not create the Sales Order. Please try again.",
+              ),
+        );
+      }
+      router.push(
+        `/dashboard/sales-orders/${encodeURIComponent(body.data.salesOrderId)}`,
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : t("تعذر إنشاء أمر البيع.", "Could not create the Sales Order."),
+      );
+    } finally {
+      conversionInFlight.current = false;
+      setActing("");
+    }
+  }
+
   const money = (amount: number) =>
     new Intl.NumberFormat(
       isArabic ? "ar-KW" : "en-US",
@@ -738,6 +783,20 @@ export default function QuotationDetailsPage() {
                   quote.status
                 : quote.status}
             </Badge>
+
+            {quote.status === "APPROVED" && (
+              <Button
+                size="sm"
+                variant="success"
+                disabled={Boolean(acting)}
+                aria-label={t("إنشاء أمر بيع", "Create Sales Order")}
+                onClick={() => void createSalesOrder()}
+              >
+                {acting === "convert-to-sales-order"
+                  ? t("جارٍ الإنشاء...", "Creating...")
+                  : t("إنشاء أمر بيع", "Create Sales Order")}
+              </Button>
+            )}
 
             {actions.map((name) => (
               <Button

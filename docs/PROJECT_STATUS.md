@@ -1,11 +1,12 @@
 # Project Status
 
-Current Product Frontier: Read-only Phase 4/5 lifecycle and canonical-reuse assessment
+Current Product Frontier: Phase 4.1 Approved Quotation to Sales Order Draft
 
-Status: Phase 3 Proposal Composer UX is merged and closed. No Phase 4/5
-implementation slice has started.
+Status: Phase 3 is closed. The approved Phase 4.1 Sales Order Draft slice is
+implemented and validated on its feature branch; final merge metadata is
+recorded only after the pull request merges.
 
-Verified baseline: `6ff9762` on `main` (2026-08-14)
+Starting verified baseline: `9062aa6` on `main` (2026-08-14)
 
 ## Sprint 09A - Quotation API
 
@@ -189,7 +190,8 @@ Quality.
 
 Still deferred:
 
-- Contracts, sales orders, invoices and payments.
+- Sales Order editing/confirmation/cancellation/fulfillment, contracts,
+  invoices and payments.
 - Voice capture and AI-assisted proposal composition.
 - Live Meta account/template configuration.
 - WebP branding compatibility, arbitrary custom HEX branding and general
@@ -201,3 +203,37 @@ The next recommended product action is a read-only Phase 4/5 assessment of
 approval/downstream document lifecycle and canonical customer/catalog reuse.
 That assessment must produce bounded CTO-reviewable acceptance criteria before
 any implementation begins.
+
+## Phase 4.1 - Approved Quotation to Sales Order Draft
+
+Status: Implemented and validated; merge metadata pending.
+
+Delivered:
+
+- An APPROVED quotation can create exactly one tenant-owned Sales Order in
+  DRAFT status with deterministic number `SO-{quotation.number}`.
+- Database uniqueness enforces the source one-to-one relationship and
+  company-scoped order number. Repeated and concurrent conversions return the
+  existing order without exposing a raw database conflict.
+- Conversion copies the persisted approved quotation customer, localized
+  content, ordered line, discount, historical tax and totals snapshots inside
+  one Prisma transaction. It does not reload or reprice from mutable customer,
+  catalog, Price List or TaxRate records and does not invoke localization/AI.
+- Creator identity and source approval identity/date are stored as historical
+  audit snapshots, with a nullable creator user reference for retention.
+- A quotation with a downstream Sales Order can no longer be cancelled.
+- Authenticated convert/list/detail APIs and localized, responsive Sales Order
+  list/detail UI are available. The Sales Order is read-only after conversion.
+
+Validated: 105 focused tests across 12 files, 501/501 full regression tests
+across 77 files, TypeScript, Prisma format/validate/generate and 17-migration
+status, lint, production build and diff checks.
+
+Still deferred:
+
+- Sales Order editing, confirmation, cancellation, fulfillment, inventory,
+  warehouse, shipping and Sales Order PDF.
+- Contracts, invoices and payments.
+- Approval-time PDF binary/hash/manifest and cryptographic signatures.
+- Canonical catalog-localization schema and live Price List composer use.
+- Meta live configuration and provider changes; Meta was untouched.

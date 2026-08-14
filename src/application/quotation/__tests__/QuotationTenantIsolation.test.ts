@@ -71,7 +71,9 @@ describe("Quotation use case tenant isolation", () => {
     {
       name: "cancel",
       create: (repository: IQuotationRepository) =>
-        new CancelQuotationUseCase(repository),
+        new CancelQuotationUseCase(repository, {
+          existsBySourceQuotation: vi.fn().mockResolvedValue(false),
+        }),
       dto: {
         companyId: "company-1",
         quotationId: "quotation-1",

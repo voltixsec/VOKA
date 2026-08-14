@@ -164,3 +164,25 @@ These entry conditions are retained as history and have been superseded by the
 merged Phase 1.4 and Phase 3 implementation. Any Phase 4/5 slice requires a
 fresh read-only assessment and CTO-approved acceptance criteria from current
 `main`.
+
+## Phase 4.1 - Approved Quotation to Sales Order Draft
+
+Status: **Implemented and validated; merge metadata pending**
+
+This bounded slice delivers the first downstream commercial snapshot:
+
+- APPROVED-only conversion to exactly one DRAFT Sales Order.
+- Deterministic `SO-{quotation.number}` numbering with company uniqueness.
+- Database-enforced source idempotency and safe concurrent-race recovery.
+- Atomic copying of persisted customer, localized proposal/line, commercial,
+  tax, total, creator and source-approval snapshots.
+- No live customer/catalog/Price List/TaxRate repricing or client commercial
+  authority.
+- Tenant-scoped conversion/list/detail APIs and localized read-only UI.
+- Quotation cancellation conflict after a Sales Order exists.
+
+Future slices require separate approval for Sales Order operations,
+confirmation, cancellation, fulfillment, inventory, PDF, contracts, invoices
+or payments. Approval-time PDF artifact/hash, reusable canonical catalog
+localization and live Price List composer integration also remain future work.
+Meta configuration and delivery-provider architecture remain outside Phase 4.1.
