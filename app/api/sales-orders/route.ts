@@ -4,6 +4,7 @@ import {
   withCompanyAuth,
 } from "@/lib/api";
 import { ListSalesOrdersUseCase } from "@/src/application/sales-order";
+import type { SalesOrderStatus } from "@/src/domain/sales-order";
 import { PrismaSalesOrderRepository } from "@/src/infrastructure/persistence/prisma/sales-order/PrismaSalesOrderRepository";
 import { serializeSalesOrder } from "./serialize-sales-order";
 
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 
 const repository = new PrismaSalesOrderRepository();
 const listSalesOrders = new ListSalesOrdersUseCase(repository);
+
+const VALID_STATUSES: SalesOrderStatus[] = ["DRAFT", "CONFIRMED", "CANCELLED"];
 
 function positiveInteger(
   value: string | null,
@@ -38,7 +41,7 @@ export const GET = withCompanyAuth(
       ? requestedLocale
       : undefined;
 
-    if (status && status !== "DRAFT") {
+    if (status && !VALID_STATUSES.includes(status as SalesOrderStatus)) {
       throw ApiError.badRequest(
         "INVALID_SALES_ORDER_STATUS",
         "Sales Order status is invalid.",
@@ -47,7 +50,7 @@ export const GET = withCompanyAuth(
 
     const result = await listSalesOrders.execute({
       companyId: company.companyId,
-      status: status === "DRAFT" ? status : undefined,
+      status: (status as SalesOrderStatus) || undefined,
       search: params.get("search") ?? undefined,
       page: positiveInteger(params.get("page"), 1),
       pageSize: positiveInteger(params.get("pageSize"), 20),

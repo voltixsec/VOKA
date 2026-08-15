@@ -158,6 +158,15 @@ function salesOrderRecord(overrides: Record<string, unknown> = {}) {
     createdByUserId: "user-1",
     createdByName: "Creator Snapshot",
     createdByRole: "SALES",
+    confirmedAt: null,
+    confirmedByUserId: null,
+    confirmedByName: null,
+    confirmedByRole: null,
+    cancelledAt: null,
+    cancelledByUserId: null,
+    cancelledByName: null,
+    cancelledByRole: null,
+    cancellationReason: null,
     createdAt: now,
     updatedAt: now,
     lines: source.lines.map((line, index) => ({
@@ -474,6 +483,161 @@ describe("PrismaSalesOrderRepository conversion", () => {
     expect(context.state.salesOrder).toBeNull();
     expect(context.createSalesOrder).not.toHaveBeenCalled();
     expect(context.queryRaw).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("PrismaSalesOrderRepository confirmation and cancellation CAS transitions", () => {
+  it("confirms a DRAFT sales order with atomic CAS update and audit persistence", async () => {
+    const draftRecord = salesOrderRecord({ status: "DRAFT" });
+    const confirmedRecord = salesOrderRecord({
+      status: "CONFIRMED",
+      confirmedAt: now,
+      confirmedByUserId: "user-2",
+      confirmedByName: "Confirmer",
+      confirmedByRole: "ADMIN",
+    });
+
+    const lockSalesOrder = vi.fn().mockResolvedValue([{ id: "sales-order-1" }]);
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce(draftRecord)
+      .mockResolvedValueOnce(confirmedRecord);
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+
+    const tx = {
+      $queryRaw: lockSalesOrder,
+      salesOrder: { findFirst, updateMany },
+    };
+    const db = {
+      $transaction: vi.fn(async (cb) => cb(tx)),
+    };
+
+    const repository = new PrismaSalesOrderRepository(db as never);
+    const result = await repository.confirm({
+      companyId: "company-1",
+      salesOrderId: "sales-order-1",
+      expectedStatus: "DRAFT",
+      actor: { userId: "user-2", name: "Confirmer", role: "ADMIN" },
+    });
+
+    expect(result.kind).toBe("CONFIRMED");
+    if (result.kind === "CONFIRMED") {
+      expect(result.salesOrder.status).toBe("CONFIRMED");
+      expect(result.salesOrder.confirmedByName).toBe("Confirmer");
+    }
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "sales-order-1",
+        companyId: "company-1",
+        status: "DRAFT",
+      },
+      data: expect.objectContaining({
+        status: "CONFIRMED",
+        confirmedByUserId: "user-2",
+        confirmedByName: "Confirmer",
+        confirmedByRole: "ADMIN",
+      }),
+    });
+  });
+
+  it("handles competing DRAFT confirm vs cancel: confirm wins, cancel gets STALE_STATE conflict", async () => {
+    // Simulated DB state that changes when confirm runs
+    let currentRecord = salesOrderRecord({ status: "DRAFT" });
+
+    const createDbTx = (statusAtStart: string) => {
+      const lockSalesOrder = vi.fn().mockResolvedValue([{ id: "sales-order-1" }]);
+      const findFirst = vi.fn().mockImplementation(() => Promise.resolve(currentRecord));
+      const updateMany = vi.fn().mockImplementation((args) => {
+        if (currentRecord.status === args.where.status) {
+          currentRecord = {
+            ...currentRecord,
+            ...args.data,
+          };
+          return Promise.resolve({ count: 1 });
+        }
+        return Promise.resolve({ count: 0 });
+      });
+
+      const tx = {
+        $queryRaw: lockSalesOrder,
+        salesOrder: { findFirst, updateMany },
+      };
+      return {
+        $transaction: vi.fn(async (cb) => cb(tx)),
+      };
+    };
+
+    const repo1 = new PrismaSalesOrderRepository(createDbTx("DRAFT") as never);
+    // Request 1: Confirm with expectedStatus=DRAFT
+    const confirmResult = await repo1.confirm({
+      companyId: "company-1",
+      salesOrderId: "sales-order-1",
+      expectedStatus: "DRAFT",
+      actor: { userId: "user-1", name: "Confirmer", role: "ADMIN" },
+    });
+
+    expect(confirmResult.kind).toBe("CONFIRMED");
+    expect(currentRecord.status).toBe("CONFIRMED");
+
+    // Request 2: Cancel originating from old DRAFT state with expectedStatus=DRAFT
+    const repo2 = new PrismaSalesOrderRepository(createDbTx("CONFIRMED") as never);
+    const cancelResult = await repo2.cancel({
+      companyId: "company-1",
+      salesOrderId: "sales-order-1",
+      expectedStatus: "DRAFT",
+      reason: "Old client request",
+      actor: { userId: "user-2", name: "Canceller", role: "OWNER" },
+    });
+
+    expect(cancelResult).toEqual({
+      kind: "STALE_STATE",
+      currentStatus: "CONFIRMED",
+    });
+    // Ensure state remains CONFIRMED
+    expect(currentRecord.status).toBe("CONFIRMED");
+
+    // Request 3: Client reloads, sees CONFIRMED, cancels with expectedStatus=CONFIRMED
+    const repo3 = new PrismaSalesOrderRepository(createDbTx("CONFIRMED") as never);
+    const laterCancelResult = await repo3.cancel({
+      companyId: "company-1",
+      salesOrderId: "sales-order-1",
+      expectedStatus: "CONFIRMED",
+      reason: "Post-confirmation client cancellation",
+      actor: { userId: "user-2", name: "Canceller", role: "OWNER" },
+    });
+
+    expect(laterCancelResult.kind).toBe("CANCELLED");
+    if (laterCancelResult.kind === "CANCELLED") {
+      expect(laterCancelResult.salesOrder.status).toBe("CANCELLED");
+      expect(laterCancelResult.salesOrder.cancellationReason).toBe(
+        "Post-confirmation client cancellation",
+      );
+    }
+  });
+
+  it("returns SALES_ORDER_NOT_FOUND if order is missing or cross-tenant during confirm or cancel", async () => {
+    const lockSalesOrder = vi.fn().mockResolvedValue([]);
+    const tx = { $queryRaw: lockSalesOrder, salesOrder: { findFirst: vi.fn() } };
+    const db = { $transaction: vi.fn(async (cb) => cb(tx)) };
+
+    const repo = new PrismaSalesOrderRepository(db as never);
+
+    const confirmRes = await repo.confirm({
+      companyId: "other-company",
+      salesOrderId: "sales-order-1",
+      expectedStatus: "DRAFT",
+      actor: { name: "A", role: "ADMIN" },
+    });
+    expect(confirmRes).toEqual({ kind: "SALES_ORDER_NOT_FOUND" });
+
+    const cancelRes = await repo.cancel({
+      companyId: "other-company",
+      salesOrderId: "sales-order-1",
+      expectedStatus: "DRAFT",
+      reason: "Some reason",
+      actor: { name: "A", role: "ADMIN" },
+    });
+    expect(cancelRes).toEqual({ kind: "SALES_ORDER_NOT_FOUND" });
   });
 });
 

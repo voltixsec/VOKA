@@ -97,4 +97,104 @@ describe("SalesOrder snapshot aggregate", () => {
     expect(salesOrder.createdByUserId).toBeNull();
     expect(salesOrder.createdByName).toBe("Creator");
   });
+
+  describe("Lifecycle state transitions and audit", () => {
+    it("confirms a DRAFT sales order with actor snapshot and timestamp", () => {
+      const salesOrder = SalesOrder.restore(props());
+      const now = new Date("2026-08-15T10:00:00.000Z");
+
+      salesOrder.confirm(
+        { userId: "actor-1", name: "Confirmer", role: "ADMIN" },
+        now,
+      );
+
+      expect(salesOrder.status).toBe("CONFIRMED");
+      expect(salesOrder.confirmedAt).toEqual(now);
+      expect(salesOrder.confirmedByUserId).toBe("actor-1");
+      expect(salesOrder.confirmedByName).toBe("Confirmer");
+      expect(salesOrder.confirmedByRole).toBe("ADMIN");
+    });
+
+    it("prevents confirming a CONFIRMED or CANCELLED sales order", () => {
+      const salesOrder = SalesOrder.restore(props());
+      salesOrder.confirm({ name: "A", role: "ADMIN" });
+
+      expect(() => salesOrder.confirm({ name: "B", role: "ADMIN" })).toThrow(
+        "Sales Order cannot transition from CONFIRMED to CONFIRMED.",
+      );
+    });
+
+    it("cancels a DRAFT sales order with required reason", () => {
+      const salesOrder = SalesOrder.restore(props());
+      const now = new Date("2026-08-15T11:00:00.000Z");
+
+      salesOrder.cancel(
+        { userId: "actor-2", name: "Canceller", role: "OWNER" },
+        "Customer request",
+        now,
+      );
+
+      expect(salesOrder.status).toBe("CANCELLED");
+      expect(salesOrder.cancelledAt).toEqual(now);
+      expect(salesOrder.cancelledByUserId).toBe("actor-2");
+      expect(salesOrder.cancelledByName).toBe("Canceller");
+      expect(salesOrder.cancelledByRole).toBe("OWNER");
+      expect(salesOrder.cancellationReason).toBe("Customer request");
+    });
+
+    it("cancels a CONFIRMED sales order", () => {
+      const salesOrder = SalesOrder.restore(props());
+      salesOrder.confirm({ name: "Confirmer", role: "ADMIN" });
+      salesOrder.cancel(
+        { name: "Canceller", role: "OWNER" },
+        "Project scope changed",
+      );
+
+      expect(salesOrder.status).toBe("CANCELLED");
+      expect(salesOrder.cancellationReason).toBe("Project scope changed");
+    });
+
+    it("requires a non-empty cancellation reason", () => {
+      const salesOrder = SalesOrder.restore(props());
+
+      expect(() =>
+        salesOrder.cancel({ name: "A", role: "ADMIN" }, "   ")
+      ).toThrow("Cancellation reason is required.");
+    });
+
+    it("treats CANCELLED as terminal and blocks transition back to CONFIRMED or CANCELLED", () => {
+      const salesOrder = SalesOrder.restore(props());
+      salesOrder.cancel({ name: "A", role: "ADMIN" }, "Reason");
+
+      expect(() => salesOrder.confirm({ name: "B", role: "ADMIN" })).toThrow(
+        "Sales Order cannot transition from CANCELLED to CONFIRMED.",
+      );
+      expect(() =>
+        salesOrder.cancel({ name: "B", role: "ADMIN" }, "Another reason")
+      ).toThrow("Sales Order is already cancelled.");
+    });
+
+    it("restores CONFIRMED and CANCELLED states with complete audit fields", () => {
+      const confirmed = SalesOrder.restore({
+        ...props(),
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-08-15T12:00:00.000Z"),
+        confirmedByName: "Manager",
+        confirmedByRole: "ADMIN",
+      });
+      expect(confirmed.status).toBe("CONFIRMED");
+      expect(confirmed.confirmedByName).toBe("Manager");
+
+      const cancelled = SalesOrder.restore({
+        ...props(),
+        status: "CANCELLED",
+        cancelledAt: new Date("2026-08-15T13:00:00.000Z"),
+        cancelledByName: "Director",
+        cancelledByRole: "OWNER",
+        cancellationReason: "Duplicated order",
+      });
+      expect(cancelled.status).toBe("CANCELLED");
+      expect(cancelled.cancellationReason).toBe("Duplicated order");
+    });
+  });
 });

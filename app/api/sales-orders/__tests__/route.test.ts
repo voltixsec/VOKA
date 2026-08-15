@@ -76,11 +76,20 @@ describe("GET /api/sales-orders", () => {
     expect(body.data.salesOrders[0].customer.name).toBe("عميل");
   });
 
-  it("rejects invalid pagination and status", async () => {
+  it("filters by status DRAFT, CONFIRMED, CANCELLED", async () => {
+    mocks.findAll.mockResolvedValue({ salesOrders: [order()], total: 1 });
+    const response = await GET(new Request("http://localhost/api/sales-orders?status=CONFIRMED"));
+    expect(response.status).toBe(200);
+    expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: "company-1",
+      status: "CONFIRMED",
+    }));
+  });
+
+  it("rejects invalid pagination and invalid status", async () => {
     const pagination = await GET(new Request("http://localhost/api/sales-orders?page=0"));
-    const status = await GET(new Request("http://localhost/api/sales-orders?status=CONFIRMED"));
+    const status = await GET(new Request("http://localhost/api/sales-orders?status=INVALID"));
     expect(pagination.status).toBe(400);
     expect(status.status).toBe(400);
-    expect(mocks.findAll).not.toHaveBeenCalled();
   });
 });

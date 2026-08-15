@@ -7,6 +7,8 @@ import type {
 import { ConvertApprovedQuotationToSalesOrderUseCase } from "../use-cases/ConvertApprovedQuotationToSalesOrderUseCase";
 import { GetSalesOrderUseCase } from "../use-cases/GetSalesOrderUseCase";
 import { ListSalesOrdersUseCase } from "../use-cases/ListSalesOrdersUseCase";
+import { ConfirmSalesOrderUseCase } from "../use-cases/ConfirmSalesOrderUseCase";
+import { CancelSalesOrderUseCase } from "../use-cases/CancelSalesOrderUseCase";
 import { buildApprovedQuotationSalesOrderDraft } from "../services/buildApprovedQuotationSalesOrderDraft";
 
 function order() {
@@ -51,10 +53,14 @@ function order() {
 }
 
 function repository(
-  conversion: SalesOrderConversionPersistenceResult,
+  conversion?: SalesOrderConversionPersistenceResult,
 ): ISalesOrderRepository {
   return {
-    convertApprovedQuotation: vi.fn().mockResolvedValue(conversion),
+    convertApprovedQuotation: vi.fn().mockResolvedValue(
+      conversion ?? { kind: "EXISTING", salesOrder: order() },
+    ),
+    confirm: vi.fn(),
+    cancel: vi.fn(),
     findById: vi.fn(),
     findBySourceQuotation: vi.fn(),
     existsBySourceQuotation: vi.fn(),
@@ -154,6 +160,179 @@ describe("Sales Order use cases", () => {
       take: 10,
     });
     expect(list.pagination).toEqual({ total: 1, page: 2, pageSize: 10, totalPages: 1 });
+  });
+
+  describe("ConfirmSalesOrderUseCase", () => {
+    it("confirms a sales order when expectedStatus matches DRAFT", async () => {
+      const confirmedOrder = order();
+      confirmedOrder.confirm({ name: "Manager", role: "ADMIN" });
+
+      const repo = repository();
+      vi.mocked(repo.confirm).mockResolvedValue({
+        kind: "CONFIRMED",
+        salesOrder: confirmedOrder,
+      });
+
+      const useCase = new ConfirmSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "DRAFT",
+        actor: { userId: "user-2", name: "Manager", role: "ADMIN" },
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.status).toBe("CONFIRMED");
+      }
+      expect(repo.confirm).toHaveBeenCalledWith({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "DRAFT",
+        actor: { userId: "user-2", name: "Manager", role: "ADMIN" },
+      });
+    });
+
+    it("returns STALE_STATE error when expectedStatus is not DRAFT", async () => {
+      const repo = repository();
+      const useCase = new ConfirmSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "CONFIRMED",
+        actor: { name: "Manager", role: "ADMIN" },
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: {
+          code: "STALE_STATE",
+          message: "Only DRAFT Sales Orders can be confirmed.",
+        },
+      });
+      expect(repo.confirm).not.toHaveBeenCalled();
+    });
+
+    it("returns STALE_STATE conflict if repo indicates current status conflict", async () => {
+      const repo = repository();
+      vi.mocked(repo.confirm).mockResolvedValue({
+        kind: "STALE_STATE",
+        currentStatus: "CANCELLED",
+      });
+
+      const useCase = new ConfirmSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "DRAFT",
+        actor: { name: "Manager", role: "ADMIN" },
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: {
+          code: "STALE_STATE",
+          message: "Sales Order status has changed.",
+          currentStatus: "CANCELLED",
+        },
+      });
+    });
+
+    it("returns SALES_ORDER_NOT_FOUND when order does not exist or belongs to another company", async () => {
+      const repo = repository();
+      vi.mocked(repo.confirm).mockResolvedValue({
+        kind: "SALES_ORDER_NOT_FOUND",
+      });
+
+      const useCase = new ConfirmSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "other-company",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "DRAFT",
+        actor: { name: "Manager", role: "ADMIN" },
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: {
+          code: "SALES_ORDER_NOT_FOUND",
+          message: "Sales Order not found.",
+        },
+      });
+    });
+  });
+
+  describe("CancelSalesOrderUseCase", () => {
+    it("cancels a DRAFT or CONFIRMED sales order with valid reason", async () => {
+      const cancelledOrder = order();
+      cancelledOrder.cancel(
+        { name: "Owner", role: "OWNER" },
+        "Client cancelled project",
+      );
+
+      const repo = repository();
+      vi.mocked(repo.cancel).mockResolvedValue({
+        kind: "CANCELLED",
+        salesOrder: cancelledOrder,
+      });
+
+      const useCase = new CancelSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "CONFIRMED",
+        reason: "Client cancelled project",
+        actor: { userId: "user-3", name: "Owner", role: "OWNER" },
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.status).toBe("CANCELLED");
+        expect(result.data.cancellationReason).toBe("Client cancelled project");
+      }
+    });
+
+    it("rejects cancellation if reason is empty or whitespace", async () => {
+      const repo = repository();
+      const useCase = new CancelSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "DRAFT",
+        reason: "   ",
+        actor: { name: "Owner", role: "OWNER" },
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_REASON",
+          message: "Cancellation reason is required.",
+        },
+      });
+      expect(repo.cancel).not.toHaveBeenCalled();
+    });
+
+    it("rejects cancellation if expectedStatus is CANCELLED", async () => {
+      const repo = repository();
+      const useCase = new CancelSalesOrderUseCase(repo);
+      const result = await useCase.execute({
+        companyId: "company-1",
+        salesOrderId: "sales-order-1",
+        expectedStatus: "CANCELLED",
+        reason: "Valid reason",
+        actor: { name: "Owner", role: "OWNER" },
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: {
+          code: "STALE_STATE",
+          message: "Sales Order state transition not allowed.",
+        },
+      });
+      expect(repo.cancel).not.toHaveBeenCalled();
+    });
   });
 });
 

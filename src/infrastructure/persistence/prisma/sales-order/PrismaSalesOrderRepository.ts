@@ -1,6 +1,10 @@
 import type { Prisma } from "../../../../../lib/generated/prisma/client";
 import { prisma } from "../../../../../lib/prisma";
 import type {
+  CancelSalesOrderParams,
+  CancelSalesOrderPersistenceResult,
+  ConfirmSalesOrderParams,
+  ConfirmSalesOrderPersistenceResult,
   ConvertApprovedQuotationParams,
   ISalesOrderRepository,
   SalesOrderConversionPersistenceResult,
@@ -15,6 +19,7 @@ import {
   type PrismaSalesOrderRecord,
 } from "./PrismaSalesOrderMapper";
 import { lockActiveQuotationForUpdate } from "../quotation/lockActiveQuotationForUpdate";
+import { lockSalesOrderForUpdate } from "./lockSalesOrderForUpdate";
 
 const salesOrderInclude = {
   lines: {
@@ -212,6 +217,190 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
         salesOrder: existing,
       };
     }
+  }
+
+  async confirm(
+    params: ConfirmSalesOrderParams,
+  ): Promise<ConfirmSalesOrderPersistenceResult> {
+    return this.db.$transaction(async (tx) => {
+      const locked = await lockSalesOrderForUpdate(
+        tx,
+        params.companyId,
+        params.salesOrderId,
+      );
+
+      if (!locked) {
+        return { kind: "SALES_ORDER_NOT_FOUND" as const };
+      }
+
+      const record = await tx.salesOrder.findFirst({
+        where: {
+          id: params.salesOrderId,
+          companyId: params.companyId,
+        },
+        include: salesOrderInclude,
+      });
+
+      if (!record) {
+        return { kind: "SALES_ORDER_NOT_FOUND" as const };
+      }
+
+      if (record.status !== params.expectedStatus) {
+        return {
+          kind: "STALE_STATE" as const,
+          currentStatus: record.status,
+        };
+      }
+
+      const salesOrder = PrismaSalesOrderMapper.toDomain(
+        record as PrismaSalesOrderRecord,
+      );
+
+      const confirmedAt = new Date();
+      salesOrder.confirm(
+        {
+          userId: params.actor.userId,
+          name: params.actor.name,
+          role: params.actor.role,
+        },
+        confirmedAt,
+      );
+
+      const updated = await tx.salesOrder.updateMany({
+        where: {
+          id: params.salesOrderId,
+          companyId: params.companyId,
+          status: params.expectedStatus,
+        },
+        data: {
+          status: salesOrder.status,
+          confirmedAt: salesOrder.confirmedAt,
+          confirmedByUserId: salesOrder.confirmedByUserId,
+          confirmedByName: salesOrder.confirmedByName,
+          confirmedByRole: salesOrder.confirmedByRole,
+        },
+      });
+
+      if (updated.count !== 1) {
+        const latest = await tx.salesOrder.findFirst({
+          where: { id: params.salesOrderId, companyId: params.companyId },
+          select: { status: true },
+        });
+        return {
+          kind: "STALE_STATE" as const,
+          currentStatus: latest?.status ?? record.status,
+        };
+      }
+
+      const fresh = await tx.salesOrder.findFirst({
+        where: { id: params.salesOrderId, companyId: params.companyId },
+        include: salesOrderInclude,
+      });
+
+      return {
+        kind: "CONFIRMED" as const,
+        salesOrder: PrismaSalesOrderMapper.toDomain(
+          fresh as PrismaSalesOrderRecord,
+        ),
+      };
+    });
+  }
+
+  async cancel(
+    params: CancelSalesOrderParams,
+  ): Promise<CancelSalesOrderPersistenceResult> {
+    const trimmedReason = params.reason?.trim();
+    if (!trimmedReason) {
+      return {
+        kind: "INVALID_REASON" as const,
+        message: "Cancellation reason is required.",
+      };
+    }
+
+    return this.db.$transaction(async (tx) => {
+      const locked = await lockSalesOrderForUpdate(
+        tx,
+        params.companyId,
+        params.salesOrderId,
+      );
+
+      if (!locked) {
+        return { kind: "SALES_ORDER_NOT_FOUND" as const };
+      }
+
+      const record = await tx.salesOrder.findFirst({
+        where: {
+          id: params.salesOrderId,
+          companyId: params.companyId,
+        },
+        include: salesOrderInclude,
+      });
+
+      if (!record) {
+        return { kind: "SALES_ORDER_NOT_FOUND" as const };
+      }
+
+      if (record.status !== params.expectedStatus) {
+        return {
+          kind: "STALE_STATE" as const,
+          currentStatus: record.status,
+        };
+      }
+
+      const salesOrder = PrismaSalesOrderMapper.toDomain(
+        record as PrismaSalesOrderRecord,
+      );
+
+      const cancelledAt = new Date();
+      salesOrder.cancel(
+        {
+          userId: params.actor.userId,
+          name: params.actor.name,
+          role: params.actor.role,
+        },
+        trimmedReason,
+        cancelledAt,
+      );
+
+      const updated = await tx.salesOrder.updateMany({
+        where: {
+          id: params.salesOrderId,
+          companyId: params.companyId,
+          status: params.expectedStatus,
+        },
+        data: {
+          status: salesOrder.status,
+          cancelledAt: salesOrder.cancelledAt,
+          cancelledByUserId: salesOrder.cancelledByUserId,
+          cancelledByName: salesOrder.cancelledByName,
+          cancelledByRole: salesOrder.cancelledByRole,
+          cancellationReason: salesOrder.cancellationReason,
+        },
+      });
+
+      if (updated.count !== 1) {
+        const latest = await tx.salesOrder.findFirst({
+          where: { id: params.salesOrderId, companyId: params.companyId },
+          select: { status: true },
+        });
+        return {
+          kind: "STALE_STATE" as const,
+          currentStatus: latest?.status ?? record.status,
+        };
+      }
+
+      const fresh = await tx.salesOrder.findFirst({
+        where: { id: params.salesOrderId, companyId: params.companyId },
+        include: salesOrderInclude,
+      });
+
+      return {
+        kind: "CANCELLED" as const,
+        salesOrder: PrismaSalesOrderMapper.toDomain(
+          fresh as PrismaSalesOrderRecord,
+        ),
+      };
+    });
   }
 
   async findById(
