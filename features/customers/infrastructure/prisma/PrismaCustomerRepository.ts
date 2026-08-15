@@ -26,6 +26,7 @@ type CustomerRecord = {
   email: string | null;
   phone: string | null;
   mobile: string | null;
+  whatsapp: string | null;
   taxNumber: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
@@ -152,6 +153,12 @@ export class PrismaCustomerRepository
                   },
                 },
                 {
+                  whatsapp: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
                   taxNumber: {
                     contains: search,
                     mode: 'insensitive',
@@ -231,6 +238,12 @@ export class PrismaCustomerRepository
                   },
                 },
                 {
+                  whatsapp: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
                   taxNumber: {
                     contains: search,
                     mode: 'insensitive',
@@ -256,6 +269,7 @@ export class PrismaCustomerRepository
       email: customer.email,
       phone: customer.phone,
       mobile: customer.mobile,
+      whatsapp: customer.whatsapp,
       taxNumber: customer.taxNumber,
       addressLine1: customer.addressLine1,
       addressLine2: customer.addressLine2,
@@ -330,6 +344,7 @@ export class PrismaCustomerRepository
         email: record.email,
         phone: record.phone,
         mobile: record.mobile,
+        whatsapp: record.whatsapp,
         taxNumber: record.taxNumber,
         addressLine1: record.addressLine1,
         addressLine2: record.addressLine2,

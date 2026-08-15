@@ -10,6 +10,7 @@ import { PrismaQuotationDocumentProvider } from "@/src/infrastructure/document/P
 import { PdfKitQuotationDocumentRenderer } from "@/src/infrastructure/document/pdfkit/PdfKitQuotationDocumentRenderer";
 import { PrismaQuotationDeliveryRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationDeliveryRepository";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
+import { PrismaQuotationCustomerContactRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationCustomerContactRepository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ const useCase = new DeliverQuotationUseCase(
     ),
   ),
   createQuotationDeliveryGateway(),
+  undefined,
+  undefined,
+  new PrismaQuotationCustomerContactRepository(),
 );
 
 function quotationId(request: Request): string {
@@ -67,6 +71,7 @@ export const POST = withCompanyAuth(
       channel: body.channel,
       recipient: body.recipient,
       locale: body.locale,
+      updateCustomerContact: body.updateCustomerContact === true,
     });
 
     if (!result.success) {

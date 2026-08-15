@@ -1,311 +1,56 @@
-﻿import { NextResponse } from 'next/server';
+import { ApiError, apiSuccess, withCompanyAuth } from '@/lib/api';
+import { CreateCustomer } from '@/features/customers/application/commands/CreateCustomer';
+import { ListCustomers } from '@/features/customers/application/queries/ListCustomers';
+import type { CustomerStatus, CustomerType } from '@/features/customers/domain/entities/Customer';
+import { PrismaCustomerRepository } from '@/features/customers/infrastructure/prisma/PrismaCustomerRepository';
+import { prisma } from '@/lib/prisma';
 
-import {
-  CreateCustomer,
-  ListCustomers,
-  PrismaCustomerRepository,
-  type CreateCustomerInput,
-  type Customer,
-  type CustomerStatus,
-  type CustomerType,
-} from '../../../features/customers';
-
-import { prisma } from '../../../lib/prisma';
+import { customerToResponse, parseCustomerChanges, throwCustomerError } from './customer-api';
 
 export const runtime = 'nodejs';
+const repository = new PrismaCustomerRepository(prisma);
+const createCustomer = new CreateCustomer(repository);
+const listCustomers = new ListCustomers(repository);
 
-const customerRepository =
-  new PrismaCustomerRepository(prisma);
-
-const createCustomer =
-  new CreateCustomer(customerRepository);
-
-const listCustomers =
-  new ListCustomers(customerRepository);
-
-function customerToResponse(customer: Customer) {
-  return {
-    id: customer.id.toString(),
-    companyId: customer.companyId,
-    code: customer.code,
-    type: customer.type,
-    status: customer.status,
-    name: customer.name,
-    legalName: customer.legalName,
-    email: customer.email,
-    phone: customer.phone,
-    mobile: customer.mobile,
-    taxNumber: customer.taxNumber,
-    addressLine1: customer.addressLine1,
-    addressLine2: customer.addressLine2,
-    city: customer.city,
-    state: customer.state,
-    postalCode: customer.postalCode,
-    countryCode: customer.countryCode,
-    preferredLocale: customer.preferredLocale,
-    preferredCurrency: customer.preferredCurrency,
-    creditLimit: customer.creditLimit,
-    paymentTermDays: customer.paymentTermDays,
-    notes: customer.notes,
-    isDeleted: customer.isDeleted,
-    deletedAt: customer.deletedAt,
-    createdAt: customer.createdAt,
-    updatedAt: customer.updatedAt,
-  };
+function positiveInteger(value: string | null): number | undefined {
+  const parsed = Number(value);
+  return value && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function parsePositiveInteger(
-  value: string | null,
-): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsedValue = Number(value);
-
-  if (
-    !Number.isInteger(parsedValue) ||
-    parsedValue < 1
-  ) {
-    return undefined;
-  }
-
-  return parsedValue;
-}
-
-function getDomainErrorStatus(code: string): number {
-  switch (code) {
-    case 'CUSTOMER_CODE_ALREADY_EXISTS':
-      return 409;
-
-    default:
-      return 400;
-  }
-}
-
-export async function GET(
-  request: Request,
-): Promise<NextResponse> {
-  try {
+export const GET = withCompanyAuth(
+  ['OWNER', 'ADMIN', 'SALES', 'VIEWER'],
+  async (request, _auth, company) => {
     const url = new URL(request.url);
-
-    const companyId =
-      url.searchParams.get('companyId')?.trim();
-
-    if (!companyId) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'COMPANY_ID_REQUIRED',
-            message: 'companyId is required.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
     const output = await listCustomers.execute({
-      companyId,
-      search:
-        url.searchParams.get('search')?.trim() ||
-        undefined,
-      status:
-        (url.searchParams.get('status') as
-          | CustomerStatus
-          | null) ?? undefined,
-      type:
-        (url.searchParams.get('type') as
-          | CustomerType
-          | null) ?? undefined,
-      includeDeleted:
-        url.searchParams.get('includeDeleted') ===
-        'true',
-      page: parsePositiveInteger(
-        url.searchParams.get('page'),
-      ),
-      pageSize: parsePositiveInteger(
-        url.searchParams.get('pageSize'),
-      ),
+      companyId: company.companyId,
+      search: url.searchParams.get('search')?.trim() || undefined,
+      status: (url.searchParams.get('status') as CustomerStatus | null) ?? undefined,
+      type: (url.searchParams.get('type') as CustomerType | null) ?? undefined,
+      page: positiveInteger(url.searchParams.get('page')),
+      pageSize: positiveInteger(url.searchParams.get('pageSize')),
     });
+    return apiSuccess({
+      customers: output.customers.map(customerToResponse),
+      pagination: { total: output.total, page: output.page, pageSize: output.pageSize, totalPages: output.totalPages },
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  },
+);
 
-    return NextResponse.json(
-      {
-        data: {
-          customers: output.customers.map(
-            customerToResponse,
-          ),
-          pagination: {
-            total: output.total,
-            page: output.page,
-            pageSize: output.pageSize,
-            totalPages: output.totalPages,
-          },
-        },
-      },
-      {
-        status: 200,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      },
-    );
-  } catch (error) {
-    console.error(
-      '[VOKA CUSTOMERS GET ERROR]',
-      error,
-    );
-
-    return NextResponse.json(
-      {
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message:
-            'The customers could not be retrieved.',
-        },
-      },
-      {
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      },
-    );
-  }
-}
-
-export async function POST(
-  request: Request,
-): Promise<NextResponse> {
-  try {
-    const body =
-      (await request.json()) as Partial<CreateCustomerInput>;
-
-    if (
-      typeof body.companyId !== 'string' ||
-      !body.companyId.trim()
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'COMPANY_ID_REQUIRED',
-            message: 'companyId is required.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
+export const POST = withCompanyAuth(
+  ['OWNER', 'ADMIN', 'SALES'],
+  async (request, _auth, company) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    const changes = parseCustomerChanges(body);
+    if (typeof changes.code !== 'string' || !changes.code) {
+      throw ApiError.badRequest('CUSTOMER_CODE_REQUIRED', 'Customer code is required.', { field: 'code' });
     }
-
-    if (
-      typeof body.code !== 'string' ||
-      !body.code.trim()
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'CUSTOMER_CODE_REQUIRED',
-            message: 'Customer code is required.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
+    if (typeof changes.name !== 'string' || !changes.name) {
+      throw ApiError.badRequest('CUSTOMER_NAME_REQUIRED', 'Customer name is required.', { field: 'name' });
     }
-
-    if (
-      typeof body.name !== 'string' ||
-      !body.name.trim()
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'CUSTOMER_NAME_REQUIRED',
-            message: 'Customer name is required.',
-          },
-        },
-        {
-          status: 400,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
-    const result = await createCustomer.execute({
-      ...body,
-      companyId: body.companyId.trim(),
-      code: body.code.trim(),
-      name: body.name.trim(),
-    } as CreateCustomerInput);
-
-    if (!result.isSuccess) {
-      const error = result.getError();
-
-      return NextResponse.json(
-        {
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        },
-        {
-          status: getDomainErrorStatus(error.code),
-          headers: {
-            'Cache-Control': 'no-store',
-          },
-        },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        data: {
-          customer: customerToResponse(
-            result.getValue(),
-          ),
-        },
-      },
-      {
-        status: 201,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      },
-    );
-  } catch (error) {
-    console.error(
-      '[VOKA CUSTOMERS POST ERROR]',
-      error,
-    );
-
-    return NextResponse.json(
-      {
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message:
-            'The customer could not be created.',
-        },
-      },
-      {
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      },
-    );
-  }
-}
+    const result = await createCustomer.execute({ ...changes, companyId: company.companyId, code: changes.code, name: changes.name });
+    if (!result.isSuccess) throwCustomerError(result.getError());
+    return apiSuccess({ customer: customerToResponse(result.getValue()) }, {
+      status: 201, headers: { 'Cache-Control': 'no-store' },
+    });
+  },
+);

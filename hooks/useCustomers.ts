@@ -9,6 +9,8 @@ export interface Customer {
   type: string;
   status: string;
   phone?: string | null;
+  mobile?: string | null;
+  whatsapp?: string | null;
   email?: string | null;
 }
 
@@ -24,7 +26,7 @@ interface CustomersResponse {
   };
 }
 
-export function useCustomers(companyId: string) {
+export function useCustomers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -36,7 +38,7 @@ export function useCustomers(companyId: string) {
         setError("");
 
         const response = await fetch(
-          `/api/customers?companyId=${encodeURIComponent(companyId)}`
+          "/api/customers"
         );
 
         if (!response.ok) {
@@ -58,7 +60,7 @@ export function useCustomers(companyId: string) {
     }
 
     loadCustomers();
-  }, [companyId]);
+  }, []);
 
   return {
     customers,

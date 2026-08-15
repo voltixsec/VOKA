@@ -127,6 +127,7 @@ model Customer {
   email             String?
   phone             String?
   mobile            String?
+  whatsapp          String?
   taxNumber         String?
   addressLine1      String?
   addressLine2      String?
