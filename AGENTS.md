@@ -23,7 +23,9 @@ choosing a convenient version:
 
 - CEO/project owner owns the business vision and final product decisions.
 - CTO owns architecture and technical approval.
-- Codex is an execution agent, not a product or technical decision maker.
+- CTO owns technical Git execution decisions inside an approved workflow, including branch, commit, push, PR, CI, merge, and cleanup. Escalate product, business, vision, or consequential decisions to the project owner.
+- Jules is the current execution agent, not a product or technical decision maker.
+- Codex is reserve capacity and must not be used unless the project owner explicitly re-enables it.
 - AI proposes; humans approve consequential actions.
 - A task closes only when the user explicitly says `تم`.
 - Silence never closes a task or session.
@@ -54,13 +56,18 @@ choosing a convenient version:
 ## Change discipline
 
 - Inspect `git status`, the relevant diff, current branch, and recent commits first.
+- Jules must start from a verified GitHub baseline; never assume unpushed local changes exist in its VM.
+- Prefer large, bounded implementation slices for Jules rather than wasting sessions on Git, trivial documentation, or mechanical checks.
+- Never apply a Jules patch directly onto `main`. Apply it only to an isolated worktree or approved feature branch based on the same starting SHA.
+- Jules must not publish a branch, create a PR, commit, push, or merge without explicit CTO approval.
+- Terminal remains the control plane for Git operations, local validation, QA, PR closure, merge, and cleanup.
 - Preserve unrelated and pre-existing worktree changes.
 - Do not modify schema, migrations, generated Prisma output, or dependencies unless
   the task explicitly requires it.
 - Do not work directly on `main`; use a feature branch.
-- Keep commits small and scoped. Never commit or push without explicit permission.
+- Keep commits small and scoped. Commit, push, PR, merge, and cleanup are authorized by the CTO under the approved workflow and do not require repeated project-owner confirmation.
 - GitHub is the shared source of truth between workstations; local folders and
-  Codex conversation state are not synchronization mechanisms.
+  Jules session state are not synchronization mechanisms.
 - Documentation is part of the product. Update the authoritative document and link
   from summaries rather than copying policy text into multiple places.
 - Before a code commit, run the applicable checks from
