@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 
 import {
   Badge,
@@ -21,9 +22,6 @@ import {
   type Customer,
   useCustomers,
 } from "../../../hooks/useCustomers";
-
-const DEMO_COMPANY_ID =
-  "cms81hx5t0000o4t1rzftwpd5";
 
 interface StatCardProps {
   title: string;
@@ -145,7 +143,7 @@ export default function CustomersPage() {
     customers,
     loading,
     error,
-  } = useCustomers(DEMO_COMPANY_ID);
+  } = useCustomers();
 
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -161,6 +159,8 @@ export default function CustomersPage() {
         customer.type,
         customer.status,
         customer.phone,
+        customer.mobile,
+        customer.whatsapp,
         customer.email,
       ]
         .filter(Boolean)
@@ -197,13 +197,9 @@ export default function CustomersPage() {
             : "Manage customer records and sales relationships."
         }
         actions={
-          <Button>
-            <span aria-hidden="true">＋</span>
-
-            {isArabic
-              ? "عميل جديد"
-              : "New Customer"}
-          </Button>
+          <Link href="/dashboard/customers/new" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-sky-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-400/40">
+            <span aria-hidden="true">＋</span>{isArabic ? "عميل جديد" : "New Customer"}
+          </Link>
         }
       />
 

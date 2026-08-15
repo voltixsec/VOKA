@@ -16,6 +16,7 @@ import {
 } from "@/src/domain/quotation";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
+import { PrismaQuotationCustomerContactRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationCustomerContactRepository";
 
 import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
 
@@ -38,6 +39,7 @@ const updateQuotation =
   );
 const localizationJobRunner =
   new QuotationLocalizationJobRunner(quotationRepository);
+const customerContacts = new PrismaQuotationCustomerContactRepository();
 
 
 function getQuotationId(request: Request): string {
@@ -93,11 +95,37 @@ export const GET = withCompanyAuth(
       );
     }
 
-    return apiSuccess(
-      serializeQuotation(
+    const serialized = serializeQuotation(
         result.data,
         getRequestedLocale(request),
-      ),
+      );
+    const liveContact = await customerContacts.find(
+      company.companyId,
+      result.data.customerId,
+    );
+    const snapshot = result.data.customer.toJSON();
+
+    return apiSuccess(
+      {
+        ...serialized,
+        customerProfile: liveContact ? {
+          id: liveContact.customerId,
+          email: liveContact.email,
+          whatsapp: liveContact.whatsapp,
+        } : null,
+        deliveryContacts: {
+          email: liveContact?.email
+            ? { value: liveContact.email, source: "CUSTOMER", differsFromSnapshot: Boolean(snapshot.email && snapshot.email !== liveContact.email) }
+            : snapshot.email
+              ? { value: snapshot.email, source: "SNAPSHOT", differsFromSnapshot: false }
+              : { value: null, source: "MISSING", differsFromSnapshot: false },
+          whatsapp: liveContact?.whatsapp
+            ? { value: liveContact.whatsapp, source: "CUSTOMER", differsFromSnapshot: Boolean(snapshot.phone && snapshot.phone !== liveContact.whatsapp) }
+            : snapshot.phone
+              ? { value: snapshot.phone, source: "SNAPSHOT", differsFromSnapshot: false }
+              : { value: null, source: "MISSING", differsFromSnapshot: false },
+        },
+      },
       {
         headers: {
           "Cache-Control": "no-store",

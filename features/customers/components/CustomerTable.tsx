@@ -1,5 +1,7 @@
 ﻿import type { Customer } from "../../../hooks/useCustomers";
 
+import Link from "next/link";
+
 import {
   Badge,
   Table,
@@ -109,21 +111,23 @@ export function CustomerTable({
           {customers.map((customer) => (
             <TableRow key={customer.id}>
               <TableCell>
-                <span
+                <Link
+                  href={`/dashboard/customers/${encodeURIComponent(customer.id)}`}
                   dir="ltr"
-                  className="inline-block font-medium text-sky-300"
+                  className="inline-block rounded font-medium text-sky-300 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-sky-300"
                 >
                   {customer.code}
-                </span>
+                </Link>
               </TableCell>
 
               <TableCell>
-                <span
+                <Link
+                  href={`/dashboard/customers/${encodeURIComponent(customer.id)}`}
                   dir="auto"
-                  className="block truncate font-medium text-white"
+                  className="block truncate rounded font-medium text-white outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-300"
                 >
                   {customer.name}
-                </span>
+                </Link>
               </TableCell>
 
               <TableCell>

@@ -8,6 +8,7 @@ import type { QuotationDelivery } from "@/src/domain/quotation-delivery";
 import { DeliverQuotationUseCase } from "../DeliverQuotationUseCase";
 import type { QuotationDeliveryGateway } from "../QuotationDeliveryGateway";
 import type { QuotationDeliveryRepository } from "../QuotationDeliveryRepository";
+import type { QuotationCustomerContactRepository } from "../QuotationCustomerContactRepository";
 
 function quotation() {
   return new Quotation({
@@ -41,6 +42,7 @@ function useCase(options?: {
   quotation?: Quotation | null;
   gateway?: QuotationDeliveryGateway;
   documents?: QuotationDocumentProvider;
+  contacts?: QuotationCustomerContactRepository;
 }) {
   const quotations = quotationRepository(
     options && "quotation" in options ? options.quotation ?? null : quotation(),
@@ -66,6 +68,7 @@ function useCase(options?: {
     gateway,
     () => new Date("2026-08-14T10:00:00.000Z"),
     () => `delivery-${deliveries.values.length + 1}`,
+    options?.contacts,
   );
   return { execute, quotations, deliveries, documents, gateway };
 }
@@ -349,5 +352,46 @@ describe("DeliverQuotationUseCase", () => {
 
     expect(result).toMatchObject({ success: false, error: { code: "QUOTATION_NOT_FOUND" } });
     expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps an edited recipient as a one-time override by default", async () => {
+    const contacts = { find: vi.fn(), updateSelected: vi.fn() };
+    const context = useCase({ contacts });
+    await context.execute.execute({ companyId: "company-1", quotationId: "quotation-1", channel: "EMAIL", recipient: "override@example.com", locale: "en" });
+    expect(contacts.updateSelected).not.toHaveBeenCalled();
+  });
+
+  it("updates only the explicitly selected email before external delivery and keeps it on provider failure", async () => {
+    const contacts = { find: vi.fn(), updateSelected: vi.fn().mockResolvedValue(true) };
+    const context = useCase({ contacts, gateway: { deliver: vi.fn().mockResolvedValue({ success: false, errorCode: "FAILED", errorMessage: "Provider failed." }) } });
+    const result = await context.execute.execute({ companyId: "company-1", quotationId: "quotation-1", channel: "EMAIL", recipient: "new@example.com", locale: "en", updateCustomerContact: true });
+    expect(contacts.updateSelected).toHaveBeenCalledWith({ companyId: "company-1", customerId: "customer-1", email: "new@example.com" });
+    expect(result.success && result.data.status).toBe("FAILED");
+  });
+
+  it("stores selected WhatsApp as E.164 while sending provider-compatible digits", async () => {
+    const contacts = { find: vi.fn(), updateSelected: vi.fn().mockResolvedValue(true) };
+    const context = useCase({ contacts });
+    await context.execute.execute({ companyId: "company-1", quotationId: "quotation-1", channel: "WHATSAPP", recipient: "+965 9000-0000", locale: "ar", updateCustomerContact: true });
+    expect(contacts.updateSelected).toHaveBeenCalledWith({ companyId: "company-1", customerId: "customer-1", whatsapp: "+96590000000" });
+    expect(context.gateway.deliver).toHaveBeenCalledWith(expect.objectContaining({ recipient: "96590000000" }));
+  });
+
+  it("prevents a cross-tenant linked-customer update before logging or provider work", async () => {
+    const contacts = { find: vi.fn(), updateSelected: vi.fn().mockResolvedValue(false) };
+    const context = useCase({ contacts });
+    const result = await context.execute.execute({ companyId: "company-1", quotationId: "quotation-1", channel: "EMAIL", recipient: "new@example.com", locale: "en", updateCustomerContact: true });
+    expect(result).toMatchObject({ success: false, error: { code: "DELIVERY_CUSTOMER_NOT_FOUND" } });
+    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.gateway.deliver).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat a selected profile update on a later retry", async () => {
+    const contacts = { find: vi.fn(), updateSelected: vi.fn().mockResolvedValue(true) };
+    const context = useCase({ contacts });
+    const input = { companyId: "company-1", quotationId: "quotation-1", channel: "EMAIL" as const, recipient: "new@example.com", locale: "en" as const };
+    await context.execute.execute({ ...input, updateCustomerContact: true });
+    await context.execute.execute(input);
+    expect(contacts.updateSelected).toHaveBeenCalledOnce();
   });
 });

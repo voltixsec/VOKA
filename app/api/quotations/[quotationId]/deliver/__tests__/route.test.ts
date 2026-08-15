@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   gatewayDeliver: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
+  updateCustomer: vi.fn(),
 }));
 
 vi.mock(
@@ -42,6 +43,15 @@ vi.mock(
     PrismaQuotationDeliveryRepository: class {
       create = mocks.create;
       update = mocks.update;
+    },
+  }),
+);
+
+vi.mock(
+  "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationCustomerContactRepository",
+  () => ({
+    PrismaQuotationCustomerContactRepository: class {
+      updateSelected = mocks.updateCustomer;
     },
   }),
 );
@@ -104,6 +114,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     mocks.findById.mockResolvedValue(quotation());
     mocks.create.mockResolvedValue(undefined);
     mocks.update.mockResolvedValue(undefined);
+    mocks.updateCustomer.mockResolvedValue(true);
     mocks.generateDocument.mockResolvedValue({
       success: true,
       data: {
@@ -263,5 +274,16 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     expect(response.status).toBe(404);
     expect(mocks.findById).toHaveBeenCalledWith("company-1", "quotation-1");
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("passes an explicit profile-update choice through without trusting a browser customer id", async () => {
+    const response = await POST(request({
+      channel: "EMAIL", recipient: "new@example.com", locale: "en",
+      updateCustomerContact: true, customerId: "cross-tenant-customer",
+    }));
+    expect(response.status).toBe(201);
+    expect(mocks.updateCustomer).toHaveBeenCalledWith({
+      companyId: "company-1", customerId: "customer-1", email: "new@example.com",
+    });
   });
 });

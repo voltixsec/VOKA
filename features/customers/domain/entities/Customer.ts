@@ -5,6 +5,7 @@
   Result,
   UniqueEntityID,
 } from '../../../../lib/core';
+import { normalizeCanonicalWhatsApp } from '../value-objects';
 
 export type CustomerType = 'COMPANY' | 'INDIVIDUAL';
 
@@ -26,6 +27,7 @@ export type CustomerProps = {
   email: string | null;
   phone: string | null;
   mobile: string | null;
+  whatsapp: string | null;
   taxNumber: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
@@ -54,6 +56,7 @@ export type CreateCustomerProps = {
   email?: string | null;
   phone?: string | null;
   mobile?: string | null;
+  whatsapp?: string | null;
   taxNumber?: string | null;
   addressLine1?: string | null;
   addressLine2?: string | null;
@@ -107,6 +110,10 @@ export class Customer extends Entity<CustomerProps> {
 
   public get mobile(): string | null {
     return this.props.mobile;
+  }
+
+  public get whatsapp(): string | null {
+    return this.props.whatsapp;
   }
 
   public get taxNumber(): string | null {
@@ -241,6 +248,11 @@ export class Customer extends Entity<CustomerProps> {
       input.countryCode,
     );
 
+    const whatsappResult = normalizeCanonicalWhatsApp(input.whatsapp);
+    if (!whatsappResult.isSuccess) {
+      return Result.failure(whatsappResult.getError());
+    }
+
     if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) {
       return Result.failure(
         new DomainError(
@@ -307,6 +319,7 @@ export class Customer extends Entity<CustomerProps> {
           email: email?.toLowerCase() ?? null,
           phone: Customer.normalizeOptional(input.phone),
           mobile: Customer.normalizeOptional(input.mobile),
+          whatsapp: whatsappResult.getValue(),
           taxNumber: Customer.normalizeOptional(input.taxNumber),
           addressLine1: Customer.normalizeOptional(
             input.addressLine1,
@@ -371,6 +384,7 @@ export class Customer extends Entity<CustomerProps> {
     email?: string | null;
     phone?: string | null;
     mobile?: string | null;
+    whatsapp?: string | null;
   }): Result<void, DomainError> {
     const email = Customer.normalizeOptional(input.email);
 
@@ -395,8 +409,53 @@ export class Customer extends Entity<CustomerProps> {
       this.props.mobile = Customer.normalizeOptional(input.mobile);
     }
 
+    if (input.whatsapp !== undefined) {
+      const whatsappResult = normalizeCanonicalWhatsApp(input.whatsapp);
+      if (!whatsappResult.isSuccess) {
+        return Result.failure(whatsappResult.getError());
+      }
+      this.props.whatsapp = whatsappResult.getValue();
+    }
+
     this.touch();
 
+    return Result.success(undefined);
+  }
+
+  public updateDetails(
+    input: Omit<Partial<CreateCustomerProps>, 'companyId'>,
+  ): Result<void, DomainError> {
+    const candidate = Customer.create({
+      companyId: this.companyId,
+      code: input.code ?? this.code,
+      name: input.name ?? this.name,
+      type: input.type ?? this.type,
+      status: input.status ?? this.status,
+      legalName: input.legalName === undefined ? this.legalName : input.legalName,
+      email: input.email === undefined ? this.email : input.email,
+      phone: input.phone === undefined ? this.phone : input.phone,
+      mobile: input.mobile === undefined ? this.mobile : input.mobile,
+      whatsapp: input.whatsapp === undefined ? this.whatsapp : input.whatsapp,
+      taxNumber: input.taxNumber === undefined ? this.taxNumber : input.taxNumber,
+      addressLine1: input.addressLine1 === undefined ? this.addressLine1 : input.addressLine1,
+      addressLine2: input.addressLine2 === undefined ? this.addressLine2 : input.addressLine2,
+      city: input.city === undefined ? this.city : input.city,
+      state: input.state === undefined ? this.state : input.state,
+      postalCode: input.postalCode === undefined ? this.postalCode : input.postalCode,
+      countryCode: input.countryCode === undefined ? this.countryCode : input.countryCode,
+      preferredLocale: input.preferredLocale === undefined ? this.preferredLocale : input.preferredLocale,
+      preferredCurrency: input.preferredCurrency === undefined ? this.preferredCurrency : input.preferredCurrency,
+      creditLimit: input.creditLimit === undefined ? this.creditLimit : input.creditLimit,
+      paymentTermDays: input.paymentTermDays === undefined ? this.paymentTermDays : input.paymentTermDays,
+      notes: input.notes === undefined ? this.notes : input.notes,
+    });
+
+    if (!candidate.isSuccess) return Result.failure(candidate.getError());
+    const next = candidate.getValue().props;
+    Object.assign(this.props, next, {
+      createdAt: this.createdAt,
+      updatedAt: new Date(),
+    });
     return Result.success(undefined);
   }
 

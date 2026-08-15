@@ -852,4 +852,33 @@ describe("QuotationDetailsPage localization visibility", () => {
     expect(screen.queryByText("Email resent")).toBeNull();
     expect(historyLoads).toBeGreaterThanOrEqual(2);
   });
+
+  it("shows live contact provenance and only persists an explicitly selected email override", async () => {
+    const value = {
+      ...quotation("COMPLETED"),
+      customerId: "customer-1",
+      customerProfile: { id: "customer-1", email: "live@example.com", whatsapp: null },
+      deliveryContacts: {
+        email: { value: "live@example.com", source: "CUSTOMER", differsFromSnapshot: true },
+        whatsapp: { value: "+96522223333", source: "SNAPSHOT", differsFromSnapshot: false },
+      },
+    };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) return response([], { channels: { EMAIL: { configured: true }, WHATSAPP: { configured: false, locales: { ar: false, en: false } } } });
+      if (input.endsWith("/deliver") && init?.method === "POST") return response({ status: "SENT" });
+      return response(value);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(QuotationDetailsPage));
+    expect(await screen.findByText(/From current customer profile/)).toBeTruthy();
+    expect(screen.getByText(/Differs from quotation snapshot/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Customer email"), { target: { value: "override@example.com" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Update customer email/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Send by email" }));
+    await screen.findByText("Email sent");
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      channel: "EMAIL", recipient: "override@example.com", locale: "en", updateCustomerContact: true,
+    });
+  });
 });

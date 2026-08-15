@@ -52,6 +52,7 @@ type Line = {
 
 type Quote = {
   id: string;
+  customerId: string;
   quotationNumber: string;
   status: string;
   issueDate: string;
@@ -64,6 +65,11 @@ type Quote = {
     phone?: string | null;
     mobile?: string | null;
     whatsapp?: string | null;
+  };
+  customerProfile: { id: string; email: string | null; whatsapp: string | null } | null;
+  deliveryContacts: {
+    email: { value: string | null; source: "CUSTOMER" | "SNAPSHOT" | "MISSING"; differsFromSnapshot: boolean };
+    whatsapp: { value: string | null; source: "CUSTOMER" | "SNAPSHOT" | "MISSING"; differsFromSnapshot: boolean };
   };
 
   projectName?: string | null;
@@ -237,6 +243,8 @@ export default function QuotationDetailsPage() {
 
   const [whatsappRecipient, setWhatsAppRecipient] =
     useState("");
+  const [updateCustomerEmail, setUpdateCustomerEmail] = useState(false);
+  const [updateCustomerWhatsApp, setUpdateCustomerWhatsApp] = useState(false);
 
   const [deliveryFeedback, setDeliveryFeedback] =
     useState<{ kind: "success" | "error"; message: string } | null>(null);
@@ -297,14 +305,13 @@ export default function QuotationDetailsPage() {
         const json =
           await response.json();
 
-        setQuote(json.data);
-        setEmailRecipient((current) =>
-          current || json.data.customer?.email || "",
-        );
-        setWhatsAppRecipient((current) =>
-          current || json.data.customer?.whatsapp ||
-            json.data.customer?.mobile || json.data.customer?.phone || "",
-        );
+        const deliveryContacts = json.data.deliveryContacts ?? {
+          email: { value: json.data.customer?.email ?? null, source: json.data.customer?.email ? "SNAPSHOT" : "MISSING", differsFromSnapshot: false },
+          whatsapp: { value: json.data.customer?.phone ?? null, source: json.data.customer?.phone ? "SNAPSHOT" : "MISSING", differsFromSnapshot: false },
+        };
+        setQuote({ ...json.data, customerProfile: json.data.customerProfile ?? null, deliveryContacts });
+        setEmailRecipient((current) => current || deliveryContacts.email.value || "");
+        setWhatsAppRecipient((current) => current || deliveryContacts.whatsapp.value || "");
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -373,6 +380,7 @@ export default function QuotationDetailsPage() {
   async function deliverChannel(
     channel: "EMAIL" | "WHATSAPP",
     recipient: string,
+    updateCustomerContact = false,
   ): Promise<DeliveryAttemptClientResult> {
     if (!quote) return { channel, sent: false, errorMessage: channelFailure(channel) };
 
@@ -382,7 +390,12 @@ export default function QuotationDetailsPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channel, recipient: recipient.trim(), locale: activeLocale }),
+          body: JSON.stringify({
+            channel,
+            recipient: recipient.trim(),
+            locale: activeLocale,
+            ...(updateCustomerContact ? { updateCustomerContact: true } : {}),
+          }),
         },
       );
       const json = await response.json().catch(() => null);
@@ -414,7 +427,8 @@ export default function QuotationDetailsPage() {
 
     setActing("deliver-email");
     setDeliveryFeedback(null);
-    const result = await deliverChannel("EMAIL", emailRecipient);
+    const result = await deliverChannel("EMAIL", emailRecipient, updateCustomerEmail);
+    setUpdateCustomerEmail(false);
     setDeliveryFeedback(result.sent
       ? { kind: "success", message: t("تم إرسال البريد الإلكتروني", "Email sent") }
       : { kind: "error", message: result.errorMessage ?? channelFailure("EMAIL") });
@@ -433,7 +447,8 @@ export default function QuotationDetailsPage() {
 
     setActing("deliver-whatsapp");
     setDeliveryFeedback(null);
-    const result = await deliverChannel("WHATSAPP", whatsappRecipient);
+    const result = await deliverChannel("WHATSAPP", whatsappRecipient, updateCustomerWhatsApp);
+    setUpdateCustomerWhatsApp(false);
     setDeliveryFeedback(result.sent
       ? { kind: "success", message: t("تم الإرسال عبر واتساب", "WhatsApp sent") }
       : { kind: "error", message: result.errorMessage ?? channelFailure("WHATSAPP") });
@@ -446,9 +461,11 @@ export default function QuotationDetailsPage() {
     setActing("deliver-both");
     setDeliveryFeedback(null);
     const settled = await Promise.allSettled([
-      deliverChannel("EMAIL", emailRecipient),
-      deliverChannel("WHATSAPP", whatsappRecipient),
+      deliverChannel("EMAIL", emailRecipient, updateCustomerEmail),
+      deliverChannel("WHATSAPP", whatsappRecipient, updateCustomerWhatsApp),
     ]);
+    setUpdateCustomerEmail(false);
+    setUpdateCustomerWhatsApp(false);
     const emailSent = settled[0].status === "fulfilled" && settled[0].value.sent;
     const whatsappSent = settled[1].status === "fulfilled" && settled[1].value.sent;
 
@@ -499,7 +516,7 @@ export default function QuotationDetailsPage() {
     if (!retryAvailable(delivery)) return;
     setActing(`retry-${delivery.id}`);
     setDeliveryFeedback(null);
-    const result = await deliverChannel(delivery.channel, delivery.recipient);
+    const result = await deliverChannel(delivery.channel, delivery.recipient, false);
     setDeliveryFeedback(result.sent
       ? {
         kind: "success",
@@ -831,6 +848,12 @@ export default function QuotationDetailsPage() {
         }
       />
 
+      {quote.status === "APPROVED" && (
+        <p className="rounded-xl border border-sky-400/15 bg-sky-400/5 px-4 py-3 text-sm text-sky-200" data-testid="branding-snapshot-lock">
+          {t("هوية المستند مقفلة على لقطة الاعتماد.", "Document branding is locked to the approval snapshot.")}
+        </p>
+      )}
+
       {error && (
         <Card className="border-red-400/20 bg-red-400/5">
           <p className="text-red-300">
@@ -1136,10 +1159,24 @@ export default function QuotationDetailsPage() {
             <Input
               type="email"
               value={emailRecipient}
-              onChange={(event) => setEmailRecipient(event.target.value)}
+              onChange={(event) => { setEmailRecipient(event.target.value); setUpdateCustomerEmail(false); }}
               placeholder={t("البريد الإلكتروني للعميل", "Customer email")}
               aria-label={t("البريد الإلكتروني للعميل", "Customer email")}
             />
+            <p className="mt-2 text-xs text-slate-500">
+              {quote.deliveryContacts.email.source === "CUSTOMER"
+                ? t("من ملف العميل الحالي", "From current customer profile")
+                : quote.deliveryContacts.email.source === "SNAPSHOT"
+                  ? t("احتياطي من لقطة عرض السعر — لم يُحفظ في ملف العميل", "Fallback from quotation snapshot — not saved to customer")
+                  : t("لا يوجد بريد محفوظ", "No saved email")}
+              {quote.deliveryContacts.email.differsFromSnapshot && ` · ${t("يختلف عن لقطة العرض", "Differs from quotation snapshot")}`}
+            </p>
+            {quote.customerProfile && emailRecipient.trim() && emailRecipient.trim() !== (quote.customerProfile.email ?? "") && (
+              <label className="mt-2 flex items-start gap-2 text-sm text-slate-300">
+                <input type="checkbox" className="mt-1" checked={updateCustomerEmail} onChange={(event) => setUpdateCustomerEmail(event.target.checked)} />
+                <span>{t("حدّث بريد العميل قبل الإرسال (يبقى محفوظاً إذا فشل الإرسال)", "Update customer email before delivery (remains saved if delivery fails)")}</span>
+              </label>
+            )}
             {!emailRecipient.trim() && (
               <p className="mt-2 text-sm text-amber-300">
                 {t(
@@ -1156,10 +1193,24 @@ export default function QuotationDetailsPage() {
             <Input
               type="tel"
               value={whatsappRecipient}
-              onChange={(event) => setWhatsAppRecipient(event.target.value)}
+              onChange={(event) => { setWhatsAppRecipient(event.target.value); setUpdateCustomerWhatsApp(false); }}
               placeholder={t("رقم واتساب بصيغة دولية", "WhatsApp number in international format")}
               aria-label={t("رقم واتساب للعميل", "Customer WhatsApp number")}
             />
+            <p className="mt-2 text-xs text-slate-500">
+              {quote.deliveryContacts.whatsapp.source === "CUSTOMER"
+                ? t("من رقم واتساب المؤكد في ملف العميل", "From confirmed customer WhatsApp")
+                : quote.deliveryContacts.whatsapp.source === "SNAPSHOT"
+                  ? t("احتياطي من هاتف لقطة العرض — ليس واتساباً مؤكداً", "Fallback from quotation phone snapshot — not confirmed WhatsApp")
+                  : t("لا يوجد رقم واتساب محفوظ", "No saved WhatsApp number")}
+              {quote.deliveryContacts.whatsapp.differsFromSnapshot && ` · ${t("يختلف عن لقطة العرض", "Differs from quotation snapshot")}`}
+            </p>
+            {quote.customerProfile && whatsappRecipient.trim() && whatsappRecipient.trim() !== (quote.customerProfile.whatsapp ?? "") && (
+              <label className="mt-2 flex items-start gap-2 text-sm text-slate-300">
+                <input type="checkbox" className="mt-1" checked={updateCustomerWhatsApp} onChange={(event) => setUpdateCustomerWhatsApp(event.target.checked)} />
+                <span>{t("حدّث واتساب العميل قبل الإرسال (يبقى محفوظاً إذا فشل الإرسال)", "Update customer WhatsApp before delivery (remains saved if delivery fails)")}</span>
+              </label>
+            )}
             {!whatsappRecipient.trim() && (
               <p className="mt-2 text-sm text-amber-300">
                 {t(
@@ -1178,6 +1229,15 @@ export default function QuotationDetailsPage() {
               : "text-red-300"
           }`}>
             {deliveryFeedback.message}
+          </p>
+        )}
+
+        {quote.customerProfile && !emailRecipient.trim() && !whatsappRecipient.trim() && (
+          <p className="mt-4 text-sm text-amber-300">
+            {t("بيانات التواصل مفقودة. ", "Customer contact details are missing. ")}
+            <Link href={`/dashboard/customers/${encodeURIComponent(quote.customerProfile.id)}/edit`} className="underline focus:outline-none focus:ring-2 focus:ring-amber-300">
+              {t("افتح ملف العميل", "Open customer profile")}
+            </Link>
           </p>
         )}
 

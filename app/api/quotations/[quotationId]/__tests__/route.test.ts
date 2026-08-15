@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   failLocalization: vi.fn(),
   localizeQuotationDraft: vi.fn(),
   runLocalizationJob: vi.fn(),
+  findCustomerContact: vi.fn(),
 
   afterTasks: [] as Array<
     () => void | Promise<void>
@@ -81,6 +82,14 @@ vi.mock(
       getCustomerSnapshot = vi.fn();
       resolveTaxRatePercentages = vi.fn().mockResolvedValue(new Map());
       listAvailableTaxRates = vi.fn();
+    },
+  }),
+);
+vi.mock(
+  "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationCustomerContactRepository",
+  () => ({
+    PrismaQuotationCustomerContactRepository: class {
+      find = mocks.findCustomerContact;
     },
   }),
 );
@@ -161,6 +170,7 @@ describe("GET /api/quotations/[quotationId]", () => {
     mocks.failLocalization.mockReset();
     mocks.localizeQuotationDraft.mockReset();
     mocks.runLocalizationJob.mockReset();
+    mocks.findCustomerContact.mockReset().mockResolvedValue(null);
   });
 
   async function runAfterTasks() {
@@ -202,6 +212,21 @@ describe("GET /api/quotations/[quotationId]", () => {
         quotationNumber: "Q-001",
       },
     });
+  });
+
+  it("prefers live canonical contact and identifies snapshot differences", async () => {
+    const value = createQuotation();
+    Object.assign(value.customer, { email: "snapshot@example.com", phone: "+96522223333" });
+    mocks.findById.mockResolvedValue(value);
+    mocks.findCustomerContact.mockResolvedValue({ customerId: "customer-1", email: "live@example.com", whatsapp: "+96590000000" });
+    const response = await GET(new Request("http://localhost/api/quotations/quotation-1"));
+    expect(await response.json()).toMatchObject({ data: {
+      customerProfile: { id: "customer-1", email: "live@example.com", whatsapp: "+96590000000" },
+      deliveryContacts: {
+        email: { value: "live@example.com", source: "CUSTOMER", differsFromSnapshot: true },
+        whatsapp: { value: "+96590000000", source: "CUSTOMER", differsFromSnapshot: true },
+      },
+    } });
   });
 
   it("returns the same 404 for missing and cross-company ids", async () => {

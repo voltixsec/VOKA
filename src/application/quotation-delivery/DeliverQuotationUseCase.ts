@@ -6,9 +6,11 @@ import {
   type QuotationDeliveryChannel,
 } from "@/src/domain/quotation-delivery";
 import { CustomerEmail } from "@/src/domain/customer/value-objects/CustomerEmail";
+import { normalizeCanonicalWhatsApp } from "@/features/customers/domain/value-objects/CanonicalWhatsApp";
 
 import type { QuotationDeliveryGateway } from "./QuotationDeliveryGateway";
 import type { QuotationDeliveryRepository } from "./QuotationDeliveryRepository";
+import type { QuotationCustomerContactRepository } from "./QuotationCustomerContactRepository";
 import { createQuotationDeliveryProviderRequestKey } from "./createQuotationDeliveryProviderRequestKey";
 import { normalizeWhatsAppRecipient } from "./normalizeWhatsAppRecipient";
 
@@ -18,6 +20,7 @@ export type DeliverQuotationInput = {
   channel: QuotationDeliveryChannel;
   recipient: string;
   locale: "ar" | "en";
+  updateCustomerContact?: boolean;
 };
 
 export type DeliverQuotationResult =
@@ -32,6 +35,7 @@ export class DeliverQuotationUseCase {
     private readonly gateway: QuotationDeliveryGateway,
     private readonly now: () => Date = () => new Date(),
     private readonly createId: () => string = () => crypto.randomUUID(),
+    private readonly customerContacts?: QuotationCustomerContactRepository,
   ) {}
 
   async execute(input: DeliverQuotationInput): Promise<DeliverQuotationResult> {
@@ -79,6 +83,25 @@ export class DeliverQuotationUseCase {
     const quotation = await this.quotations.findById(input.companyId, input.quotationId);
     if (!quotation) {
       return { success: false, error: { code: "QUOTATION_NOT_FOUND", message: "Quotation not found." } };
+    }
+
+    if (input.updateCustomerContact) {
+      let canonicalWhatsApp: string | undefined;
+      if (input.channel === "WHATSAPP") {
+        const canonical = normalizeCanonicalWhatsApp(`+${recipient}`);
+        if (!canonical.isSuccess || !canonical.getValue()) {
+          return { success: false, error: { code: "DELIVERY_WHATSAPP_RECIPIENT_INVALID", message: "Delivery WhatsApp recipient is invalid." } };
+        }
+        canonicalWhatsApp = canonical.getValue() ?? undefined;
+      }
+      const updated = await this.customerContacts?.updateSelected({
+        companyId: input.companyId,
+        customerId: quotation.customerId,
+        ...(input.channel === "EMAIL" ? { email: recipient } : { whatsapp: canonicalWhatsApp }),
+      });
+      if (!updated) {
+        return { success: false, error: { code: "DELIVERY_CUSTOMER_NOT_FOUND", message: "Linked customer contact could not be updated." } };
+      }
     }
 
     const attemptedAt = this.now();
