@@ -29,6 +29,57 @@ export type SalesOrderConversionPersistenceResult =
       message: string;
     };
 
+export type SalesOrderActorParams = {
+  userId?: string | null;
+  name: string;
+  role: string;
+};
+
+export type ConfirmSalesOrderParams = {
+  companyId: string;
+  salesOrderId: string;
+  expectedStatus: SalesOrderStatus;
+  actor: SalesOrderActorParams;
+};
+
+export type ConfirmSalesOrderPersistenceResult =
+  | {
+      kind: "CONFIRMED";
+      salesOrder: SalesOrder;
+    }
+  | {
+      kind: "SALES_ORDER_NOT_FOUND";
+    }
+  | {
+      kind: "STALE_STATE";
+      currentStatus: SalesOrderStatus;
+    };
+
+export type CancelSalesOrderParams = {
+  companyId: string;
+  salesOrderId: string;
+  expectedStatus: SalesOrderStatus;
+  reason: string;
+  actor: SalesOrderActorParams;
+};
+
+export type CancelSalesOrderPersistenceResult =
+  | {
+      kind: "CANCELLED";
+      salesOrder: SalesOrder;
+    }
+  | {
+      kind: "SALES_ORDER_NOT_FOUND";
+    }
+  | {
+      kind: "STALE_STATE";
+      currentStatus: SalesOrderStatus;
+    }
+  | {
+      kind: "INVALID_REASON";
+      message: string;
+    };
+
 export type SalesOrderListFilters = {
   companyId: string;
   status?: SalesOrderStatus;
@@ -46,6 +97,14 @@ export interface ISalesOrderRepository {
   convertApprovedQuotation(
     params: ConvertApprovedQuotationParams,
   ): Promise<SalesOrderConversionPersistenceResult>;
+
+  confirm(
+    params: ConfirmSalesOrderParams,
+  ): Promise<ConfirmSalesOrderPersistenceResult>;
+
+  cancel(
+    params: CancelSalesOrderParams,
+  ): Promise<CancelSalesOrderPersistenceResult>;
 
   findById(
     companyId: string,

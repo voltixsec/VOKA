@@ -160,6 +160,23 @@ export function serializeSalesOrder(
       name: salesOrder.createdByName,
       role: salesOrder.createdByRole,
     },
+    confirmation: salesOrder.confirmedAt
+      ? {
+          confirmedAt: salesOrder.confirmedAt.toISOString(),
+          confirmedByUserId: salesOrder.confirmedByUserId,
+          confirmedByName: salesOrder.confirmedByName,
+          confirmedByRole: salesOrder.confirmedByRole,
+        }
+      : null,
+    cancellation: salesOrder.cancelledAt
+      ? {
+          cancelledAt: salesOrder.cancelledAt.toISOString(),
+          cancelledByUserId: salesOrder.cancelledByUserId,
+          cancelledByName: salesOrder.cancelledByName,
+          cancelledByRole: salesOrder.cancelledByRole,
+          reason: salesOrder.cancellationReason,
+        }
+      : null,
     createdAt: salesOrder.createdAt?.toISOString() ?? null,
     updatedAt: salesOrder.updatedAt?.toISOString() ?? null,
   };

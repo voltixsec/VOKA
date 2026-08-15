@@ -48,6 +48,12 @@ export type SalesOrderLineSnapshot = {
   updatedAt?: Date;
 };
 
+export type SalesOrderActor = {
+  userId?: string | null;
+  name: string;
+  role: string;
+};
+
 export type SalesOrderProps = {
   id?: string;
   companyId: string;
@@ -89,6 +95,15 @@ export type SalesOrderProps = {
   createdByUserId: string | null;
   createdByName: string;
   createdByRole: string;
+  confirmedAt?: Date | null;
+  confirmedByUserId?: string | null;
+  confirmedByName?: string | null;
+  confirmedByRole?: string | null;
+  cancelledAt?: Date | null;
+  cancelledByUserId?: string | null;
+  cancelledByName?: string | null;
+  cancelledByRole?: string | null;
+  cancellationReason?: string | null;
   lines: SalesOrderLineSnapshot[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -100,7 +115,6 @@ export class SalesOrder {
   public readonly sourceQuotationId: string;
   public readonly sourceQuotationNumber: string;
   public readonly number: string;
-  public readonly status: SalesOrderStatus;
   public readonly customerId: string;
   public readonly priceListId: string | null;
   public readonly currencyCode: string;
@@ -139,6 +153,17 @@ export class SalesOrder {
   public readonly createdAt?: Date;
   public readonly updatedAt?: Date;
 
+  private _status: SalesOrderStatus;
+  private _confirmedAt: Date | null;
+  private _confirmedByUserId: string | null;
+  private _confirmedByName: string | null;
+  private _confirmedByRole: string | null;
+  private _cancelledAt: Date | null;
+  private _cancelledByUserId: string | null;
+  private _cancelledByName: string | null;
+  private _cancelledByRole: string | null;
+  private _cancellationReason: string | null;
+
   constructor(props: SalesOrderProps) {
     this.id = normalizeOptional(props.id) ?? undefined;
     this.companyId = required(props.companyId, "Company id");
@@ -151,7 +176,7 @@ export class SalesOrder {
       "Source quotation number",
     );
     this.number = required(props.number, "Sales Order number");
-    this.status = props.status ?? "DRAFT";
+    this._status = props.status ?? "DRAFT";
     this.customerId = required(props.customerId, "Customer id");
     this.priceListId = normalizeOptional(props.priceListId);
     this.currencyCode = required(props.currencyCode, "Currency code")
@@ -164,10 +189,28 @@ export class SalesOrder {
       );
     }
 
-    if (this.status !== "DRAFT") {
-      throw new SalesOrderDomainError(
-        "Only DRAFT Sales Orders are supported.",
-      );
+    this._confirmedAt = props.confirmedAt ?? null;
+    this._confirmedByUserId = normalizeOptional(props.confirmedByUserId);
+    this._confirmedByName = normalizeOptional(props.confirmedByName);
+    this._confirmedByRole = normalizeOptional(props.confirmedByRole);
+
+    this._cancelledAt = props.cancelledAt ?? null;
+    this._cancelledByUserId = normalizeOptional(props.cancelledByUserId);
+    this._cancelledByName = normalizeOptional(props.cancelledByName);
+    this._cancelledByRole = normalizeOptional(props.cancelledByRole);
+    this._cancellationReason = normalizeOptional(props.cancellationReason);
+
+    if (this._status === "CONFIRMED") {
+      validDate(this._confirmedAt ?? undefined!, "Confirmation date");
+      required(this._confirmedByName ?? "", "Confirming actor name");
+      required(this._confirmedByRole ?? "", "Confirming actor role");
+    } else if (this._status === "CANCELLED") {
+      validDate(this._cancelledAt ?? undefined!, "Cancellation date");
+      required(this._cancelledByName ?? "", "Cancelling actor name");
+      required(this._cancelledByRole ?? "", "Cancelling actor role");
+      required(this._cancellationReason ?? "", "Cancellation reason");
+    } else if (this._status !== "DRAFT") {
+      throw new SalesOrderDomainError("Invalid Sales Order status.");
     }
 
     this.customer = Object.freeze({
@@ -234,6 +277,91 @@ export class SalesOrder {
     }
 
     return new SalesOrder(props);
+  }
+
+  get status(): SalesOrderStatus {
+    return this._status;
+  }
+
+  get confirmedAt(): Date | null {
+    return this._confirmedAt;
+  }
+
+  get confirmedByUserId(): string | null {
+    return this._confirmedByUserId;
+  }
+
+  get confirmedByName(): string | null {
+    return this._confirmedByName;
+  }
+
+  get confirmedByRole(): string | null {
+    return this._confirmedByRole;
+  }
+
+  get cancelledAt(): Date | null {
+    return this._cancelledAt;
+  }
+
+  get cancelledByUserId(): string | null {
+    return this._cancelledByUserId;
+  }
+
+  get cancelledByName(): string | null {
+    return this._cancelledByName;
+  }
+
+  get cancelledByRole(): string | null {
+    return this._cancelledByRole;
+  }
+
+  get cancellationReason(): string | null {
+    return this._cancellationReason;
+  }
+
+  confirm(actor: SalesOrderActor, at: Date = new Date()): void {
+    if (this._status !== "DRAFT") {
+      throw new SalesOrderDomainError(
+        `Sales Order cannot transition from ${this._status} to CONFIRMED.`,
+      );
+    }
+
+    const name = required(actor.name, "Confirming actor name");
+    const role = required(actor.role, "Confirming actor role");
+    const confirmedAt = validDate(at, "Confirmation date");
+
+    this._status = "CONFIRMED";
+    this._confirmedAt = confirmedAt;
+    this._confirmedByUserId = normalizeOptional(actor.userId);
+    this._confirmedByName = name;
+    this._confirmedByRole = role;
+  }
+
+  cancel(actor: SalesOrderActor, reason: string, at: Date = new Date()): void {
+    if (this._status === "CANCELLED") {
+      throw new SalesOrderDomainError("Sales Order is already cancelled.");
+    }
+    if (this._status !== "DRAFT" && this._status !== "CONFIRMED") {
+      throw new SalesOrderDomainError(
+        `Sales Order cannot transition from ${this._status} to CANCELLED.`,
+      );
+    }
+
+    const trimmedReason = reason?.trim();
+    if (!trimmedReason) {
+      throw new SalesOrderDomainError("Cancellation reason is required.");
+    }
+
+    const name = required(actor.name, "Cancelling actor name");
+    const role = required(actor.role, "Cancelling actor role");
+    const cancelledAt = validDate(at, "Cancellation date");
+
+    this._status = "CANCELLED";
+    this._cancelledAt = cancelledAt;
+    this._cancelledByUserId = normalizeOptional(actor.userId);
+    this._cancelledByName = name;
+    this._cancelledByRole = role;
+    this._cancellationReason = trimmedReason;
   }
 }
 

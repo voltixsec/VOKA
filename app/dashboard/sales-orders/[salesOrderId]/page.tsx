@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Card, SectionHeader } from "../../../../components/ui";
+import { Badge, Button, Card, Input, Modal, SectionHeader } from "../../../../components/ui";
 import { useLanguage } from "../../../../components/i18n/LanguageProvider";
 
 type SalesOrder = {
   id: string;
   number: string;
-  status: "DRAFT";
+  status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   sourceQuotationId: string;
   sourceQuotationNumber: string;
   currencyCode: string;
@@ -55,6 +55,19 @@ type SalesOrder = {
     approvedByRole: string;
   };
   creator: { name: string; role: string };
+  confirmation?: {
+    confirmedAt: string;
+    confirmedByUserId?: string | null;
+    confirmedByName: string;
+    confirmedByRole: string;
+  } | null;
+  cancellation?: {
+    cancelledAt: string;
+    cancelledByUserId?: string | null;
+    cancelledByName: string;
+    cancelledByRole: string;
+    reason: string;
+  } | null;
   createdAt: string;
 };
 
@@ -74,6 +87,14 @@ export default function SalesOrderDetailsPage() {
   const [salesOrder, setSalesOrder] = useState<SalesOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Cancellation modal state
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState("");
+
   const t = (ar: string, en: string) => (isArabic ? ar : en);
 
   const load = useCallback(async () => {
@@ -110,6 +131,118 @@ export default function SalesOrderDetailsPage() {
       maximumFractionDigits: 3,
     }).format(value);
 
+  const handleConfirm = async () => {
+    if (!salesOrder || actionLoading) return;
+    try {
+      setActionLoading(true);
+      setActionError("");
+      const response = await fetch(
+        `/api/sales-orders/${encodeURIComponent(salesOrder.id)}/confirm?locale=${isArabic ? "ar" : "en"}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedStatus: salesOrder.status }),
+        },
+      );
+
+      if (response.status === 409) {
+        setActionError(
+          t(
+            "تغيرت حالة أمر البيع. جاري إعادة تحميل البيانات...",
+            "The Sales Order status has changed. Reloading latest state...",
+          ),
+        );
+        await load();
+        return;
+      }
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message ?? "Failed to confirm Sales Order");
+      }
+
+      const body = await response.json();
+      setSalesOrder(body.data);
+    } catch (caught) {
+      setActionError(
+        caught instanceof Error
+          ? caught.message
+          : t("تعذر تأكيد أمر البيع.", "Failed to confirm Sales Order."),
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelSubmit = async () => {
+    if (!salesOrder || actionLoading) return;
+    const trimmedReason = cancelReason.trim();
+    if (!trimmedReason) {
+      setCancelReasonError(
+        t("سبب الإلغاء مطلوب.", "Cancellation reason is required."),
+      );
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActionError("");
+      setCancelReasonError("");
+
+      const response = await fetch(
+        `/api/sales-orders/${encodeURIComponent(salesOrder.id)}/cancel?locale=${isArabic ? "ar" : "en"}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expectedStatus: salesOrder.status,
+            reason: trimmedReason,
+          }),
+        },
+      );
+
+      if (response.status === 409) {
+        setCancelModalOpen(false);
+        setActionError(
+          t(
+            "تغيرت حالة أمر البيع. جاري إعادة تحميل البيانات...",
+            "The Sales Order status has changed. Reloading latest state...",
+          ),
+        );
+        await load();
+        return;
+      }
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message ?? "Failed to cancel Sales Order");
+      }
+
+      const body = await response.json();
+      setSalesOrder(body.data);
+      setCancelModalOpen(false);
+      setCancelReason("");
+    } catch (caught) {
+      setCancelReasonError(
+        caught instanceof Error
+          ? caught.message
+          : t("تعذر إلغاء أمر البيع.", "Failed to cancel Sales Order."),
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const renderStatusBadge = (status: "DRAFT" | "CONFIRMED" | "CANCELLED") => {
+    if (status === "CONFIRMED") {
+      return <Badge variant="success">{t("مؤكد", "CONFIRMED")}</Badge>;
+    }
+    if (status === "CANCELLED") {
+      return <Badge variant="danger">{t("ملغى", "CANCELLED")}</Badge>;
+    }
+    return <Badge variant="info">{t("مسودة", "DRAFT")}</Badge>;
+  };
+
   if (loading) {
     return <Card aria-busy="true"><div className="h-40 animate-pulse rounded-2xl bg-white/5" /></Card>;
   }
@@ -132,11 +265,60 @@ export default function SalesOrderDetailsPage() {
       </Link>
 
       <SectionHeader
-        eyebrow={t("مسودة أمر بيع", "Sales Order Draft")}
+        eyebrow={t("أمر بيع", "Sales Order")}
         title={salesOrder.subject || salesOrder.number}
         description={`${salesOrder.number} · ${salesOrder.customer.name}`}
-        actions={<Badge>{t("مسودة", "DRAFT")}</Badge>}
+        actions={
+          <div className="flex items-center gap-3">
+            {renderStatusBadge(salesOrder.status)}
+
+            {salesOrder.status === "DRAFT" && (
+              <>
+                <Button
+                  variant="primary"
+                  disabled={actionLoading}
+                  onClick={() => void handleConfirm()}
+                >
+                  {actionLoading
+                    ? t("جاري التأكيد...", "Confirming...")
+                    : t("تأكيد أمر البيع", "Confirm Sales Order")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={actionLoading}
+                  onClick={() => {
+                    setCancelReason("");
+                    setCancelReasonError("");
+                    setCancelModalOpen(true);
+                  }}
+                >
+                  {t("إلغاء أمر البيع", "Cancel Sales Order")}
+                </Button>
+              </>
+            )}
+
+            {salesOrder.status === "CONFIRMED" && (
+              <Button
+                variant="secondary"
+                disabled={actionLoading}
+                onClick={() => {
+                  setCancelReason("");
+                  setCancelReasonError("");
+                  setCancelModalOpen(true);
+                }}
+              >
+                {t("إلغاء أمر البيع", "Cancel Sales Order")}
+              </Button>
+            )}
+          </div>
+        }
       />
+
+      {actionError && (
+        <Card className="border-amber-400/20 bg-amber-400/5">
+          <p className="text-amber-200">{actionError}</p>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -238,12 +420,92 @@ export default function SalesOrderDetailsPage() {
       </div>
 
       <Card>
-        <h2 className="font-semibold">{t("سجل الإنشاء والاعتماد", "Creation and approval audit")}</h2>
-        <dl className="mt-4 grid gap-4 md:grid-cols-2">
-          <div><dt className="text-sm text-slate-500">{t("اعتمد المصدر بواسطة", "Source approved by")}</dt><dd className="mt-1">{salesOrder.sourceApproval.approvedByName} · {salesOrder.sourceApproval.approvedByRole}</dd></div>
-          <div><dt className="text-sm text-slate-500">{t("أنشئ أمر البيع بواسطة", "Sales Order created by")}</dt><dd className="mt-1">{salesOrder.creator.name} · {salesOrder.creator.role}</dd><dd className="mt-1 text-xs text-slate-500">{new Date(salesOrder.createdAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}</dd></div>
+        <h2 className="font-semibold">{t("سجل الحركة والتدقيق", "Lifecycle and audit log")}</h2>
+        <dl className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-sm text-slate-500">{t("اعتمد المصدر بواسطة", "Source approved by")}</dt>
+            <dd className="mt-1">{salesOrder.sourceApproval.approvedByName} · {salesOrder.sourceApproval.approvedByRole}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-slate-500">{t("أنشئ أمر البيع بواسطة", "Sales Order created by")}</dt>
+            <dd className="mt-1">{salesOrder.creator.name} · {salesOrder.creator.role}</dd>
+            <dd className="mt-1 text-xs text-slate-500">{new Date(salesOrder.createdAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}</dd>
+          </div>
+
+          {salesOrder.confirmation && (
+            <div>
+              <dt className="text-sm text-slate-500">{t("تم التأكيد بواسطة", "Confirmed by")}</dt>
+              <dd className="mt-1">{salesOrder.confirmation.confirmedByName} · {salesOrder.confirmation.confirmedByRole}</dd>
+
+              <dd className="mt-1 text-xs text-slate-500">
+                {new Date(salesOrder.confirmation.confirmedAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}
+              </dd>
+            </div>
+          )}
+
+          {salesOrder.cancellation && (
+            <div>
+              <dt className="text-sm text-slate-500">{t("تم الإلغاء بواسطة", "Cancelled by")}</dt>
+              <dd className="mt-1">{salesOrder.cancellation.cancelledByName} · {salesOrder.cancellation.cancelledByRole}</dd>
+
+              <dd className="mt-1 text-xs text-slate-500">
+                {new Date(salesOrder.cancellation.cancelledAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}
+              </dd>
+              <dd className="mt-2 text-xs font-medium text-red-300">
+                {t("السبب", "Reason")}: {salesOrder.cancellation.reason}
+              </dd>
+            </div>
+          )}
         </dl>
       </Card>
+
+      <Modal
+        open={cancelModalOpen}
+        title={t("إلغاء أمر البيع", "Cancel Sales Order")}
+        description={t(
+          "يرجى توضيح سبب إلغاء أمر البيع. الإلغاء إجراء نهائي ولا يمكن التراجع عنه.",
+          "Please specify the reason for cancelling this Sales Order. Cancellation is terminal.",
+        )}
+        onClose={() => {
+          if (!actionLoading) setCancelModalOpen(false);
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={actionLoading}
+              onClick={() => setCancelModalOpen(false)}
+            >
+              {t("إلغاء", "Close")}
+            </Button>
+            <Button
+              variant="danger"
+              disabled={actionLoading}
+              onClick={() => void handleCancelSubmit()}
+            >
+              {actionLoading
+                ? t("جاري الإلغاء...", "Cancelling...")
+                : t("تأكيد الإلغاء", "Confirm Cancellation")}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input
+            aria-label={t("سبب الإلغاء", "Cancellation reason")}
+            placeholder={t("أدخل سبب إلغاء أمر البيع...", "Enter cancellation reason...")}
+            value={cancelReason}
+            onChange={(e) => {
+              setCancelReason(e.target.value);
+              setCancelReasonError("");
+            }}
+          />
+
+          {cancelReasonError && (
+            <p className="text-xs text-red-400">{cancelReasonError}</p>
+          )}
+        </div>
+      </Modal>
     </section>
   );
 }

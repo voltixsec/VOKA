@@ -84,16 +84,18 @@ model Company {
 }
 
 model User {
-  id                 String          @id @default(cuid())
-  email              String          @unique
-  name               String?
-  passwordHash       String?
-  locale             Locale          @default(EN)
-  isActive           Boolean         @default(true)
-  memberships        CompanyMember[]
-  createdSalesOrders SalesOrder[]    @relation("SalesOrderCreatedBy")
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  id                   String          @id @default(cuid())
+  email                String          @unique
+  name                 String?
+  passwordHash         String?
+  locale               Locale          @default(EN)
+  isActive             Boolean         @default(true)
+  memberships          CompanyMember[]
+  createdSalesOrders   SalesOrder[]    @relation("SalesOrderCreatedBy")
+  confirmedSalesOrders SalesOrder[]    @relation("SalesOrderConfirmedBy")
+  cancelledSalesOrders SalesOrder[]    @relation("SalesOrderCancelledBy")
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   @@index([isActive])
 }
@@ -170,6 +172,8 @@ enum QuotationStatus {
 
 enum SalesOrderStatus {
   DRAFT
+  CONFIRMED
+  CANCELLED
 }
 
 enum LocalizationStatus {
@@ -601,11 +605,24 @@ model SalesOrder {
   createdByName        String
   createdByRole        String
 
+  confirmedAt       DateTime?
+  confirmedByUserId String?
+  confirmedByName   String?
+  confirmedByRole   String?
+
+  cancelledAt        DateTime?
+  cancelledByUserId  String?
+  cancelledByName    String?
+  cancelledByRole    String?
+  cancellationReason String?
+
   company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   sourceQuotation Quotation        @relation(fields: [sourceQuotationId], references: [id], onDelete: Restrict)
   customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   priceList       PriceList?       @relation(fields: [priceListId], references: [id], onDelete: SetNull)
   createdByUser   User?            @relation("SalesOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  confirmedByUser User?            @relation("SalesOrderConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  cancelledByUser User?            @relation("SalesOrderCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   lines           SalesOrderLine[]
 
   createdAt DateTime @default(now())
@@ -619,6 +636,8 @@ model SalesOrder {
   @@index([customerId])
   @@index([priceListId])
   @@index([createdByUserId])
+  @@index([confirmedByUserId])
+  @@index([cancelledByUserId])
 }
 
 model SalesOrderLine {

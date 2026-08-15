@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SalesOrderDetailsPage from "../page";
@@ -22,7 +22,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function salesOrder() {
+function salesOrder(overrides: Record<string, unknown> = {}) {
   return {
     id: "sales-order-1",
     number: "SO-QT-1001",
@@ -85,7 +85,10 @@ function salesOrder() {
       approvedByRole: "ADMIN",
     },
     creator: { name: "Creator Snapshot", role: "SALES" },
+    confirmation: null,
+    cancellation: null,
     createdAt: "2026-08-14T12:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -117,7 +120,7 @@ describe("SalesOrderDetailsPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(createElement(SalesOrderDetailsPage));
 
-    expect(await screen.findByText("مسودة أمر بيع")).toBeTruthy();
+    expect(await screen.findByText("أمر بيع")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/sales-orders/sales-order-1?locale=ar",
     );
@@ -135,5 +138,150 @@ describe("SalesOrderDetailsPage", () => {
 
     expect(await screen.findByText("Sales Order not found.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Back to Sales Orders" })).toBeTruthy();
+  });
+
+  it("confirms a draft sales order when Confirm button is clicked", async () => {
+    const initial = salesOrder({ status: "DRAFT" });
+    const confirmed = salesOrder({
+      status: "CONFIRMED",
+      confirmation: {
+        confirmedAt: "2026-08-15T10:00:00.000Z",
+        confirmedByName: "Confirmer User",
+        confirmedByRole: "ADMIN",
+      },
+    });
+
+    const fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
+      if (opts?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: confirmed }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: initial }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(SalesOrderDetailsPage));
+    expect(await screen.findByText("Confirm Sales Order")).toBeTruthy();
+
+    const confirmBtn = screen.getByRole("button", { name: "Confirm Sales Order" });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/sales-orders/sales-order-1/confirm"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ expectedStatus: "DRAFT" }),
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Confirmed by")).toBeTruthy();
+    expect(screen.getByText("Confirmer User · ADMIN")).toBeTruthy();
+  });
+
+  it("cancels a sales order with required reason via modal", async () => {
+    const initial = salesOrder({ status: "DRAFT" });
+    const cancelled = salesOrder({
+      status: "CANCELLED",
+      cancellation: {
+        cancelledAt: "2026-08-15T11:00:00.000Z",
+        cancelledByName: "Canceller User",
+        cancelledByRole: "OWNER",
+        reason: "Customer changed mind",
+      },
+    });
+
+    const fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
+      if (opts?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: cancelled }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: initial }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(SalesOrderDetailsPage));
+    expect(await screen.findByText("Cancel Sales Order")).toBeTruthy();
+
+    const cancelBtn = screen.getByRole("button", { name: "Cancel Sales Order" });
+    fireEvent.click(cancelBtn);
+
+    // Modal opens
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+
+    const confirmCancelBtn = screen.getByRole("button", { name: "Confirm Cancellation" });
+    // Try submitting without reason
+    fireEvent.click(confirmCancelBtn);
+    expect(await screen.findByText("Cancellation reason is required.")).toBeTruthy();
+
+    // Enter reason and submit
+    const reasonInput = screen.getByRole("textbox", { name: "Cancellation reason" });
+    fireEvent.change(reasonInput, { target: { value: "Customer changed mind" } });
+    fireEvent.click(confirmCancelBtn);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/sales-orders/sales-order-1/cancel"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            expectedStatus: "DRAFT",
+            reason: "Customer changed mind",
+          }),
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Cancelled by")).toBeTruthy();
+    expect(screen.getByText("Canceller User · OWNER")).toBeTruthy();
+    expect(screen.getByText("Reason: Customer changed mind")).toBeTruthy();
+  });
+
+  it("shows stale state feedback and reloads on 409 conflict", async () => {
+    const initial = salesOrder({ status: "DRAFT" });
+    const updated = salesOrder({ status: "CONFIRMED" });
+
+    let calls = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
+      if (opts?.method === "POST") {
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: async () => ({ error: { code: "STALE_STATE" } }),
+        });
+      }
+      calls++;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: calls > 1 ? updated : initial }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(SalesOrderDetailsPage));
+    expect(await screen.findByText("Confirm Sales Order")).toBeTruthy();
+
+    const confirmBtn = screen.getByRole("button", { name: "Confirm Sales Order" });
+    fireEvent.click(confirmBtn);
+
+    expect(
+      await screen.findByText(/The Sales Order status has changed/),
+    ).toBeTruthy();
   });
 });

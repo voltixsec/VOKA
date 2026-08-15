@@ -5,10 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
 
+type SalesOrderStatusFilter = "ALL" | "DRAFT" | "CONFIRMED" | "CANCELLED";
+
 type SalesOrderListItem = {
   id: string;
   number: string;
-  status: "DRAFT";
+  status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   sourceQuotationNumber: string;
   orderDate: string;
   currencyCode: string;
@@ -34,6 +36,7 @@ export default function SalesOrdersPage() {
   });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<SalesOrderStatusFilter>("ALL");
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [error, setError] = useState("");
@@ -51,6 +54,8 @@ export default function SalesOrdersPage() {
         locale: isArabic ? "ar" : "en",
       });
       if (search.trim()) params.set("search", search.trim());
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+
       const response = await fetch(`/api/sales-orders?${params.toString()}`);
       if (response.status === 401 || response.status === 403) {
         setUnauthorized(true);
@@ -67,7 +72,7 @@ export default function SalesOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [isArabic, page, search]);
+  }, [isArabic, page, search, statusFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 200);
@@ -82,18 +87,28 @@ export default function SalesOrdersPage() {
       maximumFractionDigits: 3,
     }).format(value);
 
+  const renderBadge = (status: "DRAFT" | "CONFIRMED" | "CANCELLED") => {
+    if (status === "CONFIRMED") {
+      return <Badge variant="success">{t("مؤكد", "CONFIRMED")}</Badge>;
+    }
+    if (status === "CANCELLED") {
+      return <Badge variant="danger">{t("ملغى", "CANCELLED")}</Badge>;
+    }
+    return <Badge variant="info">{t("مسودة", "DRAFT")}</Badge>;
+  };
+
   return (
     <section className="space-y-6" dir={isArabic ? "rtl" : "ltr"}>
       <SectionHeader
         eyebrow={t("دورة المبيعات", "Sales lifecycle")}
         title={t("أوامر البيع", "Sales Orders")}
         description={t(
-          "مسودات أوامر البيع المنشأة من عروض أسعار معتمدة.",
-          "Read-only draft Sales Orders created from approved quotations.",
+          "أوامر البيع المنشأة من عروض الأسعار المعتمدة.",
+          "Sales Orders created from approved quotations.",
         )}
       />
 
-      <Card padding="sm">
+      <Card padding="sm" className="space-y-4">
         <Input
           aria-label={t("البحث في أوامر البيع", "Search Sales Orders")}
           value={search}
@@ -106,6 +121,29 @@ export default function SalesOrdersPage() {
             "Search by order, quotation, or customer...",
           )}
         />
+
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { key: "ALL", ar: "الكل", en: "All" },
+              { key: "DRAFT", ar: "مسودة", en: "Draft" },
+              { key: "CONFIRMED", ar: "مؤكد", en: "Confirmed" },
+              { key: "CANCELLED", ar: "ملغى", en: "Cancelled" },
+            ] as const
+          ).map((item) => (
+            <Button
+              key={item.key}
+              variant={statusFilter === item.key ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => {
+                setStatusFilter(item.key);
+                setPage(1);
+              }}
+            >
+              {t(item.ar, item.en)}
+            </Button>
+          ))}
+        </div>
       </Card>
 
       {loading && (
@@ -166,7 +204,7 @@ export default function SalesOrdersPage() {
               </p>
             </div>
             <div className="sm:text-end">
-              <Badge>{t("مسودة", "DRAFT")}</Badge>
+              {renderBadge(order.status)}
               <p className="mt-2 font-semibold">
                 {money(order.totals.totalAmount, order.currencyCode)}
               </p>
