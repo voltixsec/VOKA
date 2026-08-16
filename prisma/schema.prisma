@@ -68,6 +68,7 @@ model Company {
   isActive                Boolean                         @default(true)
   members                 CompanyMember[]
   customers               Customer[]
+  units                   Unit[]
   catalogItems            CatalogItem[]
   catalogCategories       CatalogCategory[]
   taxRates                TaxRate[]
@@ -238,16 +239,22 @@ model CatalogCategory {
 }
 
 model Unit {
-  id       String  @id @default(cuid())
-  name     String
-  symbol   String  @unique
-  isActive Boolean @default(true)
+  id        String  @id @default(cuid())
+  companyId String?
+  name      String
+  nameAr    String?
+  nameEn    String?
+  symbol    String
+  isActive  Boolean @default(true)
 
-  items CatalogItem[]
+  company Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items   CatalogItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([companyId, symbol])
+  @@index([companyId])
   @@index([name])
   @@index([isActive])
 }
@@ -291,8 +298,12 @@ model CatalogItem {
   sku     String?
   barcode String?
 
-  name        String
-  description String?
+  name          String
+  nameAr        String?
+  nameEn        String?
+  description   String?
+  descriptionAr String?
+  descriptionEn String?
 
   purchasePrice Decimal? @db.Decimal(18, 3)
   salePrice     Decimal  @db.Decimal(18, 3)

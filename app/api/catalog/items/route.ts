@@ -2,7 +2,6 @@ import {
   CreateCatalogItem,
   ListCatalogItems,
   PrismaCatalogItemRepository,
-  type CatalogItem,
   type CatalogItemType,
 } from '../../../../features/catalog';
 
@@ -12,6 +11,7 @@ import {
   withCompanyAuth,
 } from '../../../../lib/api';
 import { prisma } from '../../../../lib/prisma';
+import { serializeCatalogItem } from './serialize-catalog-item';
 
 const catalogItemRepository =
   new PrismaCatalogItemRepository(prisma);
@@ -35,6 +35,8 @@ type CreateCatalogItemBody = {
   type?: unknown;
   code?: unknown;
   name?: unknown;
+  nameAr?: unknown;
+  nameEn?: unknown;
   salePrice?: unknown;
   categoryId?: unknown;
   unitId?: unknown;
@@ -42,6 +44,8 @@ type CreateCatalogItemBody = {
   sku?: unknown;
   barcode?: unknown;
   description?: unknown;
+  descriptionAr?: unknown;
+  descriptionEn?: unknown;
   purchasePrice?: unknown;
   trackInventory?: unknown;
   allowDiscount?: unknown;
@@ -49,31 +53,6 @@ type CreateCatalogItemBody = {
   notes?: unknown;
   isActive?: unknown;
 };
-
-function serializeCatalogItem(item: CatalogItem) {
-  return {
-    id: item.id.toString(),
-    companyId: item.companyId,
-    categoryId: item.categoryId,
-    unitId: item.unitId,
-    taxRateId: item.taxRateId,
-    type: item.type,
-    code: item.code,
-    sku: item.sku,
-    barcode: item.barcode,
-    name: item.name,
-    description: item.description,
-    purchasePrice: item.purchasePrice,
-    salePrice: item.salePrice,
-    trackInventory: item.trackInventory,
-    allowDiscount: item.allowDiscount,
-    imageUrl: item.imageUrl,
-    notes: item.notes,
-    isActive: item.isActive,
-    createdAt: item.createdAt.toISOString(),
-    updatedAt: item.updatedAt.toISOString(),
-  };
-}
 
 function optionalString(value: unknown): string | null | undefined {
   if (value === undefined) {
@@ -196,6 +175,7 @@ export const GET = withCompanyAuth(
     );
   },
 );
+
 export const POST = withCompanyAuth(
   [
     'OWNER',
@@ -238,6 +218,8 @@ export const POST = withCompanyAuth(
         type: body.type as CatalogItemType,
         code: body.code,
         name: body.name,
+        nameAr: optionalString(body.nameAr),
+        nameEn: optionalString(body.nameEn),
         salePrice: body.salePrice,
         categoryId: optionalString(
           body.categoryId,
@@ -252,6 +234,12 @@ export const POST = withCompanyAuth(
         barcode: optionalString(body.barcode),
         description: optionalString(
           body.description,
+        ),
+        descriptionAr: optionalString(
+          body.descriptionAr,
+        ),
+        descriptionEn: optionalString(
+          body.descriptionEn,
         ),
         purchasePrice: optionalNumber(
           body.purchasePrice,

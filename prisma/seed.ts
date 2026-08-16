@@ -54,32 +54,25 @@ async function main() {
     },
   });
 
-  await prisma.unit.upsert({
-    where: { symbol: "PCS" },
-    update: {},
-    create: {
-      name: "Piece",
-      symbol: "PCS",
-    },
-  });
+  const seedUnits = [
+    { name: "Piece", symbol: "PCS" },
+    { name: "Kilogram", symbol: "KG" },
+    { name: "Ton", symbol: "TON" },
+  ];
 
-  await prisma.unit.upsert({
-    where: { symbol: "KG" },
-    update: {},
-    create: {
-      name: "Kilogram",
-      symbol: "KG",
-    },
-  });
-
-  await prisma.unit.upsert({
-    where: { symbol: "TON" },
-    update: {},
-    create: {
-      name: "Ton",
-      symbol: "TON",
-    },
-  });
+  for (const seedUnit of seedUnits) {
+    const existing = await prisma.unit.findFirst({
+      where: { companyId: null, symbol: seedUnit.symbol },
+    });
+    if (!existing) {
+      await prisma.unit.create({
+        data: {
+          name: seedUnit.name,
+          symbol: seedUnit.symbol,
+        },
+      });
+    }
+  }
 
   await prisma.taxRate.upsert({
     where: {

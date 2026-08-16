@@ -24,7 +24,11 @@ type CatalogItemRecord = {
   sku: string | null;
   barcode: string | null;
   name: string;
+  nameAr: string | null;
+  nameEn: string | null;
   description: string | null;
+  descriptionAr: string | null;
+  descriptionEn: string | null;
   purchasePrice: DecimalLike | null;
   salePrice: DecimalLike;
   trackInventory: boolean;
@@ -158,19 +162,43 @@ export class PrismaCatalogItemRepository
                   },
                 },
                 {
+                  nameAr: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  nameEn: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
                   sku: {
                     contains: search,
                     mode: 'insensitive',
                   },
                 },
                 {
-                  barcode: {
+                  description: {
                     contains: search,
                     mode: 'insensitive',
                   },
                 },
                 {
-                  description: {
+                  descriptionAr: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  descriptionEn: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  barcode: {
                     contains: search,
                     mode: 'insensitive',
                   },
@@ -266,7 +294,11 @@ export class PrismaCatalogItemRepository
       sku: item.sku,
       barcode: item.barcode,
       name: item.name,
+      nameAr: item.nameAr,
+      nameEn: item.nameEn,
       description: item.description,
+      descriptionAr: item.descriptionAr,
+      descriptionEn: item.descriptionEn,
       purchasePrice: item.purchasePrice,
       salePrice: item.salePrice,
       trackInventory: item.trackInventory,
@@ -326,7 +358,11 @@ export class PrismaCatalogItemRepository
         sku: record.sku,
         barcode: record.barcode,
         name: record.name,
+        nameAr: record.nameAr,
+        nameEn: record.nameEn,
         description: record.description,
+        descriptionAr: record.descriptionAr,
+        descriptionEn: record.descriptionEn,
         purchasePrice:
           record.purchasePrice?.toNumber() ?? null,
         salePrice: record.salePrice.toNumber(),
