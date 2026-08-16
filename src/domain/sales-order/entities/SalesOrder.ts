@@ -1,3 +1,4 @@
+import type { CompanyDocumentBrandSnapshot } from "../../document/CompanyDocumentBrandSnapshot";
 import type {
   DiscountType,
   QuotationLineType,
@@ -92,6 +93,7 @@ export type SalesOrderProps = {
   sourceApprovedAt: Date;
   sourceApprovedByName: string;
   sourceApprovedByRole: string;
+  documentBrandSnapshot?: CompanyDocumentBrandSnapshot | null;
   createdByUserId: string | null;
   createdByName: string;
   createdByRole: string;
@@ -146,6 +148,7 @@ export class SalesOrder {
   public readonly sourceApprovedAt: Date;
   public readonly sourceApprovedByName: string;
   public readonly sourceApprovedByRole: string;
+  private readonly _documentBrandSnapshot: CompanyDocumentBrandSnapshot | null;
   public readonly createdByUserId: string | null;
   public readonly createdByName: string;
   public readonly createdByRole: string;
@@ -261,12 +264,21 @@ export class SalesOrder {
       props.sourceApprovedByRole,
       "Source approver role",
     );
+    this._documentBrandSnapshot = props.documentBrandSnapshot
+      ? structuredClone(props.documentBrandSnapshot)
+      : null;
     this.createdByUserId = normalizeOptional(props.createdByUserId);
     this.createdByName = required(props.createdByName, "Creator name");
     this.createdByRole = required(props.createdByRole, "Creator role");
     this.lines = Object.freeze(normalizeLines(props.lines));
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
+  }
+
+  get documentBrandSnapshot(): CompanyDocumentBrandSnapshot | null {
+    return this._documentBrandSnapshot
+      ? structuredClone(this._documentBrandSnapshot)
+      : null;
   }
 
   static restore(props: SalesOrderProps): SalesOrder {

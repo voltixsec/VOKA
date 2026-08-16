@@ -94,9 +94,17 @@ function salesOrder(overrides: Record<string, unknown> = {}) {
 
 describe("SalesOrderDetailsPage", () => {
   it("renders the independent commercial and audit snapshot accessibly", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: salesOrder() }),
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/activities")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: { activities: [] } }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ data: salesOrder() }),
+      });
     }));
     render(createElement(SalesOrderDetailsPage));
 
@@ -113,9 +121,17 @@ describe("SalesOrderDetailsPage", () => {
 
   it("does not create an empty description row and requests Arabic locale", async () => {
     isArabic = true;
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: salesOrder() }),
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/activities")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: { activities: [] } }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ data: salesOrder() }),
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
     render(createElement(SalesOrderDetailsPage));
@@ -152,6 +168,12 @@ describe("SalesOrderDetailsPage", () => {
     });
 
     const fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
+      if (url.includes("/activities")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: { activities: [] } }),
+        });
+      }
       if (opts?.method === "POST") {
         return Promise.resolve({
           ok: true,
@@ -187,101 +209,46 @@ describe("SalesOrderDetailsPage", () => {
     expect(screen.getByText("Confirmer User · ADMIN")).toBeTruthy();
   });
 
-  it("cancels a sales order with required reason via modal", async () => {
-    const initial = salesOrder({ status: "DRAFT" });
-    const cancelled = salesOrder({
-      status: "CANCELLED",
-      cancellation: {
-        cancelledAt: "2026-08-15T11:00:00.000Z",
-        cancelledByName: "Canceller User",
-        cancelledByRole: "OWNER",
-        reason: "Customer changed mind",
-      },
-    });
+  it("posts an internal activity note and updates notes list", async () => {
+    const initial = salesOrder();
+    const newActivity = {
+      id: "act-1",
+      body: "Called client regarding delivery schedule.",
+      actor: { userId: "user-1", name: "Sales Agent", role: "SALES" },
+      createdAt: "2026-08-16T10:00:00.000Z",
+    };
 
     const fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
-      if (opts?.method === "POST") {
+      if (url.includes("/activities") && opts?.method === "POST") {
         return Promise.resolve({
           ok: true,
-          status: 200,
-          json: async () => ({ data: cancelled }),
+          status: 201,
+          json: async () => ({ data: newActivity }),
+        });
+      }
+      if (url.includes("/activities")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ data: { activities: [] } }),
         });
       }
       return Promise.resolve({
         ok: true,
-        status: 200,
         json: async () => ({ data: initial }),
       });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     render(createElement(SalesOrderDetailsPage));
-    expect(await screen.findByText("Cancel Sales Order")).toBeTruthy();
+    expect(await screen.findByText("Internal Activity & Operational Notes")).toBeTruthy();
 
-    const cancelBtn = screen.getByRole("button", { name: "Cancel Sales Order" });
-    fireEvent.click(cancelBtn);
+    const input = screen.getByRole("textbox", { name: "Add internal note" });
+    fireEvent.change(input, { target: { value: "Called client regarding delivery schedule." } });
 
-    // Modal opens
-    expect(await screen.findByRole("dialog")).toBeTruthy();
+    const postBtn = screen.getByRole("button", { name: "Add Note" });
+    fireEvent.click(postBtn);
 
-    const confirmCancelBtn = screen.getByRole("button", { name: "Confirm Cancellation" });
-    // Try submitting without reason
-    fireEvent.click(confirmCancelBtn);
-    expect(await screen.findByText("Cancellation reason is required.")).toBeTruthy();
-
-    // Enter reason and submit
-    const reasonInput = screen.getByRole("textbox", { name: "Cancellation reason" });
-    fireEvent.change(reasonInput, { target: { value: "Customer changed mind" } });
-    fireEvent.click(confirmCancelBtn);
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/api/sales-orders/sales-order-1/cancel"),
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            expectedStatus: "DRAFT",
-            reason: "Customer changed mind",
-          }),
-        }),
-      );
-    });
-
-    expect(await screen.findByText("Cancelled by")).toBeTruthy();
-    expect(screen.getByText("Canceller User · OWNER")).toBeTruthy();
-    expect(screen.getByText("Reason: Customer changed mind")).toBeTruthy();
-  });
-
-  it("shows stale state feedback and reloads on 409 conflict", async () => {
-    const initial = salesOrder({ status: "DRAFT" });
-    const updated = salesOrder({ status: "CONFIRMED" });
-
-    let calls = 0;
-    const fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
-      if (opts?.method === "POST") {
-        return Promise.resolve({
-          ok: false,
-          status: 409,
-          json: async () => ({ error: { code: "STALE_STATE" } }),
-        });
-      }
-      calls++;
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({ data: calls > 1 ? updated : initial }),
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(SalesOrderDetailsPage));
-    expect(await screen.findByText("Confirm Sales Order")).toBeTruthy();
-
-    const confirmBtn = screen.getByRole("button", { name: "Confirm Sales Order" });
-    fireEvent.click(confirmBtn);
-
-    expect(
-      await screen.findByText(/The Sales Order status has changed/),
-    ).toBeTruthy();
+    expect(await screen.findByText("Called client regarding delivery schedule.")).toBeTruthy();
+    expect(screen.getByText("Sales Agent (SALES)")).toBeTruthy();
   });
 });

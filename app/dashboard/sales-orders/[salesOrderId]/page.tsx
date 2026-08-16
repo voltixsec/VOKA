@@ -71,6 +71,17 @@ type SalesOrder = {
   createdAt: string;
 };
 
+type ActivityNote = {
+  id: string;
+  body: string;
+  actor: {
+    userId: string | null;
+    name: string;
+    role: string;
+  };
+  createdAt: string;
+};
+
 const scopeLabels: Record<string, { ar: string; en: string }> = {
   SUPPLY_ONLY: { ar: "توريد فقط", en: "Supply only" },
   SUPPLY_AND_INSTALLATION: { ar: "توريد وتركيب", en: "Supply and installation" },
@@ -95,7 +106,31 @@ export default function SalesOrderDetailsPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState("");
 
+  // Activity / Internal notes state
+  const [activities, setActivities] = useState<ActivityNote[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [noteBody, setNoteBody] = useState("");
+  const [notePosting, setNotePosting] = useState(false);
+  const [noteError, setNoteError] = useState("");
+
   const t = (ar: string, en: string) => (isArabic ? ar : en);
+
+  const loadActivities = useCallback(async () => {
+    try {
+      setActivitiesLoading(true);
+      const res = await fetch(
+        `/api/sales-orders/${encodeURIComponent(params.salesOrderId)}/activities`,
+      );
+      if (res.ok) {
+        const body = await res.json();
+        setActivities(body.data.activities ?? []);
+      }
+    } catch {
+      // Non-blocking activity fetch failure
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, [params.salesOrderId]);
 
   const load = useCallback(async () => {
     try {
@@ -110,6 +145,7 @@ export default function SalesOrderDetailsPage() {
       }
       const body = await response.json();
       setSalesOrder(body.data);
+      await loadActivities();
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Unable to load Sales Order",
@@ -117,7 +153,7 @@ export default function SalesOrderDetailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [isArabic, params.salesOrderId]);
+  }, [isArabic, loadActivities, params.salesOrderId]);
 
   useEffect(() => {
     void load();
@@ -233,6 +269,45 @@ export default function SalesOrderDetailsPage() {
     }
   };
 
+  const handleAddNote = async () => {
+    if (!salesOrder || notePosting) return;
+    const trimmed = noteBody.trim();
+    if (!trimmed) {
+      setNoteError(t("يرجى كتابة الملاحظة.", "Please enter a note."));
+      return;
+    }
+
+    try {
+      setNotePosting(true);
+      setNoteError("");
+      const response = await fetch(
+        `/api/sales-orders/${encodeURIComponent(salesOrder.id)}/activities`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: trimmed }),
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message ?? "Failed to add activity note.");
+      }
+
+      const body = await response.json();
+      setActivities((current) => [body.data, ...current]);
+      setNoteBody("");
+    } catch (caught) {
+      setNoteError(
+        caught instanceof Error
+          ? caught.message
+          : t("تعذر إضافة الملاحظة.", "Failed to add note."),
+      );
+    } finally {
+      setNotePosting(false);
+    }
+  };
+
   const renderStatusBadge = (status: "DRAFT" | "CONFIRMED" | "CANCELLED") => {
     if (status === "CONFIRMED") {
       return <Badge variant="success">{t("مؤكد", "CONFIRMED")}</Badge>;
@@ -258,6 +333,8 @@ export default function SalesOrderDetailsPage() {
     );
   }
 
+  const pdfUrl = `/api/sales-orders/${encodeURIComponent(salesOrder.id)}/pdf?locale=${isArabic ? "ar" : "en"}&disposition=inline`;
+
   return (
     <section className="space-y-6" dir={isArabic ? "rtl" : "ltr"}>
       <Link className="text-sm text-sky-300" href="/dashboard/sales-orders">
@@ -269,8 +346,17 @@ export default function SalesOrderDetailsPage() {
         title={salesOrder.subject || salesOrder.number}
         description={`${salesOrder.number} · ${salesOrder.customer.name}`}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {renderStatusBadge(salesOrder.status)}
+
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-400"
+            >
+              📄 {t("تحميل / طباعة المستند PDF", "View / Download PDF")}
+            </a>
 
             {salesOrder.status === "DRAFT" && (
               <>
@@ -418,6 +504,56 @@ export default function SalesOrderDetailsPage() {
           </dl>
         </Card>
       </div>
+
+      {/* Internal Operational Activities Section */}
+      <Card className="space-y-4">
+        <h2 className="font-semibold">{t("الملاحظات والأنشطة الداخلية", "Internal Activity & Operational Notes")}</h2>
+
+        <div className="space-y-3">
+          <Input
+            aria-label={t("إضافة ملاحظة جديدة", "Add internal note")}
+            placeholder={t("أدخل ملاحظة تشغيلية داخلية...", "Enter an internal operational note...")}
+            value={noteBody}
+            onChange={(e) => {
+              setNoteBody(e.target.value);
+              setNoteError("");
+            }}
+          />
+          {noteError && <p className="text-xs text-red-400">{noteError}</p>}
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={notePosting || !noteBody.trim()}
+              onClick={() => void handleAddNote()}
+            >
+              {notePosting ? t("جاري الإضافة...", "Posting...") : t("إضافة ملاحظة", "Add Note")}
+            </Button>
+          </div>
+        </div>
+
+        {activitiesLoading && (
+          <div className="h-16 animate-pulse rounded-xl bg-white/5" />
+        )}
+
+        {!activitiesLoading && activities.length === 0 && (
+          <p className="text-xs text-slate-500">{t("لا توجد ملاحظات داخلية بعد.", "No internal activity notes yet.")}</p>
+        )}
+
+        {!activitiesLoading && activities.length > 0 && (
+          <div className="space-y-3 border-t border-white/10 pt-3">
+            {activities.map((act) => (
+              <div key={act.id} className="rounded-xl border border-white/5 bg-slate-900/40 p-3 text-sm">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-medium text-sky-300">{act.actor.name} ({act.actor.role})</span>
+                  <span>{new Date(act.createdAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}</span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-slate-200">{act.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card>
         <h2 className="font-semibold">{t("سجل الحركة والتدقيق", "Lifecycle and audit log")}</h2>

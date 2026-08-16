@@ -119,4 +119,35 @@ describe("POST /api/sales-orders/[salesOrderId]/cancel", () => {
     expect(response.status).toBe(409);
     expect(body.error.code).toBe("STALE_STATE");
   });
+
+  it.each([undefined, "CANCELLED", "SENT", 1])(
+    "returns HTTP 400 for invalid expectedStatus %s",
+    async (expectedStatus) => {
+      const response = await POST(
+        new Request("http://localhost/api/sales-orders/sales-order-1/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedStatus, reason: "Client request" }),
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error.code).toBe("EXPECTED_STATUS_REQUIRED");
+      expect(mocks.cancel).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns HTTP 400 for malformed JSON", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/sales-orders/sales-order-1/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{ malformed",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("INVALID_JSON");
+    expect(mocks.cancel).not.toHaveBeenCalled();
+  });
 });

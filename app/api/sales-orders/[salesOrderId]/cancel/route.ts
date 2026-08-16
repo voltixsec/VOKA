@@ -14,6 +14,16 @@ const cancelSalesOrder = new CancelSalesOrderUseCase(
   new PrismaSalesOrderRepository(),
 );
 
+function parseCancelExpectedStatus(value: unknown): "DRAFT" | "CONFIRMED" {
+  if (value !== "DRAFT" && value !== "CONFIRMED") {
+    throw ApiError.badRequest(
+      "EXPECTED_STATUS_REQUIRED",
+      "expectedStatus must be DRAFT or CONFIRMED.",
+    );
+  }
+  return value;
+}
+
 function getSalesOrderId(request: Request): string {
   const segments = new URL(request.url).pathname.split("/").filter(Boolean);
   const index = segments.indexOf("sales-orders");
@@ -30,20 +40,20 @@ export const POST = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
   async (request, auth, company) => {
     const salesOrderId = getSalesOrderId(request);
-    let body: any = {};
+    let body: unknown;
     try {
       body = await request.json();
     } catch {
       throw ApiError.badRequest("INVALID_JSON", "Invalid JSON body.");
     }
 
-    const { expectedStatus, reason } = body ?? {};
-    if (!expectedStatus || typeof expectedStatus !== "string") {
-      throw ApiError.badRequest(
-        "EXPECTED_STATUS_REQUIRED",
-        "expectedStatus is required.",
-      );
+    if (!body || typeof body !== "object") {
+      throw ApiError.badRequest("INVALID_BODY", "Request body must be an object.");
     }
+
+    const record = body as Record<string, unknown>;
+    const expectedStatus = parseCancelExpectedStatus(record.expectedStatus);
+    const reason = record.reason;
 
     if (
       reason === undefined ||
@@ -65,14 +75,14 @@ export const POST = withCompanyAuth(
 
     const actor = {
       userId: auth.user.id,
-      name: auth.user.name?.trim() || auth.user.email || "Authorized User",
+      name: auth.user.name?.trim() || auth.user.email,
       role: company.role,
     };
 
     const result = await cancelSalesOrder.execute({
       companyId: company.companyId,
       salesOrderId,
-      expectedStatus: expectedStatus as any,
+      expectedStatus,
       reason: reason.trim(),
       actor,
     });

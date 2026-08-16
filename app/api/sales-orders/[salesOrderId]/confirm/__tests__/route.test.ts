@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SalesOrder } from "@/src/domain/sales-order";
 
 const mocks = vi.hoisted(() => ({
@@ -61,6 +61,8 @@ function confirmedOrder() {
 }
 
 describe("POST /api/sales-orders/[salesOrderId]/confirm", () => {
+  beforeEach(() => mocks.confirm.mockReset());
+
   it("confirms a draft sales order when expectedStatus is DRAFT", async () => {
     mocks.confirm.mockResolvedValue({
       kind: "CONFIRMED",
@@ -119,5 +121,36 @@ describe("POST /api/sales-orders/[salesOrderId]/confirm", () => {
     const body = await response.json();
     expect(response.status).toBe(404);
     expect(body.error.code).toBe("SALES_ORDER_NOT_FOUND");
+  });
+
+  it.each([undefined, "CONFIRMED", "CANCELLED", 1])(
+    "returns HTTP 400 for invalid expectedStatus %s",
+    async (expectedStatus) => {
+      const response = await POST(
+        new Request("http://localhost/api/sales-orders/sales-order-1/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expectedStatus }),
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error.code).toBe("EXPECTED_STATUS_REQUIRED");
+      expect(mocks.confirm).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns HTTP 400 for malformed JSON", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/sales-orders/sales-order-1/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{ malformed",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("INVALID_JSON");
+    expect(mocks.confirm).not.toHaveBeenCalled();
   });
 });

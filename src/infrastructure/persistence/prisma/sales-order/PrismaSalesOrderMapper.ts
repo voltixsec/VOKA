@@ -1,4 +1,5 @@
 import type { Prisma } from "../../../../../lib/generated/prisma/client";
+import { parseCompanyDocumentBrandSnapshot } from "../../../../domain/document/CompanyDocumentBrandSnapshot";
 import {
   SalesOrder,
   type SalesOrderLineSnapshot,
@@ -88,6 +89,9 @@ export class PrismaSalesOrderMapper {
       sourceApprovedAt: record.sourceApprovedAt,
       sourceApprovedByName: record.sourceApprovedByName,
       sourceApprovedByRole: record.sourceApprovedByRole,
+      documentBrandSnapshot: parseCompanyDocumentBrandSnapshot(
+        record.documentBrandSnapshot,
+      ),
       createdByUserId: record.createdByUserId,
       createdByName: record.createdByName,
       createdByRole: record.createdByRole,
