@@ -277,8 +277,13 @@ The structured commercial drafting contract is implemented and has passed
 local semantic review, TypeScript, 651 regression tests, lint, and production
 build validation. PR #42 then passed Quality CI and was merged to main.
 
-Voice remains deferred and should reuse this contract as an input transport
-rather than creating a separate business workflow.
+Phase 6.2 implementation status:
+
+**Voice Input Transport — IMPLEMENTED / READY FOR CTO REVIEW.**
+
+Implemented on `feature/phase-6.2-voice-input-transport` over baseline `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
+Voice serves strictly as an input transport feeding speech transcript into the existing Phase 6.1 prompt input field.
+Zero audio files persisted, zero backend audio uploads, zero database schema changes. Full test suite (103 files / 665 tests) passed.
 ---
 
 # Phase 6 — AI Sales Assistant
@@ -445,4 +450,5 @@ Release checklist:
 Important: Phase 5 is closed on `main` at
 `55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
 
-Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI. Voice transport remains deferred pending a separately approved product slice.
+Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI.
+Phase 6.2 Voice Input Transport is IMPLEMENTED / READY FOR CTO REVIEW on `feature/phase-6.2-voice-input-transport`.
