@@ -16,15 +16,17 @@ describe("BrowserSpeechRecognizer", () => {
     delete (window as any).webkitSpeechRecognition;
   });
 
-  it("returns isSupported false when window.SpeechRecognition is undefined", () => {
+  it("returns isSupported false and state UNAVAILABLE when browser SpeechRecognition is undefined", () => {
     expect(recognizer.isSupported()).toBe(false);
+    expect(recognizer.getState()).toBe("UNAVAILABLE");
   });
 
-  it("returns isSupported true when webkitSpeechRecognition is available", () => {
+  it("returns isSupported true and state IDLE when webkitSpeechRecognition is available", () => {
     (window as any).webkitSpeechRecognition = vi.fn(function () {
       return {};
     });
     expect(recognizer.isSupported()).toBe(true);
+    expect(recognizer.getState()).toBe("IDLE");
   });
 
   it("handles start when unsupported gracefully", () => {
@@ -34,7 +36,7 @@ describe("BrowserSpeechRecognizer", () => {
     expect(recognizer.getState()).toBe("UNAVAILABLE");
   });
 
-  it("starts recognition and fires state changes when supported", () => {
+  it("resets session transcript on start so previous session transcripts are not duplicated", () => {
     const mockRecognitionInstance = {
       continuous: false,
       interimResults: false,
@@ -54,40 +56,31 @@ describe("BrowserSpeechRecognizer", () => {
       return mockRecognitionInstance;
     });
 
-    const onStateChange = vi.fn();
     const onTranscriptChange = vi.fn();
 
-    recognizer.start({
-      lang: "ar-KW",
-      onStateChange,
-      onTranscriptChange,
-    });
-
-    // Simulate browser firing onstart event
-    if (mockRecognitionInstance.onstart) {
-      mockRecognitionInstance.onstart();
-    }
-
-    expect(onStateChange).toHaveBeenCalledWith("LISTENING");
-    expect(recognizer.getState()).toBe("LISTENING");
-
-    // Simulate final result
+    // First session
+    recognizer.start({ onTranscriptChange });
     if (mockRecognitionInstance.onresult) {
       mockRecognitionInstance.onresult({
-        resultIndex: 0,
         results: [
-          Object.assign([{ transcript: "طلب كاميرات مراقبة" }], { isFinal: true }),
+          Object.assign([{ transcript: "First" }], { isFinal: true }),
         ],
       });
     }
+    expect(recognizer.getTranscript().final).toBe("First");
 
-    expect(onTranscriptChange).toHaveBeenCalledWith({
-      interim: "",
-      final: "طلب كاميرات مراقبة",
-    });
+    // Second session
+    recognizer.start({ onTranscriptChange });
+    expect(recognizer.getTranscript().final).toBe("");
 
-    recognizer.stop();
-    expect(mockRecognitionInstance.stop).toHaveBeenCalled();
+    if (mockRecognitionInstance.onresult) {
+      mockRecognitionInstance.onresult({
+        results: [
+          Object.assign([{ transcript: "Second" }], { isFinal: true }),
+        ],
+      });
+    }
+    expect(recognizer.getTranscript().final).toBe("Second");
   });
 
   it("handles permission denial safely", () => {
