@@ -10,11 +10,33 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   roleSets: [] as string[][],
   update: vi.fn(),
+  claimLocalization: vi.fn(),
+  completeLocalization: vi.fn(),
+  failLocalization: vi.fn(),
+  localizeQuotationDraft: vi.fn(),
+  runLocalizationJob: vi.fn(),
 
   afterTasks: [] as Array<
     () => void | Promise<void>
   >,
 }));
+
+vi.mock(
+  "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner",
+  () => ({
+    QuotationLocalizationJobRunner: class {
+      run = mocks.runLocalizationJob;
+    },
+  }),
+);
+
+vi.mock(
+  "@/src/infrastructure/translation/quotation/localizeQuotationDraft",
+  () => ({
+    localizeQuotationDraft:
+      mocks.localizeQuotationDraft,
+  }),
+);
 
 vi.mock(
   "next/server",
@@ -45,6 +67,9 @@ vi.mock(
     PrismaQuotationRepository: class {
       findById = mocks.findById;
       update = mocks.update;
+      claimLocalization = mocks.claimLocalization;
+      completeLocalization = mocks.completeLocalization;
+      failLocalization = mocks.failLocalization;
     },
   }),
 );
@@ -113,6 +138,7 @@ function createQuotation(): Quotation {
     },
     lines: [
       {
+        id: "line-1",
         position: 1,
         type: "PRODUCT",
         itemName: "Product",
@@ -127,8 +153,20 @@ describe("GET /api/quotations/[quotationId]", () => {
   beforeEach(() => {
     mocks.afterTasks.length = 0;
     mocks.findById.mockReset();
-  });
     mocks.update.mockReset();
+    mocks.claimLocalization.mockReset();
+    mocks.completeLocalization.mockReset();
+    mocks.failLocalization.mockReset();
+    mocks.localizeQuotationDraft.mockReset();
+    mocks.runLocalizationJob.mockReset();
+  });
+
+  async function runAfterTasks() {
+    const tasks = mocks.afterTasks.splice(0);
+    for (const task of tasks) {
+      await task();
+    }
+  }
 
   it("returns a tenant-scoped quotation to every read role", async () => {
     mocks.findById.mockResolvedValue(createQuotation());
@@ -229,5 +267,241 @@ describe("GET /api/quotations/[quotationId]", () => {
         },
       },
     });
+  });
+
+  it("schedules the reusable localization job after a successful save", async () => {
+    const quotation = createQuotation();
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.update.mockResolvedValue(undefined);
+    mocks.runLocalizationJob.mockResolvedValue("NO_CLAIM");
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost/api/quotations/quotation-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            lines: [
+              {
+                id: "line-1",
+                position: 1,
+                type: "PRODUCT",
+                itemName: "Product",
+                quantity: 1,
+                unitPrice: 10,
+              },
+            ],
+          }),
+        },
+      ),
+    );
+
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(mocks.runLocalizationJob).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+  });
+
+  it("does not mutate lifecycle when AI fails on stale quotation", async () => {
+    const quotation = createQuotation();
+    quotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+    const staleQuotation = createQuotation();
+    staleQuotation.replaceLines([
+      {
+        position: 1,
+        type: "PRODUCT",
+        itemName: "Updated Product",
+        quantity: 1,
+        unitPrice: 10,
+      },
+    ]);
+    staleQuotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+
+    mocks.findById.mockResolvedValueOnce(quotation); // normal update read
+    mocks.findById.mockResolvedValueOnce(quotation); // response snapshot read
+    mocks.findById.mockResolvedValueOnce(staleQuotation); // post-claim current read
+    mocks.claimLocalization.mockResolvedValue({
+      claimToken: "claim-stale",
+      sourceSignature: "stale-signature",
+      attemptCount: 1,
+    });
+    mocks.localizeQuotationDraft.mockResolvedValue(
+      {} as unknown,
+    );
+    mocks.update.mockResolvedValue(undefined);
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost/api/quotations/quotation-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            lines: [
+              {
+                position: 1,
+                type: "PRODUCT",
+                itemName: "Product",
+                quantity: 1,
+                unitPrice: 10,
+              },
+            ],
+          }),
+        },
+      ),
+    );
+
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.localizeQuotationDraft).not.toHaveBeenCalled();
+    expect(mocks.completeLocalization).not.toHaveBeenCalled();
+    expect(mocks.failLocalization).not.toHaveBeenCalled();
+  });
+
+  it("keeps background execution behind the runner seam", async () => {
+    const quotation = createQuotation();
+    quotation.markLocalizationPending(
+      "en",
+      new Date("2026-08-04T00:00:00.000Z"),
+    );
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.localizeQuotationDraft.mockImplementation(
+      async (snapshot) => {
+        return {
+          ...snapshot,
+          lines: Array.isArray(snapshot.lines)
+            ? snapshot.lines.map(
+                (line: Record<string, unknown>) => ({
+                  ...line,
+                  itemNameEn: line.itemName ?? null,
+                  itemNameAr: "منتج",
+                }),
+              )
+            : [],
+        } as unknown as typeof snapshot;
+      },
+    );
+    mocks.claimLocalization.mockImplementation(async () => ({
+      claimToken: "claim-success",
+      sourceSignature: quotation.localizationSourceSignature!,
+      attemptCount: 1,
+    }));
+    mocks.completeLocalization.mockResolvedValue(false);
+
+    const updates: Array<unknown> = [];
+    mocks.update.mockImplementation(async (_companyId, updatedQuotation) => {
+      updates.push(updatedQuotation);
+    });
+
+    const response = await PATCH(
+      new Request(
+        "http://localhost/api/quotations/quotation-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            lines: [
+              {
+                id: "line-1",
+                position: 1,
+                type: "PRODUCT",
+                itemName: "Product",
+                quantity: 1,
+                unitPrice: 10,
+              },
+            ],
+          }),
+        },
+      ),
+    );
+
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(updates).toHaveLength(1);
+    expect(mocks.runLocalizationJob).toHaveBeenCalledWith({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+    });
+    return;
+    expect(mocks.completeLocalization).toHaveBeenCalledOnce();
+    const completion = mocks.completeLocalization.mock.calls[0][0];
+    expect(completion).toMatchObject({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      expectedSourceSignature: quotation.localizationSourceSignature,
+      expectedClaimToken: "claim-success",
+      lines: [{
+        id: "line-1",
+        itemNameEn: "Product",
+        itemNameAr: "منتج",
+      }],
+    });
+    expect(completion.completedAt).toBeInstanceOf(Date);
+    expect(Object.keys(completion.header).sort()).toEqual([
+      "attentionNameAr",
+      "attentionNameEn",
+      "briefAr",
+      "briefEn",
+      "customerNameAr",
+      "customerNameEn",
+      "notesAr",
+      "notesEn",
+      "projectNameAr",
+      "projectNameEn",
+      "subjectAr",
+      "subjectEn",
+      "termsAndConditionsAr",
+      "termsAndConditionsEn",
+    ]);
+    expect(Object.keys(completion.lines[0]).sort()).toEqual([
+      "descriptionAr",
+      "descriptionEn",
+      "id",
+      "itemNameAr",
+      "itemNameEn",
+      "unitNameAr",
+      "unitNameEn",
+    ]);
+    expect(completion.lines[0]).not.toHaveProperty("quantity");
+    expect(completion.lines[0]).not.toHaveProperty("position");
+    expect(mocks.failLocalization).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke AI or persistence when no claim is acquired", async () => {
+    const quotation = createQuotation();
+    mocks.findById.mockResolvedValue(quotation);
+    mocks.update.mockResolvedValue(undefined);
+    mocks.claimLocalization.mockResolvedValue(null);
+
+    const response = await PATCH(new Request(
+      "http://localhost/api/quotations/quotation-1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ lines: [{
+          id: "line-1",
+          position: 1,
+          type: "PRODUCT",
+          itemName: "Product",
+          quantity: 1,
+          unitPrice: 10,
+        }] }),
+      },
+    ));
+    await runAfterTasks();
+
+    expect(response.status).toBe(200);
+    expect(mocks.localizeQuotationDraft).not.toHaveBeenCalled();
+    expect(mocks.completeLocalization).not.toHaveBeenCalled();
+    expect(mocks.failLocalization).not.toHaveBeenCalled();
   });
 });

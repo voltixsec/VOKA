@@ -160,6 +160,12 @@ enum QuotationStatus {
   CANCELLED
 }
 
+enum LocalizationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 enum QuotationScopeType {
   SUPPLY_ONLY
   SUPPLY_AND_INSTALLATION
@@ -395,6 +401,16 @@ model Quotation {
   termsAndConditionsAr String?
   termsAndConditionsEn String?
 
+  localizationStatus      LocalizationStatus?
+  localizationRequestedAt DateTime?
+  localizationCompletedAt DateTime?
+  localizationLastError   String?
+  localizationSourceLocale Locale?
+  localizationSourceSignature String?
+  localizationClaimToken      String?
+  localizationLeaseUntil      DateTime?
+  localizationAttemptCount    Int     @default(0)
+
   sentAt         DateTime?
   approvedAt     DateTime?
   approvedByName String?
@@ -420,6 +436,7 @@ model Quotation {
   @@index([companyId, issueDate])
   @@index([companyId, expiryDate])
   @@index([companyId, isDeleted])
+  @@index([companyId, localizationStatus, localizationLeaseUntil])
   @@index([customerId])
   @@index([priceListId])
 }

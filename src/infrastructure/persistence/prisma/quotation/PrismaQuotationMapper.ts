@@ -6,6 +6,7 @@ import {
   type QuotationLineType,
   type QuotationStatus,
 } from "../../../../domain/quotation";
+import type { LocalizationStatus } from "../../../../domain/quotation/types/LocalizationStatus";
 
 type QuotationRecord = Prisma.QuotationGetPayload<{
   include: {
@@ -76,6 +77,20 @@ export class PrismaQuotationMapper {
       termsAndConditions: quotation.termsAndConditions,
       termsAndConditionsAr: quotation.termsAndConditionsAr,
       termsAndConditionsEn: quotation.termsAndConditionsEn,
+      localizationStatus: quotation.localizationStatus,
+      localizationRequestedAt: quotation.localizationRequestedAt,
+      localizationCompletedAt: quotation.localizationCompletedAt,
+      localizationLastError: quotation.localizationLastError,
+      localizationSourceLocale:
+        quotation.localizationSourceLocale === "ar"
+          ? "AR"
+          : quotation.localizationSourceLocale === "en"
+            ? "EN"
+            : undefined,
+      localizationSourceSignature: quotation.localizationSourceSignature,
+      localizationClaimToken: quotation.localizationClaimToken,
+      localizationLeaseUntil: quotation.localizationLeaseUntil,
+      localizationAttemptCount: quotation.localizationAttemptCount,
       sentAt: quotation.sentAt,
       approvedAt: quotation.approvedAt,
       approvedByName: quotation.approvedByName,
@@ -208,6 +223,20 @@ export class PrismaQuotationMapper {
       termsAndConditions: record.termsAndConditions,
       termsAndConditionsAr: record.termsAndConditionsAr,
       termsAndConditionsEn: record.termsAndConditionsEn,
+      localizationStatus: record.localizationStatus
+        ? (record.localizationStatus as LocalizationStatus)
+        : undefined,
+      localizationRequestedAt: record.localizationRequestedAt,
+      localizationCompletedAt: record.localizationCompletedAt,
+      localizationLastError: record.localizationLastError,
+      localizationSourceLocale: record.localizationSourceLocale
+        ? record.localizationSourceLocale.toLowerCase() as
+            "ar" | "en"
+        : null,
+      localizationSourceSignature: record.localizationSourceSignature,
+      localizationClaimToken: record.localizationClaimToken,
+      localizationLeaseUntil: record.localizationLeaseUntil,
+      localizationAttemptCount: record.localizationAttemptCount ?? 0,
       sentAt: record.sentAt,
       approvedAt: record.approvedAt,
       approvedByName: record.approvedByName,

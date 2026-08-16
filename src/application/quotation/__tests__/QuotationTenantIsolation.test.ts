@@ -15,6 +15,9 @@ function createRepository(): IQuotationRepository {
     update: vi.fn(),
     findAll: vi.fn(),
     delete: vi.fn(),
+    claimLocalization: vi.fn().mockResolvedValue(null),
+    completeLocalization: vi.fn(),
+    failLocalization: vi.fn(),
   };
 }
 

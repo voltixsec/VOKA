@@ -271,6 +271,23 @@ export function serializeQuotation(
     termsAndConditionsEn:
       quotation.termsAndConditionsEn,
 
+    localizationStatus:
+      quotation.localizationStatus,
+
+    localizationRequestedAt:
+      quotation.localizationRequestedAt
+        ?.toISOString() ?? null,
+
+    localizationCompletedAt:
+      quotation.localizationCompletedAt
+        ?.toISOString() ?? null,
+
+    localizationLastError:
+      quotation.localizationLastError,
+
+    localizationSourceLocale:
+      quotation.localizationSourceLocale,
+
     sentAt:
       quotation.sentAt
         ?.toISOString() ?? null,

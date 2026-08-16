@@ -17,9 +17,7 @@ import {
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
 
-import {
-  localizeQuotationDraft,
-} from "@/src/infrastructure/translation/quotation/localizeQuotationDraft";
+import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
 
 import { serializeQuotation } from "../serialize-quotation";
 
@@ -38,6 +36,8 @@ const updateQuotation =
     quotationRepository,
     quotationReferenceValidator,
   );
+const localizationJobRunner =
+  new QuotationLocalizationJobRunner(quotationRepository);
 
 
 function getQuotationId(request: Request): string {
@@ -122,6 +122,7 @@ type UpdateQuotationBody = {
   scopeType?: unknown;
 };
 
+
 function parseOptionalString(
   value: unknown,
   fieldName: string,
@@ -174,109 +175,6 @@ function parseScopeType(
   return value;
 }
 
-
-function localizationSignature(
-  input: Record<string, unknown>,
-): string {
-  const lines =
-    Array.isArray(input.lines)
-      ? input.lines.map((rawLine) => {
-          const line =
-            rawLine &&
-            typeof rawLine === "object" &&
-            !Array.isArray(rawLine)
-              ? rawLine as Record<string, unknown>
-              : {};
-
-          return {
-            id:
-              line.id ?? null,
-
-            position:
-              line.position ?? null,
-
-            itemName:
-              line.itemName ?? null,
-
-            itemNameAr:
-              line.itemNameAr ?? null,
-
-            itemNameEn:
-              line.itemNameEn ?? null,
-
-            description:
-              line.description ?? null,
-
-            descriptionAr:
-              line.descriptionAr ?? null,
-
-            descriptionEn:
-              line.descriptionEn ?? null,
-
-            unitName:
-              line.unitName ?? null,
-
-            unitNameAr:
-              line.unitNameAr ?? null,
-
-            unitNameEn:
-              line.unitNameEn ?? null,
-          };
-        })
-      : [];
-
-  return JSON.stringify({
-    projectName:
-      input.projectName ?? null,
-
-    projectNameAr:
-      input.projectNameAr ?? null,
-
-    projectNameEn:
-      input.projectNameEn ?? null,
-
-    attentionName:
-      input.attentionName ?? null,
-
-    attentionNameAr:
-      input.attentionNameAr ?? null,
-
-    attentionNameEn:
-      input.attentionNameEn ?? null,
-
-    subjectAr:
-      input.subjectAr ?? null,
-
-    subjectEn:
-      input.subjectEn ?? null,
-
-    briefAr:
-      input.briefAr ?? null,
-
-    briefEn:
-      input.briefEn ?? null,
-
-    notes:
-      input.notes ?? null,
-
-    notesAr:
-      input.notesAr ?? null,
-
-    notesEn:
-      input.notesEn ?? null,
-
-    termsAndConditions:
-      input.termsAndConditions ?? null,
-
-    termsAndConditionsAr:
-      input.termsAndConditionsAr ?? null,
-
-    termsAndConditionsEn:
-      input.termsAndConditionsEn ?? null,
-
-    lines,
-  });
-}
 
 export const PATCH = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
@@ -347,34 +245,11 @@ export const PATCH = withCompanyAuth(
       );
     }
 
-    const savedSnapshot =
-      serializeQuotation(
-        updated.data,
-      ) as unknown as Record<
-        string,
-        unknown
-      >;
-
-    const savedSignature =
-      localizationSignature(
-        savedSnapshot,
-      );
-
     const localizationSourceLocale =
       rawBody.localizationSourceLocale === "ar" ||
       rawBody.localizationSourceLocale === "en"
         ? rawBody.localizationSourceLocale
         : undefined;
-
-    const localizationInput = {
-      ...savedSnapshot,
-
-      ...(localizationSourceLocale
-        ? {
-            localizationSourceLocale,
-          }
-        : {}),
-    };
 
     console.log(
       "[VOKA:LOCALIZATION][SCHEDULED]",
@@ -387,121 +262,10 @@ export const PATCH = withCompanyAuth(
       },
     );
 
-    after(async () => {
-      const startedAt =
-        performance.now();
-
-      try {
-        const localizedBody =
-          (await localizeQuotationDraft(
-            localizationInput,
-          )) as UpdateQuotationBody;
-
-        /*
-         * Qwen may take a long time.
-         * Re-read after inference so stale AI output can never
-         * overwrite a newer user Save.
-         */
-        const latest =
-          await getQuotation.execute({
-            companyId:
-              company.companyId,
-
-            quotationId,
-          });
-
-        if (!latest.success) {
-          console.warn(
-            "[VOKA:LOCALIZATION][SKIPPED_NOT_FOUND]",
-            {
-              quotationId,
-            },
-          );
-
-          return;
-        }
-
-        const latestSnapshot =
-          serializeQuotation(
-            latest.data,
-          ) as unknown as Record<
-            string,
-            unknown
-          >;
-
-        if (
-          localizationSignature(
-            latestSnapshot,
-          ) !== savedSignature
-        ) {
-          console.log(
-            "[VOKA:LOCALIZATION][SKIPPED_STALE]",
-            {
-              quotationId,
-            },
-          );
-
-          return;
-        }
-
-        const localizationDto = {
-          ...(localizedBody as unknown as Record<
-            string,
-            unknown
-          >),
-
-          companyId:
-            company.companyId,
-
-          quotationId,
-        } as unknown as UpdateQuotationDto;
-
-        const localizationResult =
-          await updateQuotation.execute(
-            localizationDto,
-          );
-
-        if (!localizationResult.success) {
-          console.error(
-            "[VOKA:LOCALIZATION][FAILED_UPDATE]",
-            {
-              quotationId,
-
-              error:
-                localizationResult.error,
-            },
-          );
-
-          return;
-        }
-
-        console.log(
-          "[VOKA:LOCALIZATION][COMPLETED]",
-          {
-            quotationId,
-
-            elapsedMs:
-              Math.round(
-                performance.now() -
-                startedAt,
-              ),
-          },
-        );
-      }
-      catch (error) {
-        /*
-         * AI failure is background-only.
-         * It must never turn a successful Save into HTTP 500.
-         */
-        console.error(
-          "[VOKA:LOCALIZATION][FAILED]",
-          {
-            quotationId,
-            error,
-          },
-        );
-      }
-    });
+    after(() => localizationJobRunner.run({
+      companyId: company.companyId,
+      quotationId,
+    }));
 
 
 
