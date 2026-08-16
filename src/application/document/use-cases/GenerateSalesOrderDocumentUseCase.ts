@@ -1,4 +1,4 @@
-﻿import type { ISalesOrderRepository } from "@/src/application/sales-order";
+import type { ISalesOrderRepository } from "@/src/application/sales-order";
 import type { ISalesOrderDocumentRenderer } from "../contracts/ISalesOrderDocumentRenderer";
 import type { DocumentLocale } from "../contracts/QuotationDocumentSnapshot";
 import type { SalesOrderDocumentSnapshot } from "../contracts/SalesOrderDocumentSnapshot";
@@ -270,7 +270,3 @@ export class GenerateSalesOrderDocumentUseCase {
     };
   }
 }
-
-
-
-
