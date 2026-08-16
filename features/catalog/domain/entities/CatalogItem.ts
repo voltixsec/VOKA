@@ -24,7 +24,11 @@ export type CatalogItemProps = {
   sku: string | null;
   barcode: string | null;
   name: string;
+  nameAr: string | null;
+  nameEn: string | null;
   description: string | null;
+  descriptionAr: string | null;
+  descriptionEn: string | null;
   purchasePrice: number | null;
   salePrice: number;
   trackInventory: boolean;
@@ -42,12 +46,16 @@ export type CreateCatalogItemProps = {
   code: string;
   name: string;
   salePrice: number;
+  nameAr?: string | null;
+  nameEn?: string | null;
   categoryId?: string | null;
   unitId?: string | null;
   taxRateId?: string | null;
   sku?: string | null;
   barcode?: string | null;
   description?: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
   purchasePrice?: number | null;
   trackInventory?: boolean;
   allowDiscount?: boolean;
@@ -100,8 +108,24 @@ export class CatalogItem extends Entity<CatalogItemProps> {
     return this.props.name;
   }
 
+  public get nameAr(): string | null {
+    return this.props.nameAr;
+  }
+
+  public get nameEn(): string | null {
+    return this.props.nameEn;
+  }
+
   public get description(): string | null {
     return this.props.description;
+  }
+
+  public get descriptionAr(): string | null {
+    return this.props.descriptionAr;
+  }
+
+  public get descriptionEn(): string | null {
+    return this.props.descriptionEn;
   }
 
   public get purchasePrice(): number | null {
@@ -244,8 +268,16 @@ export class CatalogItem extends Entity<CatalogItemProps> {
           sku: CatalogItem.normalizeOptional(input.sku),
           barcode: CatalogItem.normalizeOptional(input.barcode),
           name,
+          nameAr: CatalogItem.normalizeOptional(input.nameAr),
+          nameEn: CatalogItem.normalizeOptional(input.nameEn),
           description: CatalogItem.normalizeOptional(
             input.description,
+          ),
+          descriptionAr: CatalogItem.normalizeOptional(
+            input.descriptionAr,
+          ),
+          descriptionEn: CatalogItem.normalizeOptional(
+            input.descriptionEn,
           ),
           purchasePrice: input.purchasePrice ?? null,
           salePrice: input.salePrice,
@@ -270,6 +302,94 @@ export class CatalogItem extends Entity<CatalogItemProps> {
     id: UniqueEntityID,
   ): CatalogItem {
     return new CatalogItem(props, id);
+  }
+
+  public updateDetails(input: {
+    name?: string;
+    nameAr?: string | null;
+    nameEn?: string | null;
+    description?: string | null;
+    descriptionAr?: string | null;
+    descriptionEn?: string | null;
+    unitId?: string | null;
+    taxRateId?: string | null;
+    categoryId?: string | null;
+    sku?: string | null;
+    barcode?: string | null;
+    salePrice?: number;
+    purchasePrice?: number | null;
+    trackInventory?: boolean;
+    allowDiscount?: boolean;
+    isActive?: boolean;
+  }): Result<void, DomainError> {
+    if (input.name !== undefined) {
+      const normalizedName = input.name.trim();
+      if (!normalizedName) {
+        return Result.failure(
+          new DomainError('Catalog item name is required.', 'INVALID_CATALOG_ITEM_NAME'),
+        );
+      }
+      this.props.name = normalizedName;
+    }
+
+    if (input.nameAr !== undefined) {
+      this.props.nameAr = CatalogItem.normalizeOptional(input.nameAr);
+    }
+    if (input.nameEn !== undefined) {
+      this.props.nameEn = CatalogItem.normalizeOptional(input.nameEn);
+    }
+    if (input.description !== undefined) {
+      this.props.description = CatalogItem.normalizeOptional(input.description);
+    }
+    if (input.descriptionAr !== undefined) {
+      this.props.descriptionAr = CatalogItem.normalizeOptional(input.descriptionAr);
+    }
+    if (input.descriptionEn !== undefined) {
+      this.props.descriptionEn = CatalogItem.normalizeOptional(input.descriptionEn);
+    }
+    if (input.unitId !== undefined) {
+      this.props.unitId = CatalogItem.normalizeOptional(input.unitId);
+    }
+    if (input.taxRateId !== undefined) {
+      this.props.taxRateId = CatalogItem.normalizeOptional(input.taxRateId);
+    }
+    if (input.categoryId !== undefined) {
+      this.props.categoryId = CatalogItem.normalizeOptional(input.categoryId);
+    }
+    if (input.sku !== undefined) {
+      this.props.sku = CatalogItem.normalizeOptional(input.sku);
+    }
+    if (input.barcode !== undefined) {
+      this.props.barcode = CatalogItem.normalizeOptional(input.barcode);
+    }
+    if (input.salePrice !== undefined) {
+      if (!Number.isFinite(input.salePrice) || input.salePrice < 0) {
+        return Result.failure(
+          new DomainError('Catalog item sale price must be a non-negative number.', 'INVALID_CATALOG_ITEM_SALE_PRICE'),
+        );
+      }
+      this.props.salePrice = input.salePrice;
+    }
+    if (input.purchasePrice !== undefined) {
+      if (input.purchasePrice !== null && (!Number.isFinite(input.purchasePrice) || input.purchasePrice < 0)) {
+        return Result.failure(
+          new DomainError('Catalog item purchase price must be a non-negative number.', 'INVALID_CATALOG_ITEM_PURCHASE_PRICE'),
+        );
+      }
+      this.props.purchasePrice = input.purchasePrice;
+    }
+    if (input.trackInventory !== undefined) {
+      this.props.trackInventory = this.props.type === 'SERVICE' ? false : input.trackInventory;
+    }
+    if (input.allowDiscount !== undefined) {
+      this.props.allowDiscount = input.allowDiscount;
+    }
+    if (input.isActive !== undefined) {
+      this.props.isActive = input.isActive;
+    }
+
+    this.touch();
+    return Result.success(undefined);
   }
 
   public rename(name: string): Result<void, DomainError> {
