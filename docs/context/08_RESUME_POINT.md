@@ -4,7 +4,8 @@ Verified on: 2026-08-16 (Asia/Kuwait)
 
 ## Current Verified State
 
-- Canonical branch: `feature/phase-6.2-voice-input-transport`.
+- Canonical branch: `main`.
+- Current canonical main baseline: `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.
 - Official baseline before Phase 6.2: `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
 - Phase 3 Proposal Composer UX is closed through PR #31.
 - Phase 4.1 Approved Quotation to Sales Order Draft is closed through PR #33.
@@ -12,7 +13,7 @@ Verified on: 2026-08-16 (Asia/Kuwait)
 - Phase 4.3 Sales Order Operational Workspace is closed through PR #39.
 - Phase 5 Canonical Catalog Integration is closed through PR #40.
 - Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft is closed and merged through PR #42 after green Quality CI.
-- Phase 6.2 Voice Input Transport is **IMPLEMENTED / READY FOR CTO REVIEW** on branch `feature/phase-6.2-voice-input-transport`.
+- Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 
 ## Phase 4 Commercial Downstream Boundary
 
@@ -75,7 +76,7 @@ Delivered:
 - Authenticated `POST /api/ai/sales-assistant/draft` route with tenant scoping and role authorization (`OWNER`, `ADMIN`, `SALES`);
 - Responsive Arabic RTL and English LTR UI workspace (`/dashboard/sales-assistant`).
 
-## Phase 6.2 Delivered Boundary (Implemented / Ready for CTO Review)
+## Phase 6.2 Delivered Boundary (Closed / Merged through PR #44)
 
 Phase 6.2 adds natural Voice Input Transport over the existing Phase 6.1 commercial drafting pipeline.
 
@@ -106,3 +107,9 @@ HUMAN SAVES.
 - Browser/client values are never canonical tax or totals authority.
 - Approved quotation and Sales Order snapshots remain historical and immutable.
 - AI produces proposals/drafts; consequential actions require human approval.
+
+## Next Session Start Point
+
+Phase 6.2 is closed. Start the next development session with `CTO START SESSION`.
+Review the canonical roadmap and architecture before selecting the next bounded
+product slice. Do not carry unfinished Phase 6.2 implementation work forward.

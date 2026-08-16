@@ -3,11 +3,15 @@
 Current Product Frontier: **Phase 6.2 — Voice Input Transport**
 
 Status: Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
-Phase 6.2 Voice Input Transport is **IMPLEMENTED / READY FOR CTO REVIEW** on branch `feature/phase-6.2-voice-input-transport`.
+Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 
 Official pre-Phase-6.2 baseline:
 
 `d19d2bd2e306a7db066532ff873e9af5ed3a8349`
+
+Current canonical main baseline after Phase 6.2 close:
+
+`0c94f521d07d4a2f78f4eb5d67c60e27ce686772`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -62,7 +66,7 @@ Architecture:
 
 - AI First: `APPROVED`
 - Advanced Import / Export Center: `APPROVED` as an optional product capability
-- Codex Desktop development execution workflow: `APPROVED`
+- Development execution workflow: `CTO + local Terminal + Jules`; Codex is not part of the active workflow unless explicitly reintroduced by the CEO.
 
 The Advanced Import / Export Center remains `PLANNED` and is sequenced after the
 Core Sales Engine.
