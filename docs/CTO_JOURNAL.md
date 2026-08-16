@@ -234,3 +234,13 @@ branch if approved. No new PDF, localization, or verification scope is implied.
   100 files / 651 tests PASS, lint PASS, production build PASS, diff check PASS.
 - Remaining closure path: commit/push, PR, green Quality CI, merge to `main`,
   then formal Phase 6.1 closeout.
+## 2026-08-16 — Phase 6.1 merged through PR #42
+
+- PR #42 merged after green Quality CI.
+- Merge commit: $MergeSha.
+- Phase 6.1 Text AI Sales Assistant / Structured Draft is now on `main`.
+- Final local validation before merge: 100 test files / 651 tests PASS,
+  TypeScript PASS, lint PASS, production build PASS, and diff check PASS.
+- No Prisma schema or migration changes were introduced.
+- AI remains proposal-only and human Save remains the consequential persistence boundary.
+- Voice remains deferred pending a separately approved product slice.

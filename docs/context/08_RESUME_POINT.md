@@ -11,7 +11,7 @@ Verified on: 2026-08-16 (Asia/Kuwait)
 - Phase 4.2 Sales Order Confirmation & Cancellation is closed through PR #38.
 - Phase 4.3 Sales Order Operational Workspace is closed through PR #39.
 - Phase 5 Canonical Catalog Integration is closed through PR #40.
-- Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft has **passed CTO local review and full local validation; PR, Quality CI, and merge remain pending**.
+- Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft is **closed and merged through PR #42 after green Quality CI**.
 
 ## Phase 4 Commercial Downstream Boundary
 
@@ -55,7 +55,7 @@ Delivered:
 Existing canonical Customer snapshot behavior remains authoritative and was
 preserved; Phase 5 did not rewrite historical customer snapshots.
 
-## Phase 6.1 Delivered Boundary (CTO Local Validation Passed)
+## Phase 6.1 Delivered Boundary (Merged through PR #42)
 
 Phase 6.1 established the VOKA Text AI Sales Assistant for structured commercial drafting.
 
