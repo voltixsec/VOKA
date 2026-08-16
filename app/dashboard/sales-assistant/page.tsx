@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { SalesAssistantDraftProposal } from "@/src/application/ai-sales-assistant";
+import { useVoiceInput, IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
 
 const SAMPLES = [
   {
@@ -18,7 +19,8 @@ const SAMPLES = [
   },
 ];
 
-export default function SalesAssistantPage() {
+export default function SalesAssistantPage(props: any) {
+  const customRecognizer: IVoiceRecognizer | undefined = props?.customRecognizer;
   const { isArabic } = useLanguage();
   const router = useRouter();
 
@@ -26,6 +28,36 @@ export default function SalesAssistantPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<SalesAssistantDraftProposal | null>(null);
+
+  const basePromptRef = useRef<string>("");
+
+  const voice = useVoiceInput({
+    locale: isArabic ? "ar" : "en",
+    recognizer: customRecognizer,
+  });
+
+  // Keep track of the transcript final result and merge into prompt
+  const prevFinalRef = useRef<string>("");
+
+  useEffect(() => {
+    if (voice.transcript.final && voice.transcript.final !== prevFinalRef.current) {
+      const newAddition = voice.transcript.final;
+      const base = basePromptRef.current;
+      const merged = base ? `${base.trim()} ${newAddition.trim()}` : newAddition.trim();
+      setPrompt(merged);
+      prevFinalRef.current = voice.transcript.final;
+    }
+  }, [voice.transcript.final]);
+
+  const handleStartListening = () => {
+    basePromptRef.current = prompt;
+    prevFinalRef.current = "";
+    voice.startListening(isArabic ? "ar-KW" : "en-US");
+  };
+
+  const handleStopListening = () => {
+    voice.stopListening();
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -68,6 +100,37 @@ export default function SalesAssistantPage() {
     }
   };
 
+  const getVoiceStatusMessage = () => {
+    switch (voice.state) {
+      case "LISTENING":
+        return isArabic
+          ? "جاري الاستماع... يرجى التحدث الآن"
+          : "Listening... Speak your request now";
+      case "PROCESSING":
+        return isArabic
+          ? "جاري معالجة الصوت وتحويله إلى نص..."
+          : "Processing speech to text...";
+      case "READY":
+        return isArabic
+          ? "تم تحويل الصوت إلى نص. يمكنك مراجعته وتعديله قبل التوليد."
+          : "Voice converted to text. Review and edit before generating proposal.";
+      case "UNAVAILABLE":
+        return isArabic
+          ? "إدخال الصوت غير مدعوم في هذا المتصفح. يمكنك إدخال النص يدوياً."
+          : "Voice input is not supported in this browser. You can type manually.";
+      case "PERMISSION_DENIED":
+        return isArabic
+          ? "تم رفض الإذن لاستخدام الميكروفون. يرجى السماح للوصول للميكروفون في المتصفح."
+          : "Microphone permission denied. Please allow microphone access in browser settings.";
+      case "ERROR":
+        return voice.errorMessage || (isArabic
+          ? "حدث خطأ أثناء التعرف على الصوت."
+          : "An error occurred during voice recognition.");
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-5xl" dir={isArabic ? "rtl" : "ltr"}>
       <div>
@@ -76,33 +139,112 @@ export default function SalesAssistantPage() {
         </p>
 
         <h2 className="mt-2 text-3xl font-semibold text-white">
-          {isArabic ? "مسودة تجارية هيكلية من النص" : "Structured Commercial Draft from Text"}
+          {isArabic ? "مسودة تجارية هيكلية من النص والصوت" : "Structured Commercial Draft from Text & Voice"}
         </h2>
 
         <p className="mt-2 text-slate-400">
           {isArabic
-            ? "أدخل طلب المبيعات باللغة الطبيعية لاستخراج وتدقيق العميل والمنتجات والأسعار وتوليد مسودة مقترحة للمراجعة."
-            : "Enter a natural language sales request to extract and resolve customer, catalog items, pricing, and generate a proposal draft for human review."}
+            ? "تحدث أو أدخل طلب المبيعات باللغة الطبيعية لاستخراج وتدقيق العميل والمنتجات والأسعار وتوليد مسودة مقترحة للمراجعة."
+            : "Speak or type a natural language sales request to extract and resolve customer, catalog items, pricing, and generate a proposal draft for human review."}
         </p>
       </div>
 
       {/* Input Prompt Card */}
       <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-soft space-y-4">
-        <label className="block text-sm font-semibold text-slate-200">
-          {isArabic ? "طلب المبيعات (اللغة الطبيعية)" : "Sales Request Prompt (Natural Language)"}
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="sales-prompt-input" className="block text-sm font-semibold text-slate-200">
+            {isArabic ? "طلب المبيعات (اللغة الطبيعية)" : "Sales Request Prompt (Natural Language)"}
+          </label>
 
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          placeholder={
-            isArabic
-              ? "مثال: اعمل عرض سعر لشركة الكويت الوطنية للاتصالات 5 كاميرات IP بدقة 4K بسعر 45 د.ك مع التركيب والبرمجة"
-              : "e.g. Create a quotation for Gulf Tech Solution supply only 10 units NVR 16 Channels at 120 KWD"
-          }
-          className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none text-sm"
-        />
+          {/* Microphone Transport Control */}
+          <div className="flex items-center gap-2">
+            {voice.state === "LISTENING" || voice.state === "PROCESSING" ? (
+              <button
+                type="button"
+                onClick={handleStopListening}
+                aria-label={isArabic ? "إيقاف الاستماع" : "Stop listening"}
+                aria-pressed={true}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-500/20 border border-rose-500/40 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/30 transition animate-pulse"
+              >
+                <span className="h-2 w-2 rounded-full bg-rose-400 animate-ping" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="2" strokeWidth="2" fill="currentColor" />
+                </svg>
+                {isArabic ? "إيقاف الاستماع" : "Stop Listening"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartListening}
+                disabled={!voice.isSupported}
+                aria-label={isArabic ? "بدء الإدخال الصوتي" : "Start voice input"}
+                aria-pressed={false}
+                title={
+                  !voice.isSupported
+                    ? isArabic
+                      ? "إدخال الصوت غير مدعوم في هذا المتصفح"
+                      : "Voice input is not supported in this browser"
+                    : isArabic
+                    ? "انقر للتحدث"
+                    : "Click to speak"
+                }
+                className="inline-flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-1.5 text-xs font-semibold text-sky-300 hover:bg-sky-400/20 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-14 0m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+                {isArabic ? "إدخال صوتي" : "Voice Input"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Text Area */}
+        <div className="relative">
+          <textarea
+            id="sales-prompt-input"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={4}
+            placeholder={
+              isArabic
+                ? "تحدث أو اكتب... مثال: اعمل عرض سعر لشركة الكويت الوطنية للاتصالات 5 كاميرات IP بدقة 4K بسعر 45 د.ك"
+                : "Speak or type... e.g. Create a quotation for Gulf Tech Solution supply only 10 units NVR 16 Channels at 120 KWD"
+            }
+            className="w-full rounded-2xl border border-white/10 bg-slate-950 p-4 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none text-sm"
+          />
+
+          {/* Live Interim Transcript Overlay/Badge */}
+          {voice.transcript.interim && (
+            <div className="mt-1 rounded-xl bg-sky-950/60 border border-sky-500/20 p-2.5 text-xs text-sky-200 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-sky-400 animate-ping" />
+              <span className="font-medium">{isArabic ? "جاري الاستماع:" : "Listening:"}</span>
+              <span className="italic text-slate-300">{voice.transcript.interim}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Accessible Voice Status Live Region */}
+        {getVoiceStatusMessage() && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`rounded-2xl p-3 text-xs flex items-center gap-2 ${
+              voice.state === "PERMISSION_DENIED" || voice.state === "ERROR"
+                ? "border border-rose-500/30 bg-rose-500/10 text-rose-300"
+                : voice.state === "UNAVAILABLE"
+                ? "border border-amber-500/30 bg-amber-500/10 text-amber-300"
+                : voice.state === "LISTENING" || voice.state === "PROCESSING"
+                ? "border border-sky-500/30 bg-sky-500/10 text-sky-300"
+                : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            }`}
+          >
+            <span className="font-semibold uppercase tracking-wider text-[10px]">
+              [{voice.state}]
+            </span>
+            <span>{getVoiceStatusMessage()}</span>
+          </div>
+        )}
 
         {/* Sample Prompt Presets */}
         <div className="flex flex-wrap items-center gap-2">

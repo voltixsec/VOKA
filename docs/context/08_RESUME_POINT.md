@@ -4,14 +4,15 @@ Verified on: 2026-08-16 (Asia/Kuwait)
 
 ## Current Verified State
 
-- Canonical branch: `main`.
-- Official baseline before Phase 6.1: `d448bad3bee0d1cf365b9ba8b2e0a0c6815c1694`.
+- Canonical branch: `feature/phase-6.2-voice-input-transport`.
+- Official baseline before Phase 6.2: `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
 - Phase 3 Proposal Composer UX is closed through PR #31.
 - Phase 4.1 Approved Quotation to Sales Order Draft is closed through PR #33.
 - Phase 4.2 Sales Order Confirmation & Cancellation is closed through PR #38.
 - Phase 4.3 Sales Order Operational Workspace is closed through PR #39.
 - Phase 5 Canonical Catalog Integration is closed through PR #40.
-- Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft is **closed and merged through PR #42 after green Quality CI**.
+- Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft is closed and merged through PR #42 after green Quality CI.
+- Phase 6.2 Voice Input Transport is **IMPLEMENTED / READY FOR CTO REVIEW** on branch `feature/phase-6.2-voice-input-transport`.
 
 ## Phase 4 Commercial Downstream Boundary
 
@@ -74,10 +75,32 @@ Delivered:
 - Authenticated `POST /api/ai/sales-assistant/draft` route with tenant scoping and role authorization (`OWNER`, `ADMIN`, `SALES`);
 - Responsive Arabic RTL and English LTR UI workspace (`/dashboard/sales-assistant`).
 
+## Phase 6.2 Delivered Boundary (Implemented / Ready for CTO Review)
+
+Phase 6.2 adds natural Voice Input Transport over the existing Phase 6.1 commercial drafting pipeline.
+
+Delivered:
+
+- Browser speech recognition abstraction (`src/infrastructure/voice/browser/`) exposing `BrowserSpeechRecognizer` and `useVoiceInput`;
+- Bilingual natural voice capture supporting Arabic (`ar-KW`) and English (`en-US`) regional defaults mapped to app locale;
+- Smart prompt concatenation: recognized voice input merges into existing prompt text without replacing typed content;
+- Explicit user control: microphone control requires user click to start/stop listening; speech completion does NOT trigger automatic proposal generation or database mutations;
+- Complete accessible UI state handling: `IDLE`, `LISTENING`, `PROCESSING`, `READY`, `UNAVAILABLE`, `PERMISSION_DENIED`, `ERROR` rendered with ARIA live regions and status semantics;
+- Absolute privacy enforcement: zero audio persistence, zero backend audio uploads, zero audio schema/migration additions, zero transcript logging;
+- Full fallback capability: text input remains 100% usable if voice API is unavailable or permission is denied;
+- Comprehensive automated test suite: unit tests for browser speech recognizer, hook, and full integration tests covering all 16 prompt requirements without requiring real microphones.
+
+CORE INVARIANT:
+
+VOICE CAPTURES INTENT.
+AI PROPOSES.
+SERVER VALIDATES.
+HUMAN SAVES.
+
 ## Continuing Guardrails
 
 - Clean Architecture + DDD + dependency inversion.
-- Domain stays independent of Next.js, Prisma, HTTP and AI providers.
+- Domain stays independent of Next.js, Prisma, HTTP, browser speech APIs and AI providers.
 - `companyId` always comes from authenticated server context.
 - Cross-tenant resources use the established safe not-found boundary.
 - Browser/client values are never canonical tax or totals authority.
