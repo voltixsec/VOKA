@@ -1,12 +1,16 @@
 # Project Status
 
-Current Product Frontier: Phase 4/5 read-only assessment
+Current Product Frontier: **Phase 6.1 — Text AI Sales Assistant / Structured Draft**
 
-Status: Phase 3 is closed. Phase 4.1 Approved Quotation to Sales Order Draft is
-closed and merged through PR #33 at `9a22302`.
+Status: Phase 3, Phase 4.1–4.3 and Phase 5 Canonical Catalog Integration are
+closed and merged.
 
-Phase 4.1 starting baseline: `9062aa6` on `main` (2026-08-14)
+Official current baseline:
 
+`55ef31e4fba7b38d0225aeb1296c7f1712fea38c`
+
+Phase 5 was merged through PR #40 after independent CTO review and green
+GitHub Quality CI.
 ## Sprint 09A - Quotation API
 
 Status: Completed
@@ -245,3 +249,93 @@ Still deferred:
 - Approval-time PDF binary/hash/manifest and cryptographic signatures.
 - Canonical catalog-localization schema and live Price List composer use.
 - Meta live configuration and provider changes; Meta was untouched.
+
+## Phase 4.2 - Sales Order Confirmation & Cancellation
+
+Status: Closed and merged through PR #38.
+
+Delivered:
+
+- DRAFT → CONFIRMED.
+- DRAFT → CANCELLED.
+- CONFIRMED → CANCELLED.
+- Durable confirmation/cancellation actor and timestamp snapshots.
+- Required cancellation reason.
+- Tenant-scoped locking and expected-status compare-and-set behavior.
+- Authenticated lifecycle APIs and bilingual operational UX.
+- Historical commercial snapshots remain immutable.
+
+## Phase 4.3 - Sales Order Operational Workspace
+
+Status: Closed and merged through PR #39.
+
+Delivered:
+
+- bilingual Sales Order PDF generation;
+- immutable document branding inherited from the approved quotation;
+- persisted-brand-first document behavior;
+- accurate creation/confirmation/cancellation audit history;
+- multi-page PDF pagination with repeated table headers;
+- tenant-safe internal operational activity notes;
+- lifecycle API request hardening;
+- tenant-safe read/write boundaries.
+
+Final Phase 4.3 validation reached 609/609 tests across 90 files.
+
+## Phase 5 - Canonical Catalog Integration
+
+Status: **Closed and merged through PR #40**.
+
+Official resulting baseline:
+
+`55ef31e4fba7b38d0225aeb1296c7f1712fea38c`
+
+Delivered:
+
+- tenant-safe Product and Service management while keeping their business
+  semantics distinct;
+- reusable Arabic/English catalog names and descriptions;
+- tenant/shared Units with bilingual values;
+- company-scoped Unit uniqueness plus a PostgreSQL partial unique index for
+  shared Units;
+- deterministic tenant-owned Unit preference with shared Unit fallback;
+- bounded catalog search and pagination;
+- Products/Services management UI;
+- quotation Create/Edit catalog parity;
+- canonical bilingual value reuse to avoid unnecessary repeated localization;
+- active company Price List draft-time pricing when explicitly selected;
+- Catalog sale-price fallback when no Price List item exists;
+- valid zero Price List prices preserved as zero;
+- historical quotation and Sales Order snapshot preservation after mutable
+  master-data changes;
+- seed hardening for shared system Units.
+
+Existing Customer snapshot reuse and server-owned tax/totals authority were
+preserved.
+
+Final Phase 5 validation:
+
+- Prisma format / validate / generate: PASS
+- TypeScript: PASS
+- focused tests: 27/27 PASS
+- full suite: 95 files / 635 tests PASS
+- lint: PASS
+- production build: PASS
+- git diff check: PASS
+- GitHub Quality CI: PASS
+
+## Approved Next Product Direction — Phase 6.1
+
+**Text AI Sales Assistant / Structured Draft**
+
+Start with text, not voice.
+
+The assistant should turn natural-language commercial intent into a structured
+quotation draft proposal, resolve bounded tenant-owned Customer/Catalog
+candidates, reuse canonical bilingual data, and present the result for explicit
+human review before Save.
+
+AI must not become authoritative for tenant ownership, canonical pricing,
+taxes, totals, approval or downstream consequential actions.
+
+Voice remains a later input transport over the same application contract.

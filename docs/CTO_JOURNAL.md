@@ -201,3 +201,18 @@ rendered Arabic/English PDF QA completed.
 
 First next task: CTO review the staged Phase 1.4 change set and merge the feature
 branch if approved. No new PDF, localization, or verification scope is implied.
+
+## 2026-08-16 — Phase 5 Canonical Catalog Integration formally closed
+
+- PR #40 merged after CTO semantic/security review.
+- Official main baseline:
+  `55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
+- Final implementation preserved zero-price semantics, tenant-safe Unit access,
+  tenant/shared uniqueness and deterministic tenant-first Unit lookup.
+- Historical quotation and Sales Order snapshots remain immutable against
+  mutable master-data changes.
+- Final regression state: 95 files / 635 tests passing plus green Quality CI.
+- Phase 5 recovery worktrees and temporary patches were removed after formal
+  closure.
+- Next approved frontier: Phase 6.1 — Text AI Sales Assistant / Structured Draft.
+  Voice remains deferred until the structured drafting contract is stable.

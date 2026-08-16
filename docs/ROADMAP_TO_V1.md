@@ -1,4 +1,4 @@
-﻿# VOKA — Roadmap to V1 Completion
+# VOKA — Roadmap to V1 Completion
 
 This document is the continuation plan after Sprint 10B.
 
@@ -205,80 +205,77 @@ configuration remain deferred; the provider implementation itself is complete.
 
 # Phase 4 — Approval and document lifecycle
 
-Status: **Partially delivered through merged Phase 4.1 (PR #33 at `9a22302`)**
+Status: **Delivered through Phase 4.3 / PR #39**
 
-Complete:
+Phase 4 now covers the first complete downstream Sales Order operational
+boundary after quotation approval.
 
-Draft
-→ Sent
-→ Approved / Rejected
-→ downstream commercial document
+Delivered:
 
-Audit:
+- approved quotation → exactly one tenant-owned Sales Order;
+- immutable quotation-derived customer, line, tax, total and approval snapshots;
+- DRAFT, CONFIRMED and CANCELLED Sales Order lifecycle;
+- confirmation and cancellation audit snapshots;
+- tenant-scoped locking / stale-state protection;
+- bilingual Sales Order PDF;
+- immutable approved-brand inheritance;
+- multi-page document pagination;
+- internal operational activity notes;
+- tenant-safe Sales Order APIs and UI.
 
-- who sent
-- who approved
-- when
-- snapshot/version
-- PDF used at approval
+Historical Sales Orders must never be dynamically repriced or rewritten from
+current Customer, Catalog, Price List, Unit or TaxRate master data.
 
-Approval identity, timestamps, immutable approval-time brand snapshots and the
-verified document path are delivered. Phase 4.1 adds the first downstream
-commercial document: exactly one read-only DRAFT Sales Order copied from an
-APPROVED quotation.
+Still deferred from later phases:
 
-## Phase 4.1 delivered boundary
-
-- deterministic `SO-{quotation.number}` numbering;
-- database-enforced one Sales Order per source quotation;
-- idempotent/concurrency-safe transactional conversion;
-- persisted customer, bilingual line/proposal, discount, historical tax and
-  total snapshot copying without live repricing;
-- creator and source-approval audit snapshots;
-- tenant-scoped source-row locking that serializes conversion and cancellation,
-  with cancellation fencing once a Sales Order exists and no line rewrites;
-- tenant-scoped convert/list/detail APIs and localized read UI.
-
-Not delivered: Sales Order editing, confirmation, cancellation, fulfillment,
-inventory, warehouse/shipping, Sales Order PDF, contracts, invoices or
-payments. Approval-time PDF binary/hash storage also remains future work.
-
-Next action: assess the remaining Sales Order operational and
-approval-to-contract/invoice lifecycle,
-state transitions, snapshots and audit requirements. Produce bounded
-CTO-reviewable acceptance criteria before authorizing implementation.
-
-Do not regenerate historical approved documents from mutable live data without a snapshot/version strategy.
+- inventory / warehouse / fulfillment;
+- procurement;
+- contracts;
+- invoices and payments;
+- cryptographic document signatures.
 
 ---
 
 # Phase 5 — Customer and catalog integration
 
-Status: **Partially delivered; next read-only assessment frontier**
+Status: **Closed through PR #40**
 
-Quotation composer should use canonical:
+Phase 5 established reusable canonical commercial master data for quotation
+composition while preserving historical document snapshots.
 
-- customers
-- products
-- services
-- units
-- taxes
-- price lists
+Delivered:
 
-Localization variants should belong to their appropriate entities when reusable.
+- Products and Services remain semantically distinct;
+- tenant-safe Product/Service catalog management;
+- reusable Arabic/English catalog names and descriptions;
+- tenant/shared Units with bilingual values;
+- bounded catalog search and pagination;
+- operational Products/Services management UI;
+- quotation Create/Edit catalog selection parity;
+- reusable persisted bilingual values reduce unnecessary AI localization;
+- draft-time Price List item resolution where an explicit Price List exists;
+- Catalog sale-price fallback where a Price List item is absent;
+- zero is treated as a valid price rather than a missing-price sentinel;
+- company-scoped Unit symbol uniqueness;
+- database partial uniqueness for shared Units;
+- tenant-first/shared-fallback Unit lookup;
+- catalog deactivation without destroying historical quotation/Sales Order
+  meaning;
+- historical quotation and Sales Order snapshots remain authoritative.
 
-Avoid retranslating the same catalog product for every quotation.
+Canonical Customer snapshot reuse already existed and remains preserved.
+Server-side tax and totals authority remains unchanged.
 
-This can dramatically reduce AI usage.
+Phase 5 final validation reached 635/635 passing tests across 95 files plus
+green GitHub Quality CI.
 
-Current quotation and Phase 4.1 conversion flows preserve tenant-safe customer,
-catalog, tax and optional Price List references while copied Sales Order
-snapshots remain authoritative. The next assessment must verify where canonical
-customer/catalog values and reusable localized variants should be referenced
-downstream without claiming that broader reuse is already complete.
+Next action:
 
-Canonical catalog localization and live Price List integration in the composer
-remain future work; Phase 4.1 deliberately performs neither lookup nor repricing.
+**Phase 6.1 — Text AI Sales Assistant / Structured Draft.**
+
+Build the structured commercial drafting contract first. Voice should later
+reuse that contract as an input transport rather than creating a separate
+business workflow.
 
 ---
 
@@ -443,6 +440,9 @@ Release checklist:
 14. release
 15. monitor logs/errors
 
-Important: Phase 3 is closed on `main` at `6ff9762`. The next recommended work
-is a read-only Phase 4/5 assessment. Start any subsequent implementation only
-after its scope and acceptance criteria are approved.
+Important: Phase 5 is closed on `main` at
+`55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
+
+The next product frontier is Phase 6.1 — Text AI Sales Assistant / Structured
+Draft. Begin with bounded structured-draft generation and human review before
+adding voice transport.

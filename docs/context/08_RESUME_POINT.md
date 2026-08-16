@@ -1,66 +1,104 @@
 # Resume Point
 
-Verified on: 2026-08-14 (Asia/Kuwait)
+Verified on: 2026-08-16 (Asia/Kuwait)
 
 ## Current Verified State
 
-- Current branch: `main` after this documentation-only closeout is merged.
-- Phase 4.1 implementation baseline: `main` at `9a22302`, the merge commit for
-  PR #33, matching `origin/main` with a clean worktree before documentation
-  closeout.
-- Phase 3 Proposal Composer UX remains closed through PR #31 at `6ff9762`.
-- Phase 4.1 Approved Quotation to Sales Order Draft is closed and merged
-  through PR #33 at `9a22302`.
+- Canonical branch: `main`.
+- Official baseline: `55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
+- Phase 3 Proposal Composer UX is closed through PR #31.
+- Phase 4.1 Approved Quotation to Sales Order Draft is closed through PR #33.
+- Phase 4.2 Sales Order Confirmation & Cancellation is closed through PR #38.
+- Phase 4.3 Sales Order Operational Workspace is closed through PR #39.
+- Phase 5 Canonical Catalog Integration is closed through PR #40.
+- Phase 5 Quality CI passed before merge.
 
-## Phase 4.1 Delivered Boundary
+## Phase 4 Commercial Downstream Boundary
 
-- Authenticated OWNER, ADMIN and SALES users can convert an APPROVED quotation
-  to exactly one DRAFT Sales Order; VIEWER remains read-only.
-- The order number is deterministically `SO-{quotation.number}` and unique
-  within its company.
-- Source quotation uniqueness, a Prisma transaction and targeted uniqueness
-  recovery make conversion idempotent and concurrency-safe.
-- Conversion and cancellation acquire the same tenant-scoped active quotation
-  row lock before deciding; the first committed lifecycle outcome controls the
-  waiting operation without rewriting quotation lines.
-- The Sales Order copies persisted customer, bilingual proposal/line,
-  commercial discount, historical tax and total values. It never reloads or
-  reprices from current customer, catalog, Price List or TaxRate data and does
-  not accept browser commercial values.
-- Creator ID/name/role and source approval name/role/date are audited as
-  snapshots. Optional canonical references can be cleared later without losing
-  historical content.
-- A quotation with a Sales Order cannot be cancelled.
-- Tenant-scoped Sales Order list/detail APIs and localized responsive read-only
-  pages are available.
-- One additive Prisma migration introduces the Sales Order foundation.
+Sales Orders now support:
 
-## Validation State
+- creation from APPROVED quotation snapshots;
+- immutable historical commercial values;
+- DRAFT, CONFIRMED and CANCELLED lifecycle states;
+- confirmation and cancellation audit snapshots;
+- tenant-safe lifecycle concurrency;
+- Sales Order PDF generation;
+- inherited immutable approved-document branding;
+- multi-page document pagination;
+- internal operational activity notes;
+- tenant-scoped list/detail/activity APIs and UI.
 
-- 105 focused Phase 4.1 and cancellation tests pass across 12 files.
-- 69 focused conversion/cancellation serialization tests pass across 7 files.
-- Full suite passes 518/518 tests across 78 files, above the 444-test baseline.
-- TypeScript and repository lint pass.
-- Prisma schema formatting, validation, generation and migration application
-  pass; the local database is current.
-- Production build and final diff/safety checks pass.
+Mutable customer, catalog, pricing or tax master data must never silently
+rewrite historical quotation or Sales Order snapshots.
 
-## Intentionally Deferred
+## Phase 5 Delivered Boundary
 
-- Sales Order editing, confirmation, cancellation, fulfillment, inventory,
-  warehouse, shipping and Sales Order PDF.
-- Contracts, invoices and payments.
-- Approval-time PDF binary storage, hash/manifest and cryptographic signatures.
-- Canonical catalog-localization schema and live Price List composer use.
-- Voice/AI composition, dynamic document pagination, WebP and custom HEX branding.
-- Next 16 migration and dependency upgrades.
-- Meta live configuration and all delivery-provider architecture changes.
+Phase 5 established canonical reusable commercial catalog data.
+
+Delivered:
+
+- semantically distinct PRODUCT and SERVICE catalog records;
+- tenant-safe catalog CRUD/deactivation behavior;
+- reusable Arabic and English item names and descriptions;
+- reusable tenant/shared Units with Arabic and English values;
+- bounded catalog search and pagination;
+- Product/Service operational management UI;
+- quotation Create/Edit catalog selection parity;
+- reuse of persisted bilingual catalog values without unnecessary AI work;
+- draft-time Price List lookup with Catalog sale-price fallback;
+- legitimate zero Price List prices remain zero;
+- tenant-safe Unit lookup and tenant-first/shared fallback behavior;
+- company-scoped Unit symbol uniqueness;
+- database-enforced uniqueness for shared Units with nullable company ownership;
+- historical quotation and Sales Order snapshot safety after master-data changes.
+
+Existing canonical Customer snapshot behavior remains authoritative and was
+preserved; Phase 5 did not rewrite historical customer snapshots.
+
+## Official Phase 5 Validation
+
+Final Phase 5 validation before merge included:
+
+- Prisma format / validate / generate: PASS
+- TypeScript: PASS
+- focused final tests: 27/27 PASS
+- full regression suite: 95 files / 635 tests PASS
+- lint: PASS
+- production build: PASS
+- git diff check: PASS
+- GitHub Quality CI: PASS
+
+## Next Product Frontier
+
+**Phase 6.1 — Text AI Sales Assistant / Structured Draft**
+
+Start with text input before voice transport.
+
+Target pipeline:
+
+User commercial request
+→ AI structured extraction
+→ canonical Customer/Catalog candidate resolution
+→ validated quotation draft proposal
+→ explicit human review
+→ Save
+→ existing localization lifecycle
+→ proposal/PDF
+
+The AI may propose structured commercial intent, but it must not become the
+canonical authority for tenant ownership, price, tax, totals, approval or other
+consequential commercial actions.
+
+Voice remains a later transport layer over the same structured drafting
+contract.
 
 ## Continuing Guardrails
 
-- The approved quotation snapshot is the Sales Order commercial source.
-- Preserve tenant isolation, database-enforced idempotency and server authority
-  over commercial values.
-- Do not add Sales Order lifecycle transitions without a separately approved
-  bounded slice.
-- Keep Meta/provider configuration outside this workstream.
+- Clean Architecture + DDD + dependency inversion.
+- Domain stays independent of Next.js, Prisma, HTTP and AI providers.
+- `companyId` always comes from authenticated server context.
+- Cross-tenant resources use the established safe not-found boundary.
+- Browser/client values are never canonical tax or totals authority.
+- Approved quotation and Sales Order snapshots remain historical and immutable.
+- AI produces proposals/drafts; consequential actions require human approval.
+- Existing TranslationPort abstraction remains the provider boundary.
