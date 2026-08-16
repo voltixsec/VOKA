@@ -271,11 +271,11 @@ green GitHub Quality CI.
 
 Phase 6.1 implementation status:
 
-**Text AI Sales Assistant / Structured Draft — CTO local validation passed.**
+**Text AI Sales Assistant / Structured Draft — merged through PR #42.**
 
 The structured commercial drafting contract is implemented and has passed
 local semantic review, TypeScript, 651 regression tests, lint, and production
-build validation. PR, Quality CI, and merge remain pending.
+build validation. PR #42 then passed Quality CI and was merged to main.
 
 Voice remains deferred and should reuse this contract as an input transport
 rather than creating a separate business workflow.
@@ -445,6 +445,4 @@ Release checklist:
 Important: Phase 5 is closed on `main` at
 `55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
 
-Phase 6.1 Text AI Sales Assistant / Structured Draft has passed CTO local
-validation. The remaining closure path is PR review, green Quality CI, merge
-to `main`, then formal closeout. Voice transport remains deferred.
+Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI. Voice transport remains deferred pending a separately approved product slice.

@@ -3,11 +3,11 @@
 Current Product Frontier: **Phase 6.1 — Text AI Sales Assistant / Structured Draft**
 
 Status: Phase 3, Phase 4.1–4.3 and Phase 5 Canonical Catalog Integration are
-closed and merged. Phase 6.1 Text AI Sales Assistant / Structured Draft has passed CTO local semantic review and full local validation; PR, Quality CI, and merge remain pending.
+closed and merged. Phase 6.1 Text AI Sales Assistant / Structured Draft is also closed and merged through PR #42 after green Quality CI.
 
 Official current baseline:
 
-`d448bad3bee0d1cf365b9ba8b2e0a0c6815c1694`
+`1fb786c3a45db0ac9616434301e06820b583cbc0`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -326,7 +326,7 @@ Final Phase 5 validation:
 
 ## Phase 6.1 — Text AI Sales Assistant / Structured Commercial Draft
 
-Status: **CTO local validation passed / Pending PR + Quality CI + merge**.
+Status: **Merged through PR #42 / Quality CI passed**.
 
 Delivered:
 
