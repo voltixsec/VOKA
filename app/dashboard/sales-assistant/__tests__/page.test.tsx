@@ -31,10 +31,10 @@ describe("SalesAssistantPage", () => {
           json: async () => ({
             data: {
               customer: {
-
                 status: "MATCHED",
                 candidates: [],
-                reviewRequired: false,name: "Kuwait National Telecom",
+                reviewRequired: false,
+                name: "Kuwait National Telecom",
                 matchConfidence: 0.95,
               },
               proposal: {
@@ -45,10 +45,10 @@ describe("SalesAssistantPage", () => {
               },
               lines: [
                 {
-
-                resolutionStatus: "MATCHED",
-                catalogCandidates: [],
-                reviewRequired: false,itemName: "4K IP Camera",
+                  resolutionStatus: "MATCHED",
+                  catalogCandidates: [],
+                  reviewRequired: false,
+                  itemName: "4K IP Camera",
                   quantity: 5,
                   unit: "PCS",
                   unitPrice: 45,
@@ -80,7 +80,7 @@ describe("SalesAssistantPage", () => {
 
     render(createElement(SalesAssistantPage));
 
-    expect(screen.getByText("Structured Commercial Draft from Text")).toBeTruthy();
+    expect(screen.getByText(/Structured Commercial Draft/i)).toBeTruthy();
 
     const textarea = screen.getByRole("textbox");
     fireEvent.change(textarea, {

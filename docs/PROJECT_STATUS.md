@@ -1,13 +1,13 @@
 # Project Status
 
-Current Product Frontier: **Phase 6.1 — Text AI Sales Assistant / Structured Draft**
+Current Product Frontier: **Phase 6.2 — Voice Input Transport**
 
-Status: Phase 3, Phase 4.1–4.3 and Phase 5 Canonical Catalog Integration are
-closed and merged. Phase 6.1 Text AI Sales Assistant / Structured Draft is also closed and merged through PR #42 after green Quality CI.
+Status: Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
+Phase 6.2 Voice Input Transport is **IMPLEMENTED / READY FOR CTO REVIEW** on branch `feature/phase-6.2-voice-input-transport`.
 
-Official current baseline:
+Official pre-Phase-6.2 baseline:
 
-`1fb786c3a45db0ac9616434301e06820b583cbc0`
+`d19d2bd2e306a7db066532ff873e9af5ed3a8349`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -343,3 +343,19 @@ Delivered:
 - Authenticated `POST /api/ai/sales-assistant/draft` route with tenant scoping and role authorization (`OWNER`, `ADMIN`, `SALES`);
 - Interactive bilingual UI workspace (`/dashboard/sales-assistant`) supporting Arabic RTL and English LTR;
 - Comprehensive unit, API route, and UI test coverage.
+
+## Phase 6.2 — Voice Input Transport
+
+Status: **IMPLEMENTED / READY FOR CTO REVIEW** on `feature/phase-6.2-voice-input-transport`.
+
+Delivered:
+
+- Speech-recognition browser transport abstraction (`BrowserSpeechRecognizer`) and custom React hook (`useVoiceInput`) under `src/infrastructure/voice/browser/`;
+- Natural voice capture in Arabic (`ar-KW`) and English (`en-US`) directly into the existing Phase 6.1 Sales Assistant prompt field (`/dashboard/sales-assistant`);
+- Smart prompt appending/merging behavior preserving user-entered text;
+- Complete voice UX states: `IDLE`, `LISTENING`, `PROCESSING`, `READY`, `UNAVAILABLE`, `PERMISSION_DENIED`, `ERROR`;
+- Strict privacy invariants: ZERO audio persistence, no audio files, no backend audio uploads, no audio schema additions, no transcript logging;
+- Full accessibility: keyboard-accessible microphone controls, ARIA live regions for screen readers, bilingual labels, no color-only state indication;
+- Invariant enforcement: voice ONLY acts as an input transport for prompt text; speech completion NEVER triggers automatic proposal generation, customer creation, or quotation persistence;
+- Preserved Clean Architecture and Phase 6.1 pipeline authority: `POST /api/ai/sales-assistant/draft` and downstream quotation composer remain unchanged;
+- Full test suite: 103 test files / 665 tests PASS, TypeScript PASS, lint PASS, production build PASS, diff check PASS. Zero database schema or dependency changes.

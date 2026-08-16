@@ -211,7 +211,7 @@ branch if approved. No new PDF, localization, or verification scope is implied.
   tenant/shared uniqueness and deterministic tenant-first Unit lookup.
 - Historical quotation and Sales Order snapshots remain immutable against
   mutable master-data changes.
-- Final regression state: 95 files / 635 tests passing plus green Quality CI.
+- Final regression state: 95 files / 635 tests passing plus green GitHub Quality CI.
 - Phase 5 recovery worktrees and temporary patches were removed after formal
   closure.
 - Next approved frontier: Phase 6.1 — Text AI Sales Assistant / Structured Draft.
@@ -244,3 +244,14 @@ branch if approved. No new PDF, localization, or verification scope is implied.
 - No Prisma schema or migration changes were introduced.
 - AI remains proposal-only and human Save remains the consequential persistence boundary.
 - Voice remains deferred pending a separately approved product slice.
+
+## 2026-08-16 — Phase 6.2 Voice Input Transport Implemented
+
+- Voice Input Transport completed on branch `feature/phase-6.2-voice-input-transport` over pre-phase baseline `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
+- Core Invariant: VOICE CAPTURES INTENT. AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
+- Browser speech recognition abstraction introduced under `src/infrastructure/voice/browser/` (`BrowserSpeechRecognizer`, `useVoiceInput`, types) supporting Arabic (`ar-KW`) and English (`en-US`) regional defaults.
+- Sales Assistant UI (`app/dashboard/sales-assistant/page.tsx`) updated with integrated microphone control, smart prompt appending, accessible live regions, and full status state handling.
+- Absolute privacy guarantees verified: NO audio files, NO audio backend uploads, NO audio DB schema fields/migrations, NO audio logging.
+- Speech completion performs NO automatic AI proposal calls, NO Customer creations, and NO quotation persistence.
+- Full test suite: 103 test files / 665 tests PASS, TypeScript PASS, lint PASS, production build PASS, diff check PASS. Zero database schema or dependency changes.
+- Status: IMPLEMENTED / READY FOR CTO REVIEW.
