@@ -279,11 +279,11 @@ build validation. PR #42 then passed Quality CI and was merged to main.
 
 Phase 6.2 implementation status:
 
-**Voice Input Transport — IMPLEMENTED / READY FOR CTO REVIEW.**
+**Voice Input Transport — CLOSED / MERGED through PR #44.**
 
-Implemented on `feature/phase-6.2-voice-input-transport` over baseline `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
+Merged to `main` through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`, based on pre-phase baseline `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
 Voice serves strictly as an input transport feeding speech transcript into the existing Phase 6.1 prompt input field.
-Zero audio files persisted, zero backend audio uploads, zero database schema changes. Full test suite (103 files / 665 tests) passed.
+Zero audio files persisted, zero backend audio uploads, zero database schema changes. Final validation passed with 103 test files / 666 tests, TypeScript, lint, production build, diff check, and green GitHub Quality #79.
 ---
 
 # Phase 6 — AI Sales Assistant
@@ -451,4 +451,4 @@ Important: Phase 5 is closed on `main` at
 `55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
 
 Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI.
-Phase 6.2 Voice Input Transport is IMPLEMENTED / READY FOR CTO REVIEW on `feature/phase-6.2-voice-input-transport`.
+Phase 6.2 Voice Input Transport is CLOSED / MERGED through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.

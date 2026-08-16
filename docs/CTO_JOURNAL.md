@@ -255,3 +255,18 @@ branch if approved. No new PDF, localization, or verification scope is implied.
 - Speech completion performs NO automatic AI proposal calls, NO Customer creations, and NO quotation persistence.
 - Full test suite: 103 test files / 665 tests PASS, TypeScript PASS, lint PASS, production build PASS, diff check PASS. Zero database schema or dependency changes.
 - Status: IMPLEMENTED / READY FOR CTO REVIEW.
+
+## 2026-08-16 — Phase 6.2 formally closed through PR #44
+
+- Phase 6.2 Voice Input Transport passed independent CTO review and all local quality gates.
+- Final focused Voice validation: 3 test files / 15 tests PASS.
+- Final full regression: 103 test files / 666 tests PASS.
+- TypeScript, lint, production build and diff check PASS.
+- GitHub Quality #79 completed successfully.
+- PR #44 merged to `main` at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.
+- Unsupported-browser state and repeated-session transcript duplication blockers were corrected before merge.
+- Voice remains input transport only: no automatic AI generation, Apply, Customer creation or quotation Save.
+- No audio persistence, backend audio upload, Prisma schema/migration or dependency changes were introduced.
+- Core invariant remains: VOICE CAPTURES INTENT. AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
+- Active development execution workflow is CTO + local Terminal + Jules. Codex is removed from the active workflow unless explicitly reintroduced by the CEO.
+- Next product slice is intentionally deferred to the next CTO START SESSION and must be selected from the canonical roadmap after architecture review.
