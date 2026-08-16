@@ -1,3 +1,4 @@
+import type { CompanyDocumentBrandSnapshot } from "../../../domain/document/CompanyDocumentBrandSnapshot";
 import type {
   DiscountType,
   QuotationLineType,
@@ -77,6 +78,7 @@ export type ApprovedQuotationSalesOrderSnapshot = {
   approvedAt: Date | null;
   approvedByName: string | null;
   approvedByRole: string | null;
+  documentBrandSnapshot?: CompanyDocumentBrandSnapshot | null;
   lines: ApprovedQuotationLineSnapshot[];
 };
 
@@ -162,6 +164,7 @@ export function buildApprovedQuotationSalesOrderDraft(
         sourceApprovedAt: quotation.approvedAt,
         sourceApprovedByName: quotation.approvedByName,
         sourceApprovedByRole: quotation.approvedByRole,
+        documentBrandSnapshot: quotation.documentBrandSnapshot ?? null,
         createdByUserId: creator.userId,
         createdByName: creator.name,
         createdByRole: creator.role,

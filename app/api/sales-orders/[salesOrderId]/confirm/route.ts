@@ -14,6 +14,16 @@ const confirmSalesOrder = new ConfirmSalesOrderUseCase(
   new PrismaSalesOrderRepository(),
 );
 
+function parseConfirmExpectedStatus(value: unknown): "DRAFT" {
+  if (value !== "DRAFT") {
+    throw ApiError.badRequest(
+      "EXPECTED_STATUS_REQUIRED",
+      "expectedStatus must be DRAFT.",
+    );
+  }
+  return "DRAFT";
+}
+
 function getSalesOrderId(request: Request): string {
   const segments = new URL(request.url).pathname.split("/").filter(Boolean);
   const index = segments.indexOf("sales-orders");
@@ -30,20 +40,19 @@ export const POST = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES"],
   async (request, auth, company) => {
     const salesOrderId = getSalesOrderId(request);
-    let body: any = {};
+    let body: unknown;
     try {
       body = await request.json();
     } catch {
       throw ApiError.badRequest("INVALID_JSON", "Invalid JSON body.");
     }
 
-    const { expectedStatus } = body ?? {};
-    if (!expectedStatus || typeof expectedStatus !== "string") {
-      throw ApiError.badRequest(
-        "EXPECTED_STATUS_REQUIRED",
-        "expectedStatus is required.",
-      );
+    if (!body || typeof body !== "object") {
+      throw ApiError.badRequest("INVALID_BODY", "Request body must be an object.");
     }
+
+    const record = body as Record<string, unknown>;
+    const expectedStatus = parseConfirmExpectedStatus(record.expectedStatus);
 
     const requestedLocale = new URL(request.url).searchParams.get("locale");
     const locale =
@@ -53,14 +62,14 @@ export const POST = withCompanyAuth(
 
     const actor = {
       userId: auth.user.id,
-      name: auth.user.name?.trim() || auth.user.email || "Authorized User",
+      name: auth.user.name?.trim() || auth.user.email,
       role: company.role,
     };
 
     const result = await confirmSalesOrder.execute({
       companyId: company.companyId,
       salesOrderId,
-      expectedStatus: expectedStatus as any,
+      expectedStatus,
       actor,
     });
 

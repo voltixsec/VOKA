@@ -74,6 +74,7 @@ model Company {
   priceLists              PriceList[]
   quotations              Quotation[]
   salesOrders             SalesOrder[]
+  salesOrderActivities    SalesOrderActivity[]
   quotationDeliveries     QuotationDelivery[]
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
   createdAt               DateTime                        @default(now())
@@ -84,18 +85,19 @@ model Company {
 }
 
 model User {
-  id                   String          @id @default(cuid())
-  email                String          @unique
+  id                   String               @id @default(cuid())
+  email                String               @unique
   name                 String?
   passwordHash         String?
-  locale               Locale          @default(EN)
-  isActive             Boolean         @default(true)
+  locale               Locale               @default(EN)
+  isActive             Boolean              @default(true)
   memberships          CompanyMember[]
-  createdSalesOrders   SalesOrder[]    @relation("SalesOrderCreatedBy")
-  confirmedSalesOrders SalesOrder[]    @relation("SalesOrderConfirmedBy")
-  cancelledSalesOrders SalesOrder[]    @relation("SalesOrderCancelledBy")
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdSalesOrders   SalesOrder[]         @relation("SalesOrderCreatedBy")
+  confirmedSalesOrders SalesOrder[]         @relation("SalesOrderConfirmedBy")
+  cancelledSalesOrders SalesOrder[]         @relation("SalesOrderCancelledBy")
+  salesOrderActivities SalesOrderActivity[]
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   @@index([isActive])
 }
@@ -616,14 +618,17 @@ model SalesOrder {
   cancelledByRole    String?
   cancellationReason String?
 
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sourceQuotation Quotation        @relation(fields: [sourceQuotationId], references: [id], onDelete: Restrict)
-  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  priceList       PriceList?       @relation(fields: [priceListId], references: [id], onDelete: SetNull)
-  createdByUser   User?            @relation("SalesOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  confirmedByUser User?            @relation("SalesOrderConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
-  cancelledByUser User?            @relation("SalesOrderCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  documentBrandSnapshot Json?
+
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceQuotation Quotation            @relation(fields: [sourceQuotationId], references: [id], onDelete: Restrict)
+  customer        Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  priceList       PriceList?           @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  createdByUser   User?                @relation("SalesOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  confirmedByUser User?                @relation("SalesOrderConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  cancelledByUser User?                @relation("SalesOrderCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   lines           SalesOrderLine[]
+  activities      SalesOrderActivity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -685,4 +690,24 @@ model SalesOrderLine {
   @@index([salesOrderId])
   @@index([catalogItemId])
   @@index([taxRateId])
+}
+
+model SalesOrderActivity {
+  id           String   @id @default(cuid())
+  companyId    String
+  salesOrderId String
+  body         String
+  actorUserId  String?
+  actorName    String
+  actorRole    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  actorUser  User?      @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, salesOrderId, createdAt])
+  @@index([salesOrderId])
+  @@index([actorUserId])
 }

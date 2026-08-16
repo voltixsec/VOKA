@@ -13,6 +13,7 @@ import type {
   ApprovedQuotationSalesOrderSnapshot,
 } from "../../../../application/sales-order";
 import { buildApprovedQuotationSalesOrderDraft } from "../../../../application/sales-order";
+import { parseCompanyDocumentBrandSnapshot } from "../../../../domain/document/CompanyDocumentBrandSnapshot";
 import { SalesOrder } from "../../../../domain/sales-order";
 import {
   PrismaSalesOrderMapper,
@@ -153,6 +154,12 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
             sourceApprovedAt: salesOrder.sourceApprovedAt,
             sourceApprovedByName: salesOrder.sourceApprovedByName,
             sourceApprovedByRole: salesOrder.sourceApprovedByRole,
+            ...(salesOrder.documentBrandSnapshot
+              ? {
+                  documentBrandSnapshot:
+                    salesOrder.documentBrandSnapshot as unknown as Prisma.InputJsonValue,
+                }
+              : {}),
             createdByName: params.createdByName,
             createdByRole: params.createdByRole,
             lines: {
@@ -538,6 +545,9 @@ function toApprovedQuotationSnapshot(
     approvedAt: quotation.approvedAt,
     approvedByName: quotation.approvedByName,
     approvedByRole: quotation.approvedByRole,
+    documentBrandSnapshot: parseCompanyDocumentBrandSnapshot(
+      quotation.documentBrandSnapshot,
+    ),
     lines: quotation.lines.map((line) => ({
       id: line.id,
       catalogItemId: line.catalogItemId,
