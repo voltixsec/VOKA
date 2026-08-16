@@ -216,3 +216,21 @@ branch if approved. No new PDF, localization, or verification scope is implied.
   closure.
 - Next approved frontier: Phase 6.1 — Text AI Sales Assistant / Structured Draft.
   Voice remains deferred until the structured drafting contract is stable.
+## 2026-08-16 — Phase 6.1 CTO local validation passed
+
+- Text AI Sales Assistant / Structured Draft completed independent CTO semantic review.
+- AI remains proposal-only; server-owned tenant scope, Customer/Catalog resolution,
+  canonical pricing, tax, totals, and persistence boundaries remain authoritative.
+- Ambiguous Customer/Catalog candidates are not silently auto-selected.
+- Zero canonical prices remain valid and are preserved.
+- Requested prices remain non-authoritative commercial intent only.
+- Draft generation creates neither Customers nor Quotations automatically.
+- Apply transfers the validated proposal into the existing quotation composer;
+  the human user performs the normal Save.
+- Application AI code remains independent from Prisma and Ollama remains behind
+  the AI provider abstraction.
+- No Prisma schema or migration changes were introduced.
+- Local validation: TypeScript PASS, focused tests 13/13 PASS, full regression
+  100 files / 651 tests PASS, lint PASS, production build PASS, diff check PASS.
+- Remaining closure path: commit/push, PR, green Quality CI, merge to `main`,
+  then formal Phase 6.1 closeout.

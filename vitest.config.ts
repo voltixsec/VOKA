@@ -14,7 +14,8 @@ export default defineConfig({
     include: [
       "src/**/__tests__/**/*.test.{ts,tsx}",
       "app/**/__tests__/**/*.test.{ts,tsx}",
-      "features/**/__tests__/**/*.test.ts",
+      "features/**/__tests__/**/*.test.{ts,tsx}",
+      "components/**/__tests__/**/*.test.{ts,tsx}",
     ],
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
