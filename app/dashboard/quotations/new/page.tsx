@@ -477,6 +477,60 @@ export default function NewQuotationPage() {
   }, [isArabic]);
 
   useEffect(() => {
+    if (loading) return;
+    try {
+      const SESSION_KEY = "voka_ai_proposal_draft";
+      const stored = sessionStorage.getItem(SESSION_KEY);
+      if (stored) {
+        sessionStorage.removeItem(SESSION_KEY);
+        const draft = JSON.parse(stored);
+        if (draft.customer?.id) {
+          setCustomerId(draft.customer.id);
+        }
+        if (draft.proposal) {
+          if (draft.proposal.currencyCode) setCurrencyCode(draft.proposal.currencyCode);
+          if (draft.proposal.scopeType) setScopeType(draft.proposal.scopeType);
+          if (draft.proposal.subjectAr) setSubjectAr(draft.proposal.subjectAr);
+          if (draft.proposal.subjectEn) setSubjectEn(draft.proposal.subjectEn);
+          if (draft.proposal.briefAr) setBriefAr(draft.proposal.briefAr);
+          if (draft.proposal.briefEn) setBriefEn(draft.proposal.briefEn);
+          if (draft.proposal.projectName) setProjectName(draft.proposal.projectName);
+          if (draft.proposal.attentionName) setAttentionName(draft.proposal.attentionName);
+        }
+        if (draft.notes) setNotes(draft.notes);
+        if (draft.termsAndConditions) setTerms(draft.termsAndConditions);
+        if (Array.isArray(draft.lines) && draft.lines.length > 0) {
+          setLines(
+            draft.lines.map((l: any, idx: number) => ({
+              editorKey: createEditorLineKey(),
+              position: idx + 1,
+              catalogItemId: l.catalogItemId || "",
+              type: l.type || "PRODUCT",
+              itemCode: l.itemCode || "",
+              itemName: l.itemName || "",
+              itemNameAr: l.itemNameAr || l.itemName || "",
+              itemNameEn: l.itemNameEn || l.itemName || "",
+              description: l.description || "",
+              descriptionAr: l.descriptionAr || "",
+              descriptionEn: l.descriptionEn || "",
+              unitName: l.unitName || "PCS",
+              unitNameAr: l.unitNameAr || "PCS",
+              unitNameEn: l.unitNameEn || "PCS",
+              quantity: l.quantity ?? 1,
+              unitPrice: l.unitPrice ?? 0,
+              taxRateId: l.taxRateId || null,
+              taxPercentage: l.taxPercentage || 0,
+            })),
+          );
+        }
+        setDirty(true);
+      }
+    } catch {
+      /* ignore invalid JSON in sessionStorage */
+    }
+  }, [loading]);
+
+  useEffect(() => {
     if (
       termsTouched ||
       !scopeType

@@ -5,13 +5,13 @@ Verified on: 2026-08-16 (Asia/Kuwait)
 ## Current Verified State
 
 - Canonical branch: `main`.
-- Official baseline: `55ef31e4fba7b38d0225aeb1296c7f1712fea38c`.
+- Official baseline before Phase 6.1: `d448bad3bee0d1cf365b9ba8b2e0a0c6815c1694`.
 - Phase 3 Proposal Composer UX is closed through PR #31.
 - Phase 4.1 Approved Quotation to Sales Order Draft is closed through PR #33.
 - Phase 4.2 Sales Order Confirmation & Cancellation is closed through PR #38.
 - Phase 4.3 Sales Order Operational Workspace is closed through PR #39.
 - Phase 5 Canonical Catalog Integration is closed through PR #40.
-- Phase 5 Quality CI passed before merge.
+- Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft has **passed CTO local review and full local validation; PR, Quality CI, and merge remain pending**.
 
 ## Phase 4 Commercial Downstream Boundary
 
@@ -55,42 +55,24 @@ Delivered:
 Existing canonical Customer snapshot behavior remains authoritative and was
 preserved; Phase 5 did not rewrite historical customer snapshots.
 
-## Official Phase 5 Validation
+## Phase 6.1 Delivered Boundary (CTO Local Validation Passed)
 
-Final Phase 5 validation before merge included:
+Phase 6.1 established the VOKA Text AI Sales Assistant for structured commercial drafting.
 
-- Prisma format / validate / generate: PASS
-- TypeScript: PASS
-- focused final tests: 27/27 PASS
-- full regression suite: 95 files / 635 tests PASS
-- lint: PASS
-- production build: PASS
-- git diff check: PASS
-- GitHub Quality CI: PASS
+Delivered:
 
-## Next Product Frontier
-
-**Phase 6.1 — Text AI Sales Assistant / Structured Draft**
-
-Start with text input before voice transport.
-
-Target pipeline:
-
-User commercial request
-→ AI structured extraction
-→ canonical Customer/Catalog candidate resolution
-→ validated quotation draft proposal
-→ explicit human review
-→ Save
-→ existing localization lifecycle
-→ proposal/PDF
-
-The AI may propose structured commercial intent, but it must not become the
-canonical authority for tenant ownership, price, tax, totals, approval or other
-consequential commercial actions.
-
-Voice remains a later transport layer over the same structured drafting
-contract.
+- Natural language sales request extraction (Arabic & English) into structured intent;
+- Ollama infrastructure provider (`OllamaSalesAssistantAdapter`) with application-facing abstraction (`AISalesAssistantPort`);
+- Untrusted AI output validation (`validateExtractedSalesIntent`) with deterministic heuristic parser fallback (`AISalesAssistantExtractor`);
+- Candidate Customer matching against active tenant customers with strict ambiguity handling (`MATCHED`, `AMBIGUOUS`, `MISSING`);
+- Active tenant Catalog item resolution with strict ambiguity handling (`MATCHED`, `AMBIGUOUS`, `MISSING`, `CUSTOM`);
+- Server-owned canonical pricing via `PricingService` with zero PriceList price preservation;
+- Non-authoritative `requestedPrice` capture for intent tracking;
+- Server-owned tax rate and totals calculation reusing `QuotationCalculator`;
+- Human approval boundary: proposal generation performs NO automatic persistence and NEVER creates Customer or Quotation records automatically;
+- "Apply to Quotation" populates the existing quotation Create composer via temporary client transfer for explicit human editing and normal Save;
+- Authenticated `POST /api/ai/sales-assistant/draft` route with tenant scoping and role authorization (`OWNER`, `ADMIN`, `SALES`);
+- Responsive Arabic RTL and English LTR UI workspace (`/dashboard/sales-assistant`).
 
 ## Continuing Guardrails
 
@@ -101,4 +83,3 @@ contract.
 - Browser/client values are never canonical tax or totals authority.
 - Approved quotation and Sales Order snapshots remain historical and immutable.
 - AI produces proposals/drafts; consequential actions require human approval.
-- Existing TranslationPort abstraction remains the provider boundary.

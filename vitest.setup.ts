@@ -1,1 +1,1 @@
-﻿// Global test setup for VOKA
+import "@testing-library/jest-dom/vitest";

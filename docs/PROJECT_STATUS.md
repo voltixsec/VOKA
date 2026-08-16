@@ -3,11 +3,11 @@
 Current Product Frontier: **Phase 6.1 — Text AI Sales Assistant / Structured Draft**
 
 Status: Phase 3, Phase 4.1–4.3 and Phase 5 Canonical Catalog Integration are
-closed and merged.
+closed and merged. Phase 6.1 Text AI Sales Assistant / Structured Draft has passed CTO local semantic review and full local validation; PR, Quality CI, and merge remain pending.
 
 Official current baseline:
 
-`55ef31e4fba7b38d0225aeb1296c7f1712fea38c`
+`d448bad3bee0d1cf365b9ba8b2e0a0c6815c1694`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -324,18 +324,22 @@ Final Phase 5 validation:
 - git diff check: PASS
 - GitHub Quality CI: PASS
 
-## Approved Next Product Direction — Phase 6.1
+## Phase 6.1 — Text AI Sales Assistant / Structured Commercial Draft
 
-**Text AI Sales Assistant / Structured Draft**
+Status: **CTO local validation passed / Pending PR + Quality CI + merge**.
 
-Start with text, not voice.
+Delivered:
 
-The assistant should turn natural-language commercial intent into a structured
-quotation draft proposal, resolve bounded tenant-owned Customer/Catalog
-candidates, reuse canonical bilingual data, and present the result for explicit
-human review before Save.
-
-AI must not become authoritative for tenant ownership, canonical pricing,
-taxes, totals, approval or downstream consequential actions.
-
-Voice remains a later input transport over the same application contract.
+- Natural-language sales request extraction (Arabic & English) into structured commercial intent;
+- Infrastructure Ollama AI provider (`OllamaSalesAssistantAdapter`) with application-facing abstraction (`AISalesAssistantPort`);
+- Untrusted AI output validation (`validateExtractedSalesIntent`) with deterministic heuristic parser fallback (`AISalesAssistantExtractor`);
+- Candidate Customer matching against active tenant customers with strict ambiguity protection (`MATCHED`, `AMBIGUOUS`, `MISSING`);
+- Active tenant Catalog item resolution with strict ambiguity protection;
+- Canonical pricing via `PricingService` with zero PriceList price preservation and fallback rules;
+- Non-authoritative `requestedPrice` capture for intent tracking;
+- Server-owned tax rate and totals calculation reusing `QuotationCalculator`;
+- Human approval boundary: draft generation performs NO automatic persistence and NEVER creates Customer or Quotation records automatically;
+- "Apply to Quotation" populates the existing quotation Create composer via temporary client transfer for explicit human editing and normal Save;
+- Authenticated `POST /api/ai/sales-assistant/draft` route with tenant scoping and role authorization (`OWNER`, `ADMIN`, `SALES`);
+- Interactive bilingual UI workspace (`/dashboard/sales-assistant`) supporting Arabic RTL and English LTR;
+- Comprehensive unit, API route, and UI test coverage.
