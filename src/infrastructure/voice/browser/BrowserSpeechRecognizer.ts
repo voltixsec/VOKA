@@ -26,6 +26,9 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
   }
 
   public getState(): VoiceInputState {
+    if (!this.isSupported()) {
+      return "UNAVAILABLE";
+    }
     return this.state;
   }
 
@@ -55,6 +58,9 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
       return;
     }
 
+    // Always reset session transcript at the start of a new voice recognition session
+    this.transcript = { interim: "", final: "" };
+
     const SpeechRecognitionClass =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -80,9 +86,9 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
 
       recognition.onresult = (event: any) => {
         let interimTranscript = "";
-        let finalTranscript = this.transcript.final;
+        let finalTranscript = "";
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           const result = event.results[i];
           const text = result[0]?.transcript || "";
 
@@ -170,6 +176,6 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
       this.recognitionInstance = null;
     }
     this.transcript = { interim: "", final: "" };
-    this.setState("IDLE");
+    this.setState(this.isSupported() ? "IDLE" : "UNAVAILABLE");
   }
 }

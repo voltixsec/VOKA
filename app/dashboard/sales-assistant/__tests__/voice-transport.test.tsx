@@ -47,6 +47,7 @@ class MockVoiceRecognizer implements IVoiceRecognizer {
   start(options?: VoiceRecognizerOptions): void {
     this.startCount++;
     this.lastOptions = options || null;
+    this.transcript = { interim: "", final: "" };
     if (!this.supported) {
       this.state = "UNAVAILABLE";
       if (options?.onStateChange) options.onStateChange("UNAVAILABLE");
@@ -86,29 +87,68 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   mockIsArabic = false;
+  delete (window as any).SpeechRecognition;
+  delete (window as any).webkitSpeechRecognition;
 });
 
 describe("Voice Input Transport Integration Tests", () => {
-  it("Requirement 1: unsupported browser voice API leaves text Sales Assistant usable", () => {
-    const mockRecognizer = new MockVoiceRecognizer();
-    mockRecognizer.supported = false;
+  it("Blocker 1 Regression: real unsupported browser (no SpeechRecognition) exposes UNAVAILABLE and leaves text input usable", () => {
+    delete (window as any).SpeechRecognition;
+    delete (window as any).webkitSpeechRecognition;
 
-    render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
+    render(createElement(SalesAssistantPage));
 
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
     expect(textarea).toBeTruthy();
 
-    // Check title tooltip and status message
     expect(screen.getByTitle(/not supported/i)).toBeTruthy();
     expect(screen.getByText(/UNAVAILABLE/)).toBeTruthy();
 
-    // Text area is fully usable
-    fireEvent.change(textarea, { target: { value: "Manual text prompt input" } });
-    expect(textarea.value).toBe("Manual text prompt input");
+    fireEvent.change(textarea, { target: { value: "Direct text input works fine" } });
+    expect(textarea.value).toBe("Direct text input works fine");
 
-    // Voice button is disabled
     const voiceButton = screen.getByRole("button", { name: /Voice Input/i });
     expect((voiceButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("Blocker 2 Regression: repeated voice sessions do NOT duplicate previous speech transcripts", () => {
+    const mockRecognizer = new MockVoiceRecognizer();
+
+    render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
+
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+    // Initial prompt = "Base"
+    fireEvent.change(textarea, { target: { value: "Base" } });
+
+    // First voice session
+    const startBtn1 = screen.getByRole("button", { name: /Voice Input/i });
+    fireEvent.click(startBtn1);
+
+    act(() => {
+      mockRecognizer.emitTranscript("First");
+      mockRecognizer.stop();
+    });
+
+    expect(textarea.value).toBe("Base First");
+
+    // Second explicit voice session
+    const startBtn2 = screen.getByRole("button", { name: /Voice Input/i });
+    fireEvent.click(startBtn2);
+
+    act(() => {
+      mockRecognizer.emitTranscript("Second");
+      mockRecognizer.stop();
+    });
+
+    // Resulting prompt must contain exactly "Base First Second"
+    expect(textarea.value).toBe("Base First Second");
+
+    const matchesFirst = (textarea.value.match(/First/g) || []).length;
+    const matchesSecond = (textarea.value.match(/Second/g) || []).length;
+
+    expect(matchesFirst).toBe(1);
+    expect(matchesSecond).toBe(1);
   });
 
   it("Requirement 2 & 3: microphone action starts and user can explicitly stop listening", () => {

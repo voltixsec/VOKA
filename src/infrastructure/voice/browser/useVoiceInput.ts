@@ -47,13 +47,15 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsSupported(recognizer.isSupported());
-    setState(recognizer.getState());
+    const supported = recognizer.isSupported();
+    setIsSupported(supported);
+    setState(supported ? recognizer.getState() : "UNAVAILABLE");
   }, [recognizer]);
 
   const startListening = useCallback(
     (overrideLang?: string) => {
       setErrorMessage(null);
+      setTranscript({ interim: "", final: "" });
       const targetLang = overrideLang || resolveVoiceLocale(locale);
 
       recognizer.start({
@@ -82,7 +84,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     recognizer.reset();
     setTranscript({ interim: "", final: "" });
     setErrorMessage(null);
-    setState("IDLE");
+    setState(recognizer.isSupported() ? "IDLE" : "UNAVAILABLE");
   }, [recognizer]);
 
   return {
