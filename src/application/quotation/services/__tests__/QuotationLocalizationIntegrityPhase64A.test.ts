@@ -148,6 +148,9 @@ describe("Phase 6.4A Quotation Localization Integrity", () => {
         });
         return true;
       }),
+      update: vi.fn().mockImplementation(async (_companyId, updatedQuotation) => {
+        current = updatedQuotation;
+      }),
       save: vi.fn(),
       existsByNumber: vi.fn(),
     } as unknown as IQuotationRepository;
@@ -345,12 +348,17 @@ describe("Phase 6.4A Quotation Localization Integrity", () => {
     });
 
     const runner = new QuotationLocalizationJobRunner(repo, mockLocalize);
-    const repairService = new QuotationLocalizationRepairService(runner);
+    const repairService = new QuotationLocalizationRepairService(repo, runner);
 
     const repairResult = await repairService.repairDraftQuotation(brokenDraft);
     expect(repairResult.repaired).toBe(true);
 
+    expect(repo.update).toHaveBeenCalled();
+    expect(repo.claimLocalization).toHaveBeenCalled();
+    expect(repo.completeLocalization).toHaveBeenCalled();
+
     const updated = await repo.findById("comp-1", "q-100");
+    expect(updated?.localizationStatus).toBe(LocalizationStatus.COMPLETED);
     expect(updated?.projectNameEn).toBe("Commercial Building");
   });
 
@@ -364,7 +372,7 @@ describe("Phase 6.4A Quotation Localization Integrity", () => {
 
     const repo = mockRepo(approvedQuote);
     const runner = new QuotationLocalizationJobRunner(repo, vi.fn());
-    const repairService = new QuotationLocalizationRepairService(runner);
+    const repairService = new QuotationLocalizationRepairService(repo, runner);
 
     const repairResult = await repairService.repairDraftQuotation(approvedQuote);
     expect(repairResult.repaired).toBe(false);

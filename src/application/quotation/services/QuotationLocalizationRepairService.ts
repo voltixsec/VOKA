@@ -1,6 +1,8 @@
 import { analyzeQuotationLocalization } from "./QuotationLocalizationAnalyzer";
+import { createQuotationLocalizationSourceSignature } from "./QuotationLocalizationSourceSignature";
 import type { Quotation } from "../../../domain/quotation/entities/Quotation";
-import type { QuotationLocalizationJobRunner } from "../../../infrastructure/translation/quotation/QuotationLocalizationJobRunner";
+import type { IQuotationRepository } from "../repositories/IQuotationRepository";
+import type { IQuotationLocalizationRunnerPort } from "../ports/IQuotationLocalizationRunnerPort";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -69,7 +71,8 @@ export type RepairAttemptResult =
 
 export class QuotationLocalizationRepairService {
   constructor(
-    private readonly jobRunner: QuotationLocalizationJobRunner,
+    private readonly repository: IQuotationRepository,
+    private readonly runnerPort: IQuotationLocalizationRunnerPort,
   ) {}
 
   async repairDraftQuotation(
@@ -92,7 +95,25 @@ export class QuotationLocalizationRepairService {
       throw new Error("Cannot repair quotation without companyId and id.");
     }
 
-    const jobResult = await this.jobRunner.run({
+    // Prepare quotation for claimability through standard lifecycle
+    const snapshot = buildSnapshot(quotation);
+    const analysis = analyzeQuotationLocalization(
+      snapshot,
+      quotation.localizationSourceLocale ?? undefined,
+    );
+
+    const now = new Date();
+    quotation.startLocalizationGeneration(
+      analysis.sourceLocale,
+      createQuotationLocalizationSourceSignature(analysis),
+      now,
+    );
+
+    // Save transition to repository (status becomes PENDING with sourceSignature set)
+    await this.repository.update(quotation.companyId, quotation);
+
+    // Execute standard claim + job runner path
+    const jobResult = await this.runnerPort.run({
       companyId: quotation.companyId,
       quotationId: quotation.id,
     });

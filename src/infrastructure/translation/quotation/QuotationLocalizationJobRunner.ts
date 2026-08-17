@@ -200,7 +200,9 @@ function classifyLocalizationError(error: unknown): QuotationLocalizationErrorCo
   return "TRANSLATION_UNEXPECTED_ERROR";
 }
 
-export class QuotationLocalizationJobRunner {
+import type { IQuotationLocalizationRunnerPort } from "../../../application/quotation/ports/IQuotationLocalizationRunnerPort";
+
+export class QuotationLocalizationJobRunner implements IQuotationLocalizationRunnerPort {
   constructor(
     private readonly repository: IQuotationRepository,
     private readonly localize: (input: UnknownRecord) => Promise<UnknownRecord> = localizeQuotationDraft,
