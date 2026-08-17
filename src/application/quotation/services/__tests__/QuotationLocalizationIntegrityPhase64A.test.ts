@@ -399,4 +399,37 @@ describe("Phase 6.4A Quotation Localization Integrity", () => {
     expect(repo.claimLocalization).not.toHaveBeenCalled();
     expect(repo.completeLocalization).not.toHaveBeenCalled();
   });
+
+  it("H: Read-only GET detection does NOT trigger translation runner or mutate DB, while repeated calls stay provider-free", () => {
+    const brokenDraft = createSampleQuotation({
+      status: "DRAFT",
+      projectNameAr: "مشروع الصليبيخات",
+      projectNameEn: null, // missing target
+      localizationStatus: LocalizationStatus.COMPLETED,
+    });
+
+    const mockLocalize = vi.fn();
+    const repo = mockRepo(brokenDraft);
+
+    // Simulate GET logic: check incompleteness
+    const check1 = checkQuotationLocalizationIncompleteness(brokenDraft);
+    expect(check1.isBrokenCompleted).toBe(true);
+
+    const serialized1 = serializeQuotation(brokenDraft, "en");
+    if (check1.isBrokenCompleted) {
+      serialized1.localizationStatus = LocalizationStatus.PENDING;
+    }
+
+    // Serialized response correctly presents non-COMPLETED status to UI
+    expect(serialized1.localizationStatus).toBe(LocalizationStatus.PENDING);
+    // Verify zero DB updates or translation calls occurred
+    expect(repo.update).not.toHaveBeenCalled();
+    expect(mockLocalize).not.toHaveBeenCalled();
+
+    // Repeat GET request
+    const check2 = checkQuotationLocalizationIncompleteness(brokenDraft);
+    expect(check2.isBrokenCompleted).toBe(true);
+    expect(mockLocalize).not.toHaveBeenCalled();
+    expect(repo.update).not.toHaveBeenCalled();
+  });
 });

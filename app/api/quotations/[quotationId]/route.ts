@@ -13,6 +13,7 @@ import {
 } from "@/src/application/quotation";
 import {
   isQuotationScopeType,
+  LocalizationStatus,
 } from "@/src/domain/quotation";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
@@ -104,29 +105,20 @@ export const GET = withCompanyAuth(
       );
     }
 
-    let quotationData = result.data;
-
-    if (
+    const quotationData = result.data;
+    const isBrokenCompletedDraft =
       quotationData.status === "DRAFT" &&
-      quotationData.localizationStatus === "COMPLETED"
-    ) {
-      const repairCheck = checkQuotationLocalizationIncompleteness(quotationData);
-      if (repairCheck.isBrokenCompleted) {
-        await repairService.repairDraftQuotation(quotationData);
-        const reloaded = await getQuotation.execute({
-          companyId: company.companyId,
-          quotationId: getQuotationId(request),
-        });
-        if (reloaded.success) {
-          quotationData = reloaded.data;
-        }
-      }
-    }
+      quotationData.localizationStatus === "COMPLETED" &&
+      checkQuotationLocalizationIncompleteness(quotationData).isBrokenCompleted;
 
     const serialized = serializeQuotation(
         quotationData,
         getRequestedLocale(request),
       );
+
+    if (isBrokenCompletedDraft) {
+      serialized.localizationStatus = LocalizationStatus.PENDING;
+    }
     const liveContact = await customerContacts.find(
       company.companyId,
       quotationData.customerId,
