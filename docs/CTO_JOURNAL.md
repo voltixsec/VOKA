@@ -237,7 +237,7 @@ branch if approved. No new PDF, localization, or verification scope is implied.
 ## 2026-08-16 — Phase 6.1 merged through PR #42
 
 - PR #42 merged after green Quality CI.
-- Merge commit: $MergeSha.
+- Merge commit: `1fb786c3a45db0ac9616434301e06820b583cbc0`.
 - Phase 6.1 Text AI Sales Assistant / Structured Draft is now on `main`.
 - Final local validation before merge: 100 test files / 651 tests PASS,
   TypeScript PASS, lint PASS, production build PASS, and diff check PASS.
@@ -270,3 +270,27 @@ branch if approved. No new PDF, localization, or verification scope is implied.
 - Core invariant remains: VOICE CAPTURES INTENT. AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
 - Active development execution workflow is CTO + local Terminal + Jules. Codex is removed from the active workflow unless explicitly reintroduced by the CEO.
 - Next product slice is intentionally deferred to the next CTO START SESSION and must be selected from the canonical roadmap after architecture review.
+
+
+## 2026-08-17 — Phase 6.3 AI Model Routing formally closed
+
+- Phase 6.3 was inserted as a bounded infrastructure slice before Phase 7 after empirical Ollama cloud/local benchmarking.
+- Primary interactive AI candidate: `minimax-m3:cloud`.
+- Local fallback candidate: `qwen3:1.7b`.
+- Cloud and local Ollama generation behavior are separated through model profiles.
+- Cloud requests omit `format: "json"`, forced `num_ctx`, and low `num_predict` ceilings.
+- Local requests retain compatible structured JSON options.
+- Sales AI and Translation routing are independently configurable.
+- Local fallback covers network, timeout, HTTP, empty output, invalid JSON, `done_reason=length`, semantic Sales validation failure, and invalid Translation key sets.
+- `validateExtractedSalesIntent` remains authoritative and was not weakened.
+- AI remains proposal-only and non-canonical for tenant ownership, Customer/Catalog identity, pricing, tax, totals, approval, Sales Orders, persistence, branding and document history.
+- No Prisma schema, migration, dependency or paid-provider changes were introduced.
+- Focused validation: 42/42 PASS.
+- Full regression: 106 files / 708 tests PASS.
+- TypeScript, lint, production build and diff check PASS.
+- GitHub Quality #83 PASS.
+- PR #46 merged to main at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`.
+- Canonical main baseline after Phase 6.3 close: `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`.
+- Active workflow remains CTO + local Terminal + Jules.
+- GitHub remains the durable source of truth across devices and Jules sessions.
+- Next frontier: Phase 7.0 Contracts & Invoices Architecture Assessment.
