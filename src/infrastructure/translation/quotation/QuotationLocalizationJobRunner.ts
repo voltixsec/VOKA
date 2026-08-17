@@ -106,6 +106,73 @@ function buildCompletionPatch(localized: UnknownRecord) {
   return { header, lines };
 }
 
+function validateCompletionPatch(
+  analysis: { sourceLocale: "ar" | "en"; bindings: Array<{ key: string; arKey: string; enKey: string }> },
+  completion: ReturnType<typeof buildCompletionPatch>,
+): void {
+  for (const binding of analysis.bindings) {
+    const key = binding.key;
+
+    if (key === "customer_name") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.customerNameEn : completion.header.customerNameAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key === "project_name") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.projectNameEn : completion.header.projectNameAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key === "attention_name") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.attentionNameEn : completion.header.attentionNameAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key === "subject") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.subjectEn : completion.header.subjectAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key === "brief") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.briefEn : completion.header.briefAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key === "notes") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.notesEn : completion.header.notesAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key === "terms") {
+      const val = analysis.sourceLocale === "ar" ? completion.header.termsAndConditionsEn : completion.header.termsAndConditionsAr;
+      if (typeof val !== "string" || !val.trim()) {
+        throw new Error(`Quotation localization missing translation for "${key}".`);
+      }
+    } else if (key.startsWith("line_")) {
+      const match = /^line_(\d+)_(item_name|description|unit_name)$/.exec(key);
+      if (match) {
+        const lineIndex = parseInt(match[1], 10);
+        const field = match[2];
+        const line = completion.lines[lineIndex];
+        if (!line) {
+          throw new Error(`Quotation localization missing translation for "${key}".`);
+        }
+        let val: string | null | undefined;
+        if (field === "item_name") {
+          val = analysis.sourceLocale === "ar" ? line.itemNameEn : line.itemNameAr;
+        } else if (field === "description") {
+          val = analysis.sourceLocale === "ar" ? line.descriptionEn : line.descriptionAr;
+        } else if (field === "unit_name") {
+          val = analysis.sourceLocale === "ar" ? line.unitNameEn : line.unitNameAr;
+        }
+        if (typeof val !== "string" || !val.trim()) {
+          throw new Error(`Quotation localization missing translation for "${key}".`);
+        }
+      }
+    }
+  }
+}
+
 function classifyLocalizationError(error: unknown): QuotationLocalizationErrorCode {
   const allowed = new Set<QuotationLocalizationErrorCode>([
     "TRANSLATION_TIMEOUT",
@@ -173,6 +240,7 @@ export class QuotationLocalizationJobRunner {
         localizationSourceLocale: analysis.sourceLocale,
       });
       const completion = buildCompletionPatch(localized);
+      validateCompletionPatch(analysis, completion);
       const completed = await this.repository.completeLocalization({
         ...params,
         expectedSourceSignature: claim.sourceSignature,
