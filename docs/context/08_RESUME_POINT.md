@@ -1,11 +1,11 @@
 # Resume Point
 
-Verified on: 2026-08-16 (Asia/Kuwait)
+Verified on: 2026-08-17 (Asia/Kuwait)
 
 ## Current Verified State
 
 - Canonical branch: `main`.
-- Current canonical main baseline: `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.
+- Current canonical main baseline: `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`.
 - Official baseline before Phase 6.2: `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
 - Phase 3 Proposal Composer UX is closed through PR #31.
 - Phase 4.1 Approved Quotation to Sales Order Draft is closed through PR #33.
@@ -14,6 +14,7 @@ Verified on: 2026-08-16 (Asia/Kuwait)
 - Phase 5 Canonical Catalog Integration is closed through PR #40.
 - Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft is closed and merged through PR #42 after green Quality CI.
 - Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
+- Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
 
 ## Phase 4 Commercial Downstream Boundary
 
@@ -98,6 +99,35 @@ AI PROPOSES.
 SERVER VALIDATES.
 HUMAN SAVES.
 
+## Phase 6.3 Delivered Boundary
+
+Phase 6.3 adds cloud-primary/local-fallback model routing without changing application or domain authority.
+
+Delivered:
+
+- primary Ollama Cloud model support using `minimax-m3:cloud`;
+- local fallback using `qwen3:1.7b`;
+- independent Sales AI and Translation model configuration;
+- cloud-compatible generation profiles without `format: "json"`, forced `num_ctx`, or low `num_predict` ceilings;
+- local structured-output behavior retained where compatible;
+- fallback on provider/network/timeout/HTTP/empty/invalid JSON failures;
+- fallback on truncated `done_reason=length`;
+- Sales semantic validation failure gets local AI fallback opportunity before deterministic heuristic extraction;
+- Translation exact-key validation and fallback;
+- no schema, migration, dependency or paid-provider requirement.
+
+Final validation:
+
+- focused: 42/42 PASS
+- full: 106 files / 708 tests PASS
+- TypeScript PASS
+- lint PASS
+- production build PASS
+- diff check PASS
+- GitHub Quality #83 PASS
+
+Canonical Phase 6.3 merge: `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`
+
 ## Continuing Guardrails
 
 - Clean Architecture + DDD + dependency inversion.
@@ -110,6 +140,20 @@ HUMAN SAVES.
 
 ## Next Session Start Point
 
-Phase 6.2 is closed. Start the next development session with `CTO START SESSION`.
-Review the canonical roadmap and architecture before selecting the next bounded
-product slice. Do not carry unfinished Phase 6.2 implementation work forward.
+Phase 6.3 is closed and merged on canonical `main`.
+
+Start the next development session with `CTO START SESSION`.
+
+The next product frontier is **Phase 7.0 — Contracts & Invoices Architecture Assessment**.
+
+Before any Phase 7 implementation or schema change, determine:
+
+- whether Invoice authority begins from CONFIRMED Sales Order;
+- whether Contract is mandatory or optional in V1;
+- which immutable quotation/Sales Order/customer/branding snapshots flow downstream;
+- whether V1 supports one or multiple invoices per Sales Order;
+- how historical prices, discounts, taxes and currency remain immutable;
+- the minimum bounded V1 invoice/contract scope without expanding VOKA into a full accounting ERP.
+
+Active development workflow: CTO + local Terminal + Jules.
+GitHub is the durable source of truth across devices and Jules sessions.

@@ -1,17 +1,18 @@
 # Project Status
 
-Current Product Frontier: **Phase 6.2 — Voice Input Transport**
+Current Product Frontier: **Phase 7.0 — Contracts & Invoices Architecture Assessment**
 
 Status: Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
+Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at merge commit `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
 
 Official pre-Phase-6.2 baseline:
 
 `d19d2bd2e306a7db066532ff873e9af5ed3a8349`
 
-Current canonical main baseline after Phase 6.2 close:
+Current canonical main baseline after Phase 6.3 close:
 
-`0c94f521d07d4a2f78f4eb5d67c60e27ce686772`
+`8ad47179408e2753f1ece92aedb8d0e5ab0641d8`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -350,7 +351,7 @@ Delivered:
 
 ## Phase 6.2 — Voice Input Transport
 
-Status: **IMPLEMENTED / READY FOR CTO REVIEW** on `feature/phase-6.2-voice-input-transport`.
+Status: **CLOSED / MERGED** through PR #44.
 
 Delivered:
 
@@ -363,3 +364,37 @@ Delivered:
 - Invariant enforcement: voice ONLY acts as an input transport for prompt text; speech completion NEVER triggers automatic proposal generation, customer creation, or quotation persistence;
 - Preserved Clean Architecture and Phase 6.1 pipeline authority: `POST /api/ai/sales-assistant/draft` and downstream quotation composer remain unchanged;
 - Full test suite: 103 test files / 665 tests PASS, TypeScript PASS, lint PASS, production build PASS, diff check PASS. Zero database schema or dependency changes.
+
+
+## Phase 6.3 — AI Model Routing
+
+Status: **CLOSED / MERGED** through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
+
+Delivered:
+
+- Cloud-primary plus local-fallback routing for AI Sales Assistant and Translation / Localization.
+- Primary interactive AI candidate: `minimax-m3:cloud`.
+- Local fallback candidate: `qwen3:1.7b`.
+- Sales AI and Translation model configuration are independently configurable.
+- Cloud requests omit `format: "json"`, forced `num_ctx`, and low `num_predict` ceilings.
+- Local Ollama models retain compatible structured JSON options.
+- Fallback covers network failure, timeout, HTTP failure, empty output, invalid JSON, `done_reason=length`, semantically invalid Sales output, and invalid Translation key sets.
+- `validateExtractedSalesIntent` remains authoritative.
+- AI remains non-canonical for tenant ownership, Customer/Catalog identity, pricing, tax, totals, approval, Sales Order, branding, history and persistence.
+- No Prisma schema, migration, dependency or paid-provider changes were introduced.
+
+Final validation:
+
+- focused tests: 42/42 PASS
+- full suite: 106 files / 708 tests PASS
+- TypeScript: PASS
+- lint: PASS
+- production build: PASS
+- diff check: PASS
+- GitHub Quality #83: PASS
+
+Core invariant:
+
+AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
+
+Next product frontier: Phase 7.0 Contracts & Invoices Architecture Assessment before any Phase 7 schema or implementation work.

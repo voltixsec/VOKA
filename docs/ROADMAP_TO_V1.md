@@ -288,6 +288,27 @@ Zero audio files persisted, zero backend audio uploads, zero database schema cha
 
 # Phase 6 — AI Sales Assistant
 
+## Phase 6.3 — AI Model Routing
+
+Status: **CLOSED / MERGED through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.**
+
+Delivered:
+
+- Ollama Cloud primary routing with local Ollama fallback;
+- `minimax-m3:cloud` as primary interactive AI candidate;
+- `qwen3:1.7b` as local fallback candidate;
+- independent Sales AI and Translation model configuration;
+- cloud-aware request profiles without structured-output `format`, forced `num_ctx`, or low `num_predict` ceilings;
+- local structured JSON behavior retained where compatible;
+- fallback for network, timeout, HTTP, empty output, invalid JSON and truncated generation;
+- Sales semantic validation failure can fall back locally before heuristic extraction;
+- Translation exact-key validation with fallback;
+- no database schema, migration, dependency or paid-provider changes.
+
+Final validation: 42/42 focused tests, 106 files / 708 full tests, TypeScript, lint, production build, diff check and GitHub Quality #83 all passed.
+
+Core invariant remains: AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
+
 Pipeline:
 
 Voice / text
@@ -452,3 +473,5 @@ Important: Phase 5 is closed on `main` at
 
 Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI.
 Phase 6.2 Voice Input Transport is CLOSED / MERGED through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.
+Phase 6.3 AI Model Routing is CLOSED / MERGED through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
+The next bounded product step is Phase 7.0 Contracts & Invoices Architecture Assessment; no Phase 7 schema or implementation should begin before that assessment.
