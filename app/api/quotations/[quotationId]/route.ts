@@ -19,6 +19,10 @@ import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persiste
 import { PrismaQuotationCustomerContactRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationCustomerContactRepository";
 
 import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
+import {
+  checkQuotationLocalizationIncompleteness,
+  QuotationLocalizationRepairService,
+} from "@/src/application/quotation/services/QuotationLocalizationRepairService";
 
 import { serializeQuotation } from "../serialize-quotation";
 
@@ -39,6 +43,11 @@ const updateQuotation =
   );
 const localizationJobRunner =
   new QuotationLocalizationJobRunner(quotationRepository);
+const repairService =
+  new QuotationLocalizationRepairService(
+    quotationRepository,
+    localizationJobRunner,
+  );
 const customerContacts = new PrismaQuotationCustomerContactRepository();
 
 
@@ -95,15 +104,34 @@ export const GET = withCompanyAuth(
       );
     }
 
+    let quotationData = result.data;
+
+    if (
+      quotationData.status === "DRAFT" &&
+      quotationData.localizationStatus === "COMPLETED"
+    ) {
+      const repairCheck = checkQuotationLocalizationIncompleteness(quotationData);
+      if (repairCheck.isBrokenCompleted) {
+        await repairService.repairDraftQuotation(quotationData);
+        const reloaded = await getQuotation.execute({
+          companyId: company.companyId,
+          quotationId: getQuotationId(request),
+        });
+        if (reloaded.success) {
+          quotationData = reloaded.data;
+        }
+      }
+    }
+
     const serialized = serializeQuotation(
-        result.data,
+        quotationData,
         getRequestedLocale(request),
       );
     const liveContact = await customerContacts.find(
       company.companyId,
-      result.data.customerId,
+      quotationData.customerId,
     );
-    const snapshot = result.data.customer.toJSON();
+    const snapshot = quotationData.customer.toJSON();
 
     return apiSuccess(
       {

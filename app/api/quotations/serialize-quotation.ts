@@ -167,7 +167,7 @@ export function serializeQuotation(
               line.itemNameEn,
               line.itemName,
               isCompleted,
-            ) ?? line.itemName,
+            ) ?? (isCompleted && (locale === "ar" || locale === "en") ? null : line.itemName),
 
           itemNameAr:
             line.itemNameAr,

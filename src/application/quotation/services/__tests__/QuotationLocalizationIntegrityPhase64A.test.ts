@@ -312,12 +312,27 @@ describe("Phase 6.4A Quotation Localization Integrity", () => {
     const brokenQuote = createSampleQuotation({
       projectNameAr: "مشروع النور",
       projectNameEn: null, // Missing English translation
+      itemNameAr: "كاميرا مراقبة",
+      itemNameEn: null, // Missing English line item name
       localizationStatus: LocalizationStatus.COMPLETED,
     });
 
     const serializedEn = serializeQuotation(brokenQuote, "en");
-    // When localizationStatus is COMPLETED, asking for English must return null when projectNameEn is missing, not Arabic fallback "مشروع النور"
+    // When localizationStatus is COMPLETED, asking for English must return null when projectNameEn and itemNameEn are missing
     expect(serializedEn.projectName).toBeNull();
+    expect(serializedEn.lines[0].itemName).toBeNull();
+
+    const brokenQuoteAr = createSampleQuotation({
+      projectNameAr: null, // Missing Arabic translation
+      projectNameEn: "Light Project",
+      itemNameAr: null, // Missing Arabic line item name
+      itemNameEn: "Surveillance Camera",
+      localizationStatus: LocalizationStatus.COMPLETED,
+    });
+
+    const serializedAr = serializeQuotation(brokenQuoteAr, "ar");
+    expect(serializedAr.projectName).toBeNull();
+    expect(serializedAr.lines[0].itemName).toBeNull();
   });
 
   it("F: Old editable DRAFT with false/broken COMPLETED localization => detected & safely re-localized", async () => {
