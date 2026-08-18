@@ -138,9 +138,17 @@ model Customer {
   whatsapp          String?
   taxNumber         String?
   addressLine1      String?
+  addressLine1Ar    String?
+  addressLine1En    String?
   addressLine2      String?
+  addressLine2Ar    String?
+  addressLine2En    String?
   city              String?
+  cityAr            String?
+  cityEn            String?
   state             String?
+  stateAr           String?
+  stateEn           String?
   postalCode        String?
   countryCode       String?
   preferredLocale   Locale?
@@ -148,6 +156,8 @@ model Customer {
   creditLimit       Decimal?       @db.Decimal(18, 3)
   paymentTermDays   Int?
   notes             String?
+  notesAr           String?
+  notesEn           String?
   isDeleted         Boolean        @default(false)
   deletedAt         DateTime?
   company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
