@@ -117,4 +117,174 @@ describe("QuotationDeliveryProviderConfiguration", () => {
       locales: { ar: false, en: false },
     });
   });
+
+  describe("getReadiness()", () => {
+    it("reports full email and whatsapp readiness", () => {
+      const environment = {
+        VOKA_EMAIL_PROVIDER: "resend",
+        RESEND_API_KEY: "re_secret_key_123",
+        VOKA_EMAIL_FROM: "sales@example.com",
+        VOKA_WHATSAPP_PROVIDER: "meta",
+        META_WHATSAPP_ACCESS_TOKEN: "meta_secret_token_123",
+        META_WHATSAPP_PHONE_NUMBER_ID: "123456789",
+        META_WHATSAPP_GRAPH_API_VERSION: "v20.0",
+        META_WHATSAPP_TEMPLATE_AR: "quote_template_ar",
+        META_WHATSAPP_TEMPLATE_LANGUAGE_AR: "ar",
+        META_WHATSAPP_TEMPLATE_EN: "quote_template_en",
+        META_WHATSAPP_TEMPLATE_LANGUAGE_EN: "en_US",
+      };
+
+      const readiness = new QuotationDeliveryProviderConfiguration(environment).getReadiness();
+
+      expect(readiness).toEqual({
+        email: {
+          provider: "RESEND",
+          configured: true,
+          requirements: {
+            providerSelected: true,
+            apiKeyConfigured: true,
+            senderConfigured: true,
+          },
+        },
+        whatsapp: {
+          provider: "META",
+          configured: true,
+          requirements: {
+            providerSelected: true,
+            accessTokenConfigured: true,
+            phoneNumberIdConfigured: true,
+            graphApiVersionConfigured: true,
+          },
+          locales: {
+            ar: {
+              templateConfigured: true,
+              languageConfigured: true,
+              configured: true,
+            },
+            en: {
+              templateConfigured: true,
+              languageConfigured: true,
+              configured: true,
+            },
+          },
+        },
+      });
+
+      const serialized = JSON.stringify(readiness);
+      expect(serialized).not.toContain("re_secret_key_123");
+      expect(serialized).not.toContain("sales@example.com");
+      expect(serialized).not.toContain("meta_secret_token_123");
+      expect(serialized).not.toContain("123456789");
+      expect(serialized).not.toContain("quote_template_ar");
+      expect(serialized).not.toContain("quote_template_en");
+    });
+
+    it("handles partial email configuration and missing email provider", () => {
+      const partialEmail = new QuotationDeliveryProviderConfiguration({
+        VOKA_EMAIL_PROVIDER: "resend",
+        RESEND_API_KEY: "re_key",
+      }).getReadiness();
+
+      expect(partialEmail.email).toEqual({
+        provider: "RESEND",
+        configured: false,
+        requirements: {
+          providerSelected: true,
+          apiKeyConfigured: true,
+          senderConfigured: false,
+        },
+      });
+
+      const noEmail = new QuotationDeliveryProviderConfiguration({}).getReadiness();
+      expect(noEmail.email).toEqual({
+        provider: null,
+        configured: false,
+        requirements: {
+          providerSelected: false,
+          apiKeyConfigured: false,
+          senderConfigured: false,
+        },
+      });
+    });
+
+    it("handles whatsapp partial configuration: missing token, phone number ID, invalid graph API version", () => {
+      const missingToken = new QuotationDeliveryProviderConfiguration({
+        VOKA_WHATSAPP_PROVIDER: "meta",
+        META_WHATSAPP_PHONE_NUMBER_ID: "12345",
+        META_WHATSAPP_GRAPH_API_VERSION: "v20.0",
+      }).getReadiness();
+
+      expect(missingToken.whatsapp.requirements).toEqual({
+        providerSelected: true,
+        accessTokenConfigured: false,
+        phoneNumberIdConfigured: true,
+        graphApiVersionConfigured: true,
+      });
+      expect(missingToken.whatsapp.configured).toBe(false);
+
+      const missingPhone = new QuotationDeliveryProviderConfiguration({
+        VOKA_WHATSAPP_PROVIDER: "meta",
+        META_WHATSAPP_ACCESS_TOKEN: "token",
+        META_WHATSAPP_GRAPH_API_VERSION: "v20.0",
+      }).getReadiness();
+
+      expect(missingPhone.whatsapp.requirements.phoneNumberIdConfigured).toBe(false);
+      expect(missingPhone.whatsapp.configured).toBe(false);
+
+      const invalidGraph = new QuotationDeliveryProviderConfiguration({
+        VOKA_WHATSAPP_PROVIDER: "meta",
+        META_WHATSAPP_ACCESS_TOKEN: "token",
+        META_WHATSAPP_PHONE_NUMBER_ID: "12345",
+        META_WHATSAPP_GRAPH_API_VERSION: "invalid_version",
+      }).getReadiness();
+
+      expect(invalidGraph.whatsapp.requirements.graphApiVersionConfigured).toBe(false);
+      expect(invalidGraph.whatsapp.configured).toBe(false);
+    });
+
+    it("handles Arabic template only and English template only", () => {
+      const baseMeta = {
+        VOKA_WHATSAPP_PROVIDER: "meta",
+        META_WHATSAPP_ACCESS_TOKEN: "token",
+        META_WHATSAPP_PHONE_NUMBER_ID: "12345",
+        META_WHATSAPP_GRAPH_API_VERSION: "v20.0",
+      };
+
+      const arOnly = new QuotationDeliveryProviderConfiguration({
+        ...baseMeta,
+        META_WHATSAPP_TEMPLATE_AR: "template_ar",
+        META_WHATSAPP_TEMPLATE_LANGUAGE_AR: "ar",
+      }).getReadiness();
+
+      expect(arOnly.whatsapp.configured).toBe(true);
+      expect(arOnly.whatsapp.locales.ar).toEqual({
+        templateConfigured: true,
+        languageConfigured: true,
+        configured: true,
+      });
+      expect(arOnly.whatsapp.locales.en).toEqual({
+        templateConfigured: false,
+        languageConfigured: false,
+        configured: false,
+      });
+
+      const enOnly = new QuotationDeliveryProviderConfiguration({
+        ...baseMeta,
+        META_WHATSAPP_TEMPLATE_EN: "template_en",
+        META_WHATSAPP_TEMPLATE_LANGUAGE_EN: "en_US",
+      }).getReadiness();
+
+      expect(enOnly.whatsapp.configured).toBe(true);
+      expect(enOnly.whatsapp.locales.ar).toEqual({
+        templateConfigured: false,
+        languageConfigured: false,
+        configured: false,
+      });
+      expect(enOnly.whatsapp.locales.en).toEqual({
+        templateConfigured: true,
+        languageConfigured: true,
+        configured: true,
+      });
+    });
+  });
 });
