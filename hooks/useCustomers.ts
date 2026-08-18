@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 
@@ -6,6 +6,8 @@ export interface Customer {
   id: string;
   code: string;
   name: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
   type: string;
   status: string;
   phone?: string | null;

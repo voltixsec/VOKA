@@ -68,6 +68,7 @@ model Company {
   isActive                Boolean                         @default(true)
   members                 CompanyMember[]
   customers               Customer[]
+  customerSequence        CustomerSequence?
   units                   Unit[]
   catalogItems            CatalogItem[]
   catalogCategories       CatalogCategory[]
@@ -128,6 +129,8 @@ model Customer {
   type              CustomerType   @default(COMPANY)
   status            CustomerStatus @default(LEAD)
   name              String
+  nameAr            String?
+  nameEn            String?
   legalName         String?
   email             String?
   phone             String?
@@ -156,12 +159,20 @@ model Customer {
   @@unique([companyId, code])
   @@index([companyId])
   @@index([companyId, name])
+  @@index([companyId, nameAr])
+  @@index([companyId, nameEn])
   @@index([companyId, status])
   @@index([companyId, type])
   @@index([companyId, isDeleted])
   @@index([companyId, email])
   @@index([companyId, phone])
   @@index([companyId, taxNumber])
+}
+
+model CustomerSequence {
+  companyId String  @id
+  nextValue Int     @default(1)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 enum QuotationStatus {

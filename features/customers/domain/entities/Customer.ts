@@ -1,4 +1,4 @@
-﻿import {
+import {
   DomainError,
   Entity,
   Guard,
@@ -23,6 +23,8 @@ export type CustomerProps = {
   type: CustomerType;
   status: CustomerStatus;
   name: string;
+  nameAr: string | null;
+  nameEn: string | null;
   legalName: string | null;
   email: string | null;
   phone: string | null;
@@ -48,8 +50,10 @@ export type CustomerProps = {
 
 export type CreateCustomerProps = {
   companyId: string;
-  code: string;
-  name: string;
+  code?: string;
+  name?: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
   type?: CustomerType;
   status?: CustomerStatus;
   legalName?: string | null;
@@ -94,6 +98,14 @@ export class Customer extends Entity<CustomerProps> {
 
   public get name(): string {
     return this.props.name;
+  }
+
+  public get nameAr(): string | null {
+    return this.props.nameAr;
+  }
+
+  public get nameEn(): string | null {
+    return this.props.nameEn;
   }
 
   public get legalName(): string | null {
@@ -180,13 +192,20 @@ export class Customer extends Entity<CustomerProps> {
     return this.props.updatedAt;
   }
 
+  public getDisplayName(locale?: 'ar' | 'en' | CustomerLocale | string | null): string {
+    const isAr = locale?.toString().toLowerCase().startsWith('ar');
+    if (isAr) {
+      return this.props.nameAr || this.props.name || this.props.nameEn || '';
+    }
+    return this.props.nameEn || this.props.name || this.props.nameAr || '';
+  }
+
   public static create(
     input: CreateCustomerProps,
     id?: UniqueEntityID,
   ): Result<Customer, DomainError> {
     const companyId = input.companyId.trim();
-    const code = input.code.trim().toUpperCase();
-    const name = input.name.trim();
+    const code = (input.code ?? '').trim().toUpperCase();
 
     const companyIdGuard = Guard.againstEmptyString(
       companyId,
@@ -202,36 +221,31 @@ export class Customer extends Entity<CustomerProps> {
       );
     }
 
-    const codeGuard = Guard.againstEmptyString(code, 'Customer code');
-
-    if (!codeGuard.succeeded) {
-      return Result.failure(
-        new DomainError(
-          codeGuard.message ?? 'Customer code is required.',
-          'INVALID_CUSTOMER_CODE',
-        ),
-      );
+    if (code) {
+      if (!/^[A-Z0-9][A-Z0-9-_]{0,49}$/.test(code)) {
+        return Result.failure(
+          new DomainError(
+            'Customer code may only contain letters, numbers, hyphens, and underscores.',
+            'INVALID_CUSTOMER_CODE',
+          ),
+        );
+      }
     }
 
-    if (!/^[A-Z0-9][A-Z0-9-_]{0,49}$/.test(code)) {
+    const nameAr = Customer.normalizeOptional(input.nameAr);
+    const nameEn = Customer.normalizeOptional(input.nameEn);
+    const legacyName = Customer.normalizeOptional(input.name);
+
+    if (!nameAr && !nameEn && !legacyName) {
       return Result.failure(
         new DomainError(
-          'Customer code may only contain letters, numbers, hyphens, and underscores.',
-          'INVALID_CUSTOMER_CODE',
-        ),
-      );
-    }
-
-    const nameGuard = Guard.againstEmptyString(name, 'Customer name');
-
-    if (!nameGuard.succeeded) {
-      return Result.failure(
-        new DomainError(
-          nameGuard.message ?? 'Customer name is required.',
+          'At least one customer name is required.',
           'INVALID_CUSTOMER_NAME',
         ),
       );
     }
+
+    const effectiveName = legacyName || nameAr || nameEn || '';
 
     const email = Customer.normalizeOptional(input.email);
 
@@ -314,7 +328,9 @@ export class Customer extends Entity<CustomerProps> {
           code,
           type: input.type ?? 'COMPANY',
           status: input.status ?? 'LEAD',
-          name,
+          name: effectiveName,
+          nameAr,
+          nameEn,
           legalName: Customer.normalizeOptional(input.legalName),
           email: email?.toLowerCase() ?? null,
           phone: Customer.normalizeOptional(input.phone),
@@ -425,10 +441,24 @@ export class Customer extends Entity<CustomerProps> {
   public updateDetails(
     input: Omit<Partial<CreateCustomerProps>, 'companyId'>,
   ): Result<void, DomainError> {
+    const nextNameAr = input.nameAr === undefined ? this.nameAr : Customer.normalizeOptional(input.nameAr);
+    const nextNameEn = input.nameEn === undefined ? this.nameEn : Customer.normalizeOptional(input.nameEn);
+    const nextLegacyName = input.name === undefined ? this.name : Customer.normalizeOptional(input.name);
+
+    if (!nextNameAr && !nextNameEn && !nextLegacyName) {
+      return Result.failure(
+        new DomainError('At least one customer name is required.', 'INVALID_CUSTOMER_NAME'),
+      );
+    }
+
+    const effectiveName = nextLegacyName || nextNameAr || nextNameEn || this.name;
+
     const candidate = Customer.create({
       companyId: this.companyId,
-      code: input.code ?? this.code,
-      name: input.name ?? this.name,
+      code: this.code, // Code is immutable
+      name: effectiveName,
+      nameAr: nextNameAr,
+      nameEn: nextNameEn,
       type: input.type ?? this.type,
       status: input.status ?? this.status,
       legalName: input.legalName === undefined ? this.legalName : input.legalName,
@@ -453,6 +483,7 @@ export class Customer extends Entity<CustomerProps> {
     if (!candidate.isSuccess) return Result.failure(candidate.getError());
     const next = candidate.getValue().props;
     Object.assign(this.props, next, {
+      code: this.code, // preserve existing code
       createdAt: this.createdAt,
       updatedAt: new Date(),
     });

@@ -261,6 +261,8 @@ export class AISalesAssistantResolver {
       const values = [
         customer.code,
         customer.name,
+        customer.nameAr,
+        customer.nameEn,
         customer.legalName,
         customer.email,
       ];

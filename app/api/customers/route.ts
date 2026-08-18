@@ -41,13 +41,7 @@ export const POST = withCompanyAuth(
   async (request, _auth, company) => {
     const body = (await request.json()) as Record<string, unknown>;
     const changes = parseCustomerChanges(body);
-    if (typeof changes.code !== 'string' || !changes.code) {
-      throw ApiError.badRequest('CUSTOMER_CODE_REQUIRED', 'Customer code is required.', { field: 'code' });
-    }
-    if (typeof changes.name !== 'string' || !changes.name) {
-      throw ApiError.badRequest('CUSTOMER_NAME_REQUIRED', 'Customer name is required.', { field: 'name' });
-    }
-    const result = await createCustomer.execute({ ...changes, companyId: company.companyId, code: changes.code, name: changes.name });
+    const result = await createCustomer.execute({ ...changes, companyId: company.companyId });
     if (!result.isSuccess) throwCustomerError(result.getError());
     return apiSuccess({ customer: customerToResponse(result.getValue()) }, {
       status: 201, headers: { 'Cache-Control': 'no-store' },

@@ -1,4 +1,4 @@
-﻿import {
+import {
   DomainError,
   Result,
   type Service,
@@ -35,19 +35,21 @@ export class CreateCustomer
 
     const customer = customerResult.getValue();
 
-    const existingCustomer =
-      await this.customerRepository.findByCode(
-        customer.companyId,
-        customer.code,
-      );
+    if (customer.code) {
+      const existingCustomer =
+        await this.customerRepository.findByCode(
+          customer.companyId,
+          customer.code,
+        );
 
-    if (existingCustomer) {
-      return Result.failure(
-        new DomainError(
-          'A customer with this code already exists in this company.',
-          'CUSTOMER_CODE_ALREADY_EXISTS',
-        ),
-      );
+      if (existingCustomer) {
+        return Result.failure(
+          new DomainError(
+            'A customer with this code already exists in this company.',
+            'CUSTOMER_CODE_ALREADY_EXISTS',
+          ),
+        );
+      }
     }
 
     const savedCustomer =

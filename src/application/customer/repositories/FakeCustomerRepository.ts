@@ -1,4 +1,4 @@
-﻿import type { Customer } from "../../../domain/customer/entities/Customer";
+import type { Customer } from "../../../domain/customer/entities/Customer";
 import type { ICustomerRepository } from "../../../application/customer/repositories/ICustomerRepository";
 
 export class FakeCustomerRepository
@@ -32,10 +32,15 @@ export class FakeCustomerRepository
     name: string,
   ): Promise<Customer | null> {
 
+    const norm = (s?: string | null) => s?.trim().toLowerCase();
+    const target = norm(name);
+
     return (
       this.customers.find(
         customer =>
-          customer.name.toString() === name,
+          norm(customer.name.toString()) === target ||
+          (customer.nameAr && norm(customer.nameAr) === target) ||
+          (customer.nameEn && norm(customer.nameEn) === target),
       ) ?? null
     );
 

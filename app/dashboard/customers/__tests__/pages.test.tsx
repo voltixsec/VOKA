@@ -11,7 +11,7 @@ import CustomerDetailPage from '../[customerId]/page';
 import EditCustomerPage from '../[customerId]/edit/page';
 import NewCustomerPage from '../new/page';
 
-const customer = { id: 'customer-1', code: 'C-1', name: 'Acme', type: 'COMPANY', status: 'ACTIVE', email: 'hello@example.com', whatsapp: '+96590000000', countryCode: 'KW', preferredCurrency: 'KWD' };
+const customer = { id: 'customer-1', code: 'CUST-000001', name: 'Acme', nameEn: 'Acme', type: 'COMPANY', status: 'ACTIVE', email: 'hello@example.com', whatsapp: '+96590000000', countryCode: 'KW', preferredCurrency: 'KWD' };
 const response = (data: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } }));
 
 describe('customer management pages', () => {
@@ -20,19 +20,19 @@ describe('customer management pages', () => {
   it('renders customer detail and canonical contacts', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(() => response({ data: { customer } }));
     render(<CustomerDetailPage />);
-    expect(await screen.findByText('Acme')).toBeInTheDocument();
+    const matches = await screen.findAllByText('Acme');
+    expect(matches.length).toBeGreaterThan(0);
     expect(screen.getByText('+96590000000')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Edit customer' })).toHaveAttribute('href', '/dashboard/customers/customer-1/edit');
   });
 
   it('creates a new customer and navigates to its detail', async () => {
-    const fetch = vi.spyOn(global, 'fetch').mockImplementation(() => response({ data: { customer: { id: 'customer-new' } } }, 201));
+    const fetch = vi.spyOn(global, 'fetch').mockImplementation(() => response({ data: { customer: { id: 'customer-new', code: 'CUST-000002' } } }, 201));
     render(<NewCustomerPage />);
-    fireEvent.change(screen.getByLabelText('Customer code'), { target: { value: 'C-NEW' } });
-    fireEvent.change(screen.getByLabelText('Customer name'), { target: { value: 'New Co' } });
+    fireEvent.change(screen.getByLabelText('Customer Name (English)'), { target: { value: 'New Co' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create customer' }));
     await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/dashboard/customers/customer-new'));
-    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ code: 'C-NEW', name: 'New Co', whatsapp: null });
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ nameEn: 'New Co', whatsapp: null });
   });
 
   it('loads edit state and PATCHes changed fields only', async () => {
