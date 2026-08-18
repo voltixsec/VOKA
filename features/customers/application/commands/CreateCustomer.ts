@@ -1,4 +1,4 @@
-﻿import {
+import {
   DomainError,
   Result,
   type Service,
@@ -11,7 +11,7 @@ import {
 
 import type { CustomerRepository } from '../../domain/repositories';
 
-export type CreateCustomerInput = CreateCustomerProps;
+export type CreateCustomerInput = Omit<CreateCustomerProps, 'code'>;
 
 export class CreateCustomer
   implements
@@ -27,28 +27,18 @@ export class CreateCustomer
   public async execute(
     input: CreateCustomerInput,
   ): Promise<Result<Customer, DomainError>> {
-    const customerResult = Customer.create(input);
+    // Customer business code is server-owned.
+    // Runtime callers cannot override the generated CUST sequence.
+    const customerResult = Customer.create({
+      ...input,
+      code: '',
+    });
 
     if (!customerResult.isSuccess) {
       return Result.failure(customerResult.getError());
     }
 
     const customer = customerResult.getValue();
-
-    const existingCustomer =
-      await this.customerRepository.findByCode(
-        customer.companyId,
-        customer.code,
-      );
-
-    if (existingCustomer) {
-      return Result.failure(
-        new DomainError(
-          'A customer with this code already exists in this company.',
-          'CUSTOMER_CODE_ALREADY_EXISTS',
-        ),
-      );
-    }
 
     const savedCustomer =
       await this.customerRepository.save(customer);

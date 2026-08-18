@@ -1,4 +1,4 @@
-﻿import type { PrismaClient } from '../../../../lib/generated/prisma/client';
+import type { PrismaClient } from '../../../../lib/generated/prisma/client';
 import { UniqueEntityID } from '../../../../lib/core';
 import {
   Customer,
@@ -10,6 +10,7 @@ import type {
   CustomerListFilters,
   CustomerRepository,
 } from '../../domain/repositories';
+import { CustomerCodeAllocator } from './CustomerCodeAllocator';
 
 type DecimalLike = {
   toNumber(): number;
@@ -22,6 +23,8 @@ type CustomerRecord = {
   type: string;
   status: string;
   name: string;
+  nameAr: string | null;
+  nameEn: string | null;
   legalName: string | null;
   email: string | null;
   phone: string | null;
@@ -48,9 +51,13 @@ type CustomerRecord = {
 export class PrismaCustomerRepository
   implements CustomerRepository
 {
+  private readonly codeAllocator: CustomerCodeAllocator;
+
   constructor(
     private readonly prisma: PrismaClient,
-  ) {}
+  ) {
+    this.codeAllocator = new CustomerCodeAllocator(prisma);
+  }
 
   public async findById(
     id: string,
@@ -124,6 +131,18 @@ export class PrismaCustomerRepository
                 },
                 {
                   name: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  nameAr: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  nameEn: {
                     contains: search,
                     mode: 'insensitive',
                   },
@@ -214,6 +233,18 @@ export class PrismaCustomerRepository
                   },
                 },
                 {
+                  nameAr: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  nameEn: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
                   legalName: {
                     contains: search,
                     mode: 'insensitive',
@@ -259,12 +290,19 @@ export class PrismaCustomerRepository
   public async save(
     customer: Customer,
   ): Promise<Customer> {
+    let code = customer.code;
+    if (!code) {
+      code = await this.codeAllocator.allocateNextCode(customer.companyId);
+    }
+
     const data = {
       companyId: customer.companyId,
-      code: customer.code,
+      code,
       type: customer.type,
       status: customer.status,
       name: customer.name,
+      nameAr: customer.nameAr,
+      nameEn: customer.nameEn,
       legalName: customer.legalName,
       email: customer.email,
       phone: customer.phone,
@@ -340,6 +378,8 @@ export class PrismaCustomerRepository
         type: record.type as CustomerType,
         status: record.status as CustomerStatus,
         name: record.name,
+        nameAr: record.nameAr,
+        nameEn: record.nameEn,
         legalName: record.legalName,
         email: record.email,
         phone: record.phone,

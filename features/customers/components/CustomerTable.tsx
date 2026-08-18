@@ -1,4 +1,4 @@
-﻿import type { Customer } from "../../../hooks/useCustomers";
+import type { Customer } from "../../../hooks/useCustomers";
 
 import Link from "next/link";
 
@@ -72,6 +72,13 @@ function translateCustomerStatus(
   return translations[status.toUpperCase()] ?? status;
 }
 
+function getDisplayName(customer: Customer, isArabic: boolean): string {
+  if (isArabic) {
+    return customer.nameAr || customer.name || customer.nameEn || "—";
+  }
+  return customer.nameEn || customer.name || customer.nameAr || "—";
+}
+
 export function CustomerTable({
   customers,
   isArabic = false,
@@ -126,7 +133,7 @@ export function CustomerTable({
                   dir="auto"
                   className="block truncate rounded font-medium text-white outline-none hover:text-sky-200 focus-visible:ring-2 focus-visible:ring-sky-300"
                 >
-                  {customer.name}
+                  {getDisplayName(customer, isArabic)}
                 </Link>
               </TableCell>
 

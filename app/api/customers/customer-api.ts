@@ -8,12 +8,12 @@ import type {
 } from '@/features/customers/domain/entities/Customer';
 
 const stringFields = [
-  'code', 'name', 'legalName', 'email', 'phone', 'mobile', 'whatsapp',
+  'name', 'nameAr', 'nameEn', 'legalName', 'email', 'phone', 'mobile', 'whatsapp',
   'taxNumber', 'addressLine1', 'addressLine2', 'city', 'state',
   'postalCode', 'countryCode', 'preferredCurrency', 'notes',
 ] as const;
 
-export type CustomerChanges = Omit<Partial<CreateCustomerProps>, 'companyId'>;
+export type CustomerChanges = Omit<Partial<CreateCustomerProps>, 'companyId' | 'code'>;
 
 function optionalString(value: unknown, field: string): string | null {
   if (value === null) return null;
@@ -27,15 +27,6 @@ export function parseCustomerChanges(body: Record<string, unknown>): CustomerCha
   const changes: Record<string, unknown> = {};
   for (const field of stringFields) {
     if (body[field] !== undefined) changes[field] = optionalString(body[field], field);
-  }
-  for (const field of ['code', 'name'] as const) {
-    if (body[field] !== undefined && !changes[field]) {
-      throw ApiError.badRequest(
-        field === 'code' ? 'CUSTOMER_CODE_REQUIRED' : 'CUSTOMER_NAME_REQUIRED',
-        field === 'code' ? 'Customer code is required.' : 'Customer name is required.',
-        { field },
-      );
-    }
   }
 
   if (body.type !== undefined) {
@@ -67,10 +58,29 @@ export function parseCustomerChanges(body: Record<string, unknown>): CustomerCha
   return changes as CustomerChanges;
 }
 
+export function parseCustomerCreate(
+  body: Record<string, unknown>,
+): CustomerChanges {
+  const changes = parseCustomerChanges(body);
+
+  // New Customers enter the canonical bilingual master-data model.
+  // Legacy name remains compatibility data for existing persisted rows.
+  if (!changes.nameAr && !changes.nameEn) {
+    throw ApiError.badRequest(
+      'INVALID_CUSTOMER_NAME',
+      'At least one Arabic or English customer name is required.',
+      { field: 'nameAr' },
+    );
+  }
+
+  return changes;
+}
+
 export function customerToResponse(customer: Customer) {
   return {
     id: customer.id.toString(), code: customer.code, type: customer.type,
-    status: customer.status, name: customer.name, legalName: customer.legalName,
+    status: customer.status, name: customer.name, nameAr: customer.nameAr, nameEn: customer.nameEn,
+    legalName: customer.legalName,
     email: customer.email, phone: customer.phone, mobile: customer.mobile,
     whatsapp: customer.whatsapp, taxNumber: customer.taxNumber,
     addressLine1: customer.addressLine1, addressLine2: customer.addressLine2,

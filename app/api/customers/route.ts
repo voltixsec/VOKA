@@ -5,7 +5,7 @@ import type { CustomerStatus, CustomerType } from '@/features/customers/domain/e
 import { PrismaCustomerRepository } from '@/features/customers/infrastructure/prisma/PrismaCustomerRepository';
 import { prisma } from '@/lib/prisma';
 
-import { customerToResponse, parseCustomerChanges, throwCustomerError } from './customer-api';
+import { customerToResponse, parseCustomerCreate, throwCustomerError } from './customer-api';
 
 export const runtime = 'nodejs';
 const repository = new PrismaCustomerRepository(prisma);
@@ -40,14 +40,8 @@ export const POST = withCompanyAuth(
   ['OWNER', 'ADMIN', 'SALES'],
   async (request, _auth, company) => {
     const body = (await request.json()) as Record<string, unknown>;
-    const changes = parseCustomerChanges(body);
-    if (typeof changes.code !== 'string' || !changes.code) {
-      throw ApiError.badRequest('CUSTOMER_CODE_REQUIRED', 'Customer code is required.', { field: 'code' });
-    }
-    if (typeof changes.name !== 'string' || !changes.name) {
-      throw ApiError.badRequest('CUSTOMER_NAME_REQUIRED', 'Customer name is required.', { field: 'name' });
-    }
-    const result = await createCustomer.execute({ ...changes, companyId: company.companyId, code: changes.code, name: changes.name });
+    const changes = parseCustomerCreate(body);
+    const result = await createCustomer.execute({ ...changes, companyId: company.companyId });
     if (!result.isSuccess) throwCustomerError(result.getError());
     return apiSuccess({ customer: customerToResponse(result.getValue()) }, {
       status: 201, headers: { 'Cache-Control': 'no-store' },

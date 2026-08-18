@@ -30,6 +30,9 @@ export const PATCH = withCompanyAuth(
   ['OWNER', 'ADMIN', 'SALES'],
   async (request, _auth, company) => {
     const changes = parseCustomerChanges((await request.json()) as Record<string, unknown>);
+    // Remove code from changes to prevent editing customer code
+    delete (changes as Record<string, unknown>).code;
+
     if (Object.keys(changes).length === 0) {
       throw ApiError.badRequest('CUSTOMER_CHANGES_REQUIRED', 'At least one editable customer field is required.');
     }
