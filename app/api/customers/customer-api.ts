@@ -9,8 +9,13 @@ import type {
 
 const stringFields = [
   'name', 'nameAr', 'nameEn', 'legalName', 'email', 'phone', 'mobile', 'whatsapp',
-  'taxNumber', 'addressLine1', 'addressLine2', 'city', 'state',
-  'postalCode', 'countryCode', 'preferredCurrency', 'notes',
+  'taxNumber',
+  'addressLine1', 'addressLine1Ar', 'addressLine1En',
+  'addressLine2', 'addressLine2Ar', 'addressLine2En',
+  'city', 'cityAr', 'cityEn',
+  'state', 'stateAr', 'stateEn',
+  'postalCode', 'countryCode', 'preferredCurrency',
+  'notes', 'notesAr', 'notesEn',
 ] as const;
 
 export type CustomerChanges = Omit<Partial<CreateCustomerProps>, 'companyId' | 'code'>;
@@ -83,12 +88,27 @@ export function customerToResponse(customer: Customer) {
     legalName: customer.legalName,
     email: customer.email, phone: customer.phone, mobile: customer.mobile,
     whatsapp: customer.whatsapp, taxNumber: customer.taxNumber,
-    addressLine1: customer.addressLine1, addressLine2: customer.addressLine2,
-    city: customer.city, state: customer.state, postalCode: customer.postalCode,
+    addressLine1: customer.addressLine1,
+    addressLine1Ar: customer.addressLine1Ar,
+    addressLine1En: customer.addressLine1En,
+    addressLine2: customer.addressLine2,
+    addressLine2Ar: customer.addressLine2Ar,
+    addressLine2En: customer.addressLine2En,
+    city: customer.city,
+    cityAr: customer.cityAr,
+    cityEn: customer.cityEn,
+    state: customer.state,
+    stateAr: customer.stateAr,
+    stateEn: customer.stateEn,
+    postalCode: customer.postalCode,
     countryCode: customer.countryCode, preferredLocale: customer.preferredLocale,
     preferredCurrency: customer.preferredCurrency, creditLimit: customer.creditLimit,
-    paymentTermDays: customer.paymentTermDays, notes: customer.notes,
-    createdAt: customer.createdAt, updatedAt: customer.updatedAt,
+    paymentTermDays: customer.paymentTermDays,
+    notes: customer.notes,
+    notesAr: customer.notesAr,
+    notesEn: customer.notesEn,
+    createdAt: customer.createdAt,
+    updatedAt: customer.updatedAt,
   };
 }
 

@@ -32,9 +32,17 @@ export type CustomerProps = {
   whatsapp: string | null;
   taxNumber: string | null;
   addressLine1: string | null;
+  addressLine1Ar: string | null;
+  addressLine1En: string | null;
   addressLine2: string | null;
+  addressLine2Ar: string | null;
+  addressLine2En: string | null;
   city: string | null;
+  cityAr: string | null;
+  cityEn: string | null;
   state: string | null;
+  stateAr: string | null;
+  stateEn: string | null;
   postalCode: string | null;
   countryCode: string | null;
   preferredLocale: CustomerLocale | null;
@@ -42,6 +50,8 @@ export type CustomerProps = {
   creditLimit: number | null;
   paymentTermDays: number | null;
   notes: string | null;
+  notesAr: string | null;
+  notesEn: string | null;
   isDeleted: boolean;
   deletedAt: Date | null;
   createdAt: Date;
@@ -63,9 +73,17 @@ export type CreateCustomerProps = {
   whatsapp?: string | null;
   taxNumber?: string | null;
   addressLine1?: string | null;
+  addressLine1Ar?: string | null;
+  addressLine1En?: string | null;
   addressLine2?: string | null;
+  addressLine2Ar?: string | null;
+  addressLine2En?: string | null;
   city?: string | null;
+  cityAr?: string | null;
+  cityEn?: string | null;
   state?: string | null;
+  stateAr?: string | null;
+  stateEn?: string | null;
   postalCode?: string | null;
   countryCode?: string | null;
   preferredLocale?: CustomerLocale | null;
@@ -73,6 +91,8 @@ export type CreateCustomerProps = {
   creditLimit?: number | null;
   paymentTermDays?: number | null;
   notes?: string | null;
+  notesAr?: string | null;
+  notesEn?: string | null;
 };
 
 export class Customer extends Entity<CustomerProps> {
@@ -136,16 +156,48 @@ export class Customer extends Entity<CustomerProps> {
     return this.props.addressLine1;
   }
 
+  public get addressLine1Ar(): string | null {
+    return this.props.addressLine1Ar;
+  }
+
+  public get addressLine1En(): string | null {
+    return this.props.addressLine1En;
+  }
+
   public get addressLine2(): string | null {
     return this.props.addressLine2;
+  }
+
+  public get addressLine2Ar(): string | null {
+    return this.props.addressLine2Ar;
+  }
+
+  public get addressLine2En(): string | null {
+    return this.props.addressLine2En;
   }
 
   public get city(): string | null {
     return this.props.city;
   }
 
+  public get cityAr(): string | null {
+    return this.props.cityAr;
+  }
+
+  public get cityEn(): string | null {
+    return this.props.cityEn;
+  }
+
   public get state(): string | null {
     return this.props.state;
+  }
+
+  public get stateAr(): string | null {
+    return this.props.stateAr;
+  }
+
+  public get stateEn(): string | null {
+    return this.props.stateEn;
   }
 
   public get postalCode(): string | null {
@@ -174,6 +226,14 @@ export class Customer extends Entity<CustomerProps> {
 
   public get notes(): string | null {
     return this.props.notes;
+  }
+
+  public get notesAr(): string | null {
+    return this.props.notesAr;
+  }
+
+  public get notesEn(): string | null {
+    return this.props.notesEn;
   }
 
   public get isDeleted(): boolean {
@@ -340,11 +400,27 @@ export class Customer extends Entity<CustomerProps> {
           addressLine1: Customer.normalizeOptional(
             input.addressLine1,
           ),
+          addressLine1Ar: Customer.normalizeOptional(
+            input.addressLine1Ar,
+          ),
+          addressLine1En: Customer.normalizeOptional(
+            input.addressLine1En,
+          ),
           addressLine2: Customer.normalizeOptional(
             input.addressLine2,
           ),
+          addressLine2Ar: Customer.normalizeOptional(
+            input.addressLine2Ar,
+          ),
+          addressLine2En: Customer.normalizeOptional(
+            input.addressLine2En,
+          ),
           city: Customer.normalizeOptional(input.city),
+          cityAr: Customer.normalizeOptional(input.cityAr),
+          cityEn: Customer.normalizeOptional(input.cityEn),
           state: Customer.normalizeOptional(input.state),
+          stateAr: Customer.normalizeOptional(input.stateAr),
+          stateEn: Customer.normalizeOptional(input.stateEn),
           postalCode: Customer.normalizeOptional(input.postalCode),
           countryCode,
           preferredLocale: input.preferredLocale ?? null,
@@ -352,6 +428,8 @@ export class Customer extends Entity<CustomerProps> {
           creditLimit: input.creditLimit ?? null,
           paymentTermDays: input.paymentTermDays ?? null,
           notes: Customer.normalizeOptional(input.notes),
+          notesAr: Customer.normalizeOptional(input.notesAr),
+          notesEn: Customer.normalizeOptional(input.notesEn),
           isDeleted: false,
           deletedAt: null,
           createdAt: now,
@@ -503,9 +581,17 @@ export class Customer extends Entity<CustomerProps> {
       whatsapp: input.whatsapp === undefined ? this.whatsapp : input.whatsapp,
       taxNumber: input.taxNumber === undefined ? this.taxNumber : input.taxNumber,
       addressLine1: input.addressLine1 === undefined ? this.addressLine1 : input.addressLine1,
+      addressLine1Ar: input.addressLine1Ar === undefined ? this.addressLine1Ar : input.addressLine1Ar,
+      addressLine1En: input.addressLine1En === undefined ? this.addressLine1En : input.addressLine1En,
       addressLine2: input.addressLine2 === undefined ? this.addressLine2 : input.addressLine2,
+      addressLine2Ar: input.addressLine2Ar === undefined ? this.addressLine2Ar : input.addressLine2Ar,
+      addressLine2En: input.addressLine2En === undefined ? this.addressLine2En : input.addressLine2En,
       city: input.city === undefined ? this.city : input.city,
+      cityAr: input.cityAr === undefined ? this.cityAr : input.cityAr,
+      cityEn: input.cityEn === undefined ? this.cityEn : input.cityEn,
       state: input.state === undefined ? this.state : input.state,
+      stateAr: input.stateAr === undefined ? this.stateAr : input.stateAr,
+      stateEn: input.stateEn === undefined ? this.stateEn : input.stateEn,
       postalCode: input.postalCode === undefined ? this.postalCode : input.postalCode,
       countryCode: input.countryCode === undefined ? this.countryCode : input.countryCode,
       preferredLocale: input.preferredLocale === undefined ? this.preferredLocale : input.preferredLocale,
@@ -513,6 +599,8 @@ export class Customer extends Entity<CustomerProps> {
       creditLimit: input.creditLimit === undefined ? this.creditLimit : input.creditLimit,
       paymentTermDays: input.paymentTermDays === undefined ? this.paymentTermDays : input.paymentTermDays,
       notes: input.notes === undefined ? this.notes : input.notes,
+      notesAr: input.notesAr === undefined ? this.notesAr : input.notesAr,
+      notesEn: input.notesEn === undefined ? this.notesEn : input.notesEn,
     });
 
     if (!candidate.isSuccess) return Result.failure(candidate.getError());

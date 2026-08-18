@@ -32,9 +32,17 @@ type CustomerRecord = {
   whatsapp: string | null;
   taxNumber: string | null;
   addressLine1: string | null;
+  addressLine1Ar: string | null;
+  addressLine1En: string | null;
   addressLine2: string | null;
+  addressLine2Ar: string | null;
+  addressLine2En: string | null;
   city: string | null;
+  cityAr: string | null;
+  cityEn: string | null;
   state: string | null;
+  stateAr: string | null;
+  stateEn: string | null;
   postalCode: string | null;
   countryCode: string | null;
   preferredLocale: string | null;
@@ -42,6 +50,8 @@ type CustomerRecord = {
   creditLimit: DecimalLike | null;
   paymentTermDays: number | null;
   notes: string | null;
+  notesAr: string | null;
+  notesEn: string | null;
   isDeleted: boolean;
   deletedAt: Date | null;
   createdAt: Date;
@@ -310,9 +320,17 @@ export class PrismaCustomerRepository
       whatsapp: customer.whatsapp,
       taxNumber: customer.taxNumber,
       addressLine1: customer.addressLine1,
+      addressLine1Ar: customer.addressLine1Ar,
+      addressLine1En: customer.addressLine1En,
       addressLine2: customer.addressLine2,
+      addressLine2Ar: customer.addressLine2Ar,
+      addressLine2En: customer.addressLine2En,
       city: customer.city,
+      cityAr: customer.cityAr,
+      cityEn: customer.cityEn,
       state: customer.state,
+      stateAr: customer.stateAr,
+      stateEn: customer.stateEn,
       postalCode: customer.postalCode,
       countryCode: customer.countryCode,
       preferredLocale: customer.preferredLocale,
@@ -320,6 +338,8 @@ export class PrismaCustomerRepository
       creditLimit: customer.creditLimit,
       paymentTermDays: customer.paymentTermDays,
       notes: customer.notes,
+      notesAr: customer.notesAr,
+      notesEn: customer.notesEn,
       isDeleted: customer.isDeleted,
       deletedAt: customer.deletedAt,
       updatedAt: customer.updatedAt,
@@ -387,9 +407,17 @@ export class PrismaCustomerRepository
         whatsapp: record.whatsapp,
         taxNumber: record.taxNumber,
         addressLine1: record.addressLine1,
+        addressLine1Ar: record.addressLine1Ar,
+        addressLine1En: record.addressLine1En,
         addressLine2: record.addressLine2,
+        addressLine2Ar: record.addressLine2Ar,
+        addressLine2En: record.addressLine2En,
         city: record.city,
+        cityAr: record.cityAr,
+        cityEn: record.cityEn,
         state: record.state,
+        stateAr: record.stateAr,
+        stateEn: record.stateEn,
         postalCode: record.postalCode,
         countryCode: record.countryCode,
         preferredLocale:
@@ -399,6 +427,8 @@ export class PrismaCustomerRepository
           record.creditLimit?.toNumber() ?? null,
         paymentTermDays: record.paymentTermDays,
         notes: record.notes,
+        notesAr: record.notesAr,
+        notesEn: record.notesEn,
         isDeleted: record.isDeleted,
         deletedAt: record.deletedAt,
         createdAt: record.createdAt,
