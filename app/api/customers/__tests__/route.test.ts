@@ -46,7 +46,7 @@ describe('customer APIs', () => {
   });
 
   it('creates a customer with canonical WhatsApp and resists mass assignment', async () => {
-    const response = await POST(request('/api/customers', 'POST', { companyId: 'other', code: 'C-2', name: 'New', whatsapp: '+96590000000', isDeleted: true }));
+    const response = await POST(request('/api/customers', 'POST', { companyId: 'other', code: 'C-2', nameEn: 'New', whatsapp: '+96590000000', isDeleted: true }));
     const body = await response.json();
     expect(response.status).toBe(201);
     expect(body.data.customer).toMatchObject({ whatsapp: '+96590000000' });
@@ -57,7 +57,7 @@ describe('customer APIs', () => {
   });
 
   it('rejects invalid customer WhatsApp on create', async () => {
-    const response = await POST(request('/api/customers', 'POST', { code: 'C-2', name: 'New', whatsapp: '0501234567' }));
+    const response = await POST(request('/api/customers', 'POST', { code: 'C-2', nameEn: 'New', whatsapp: '0501234567' }));
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: { code: 'INVALID_CUSTOMER_WHATSAPP' } });
   });

@@ -97,6 +97,14 @@ export function CustomerForm(props: {
   const set = (field: keyof CustomerFormValue, next: string) =>
     setValue((current) => ({ ...current, [field]: next }));
 
+  const isLegacyCustomer = Boolean(
+    props.isEdit &&
+      props.initialValue &&
+      !props.initialValue.nameAr.trim() &&
+      !props.initialValue.nameEn.trim() &&
+      props.initialValue.name.trim(),
+  );
+
   const labels = props.isArabic
     ? {
         code: 'رمز العميل (توليد آلي)',
@@ -146,7 +154,11 @@ export function CustomerForm(props: {
         setErrorMsg('');
         if (!whatsappValid) return;
 
-        if (!value.nameAr.trim() && !value.nameEn.trim() && !value.name.trim()) {
+        const hasCanonicalName = Boolean(
+          value.nameAr.trim() || value.nameEn.trim(),
+        );
+
+        if (!hasCanonicalName && !isLegacyCustomer) {
           setErrorMsg(
             props.isArabic
               ? 'يجب إدخال اسم واحد على الأقل (عربي أو إنكليزي)'

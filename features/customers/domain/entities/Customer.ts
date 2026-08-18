@@ -441,17 +441,52 @@ export class Customer extends Entity<CustomerProps> {
   public updateDetails(
     input: Omit<Partial<CreateCustomerProps>, 'companyId'>,
   ): Result<void, DomainError> {
-    const nextNameAr = input.nameAr === undefined ? this.nameAr : Customer.normalizeOptional(input.nameAr);
-    const nextNameEn = input.nameEn === undefined ? this.nameEn : Customer.normalizeOptional(input.nameEn);
-    const nextLegacyName = input.name === undefined ? this.name : Customer.normalizeOptional(input.name);
+    const wasLegacyOnly = !this.nameAr && !this.nameEn;
 
-    if (!nextNameAr && !nextNameEn && !nextLegacyName) {
+    const nextNameAr =
+      input.nameAr === undefined
+        ? this.nameAr
+        : Customer.normalizeOptional(input.nameAr);
+
+    const nextNameEn =
+      input.nameEn === undefined
+        ? this.nameEn
+        : Customer.normalizeOptional(input.nameEn);
+
+    const nextLegacyName =
+      input.name === undefined
+        ? this.name
+        : Customer.normalizeOptional(input.name);
+
+    // Once a Customer has canonical bilingual master data,
+    // at least one canonical name must always remain.
+    if (!wasLegacyOnly && !nextNameAr && !nextNameEn) {
       return Result.failure(
-        new DomainError('At least one customer name is required.', 'INVALID_CUSTOMER_NAME'),
+        new DomainError(
+          'At least one Arabic or English customer name is required.',
+          'INVALID_CUSTOMER_NAME',
+        ),
       );
     }
 
-    const effectiveName = nextLegacyName || nextNameAr || nextNameEn || this.name;
+    // Genuine pre-6.4B rows may continue using legacy name
+    // for unrelated edits without forced migration or translation.
+    if (
+      wasLegacyOnly &&
+      !nextNameAr &&
+      !nextNameEn &&
+      !nextLegacyName
+    ) {
+      return Result.failure(
+        new DomainError(
+          'At least one customer name is required.',
+          'INVALID_CUSTOMER_NAME',
+        ),
+      );
+    }
+
+    const effectiveName =
+      nextLegacyName || nextNameAr || nextNameEn || this.name;
 
     const candidate = Customer.create({
       companyId: this.companyId,

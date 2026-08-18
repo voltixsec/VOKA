@@ -5,7 +5,7 @@ import type { CustomerStatus, CustomerType } from '@/features/customers/domain/e
 import { PrismaCustomerRepository } from '@/features/customers/infrastructure/prisma/PrismaCustomerRepository';
 import { prisma } from '@/lib/prisma';
 
-import { customerToResponse, parseCustomerChanges, throwCustomerError } from './customer-api';
+import { customerToResponse, parseCustomerCreate, throwCustomerError } from './customer-api';
 
 export const runtime = 'nodejs';
 const repository = new PrismaCustomerRepository(prisma);
@@ -40,7 +40,7 @@ export const POST = withCompanyAuth(
   ['OWNER', 'ADMIN', 'SALES'],
   async (request, _auth, company) => {
     const body = (await request.json()) as Record<string, unknown>;
-    const changes = parseCustomerChanges(body);
+    const changes = parseCustomerCreate(body);
     const result = await createCustomer.execute({ ...changes, companyId: company.companyId });
     if (!result.isSuccess) throwCustomerError(result.getError());
     return apiSuccess({ customer: customerToResponse(result.getValue()) }, {
