@@ -11,23 +11,20 @@ function pickLocalized(
   ar: string | null | undefined,
   en: string | null | undefined,
   fallback: string | null | undefined,
+  isCompleted: boolean = false,
 ): string | null {
   if (locale === "ar") {
-    return (
-      ar?.trim() ||
-      fallback?.trim() ||
-      en?.trim() ||
-      null
-    );
+    const arVal = ar?.trim() || null;
+    if (arVal) return arVal;
+    if (isCompleted) return null;
+    return fallback?.trim() || en?.trim() || null;
   }
 
   if (locale === "en") {
-    return (
-      en?.trim() ||
-      fallback?.trim() ||
-      ar?.trim() ||
-      null
-    );
+    const enVal = en?.trim() || null;
+    if (enVal) return enVal;
+    if (isCompleted) return null;
+    return fallback?.trim() || ar?.trim() || null;
   }
 
   return (
@@ -44,6 +41,7 @@ export function serializeQuotation(
 ) {
   const customer =
     quotation.customer.toJSON();
+  const isCompleted = quotation.localizationStatus === "COMPLETED";
 
   return {
     id: quotation.id,
@@ -75,6 +73,7 @@ export function serializeQuotation(
           customer.nameAr,
           customer.nameEn,
           customer.name,
+          isCompleted,
         ) ?? customer.name,
     },
 
@@ -84,6 +83,7 @@ export function serializeQuotation(
         quotation.subjectAr,
         quotation.subjectEn,
         null,
+        isCompleted,
       ),
 
     subjectAr:
@@ -98,6 +98,7 @@ export function serializeQuotation(
         quotation.briefAr,
         quotation.briefEn,
         null,
+        isCompleted,
       ),
 
     briefAr:
@@ -112,6 +113,7 @@ export function serializeQuotation(
         quotation.projectNameAr,
         quotation.projectNameEn,
         quotation.projectName,
+        isCompleted,
       ),
 
     projectNameAr:
@@ -126,6 +128,7 @@ export function serializeQuotation(
         quotation.attentionNameAr,
         quotation.attentionNameEn,
         quotation.attentionName,
+        isCompleted,
       ),
 
     attentionNameAr:
@@ -163,7 +166,8 @@ export function serializeQuotation(
               line.itemNameAr,
               line.itemNameEn,
               line.itemName,
-            ) ?? line.itemName,
+              isCompleted,
+            ) ?? (isCompleted && (locale === "ar" || locale === "en") ? null : line.itemName),
 
           itemNameAr:
             line.itemNameAr,
@@ -177,6 +181,7 @@ export function serializeQuotation(
               line.descriptionAr,
               line.descriptionEn,
               line.description,
+              isCompleted,
             ),
 
           descriptionAr:
@@ -191,6 +196,7 @@ export function serializeQuotation(
               line.unitNameAr,
               line.unitNameEn,
               line.unitName,
+              isCompleted,
             ),
 
           unitNameAr:
@@ -249,6 +255,7 @@ export function serializeQuotation(
         quotation.notesAr,
         quotation.notesEn,
         quotation.notes,
+        isCompleted,
       ),
 
     notesAr:
@@ -263,6 +270,7 @@ export function serializeQuotation(
         quotation.termsAndConditionsAr,
         quotation.termsAndConditionsEn,
         quotation.termsAndConditions,
+        isCompleted,
       ),
 
     termsAndConditionsAr:

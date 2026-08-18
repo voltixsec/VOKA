@@ -13,12 +13,17 @@ import {
 } from "@/src/application/quotation";
 import {
   isQuotationScopeType,
+  LocalizationStatus,
 } from "@/src/domain/quotation";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
 import { PrismaQuotationCustomerContactRepository } from "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationCustomerContactRepository";
 
 import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
+import {
+  checkQuotationLocalizationIncompleteness,
+  QuotationLocalizationRepairService,
+} from "@/src/application/quotation/services/QuotationLocalizationRepairService";
 
 import { serializeQuotation } from "../serialize-quotation";
 
@@ -39,6 +44,11 @@ const updateQuotation =
   );
 const localizationJobRunner =
   new QuotationLocalizationJobRunner(quotationRepository);
+const repairService =
+  new QuotationLocalizationRepairService(
+    quotationRepository,
+    localizationJobRunner,
+  );
 const customerContacts = new PrismaQuotationCustomerContactRepository();
 
 
@@ -95,15 +105,25 @@ export const GET = withCompanyAuth(
       );
     }
 
+    const quotationData = result.data;
+    const isBrokenCompletedDraft =
+      quotationData.status === "DRAFT" &&
+      quotationData.localizationStatus === "COMPLETED" &&
+      checkQuotationLocalizationIncompleteness(quotationData).isBrokenCompleted;
+
     const serialized = serializeQuotation(
-        result.data,
+        quotationData,
         getRequestedLocale(request),
       );
+
+    if (isBrokenCompletedDraft) {
+      serialized.localizationStatus = LocalizationStatus.PENDING;
+    }
     const liveContact = await customerContacts.find(
       company.companyId,
-      result.data.customerId,
+      quotationData.customerId,
     );
-    const snapshot = result.data.customer.toJSON();
+    const snapshot = quotationData.customer.toJSON();
 
     return apiSuccess(
       {
