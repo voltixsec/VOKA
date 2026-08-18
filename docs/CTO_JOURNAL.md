@@ -294,3 +294,21 @@ branch if approved. No new PDF, localization, or verification scope is implied.
 - Active workflow remains CTO + local Terminal + Jules.
 - GitHub remains the durable source of truth across devices and Jules sessions.
 - Next frontier: Phase 7.0 Contracts & Invoices Architecture Assessment.
+
+## 2026-08-18 — Phase 6.4A Localization Integrity formally closed
+
+- Phase 6.4A was introduced after real quotation UI validation exposed false localization readiness.
+- PR #48 merged to `main` at `32823da495d7564c810b1479bb0133b11741e905`.
+- `COMPLETED` localization now requires all required translated targets to be valid and non-blank before completion.
+- Explicit locale serialization no longer masks missing completed target fields with source/opposite-language quotation content.
+- Legacy broken editable DRAFT quotations have a bounded repair path using an application-layer runner port and the standard localization claim/job lifecycle.
+- Quotation GET remains read-only and does not trigger external AI/provider work or database mutation.
+- Controlled re-localization is exposed through explicit `POST /api/quotations/[quotationId]/localize`.
+- APPROVED quotation snapshots remain immutable.
+- Customer bilingual master-data remains explicitly deferred to Phase 6.4B.
+- Phase 6.3 MiniMax Cloud primary + Qwen local fallback routing remains intact.
+- Final validation: 8/8 focused Phase 6.4A tests, 22/22 routing tests, 107 files / 716 tests full regression, TypeScript, lint, production build, diff check and GitHub Quality PASS.
+- No Prisma schema changes, migrations or dependency changes were introduced.
+- Product frontier is Phase 6.4 Product Integrity & Stabilization.
+- Next slice: Phase 6.4B — Customer Master Data.
+- Phase 7 remains frozen until Phase 6.4B, 6.4C, 6.4D and full commercial regression are complete.

@@ -1,6 +1,6 @@
 # Project Status
 
-Current Product Frontier: **Phase 7.0 — Contracts & Invoices Architecture Assessment**
+Current Product Frontier: **Phase 6.4 — Product Integrity & Stabilization**
 
 Status: Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
@@ -10,9 +10,9 @@ Official pre-Phase-6.2 baseline:
 
 `d19d2bd2e306a7db066532ff873e9af5ed3a8349`
 
-Current canonical main baseline after Phase 6.3 close:
+Current canonical main baseline after Phase 6.4A merge:
 
-`8ad47179408e2753f1ece92aedb8d0e5ab0641d8`
+`32823da495d7564c810b1479bb0133b11741e905`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -398,3 +398,72 @@ Core invariant:
 AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
 
 Next product frontier: Phase 7.0 Contracts & Invoices Architecture Assessment before any Phase 7 schema or implementation work.
+
+## Phase 6.4 — Product Integrity & Stabilization
+
+Status: **ACTIVE**
+
+Phase 7 implementation is intentionally frozen until stabilization is complete.
+
+### Phase 6.4A — Localization Integrity
+
+Status: **CLOSED / MERGED** through PR #48.
+
+Canonical merge commit:
+
+`32823da495d7564c810b1479bb0133b11741e905`
+
+Delivered:
+
+- false `COMPLETED` quotation localization prevention;
+- validation of required translated targets before localization completion;
+- genuine requested-locale serialization for completed localization;
+- no opposite/source-language line-item fallback masking broken completed localization;
+- bounded, tenant-safe repair for broken editable DRAFT quotations;
+- read-only quotation GET integrity detection without AI/provider side effects;
+- explicit `POST /api/quotations/[quotationId]/localize` mutation boundary for controlled re-localization;
+- APPROVED quotation immutability preserved;
+- Customer bilingual master-data intentionally deferred to Phase 6.4B;
+- Phase 6.3 MiniMax Cloud primary + Qwen local fallback routing preserved.
+
+Validation:
+
+- focused Phase 6.4A tests: 8/8 PASS;
+- Phase 6.3 routing tests: 22/22 PASS;
+- full regression: 107 files / 716 tests PASS;
+- TypeScript PASS;
+- lint PASS with only 4 pre-existing warnings;
+- production build PASS;
+- diff check PASS;
+- GitHub Quality PASS.
+
+No Prisma schema changes, migrations, or dependency changes.
+
+### Phase 6.4B — Customer Master Data
+
+Status: **NEXT**
+
+Objective:
+
+- server-generated tenant-safe Customer code;
+- bilingual Customer naming architecture;
+- preserve Customer authority and historical quotation/Sales Order snapshots;
+- no automatic Customer creation from AI.
+
+### Phase 6.4C — Delivery Configuration & UX
+
+Status: **PLANNED**
+
+Audit live Email / WhatsApp readiness, provider configuration visibility, and delivery UX without falsely enabling unavailable channels.
+
+### Phase 6.4D — Dense Quotation Composer UX
+
+Status: **PLANNED**
+
+Desktop-first dense ERP-style quotation line editor with continuous rows, minimal vertical spacing, keyboard-friendly entry, and equivalent RTL/LTR behavior.
+
+After Phase 6.4B–D, run full commercial regression:
+
+Customer → Products/Services → Quotation Arabic → English → PDF → Send → Approve → Sales Order
+
+Then formally close Phase 6.4 and reassess Phase 7.

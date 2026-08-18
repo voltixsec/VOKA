@@ -326,6 +326,52 @@ The PDF renderer remains deterministic and AI-free.
 
 ---
 
+
+## Phase 6.4 — Product Integrity & Stabilization
+
+Status: **ACTIVE**
+
+Phase 6.4 was inserted after real UI validation exposed product-integrity gaps that must be closed before Phase 7.
+
+### 6.4A — Localization Integrity
+
+Status: **CLOSED / MERGED through PR #48 at `32823da495d7564c810b1479bb0133b11741e905`.**
+
+Delivered:
+
+- verified localization completion integrity;
+- required translation-target validation;
+- requested-locale serialization without masking broken completed content;
+- bounded repair path for broken editable DRAFT quotations;
+- read-only GET integrity detection;
+- explicit controlled localization mutation endpoint;
+- APPROVED immutability preserved;
+- no schema, migration, or dependency changes.
+
+Final validation: 8/8 focused Phase 6.4A tests, 22/22 Phase 6.3 routing tests, 107 files / 716 tests full regression, TypeScript, lint, production build, diff check, and GitHub Quality all PASS.
+
+### 6.4B — Customer Master Data
+
+Next bounded slice.
+
+Planned scope:
+
+- automatic tenant-safe Customer code generation;
+- bilingual Customer master-data naming;
+- preservation of existing Customer authority and downstream historical snapshots.
+
+### 6.4C — Delivery Configuration & UX
+
+Planned.
+
+### 6.4D — Dense Quotation Composer UX
+
+Planned.
+
+Phase 7 remains frozen until the Phase 6.4 stabilization sequence and full commercial regression are complete.
+
+---
+
 # Phase 7 — Contracts and invoices
 
 After quotation approval:
@@ -474,4 +520,4 @@ Important: Phase 5 is closed on `main` at
 Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI.
 Phase 6.2 Voice Input Transport is CLOSED / MERGED through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.
 Phase 6.3 AI Model Routing is CLOSED / MERGED through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
-The next bounded product step is Phase 7.0 Contracts & Invoices Architecture Assessment; no Phase 7 schema or implementation should begin before that assessment.
+The next bounded product step is Phase 6.4B — Customer Master Data. Phase 7 remains frozen until Phase 6.4 stabilization is formally closed.
