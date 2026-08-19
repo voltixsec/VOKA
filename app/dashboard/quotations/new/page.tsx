@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -13,6 +14,13 @@ import {
   Input,
   SectionHeader,
 } from "../../../../components/ui";
+import {
+  QuotationLineItemCombobox,
+} from "../../../../components/quotations/QuotationLineItemCombobox";
+import {
+  CatalogItemModal,
+  type CatalogItemModalItem,
+} from "../../../../components/catalog/CatalogItemModal";
 import {
   useLanguage,
 } from "../../../../components/i18n/LanguageProvider";
@@ -36,8 +44,17 @@ type Item = {
   code: string;
   type: QuotationLineType;
   salePrice: number;
+  unitId?: string | null;
   taxRateId?: string | null;
   description?: string | null;
+};
+
+type Unit = {
+  id: string;
+  name: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
+  symbol: string;
 };
 
 type Line = {
@@ -157,6 +174,9 @@ export default function NewQuotationPage() {
   const [items, setItems] =
     useState<Item[]>([]);
 
+  const [units, setUnits] =
+    useState<Unit[]>([]);
+
   const [taxRates, setTaxRates] =
     useState<TaxRate[]>([]);
 
@@ -201,7 +221,32 @@ export default function NewQuotationPage() {
     useState("");
 
   const [lines, setLines] =
-    useState<Line[]>([]);
+    useState<Line[]>(() => [
+      {
+        editorKey: createEditorLineKey(),
+        position: 1,
+        catalogItemId: "",
+        type: "CUSTOM",
+        itemCode: "",
+        itemName: "",
+        description: "",
+        unitName: "",
+        quantity: 1,
+        unitPrice: 0,
+        taxRateId: null,
+        taxPercentage: 0,
+      },
+    ]);
+
+  const pendingFocusLineKeyRef = useRef<string | null>(null);
+  const itemInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const [catalogItemModalOpen, setCatalogItemModalOpen] =
+    useState(false);
+  const [catalogItemModalLineKey, setCatalogItemModalLineKey] =
+    useState<string | null>(null);
+  const [catalogItemModalInitialName, setCatalogItemModalInitialName] =
+    useState("");
 
   const [notes, setNotes] =
     useState("");
@@ -419,7 +464,12 @@ export default function NewQuotationPage() {
           );
         }
 
-        const [customerResult, itemResult, taxRateResult] =
+        const [
+          customerResult,
+          itemResult,
+          taxRateResult,
+          unitResult,
+        ] =
           await Promise.allSettled([
             fetch(
               "/api/customers?companyId=" +
@@ -430,6 +480,7 @@ export default function NewQuotationPage() {
               "/api/catalog/items?pageSize=100&isActive=true",
             ),
             fetch("/api/tax-rates"),
+            fetch("/api/units"),
           ]);
 
         if (
@@ -463,6 +514,13 @@ export default function NewQuotationPage() {
           setTaxRates(Array.isArray(taxRateJson.data) ? taxRateJson.data : []);
         } else {
           setTaxRateError(true);
+        }
+
+        if (unitResult.status === "fulfilled" && unitResult.value.ok) {
+          const unitJson = await unitResult.value.json();
+          setUnits(Array.isArray(unitJson.data) ? unitJson.data : []);
+        } else {
+          setUnits([]);
         }
       } catch (caught) {
         setError(
@@ -627,6 +685,34 @@ export default function NewQuotationPage() {
         };
   }
 
+  function queueLineFocus(lineKey: string) {
+    pendingFocusLineKeyRef.current = lineKey;
+  }
+
+  function appendCustomLineAndFocus() {
+    const lineKey = createEditorLineKey();
+
+    setDirty(true);
+    queueLineFocus(lineKey);
+    setLines((current) => [
+      ...current,
+      {
+        editorKey: lineKey,
+        position: current.length + 1,
+        catalogItemId: "",
+        type: "CUSTOM",
+        itemCode: "",
+        itemName: "",
+        description: "",
+        unitName: "",
+        quantity: 1,
+        unitPrice: 0,
+        taxRateId: null,
+        taxPercentage: 0,
+      },
+    ]);
+  }
+
   function addItem(id: string) {
     setDirty(true);
 
@@ -745,6 +831,18 @@ export default function NewQuotationPage() {
       ),
     );
   }
+
+  useEffect(() => {
+    const pendingLineKey = pendingFocusLineKeyRef.current;
+    if (!pendingLineKey) return;
+
+    const input = itemInputRefs.current[pendingLineKey];
+    if (!input) return;
+
+    pendingFocusLineKeyRef.current = null;
+    input.focus();
+    input.select();
+  }, [lines]);
 
   function moveLine(index: number, direction: "up" | "down") {
     setLines((current) => moveQuotationLine(current, index, direction));
@@ -1190,74 +1288,34 @@ export default function NewQuotationPage() {
             )}
           </h3>
 
-          <label className="mt-4 block space-y-2">
-            <span className="text-sm text-slate-400">
-              {t(
-                "\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c \u0623\u0648 \u062e\u062f\u0645\u0629",
-                "Add product or service",
-              )}
-            </span>
-
-            <select
-              defaultValue=""
-              onChange={(event) => {
-                addItem(
-                  event.target.value,
-                );
-                event.target.value = "";
-              }}
-              className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4"
-            >
-              <option value="">
-                {t(
-                  "\u0627\u062e\u062a\u0631 \u0628\u0646\u062f\u064b\u0627",
-                  "Select a line",
-                )}
-              </option>
-
-              <option value="__custom">
-                {t(
-                  "+ \u0628\u0646\u062f \u0645\u062e\u0635\u0635",
-                  "+ Custom line",
-                )}
-              </option>
-
-              {items.map((item) => (
-                <option
-                  key={item.id}
-                  value={item.id}
-                >
-                  {item.code} - {item.name}
-                </option>
-              ))}
-            </select>
+          <div className="mt-2 space-y-1">
             {catalogError && (
-              <span className="text-xs text-amber-300">
+              <p className="text-xs text-amber-300">
                 {t(
-                  "تعذر تحميل الكتالوج. يمكنك إضافة بند مخصص.",
-                  "Catalog unavailable. You can still add a custom line.",
+                  "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0643\u062a\u0627\u0644\u0648\u062c. \u064a\u0645\u0643\u0646\u0643 \u0627\u0644\u0627\u0633\u062a\u0645\u0631\u0627\u0631 \u0628\u0625\u0636\u0627\u0641\u0629 \u0628\u0646\u062f \u0645\u062e\u0635\u0635.",
+                  "Catalog unavailable. You can still enter a custom line.",
                 )}
-              </span>
+              </p>
             )}
+
             {taxRateError && (
-              <span className="text-xs text-amber-300">
+              <p className="text-xs text-amber-300">
                 {t(
-                  "تعذر تحميل الضرائب المتاحة.",
+                  "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0636\u0631\u0627\u0626\u0628 \u0627\u0644\u0645\u062a\u0627\u062d\u0629.",
                   "Available tax rates could not be loaded.",
                 )}
-              </span>
+              </p>
             )}
-          </label>
+          </div>
 
-          <div className="mt-4 space-y-3">
-            <div className="hidden gap-3 px-4 text-xs text-slate-500 md:grid md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]">
-              <span>{t("الصنف", "Item")}</span>
-              <span>{t("الوحدة", "Unit")}</span>
-              <span>{t("الكمية", "Quantity")}</span>
-              <span>{t("سعر الوحدة", "Unit price")}</span>
-              <span>{t("الضريبة", "Tax")}</span>
-              <span>{t("إجمالي البند", "Line total")}</span>
-              <span>{t("الإجراءات", "Actions")}</span>
+          <div className="mt-3 overflow-x-auto rounded-xl border border-white/10">
+            <div className="hidden min-w-[900px] items-center gap-1 border-b border-white/10 bg-white/[0.025] px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(280px,1fr)_150px_100px_140px_150px_44px]">
+              <span>{t("\u0627\u0644\u0635\u0646\u0641", "Item")}</span>
+              <span>{t("\u0627\u0644\u0648\u062d\u062f\u0629", "Unit")}</span>
+              <span>{t("\u0627\u0644\u0643\u0645\u064a\u0629", "Quantity")}</span>
+              <span>{t("\u0633\u0639\u0631 \u0627\u0644\u0648\u062d\u062f\u0629", "Unit price")}</span>
+              <span>{t("\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0628\u0646\u062f", "Line total")}</span>
+              <span aria-hidden="true" />
             </div>
             {lines.length === 0 && (
               <p className="py-6 text-center text-sm text-slate-500">
@@ -1272,33 +1330,132 @@ export default function NewQuotationPage() {
               (line, index) => (
                 <div
                   key={line.editorKey}
-                  className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]"
+                  className="grid min-w-[900px] items-start gap-1 border-b border-white/5 px-2 py-1.5 last:border-b-0 md:grid-cols-[minmax(280px,1fr)_150px_100px_140px_150px_44px]"
                 >
                   <div>
-                    <Input
-                      aria-label={`${t("الصنف", "Item")} ${index + 1}`}
-                      value={
-                        line.itemName
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        changeLine(
-                          index,
-                          "itemName",
-                          event.target
-                            .value,
+                    <QuotationLineItemCombobox
+                      ref={(element) => {
+                        itemInputRefs.current[line.editorKey] = element;
+                      }}
+                      ariaLabel={`${t("\u0627\u0644\u0635\u0646\u0641", "Item")} ${index + 1}`}
+                      value={line.itemName}
+                      items={items}
+                      placeholder={t(
+                        "\u0627\u0628\u062d\u062b \u0623\u0648 \u0627\u0643\u062a\u0628 \u0627\u0644\u0635\u0646\u0641",
+                        "Search or type an item",
+                      )}
+                      createLabel={(value) =>
+                        t(
+                          `\u0625\u0646\u0634\u0627\u0621 "${value}"`,
+                          `Create "${value}"`,
                         )
                       }
+                      createAndEditLabel={(value) =>
+                        t(
+                          `إنشاء وتعديل "${value}"`,
+                          `Create & Edit "${value}"`,
+                        )
+                      }
+                      onValueChange={(value) =>
+                        changeLine(index, "itemName", value)
+                      }
+                      onSelectItem={(id) => {
+                        const item = items.find(
+                          (candidate) => candidate.id === id,
+                        );
+                        if (!item) return;
+
+                        const catalogTaxRate = item.taxRateId
+                          ? taxRates.find(
+                              (rate) => rate.id === item.taxRateId,
+                            )
+                          : undefined;
+
+                        setDirty(true);
+                        setLines((current) =>
+                          current.map((candidate, lineIndex) => {
+                            if (lineIndex !== index) return candidate;
+
+                            const itemDescription =
+                              item.description ?? "";
+
+                            return {
+                              ...candidate,
+                              catalogItemId: item.id,
+                              type: item.type,
+                              itemCode: item.code,
+                              itemName: item.name,
+                              description: itemDescription,
+                              unitName: (() => {
+                                const unit = units.find(
+                                  (candidate) =>
+                                    candidate.id === item.unitId,
+                                );
+
+                                if (!unit) return "";
+
+                                const localizedName = isArabic
+                                  ? unit.nameAr ?? unit.name
+                                  : unit.nameEn ?? unit.name;
+
+                                return unit.symbol
+                                  ? `${localizedName} (${unit.symbol})`
+                                  : localizedName;
+                              })(),
+                              unitPrice: item.salePrice,
+                              taxRateId: catalogTaxRate?.id ?? null,
+                              taxPercentage:
+                                catalogTaxRate?.percentage ?? 0,
+                              taxUnavailable:
+                                Boolean(item.taxRateId) &&
+                                !catalogTaxRate,
+                              ...activeLocalizedLineText(
+                                item.name,
+                                itemDescription,
+                              ),
+                            };
+                          }),
+                        );
+                      }}
+                      onCreateCustom={(value) => {
+                        setDirty(true);
+                        setLines((current) =>
+                          current.map((candidate, lineIndex) => {
+                            if (lineIndex !== index) return candidate;
+
+                            return {
+                              ...candidate,
+                              catalogItemId: "",
+                              type: "CUSTOM",
+                              itemCode: "",
+                              itemName: value,
+                              unitName: t(
+                                "\u0639\u062f\u062f",
+                                "PCS",
+                              ),
+                              taxRateId: null,
+                              taxPercentage: 0,
+                              taxUnavailable: false,
+                              ...activeLocalizedLineText(
+                                value,
+                                candidate.description ?? "",
+                              ),
+                            };
+                          }),
+                        );
+                      }}
+                      onCreateAndEdit={(value) => {
+                        setCatalogItemModalLineKey(line.editorKey);
+                        setCatalogItemModalInitialName(value);
+                        setCatalogItemModalOpen(true);
+                      }}
                     />
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      {line.itemCode ||
-                        line.type}
-                    </p>
+                    
                   </div>
 
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("الوحدة", "Unit")} ${index + 1}`}
                     value={line.unitName}
                     onChange={(event) =>
@@ -1315,6 +1472,7 @@ export default function NewQuotationPage() {
                   />
 
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("الكمية", "Quantity")} ${index + 1}`}
                     type="number"
                     min="0.001"
@@ -1333,6 +1491,7 @@ export default function NewQuotationPage() {
                   />
 
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("سعر الوحدة", "Unit price")} ${index + 1}`}
                     type="number"
                     min="0"
@@ -1350,62 +1509,18 @@ export default function NewQuotationPage() {
                     }
                   />
 
-                  <label className="space-y-1">
-                    <span className="text-xs text-slate-500">
-                      {t("الضريبة", "Tax")}
-                    </span>
-                    <select
-                      aria-label={`${t("الضريبة", "Tax")} ${index + 1}`}
-                      value={line.taxRateId ?? ""}
-                      onChange={(event) => changeTaxRate(index, event.target.value)}
-                      className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
-                    >
-                      <option value="">{t("بدون ضريبة", "No tax")}</option>
-                      {taxRates.map((rate) => (
-                        <option key={rate.id} value={rate.id}>
-                          {rate.name} ({rate.percentage.toFixed(2)}%)
-                        </option>
-                      ))}
-                    </select>
-                    {line.taxUnavailable && (
-                      <span className="block text-xs text-amber-300">
-                        {t(
-                          "ضريبة الكتالوج غير متاحة. اختر ضريبة نشطة.",
-                          "Catalog tax is unavailable. Select an active tax rate.",
-                        )}
-                      </span>
-                    )}
-                  </label>
+                  
 
-                  <div className="flex min-h-11 items-center rounded-xl border border-white/10 bg-white/[0.03] px-3 font-semibold text-emerald-300">
+                  <div className="flex min-h-9 items-center rounded-lg border border-white/10 bg-white/[0.03] px-2 text-sm font-semibold text-emerald-300">
                     {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      aria-label={`${t("تحريك لأعلى", "Move up")} ${index + 1}`}
-                      disabled={index === 0}
-                      onClick={() => moveLine(index, "up")}
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      aria-label={`${t("تحريك لأسفل", "Move down")} ${index + 1}`}
-                      disabled={index === lines.length - 1}
-                      onClick={() => moveLine(index, "down")}
-                    >
-                      ↓
-                    </Button>
-                    <Button
+                  <div className="flex min-h-9 items-center justify-center">
+<Button
                       type="button"
                       variant="danger"
                       size="sm"
+                      className="h-8 min-h-0 w-8 px-0 py-0 text-base leading-none"
                       disabled={lines.length === 1}
                       onClick={() => {
                         setLines((current) => normalizeQuotationLinePositions(
@@ -1414,28 +1529,29 @@ export default function NewQuotationPage() {
                         setDirty(true);
                       }}
                     >
-                      {t("\u062d\u0630\u0641", "Remove")}
+                      <span aria-hidden="true">{"\u00d7"}</span>
                     </Button>
-                  </div>
+              </div>
 
-                  <label className="space-y-1 md:col-span-7">
-                    <span className="text-xs text-slate-400">
-                      {t("الوصف", "Description")}
-                    </span>
-                    <textarea
-                      aria-label={`${t("الوصف", "Description")} ${index + 1}`}
-                      value={line.description ?? ""}
-                      onChange={(event) => changeLine(index, "description", event.target.value)}
-                      placeholder={t("وصف اختياري", "Optional description")}
-                      rows={2}
-                      className="w-full resize-y rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-sky-400/50 focus:ring-4 focus:ring-sky-400/10"
-                    />
-                  </label>
+                  
                 </div>
               ),
             )}
+
+        <button
+          type="button"
+          onClick={appendCustomLineAndFocus}
+          className="flex min-h-9 min-w-[900px] items-center border-t border-white/5 px-3 text-left text-sm font-medium text-sky-300 transition hover:bg-sky-400/5 hover:text-sky-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/30"
+        >
+          <span aria-hidden="true" className="me-2 text-base">
+            +
+          </span>
+          {t("\u0625\u0636\u0627\u0641\u0629", "Add")}
+        </button>
           </div>
         </Card>
+
+
 
         <Card>
           <div className="grid gap-4 md:grid-cols-2">
@@ -1630,6 +1746,101 @@ export default function NewQuotationPage() {
           </div>
         </Card>
       </form>
+
+        <CatalogItemModal
+          open={catalogItemModalOpen}
+          initialType="PRODUCT"
+          initialName={catalogItemModalInitialName}
+          units={units}
+          taxRates={taxRates}
+          onClose={() => {
+            setCatalogItemModalOpen(false);
+            setCatalogItemModalLineKey(null);
+            setCatalogItemModalInitialName("");
+          }}
+          onSaved={(savedItem: CatalogItemModalItem) => {
+            const targetLineKey = catalogItemModalLineKey;
+
+            if (!targetLineKey) {
+              setCatalogItemModalOpen(false);
+              setCatalogItemModalInitialName("");
+              return;
+            }
+
+            const catalogTaxRate = savedItem.taxRateId
+              ? taxRates.find(
+                  (rate) => rate.id === savedItem.taxRateId,
+                )
+              : null;
+
+            const unit = savedItem.unitId
+              ? units.find(
+                  (candidate) => candidate.id === savedItem.unitId,
+                )
+              : null;
+
+            const localizedUnitName = unit
+              ? (() => {
+                  const name = isArabic
+                    ? unit.nameAr ?? unit.name
+                    : unit.nameEn ?? unit.name;
+
+                  return unit.symbol
+                    ? `${name} (${unit.symbol})`
+                    : name;
+                })()
+              : "";
+
+            setItems((current) => {
+              const withoutSavedItem = current.filter(
+                (item) => item.id !== savedItem.id,
+              );
+
+              return [
+                ...withoutSavedItem,
+                savedItem,
+              ];
+            });
+
+            setDirty(true);
+
+            setLines((current) =>
+              current.map((candidate) => {
+                if (candidate.editorKey !== targetLineKey) {
+                  return candidate;
+                }
+
+                return {
+                  ...candidate,
+                  catalogItemId: savedItem.id,
+                  type: savedItem.type,
+                  itemCode: savedItem.code,
+                  itemName: savedItem.name,
+                  description: savedItem.description ?? "",
+                  unitName: localizedUnitName,
+                  unitPrice: savedItem.salePrice,
+                  taxRateId: catalogTaxRate?.id ?? null,
+                  taxPercentage:
+                    catalogTaxRate?.percentage ?? 0,
+                  taxUnavailable: Boolean(
+                    savedItem.taxRateId &&
+                      !catalogTaxRate,
+                  ),
+                  ...activeLocalizedLineText(
+                    savedItem.name,
+                    savedItem.description ?? "",
+                  ),
+                };
+              }),
+            );
+
+            queueLineFocus(targetLineKey);
+
+            setCatalogItemModalOpen(false);
+            setCatalogItemModalLineKey(null);
+            setCatalogItemModalInitialName("");
+          }}
+        />
     </section>
   );
 }

@@ -1,6 +1,7 @@
-﻿import type {
-  InputHTMLAttributes,
-  ReactNode,
+﻿import {
+  forwardRef,
+  type InputHTMLAttributes,
+  type ReactNode,
 } from "react";
 
 interface InputProps
@@ -10,14 +11,17 @@ interface InputProps
   leadingIcon?: ReactNode;
 }
 
-export function Input({
-  label,
-  error,
-  leadingIcon,
-  className = "",
-  id,
-  ...props
-}: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  {
+    label,
+    error,
+    leadingIcon,
+    className = "",
+    id,
+    ...props
+  },
+  ref,
+) {
   const inputId =
     id ?? props.name ?? undefined;
 
@@ -40,6 +44,7 @@ export function Input({
         )}
 
         <input
+          ref={ref}
           id={inputId}
           className={[
             "min-h-11 w-full rounded-xl border",
@@ -68,4 +73,4 @@ export function Input({
       )}
     </label>
   );
-}
+});

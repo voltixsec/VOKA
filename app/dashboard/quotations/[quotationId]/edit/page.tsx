@@ -8,6 +8,7 @@ import {
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -185,6 +186,9 @@ export default function EditQuotationPage() {
   const [lines, setLines] =
     useState<Line[]>([]);
 
+  const pendingFocusLineKeyRef = useRef<string | null>(null);
+  const itemInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   const [items, setItems] =
     useState<Item[]>([]);
 
@@ -305,7 +309,12 @@ export default function EditQuotationPage() {
         }
 
         setQuote(loaded);
-        setLines(loaded.lines);
+        setLines(
+          loaded.lines.map((line) => ({
+            ...line,
+            editorKey: line.editorKey ?? createEditorLineKey(),
+          })),
+        );
 
         setProjectName(
           loaded.projectName ?? "",
@@ -432,6 +441,39 @@ export default function EditQuotationPage() {
           unitNameEn: "PCS",
           ...(description ? { descriptionEn: description } : {}),
         };
+  }
+
+  function queueLineFocus(lineKey: string) {
+    pendingFocusLineKeyRef.current = lineKey;
+  }
+
+  function appendCustomLineAndFocus() {
+    const lineKey = createEditorLineKey();
+    const itemName = t(
+      "\u0628\u0646\u062f \u0645\u062e\u0635\u0635",
+      "Custom line",
+    );
+
+    setDirty(true);
+    queueLineFocus(lineKey);
+    setLines((current) => [
+      ...current,
+      {
+        editorKey: lineKey,
+        position: current.length + 1,
+        catalogItemId: null,
+        type: "CUSTOM",
+        itemCode: "",
+        itemName,
+        description: "",
+        unitName: "PCS",
+        quantity: 1,
+        unitPrice: 0,
+        taxRateId: null,
+        taxPercentage: 0,
+        ...activeLocalizedText(itemName, ""),
+      },
+    ]);
   }
 
   function addItem(id: string) {
@@ -591,6 +633,18 @@ export default function EditQuotationPage() {
       ),
     );
   }
+
+  useEffect(() => {
+    const pendingLineKey = pendingFocusLineKeyRef.current;
+    if (!pendingLineKey) return;
+
+    const input = itemInputRefs.current[pendingLineKey];
+    if (!input) return;
+
+    pendingFocusLineKeyRef.current = null;
+    input.focus();
+    input.select();
+  }, [lines]);
 
   function moveLine(index: number, direction: "up" | "down") {
     setLines((current) => moveQuotationLine(current, index, direction));
@@ -1011,7 +1065,7 @@ export default function EditQuotationPage() {
             )}
           </h3>
 
-          <label className="mt-4 block space-y-2">
+          <label className="mt-3 block space-y-1.5">
             <span className="text-sm text-slate-400">
               {t(
                 "\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c \u0623\u0648 \u062e\u062f\u0645\u0629",
@@ -1029,7 +1083,7 @@ export default function EditQuotationPage() {
                 addItem(event.target.value);
                 event.target.value = "";
               }}
-              className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4"
+              className="min-h-9 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm md:max-w-xl"
             >
               <option value="">
                 {t(
@@ -1055,6 +1109,16 @@ export default function EditQuotationPage() {
               ))}
             </select>
 
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8 min-h-0 px-3 py-1 text-xs"
+              onClick={appendCustomLineAndFocus}
+            >
+              {t("\u002b \u0628\u0646\u062f \u0645\u062e\u0635\u0635", "+ Custom line")}
+            </Button>
+
             {catalogError && (
               <span className="text-xs text-amber-300">
                 {t(
@@ -1070,8 +1134,8 @@ export default function EditQuotationPage() {
             )}
           </label>
 
-          <div className="mt-4 space-y-3">
-            <div className="hidden gap-3 px-4 text-xs text-slate-500 md:grid md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]">
+          <div className="mt-3 overflow-x-auto rounded-xl border border-white/10">
+            <div className="hidden min-w-[1040px] items-center gap-1 border-b border-white/10 bg-white/[0.025] px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(240px,1fr)_90px_90px_120px_150px_130px_150px]">
               <span>{t("الصنف", "Item")}</span>
               <span>{t("الوحدة", "Unit")}</span>
               <span>{t("الكمية", "Quantity")}</span>
@@ -1084,9 +1148,15 @@ export default function EditQuotationPage() {
               (line, index) => (
                 <div
                   key={line.id ?? line.editorKey ?? index}
-                  className="grid gap-3 rounded-2xl border border-white/5 p-4 md:grid-cols-[1fr_100px_100px_130px_170px_140px_auto]"
+                  className="grid min-w-[1040px] items-start gap-1 border-b border-white/5 px-2 py-1.5 last:border-b-0 md:grid-cols-[minmax(240px,1fr)_90px_90px_120px_150px_130px_150px]"
                 >
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
+                    ref={(element) => {
+                      if (line.editorKey) {
+                        itemInputRefs.current[line.editorKey] = element;
+                      }
+                    }}
                     required
                     aria-label={`${t("الصنف", "Item")} ${index + 1}`}
                     value={line.itemName}
@@ -1100,6 +1170,7 @@ export default function EditQuotationPage() {
                   />
 
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("الوحدة", "Unit")} ${index + 1}`}
                     value={
                       line.unitName ?? ""
@@ -1114,6 +1185,7 @@ export default function EditQuotationPage() {
                   />
 
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("الكمية", "Quantity")} ${index + 1}`}
                     type="number"
                     min="0.001"
@@ -1132,6 +1204,7 @@ export default function EditQuotationPage() {
                   />
 
                   <Input
+                    className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("سعر الوحدة", "Unit price")} ${index + 1}`}
                     type="number"
                     min="0"
@@ -1157,7 +1230,7 @@ export default function EditQuotationPage() {
                       aria-label={`${t("الضريبة", "Tax")} ${index + 1}`}
                       value={taxSelectionValue(line)}
                       onChange={(event) => changeTaxRate(index, event.target.value)}
-                      className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
+                      className="min-h-9 w-full rounded-lg border border-white/10 bg-slate-950 px-2 text-sm"
                     >
                       <option value="">{t("بدون ضريبة", "No tax")}</option>
                       {line.id && quote?.lines.find((candidate) => candidate.id === line.id)?.taxRateId && (
@@ -1181,15 +1254,16 @@ export default function EditQuotationPage() {
                     )}
                   </label>
 
-                  <div className="flex min-h-11 items-center rounded-xl border border-white/10 bg-white/[0.03] px-3 font-semibold text-emerald-300">
+                  <div className="flex min-h-9 items-center rounded-lg border border-white/10 bg-white/[0.03] px-2 text-sm font-semibold text-emerald-300">
                     {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex min-h-9 items-center gap-1 whitespace-nowrap">
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
+                      className="h-8 min-h-0 px-2 py-1"
                       aria-label={`${t("تحريك لأعلى", "Move up")} ${index + 1}`}
                       disabled={index === 0}
                       onClick={() => moveLine(index, "up")}
@@ -1200,6 +1274,7 @@ export default function EditQuotationPage() {
                       type="button"
                       variant="secondary"
                       size="sm"
+                      className="h-8 min-h-0 px-2 py-1"
                       aria-label={`${t("تحريك لأسفل", "Move down")} ${index + 1}`}
                       disabled={index === lines.length - 1}
                       onClick={() => moveLine(index, "down")}
@@ -1210,6 +1285,7 @@ export default function EditQuotationPage() {
                       type="button"
                       variant="danger"
                       size="sm"
+                      className="h-8 min-h-0 px-2 py-1 text-xs"
                       disabled={lines.length === 1}
                       onClick={() => {
                         const removedLineId = line.id;
@@ -1236,9 +1312,19 @@ export default function EditQuotationPage() {
                       aria-label={`${t("الوصف", "Description")} ${index + 1}`}
                       value={line.description ?? ""}
                       onChange={(event) => changeLine(index, "description", event.target.value)}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Tab" &&
+                          !event.shiftKey &&
+                          index === lines.length - 1
+                        ) {
+                          event.preventDefault();
+                          appendCustomLineAndFocus();
+                        }
+                      }}
                       placeholder={t("وصف اختياري", "Optional description")}
-                      rows={2}
-                      className="w-full resize-y rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-sky-400/50 focus:ring-4 focus:ring-sky-400/10"
+                      rows={1}
+                      className="min-h-9 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-2 py-1.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-sky-400/50 focus:ring-2 focus:ring-sky-400/10"
                     />
                   </label>
                 </div>

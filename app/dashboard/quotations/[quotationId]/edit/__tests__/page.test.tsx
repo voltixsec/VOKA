@@ -658,4 +658,33 @@ describe("EditQuotationPage active language", () => {
     ).toBe(true));
     expect(patchBody(fetchMock).expiryDate).toBe(expected);
   });
+  it("creates and focuses the next custom line when tabbing from the last description", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    await screen.findByText("QT-1001");
+
+    const firstDescription = screen.getByRole("textbox", {
+      name: "Description 1",
+    });
+
+    fireEvent.keyDown(firstDescription, {
+      key: "Tab",
+      code: "Tab",
+    });
+
+    const nextItem = await screen.findByRole("textbox", {
+      name: "Item 2",
+    });
+
+    expect((nextItem as HTMLInputElement).value).toBe("Custom line");
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(nextItem);
+    });
+  });
+
+
 });
