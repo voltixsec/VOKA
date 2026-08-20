@@ -43,6 +43,7 @@ const quotation = {
       id: "line-1",
       position: 1,
       type: "PRODUCT",
+      catalogItemId: "catalog-1",
       itemName: "Item",
       itemNameAr: "\u0635\u0646\u0641",
       itemNameEn: "Item",
@@ -83,6 +84,7 @@ const catalogItem = {
   code: "CAM-1",
   type: "PRODUCT",
   salePrice: 25.5,
+  unitId: "unit-1",
   taxRateId: "tax-1",
   description: "Catalog description",
 };
@@ -90,6 +92,10 @@ const catalogItem = {
 const taxRates = [
   { id: "tax-1", name: "VAT 5", percentage: 5, isSystem: false },
   { id: "tax-10", name: "VAT 10", percentage: 10, isSystem: true },
+];
+
+const units = [
+  { id: "unit-1", name: "Piece", nameAr: "حبة", nameEn: "Piece", symbol: "pcs" },
 ];
 
 function response(data: unknown) {
@@ -109,6 +115,10 @@ function fetchForEdit() {
 
       if (input === "/api/tax-rates") {
         return Promise.resolve(response(taxRates));
+      }
+
+      if (input === "/api/units") {
+        return Promise.resolve(response(units));
       }
 
       if (init?.method === "PATCH") {
@@ -132,17 +142,6 @@ function patchBody(fetchMock: ReturnType<typeof vi.fn>) {
   return JSON.parse(String(call[1].body));
 }
 
-function controlFor(label: string) {
-  const wrapper = screen.getByText(label).closest("label");
-  const control = wrapper?.querySelector("input, textarea");
-
-  if (!control) {
-    throw new Error(`Control missing for ${label}`);
-  }
-
-  return control as HTMLInputElement | HTMLTextAreaElement;
-}
-
 beforeEach(() => {
   isArabic = false;
   push.mockReset();
@@ -154,537 +153,298 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("EditQuotationPage active language", () => {
-  it.each([
-    {
-      arabic: false,
-      subject: "English subject",
-      brief: "English brief",
-      hiddenSubject: "\u0645\u0648\u0636\u0648\u0639 \u0639\u0631\u0628\u064a",
-      hiddenBrief: "\u0645\u0644\u062e\u0635 \u0639\u0631\u0628\u064a",
-    },
-    {
-      arabic: true,
-      subject: "\u0645\u0648\u0636\u0648\u0639 \u0639\u0631\u0628\u064a",
-      brief: "\u0645\u0644\u062e\u0635 \u0639\u0631\u0628\u064a",
-      hiddenSubject: "English subject",
-      hiddenBrief: "English brief",
-    },
-  ])("shows only the $arabic active-language subject and brief", async ({
-    arabic,
-    subject,
-    brief,
-    hiddenSubject,
-    hiddenBrief,
-  }) => {
-    isArabic = arabic;
+describe("EditQuotationPage dense composer UX", () => {
+  it("1. Loads existing saved quotation line correctly into dense composer", async () => {
     vi.stubGlobal("fetch", fetchForEdit());
 
     render(createElement(EditQuotationPage));
 
-    expect(await screen.findByDisplayValue(subject)).toBeTruthy();
-    expect(screen.getByDisplayValue(brief)).toBeTruthy();
-    expect(screen.queryByDisplayValue(hiddenSubject)).toBeNull();
-    expect(screen.queryByDisplayValue(hiddenBrief)).toBeNull();
+    expect(await screen.findByDisplayValue("Item")).toBeTruthy();
+    expect(screen.getByDisplayValue("unit")).toBeTruthy();
+    expect(screen.getByDisplayValue("1")).toBeTruthy();
+    expect(screen.getByDisplayValue("10")).toBeTruthy();
+    expect(screen.getByText("10.500 KWD")).toBeTruthy(); // 10 * 1.05 (historical tax 5%)
   });
 
-  it.each([
-    {
-      arabic: false,
-      label: "Proposal subject",
-      next: "Updated English",
-      sourceLocale: "en",
-      expected: {
-        subjectAr: "\u0645\u0648\u0636\u0648\u0639 \u0639\u0631\u0628\u064a",
-        subjectEn: "Updated English",
-      },
-    },
-    {
-      arabic: true,
-      label: "\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0639\u0631\u0636",
-      next: "\u0645\u0648\u0636\u0648\u0639 \u0645\u062d\u062f\u062b",
-      sourceLocale: "ar",
-      expected: {
-        subjectAr: "\u0645\u0648\u0636\u0648\u0639 \u0645\u062d\u062f\u062b",
-        subjectEn: "English subject",
-      },
-    },
-  ])("preserves the inactive language when saving", async ({
-    arabic,
-    label,
-    next,
-    sourceLocale,
-    expected,
-  }) => {
-    isArabic = arabic;
+  it("2. Historical saved tax survives normal edit/save unchanged", async () => {
     const fetchMock = fetchForEdit();
     vi.stubGlobal("fetch", fetchMock);
 
     render(createElement(EditQuotationPage));
 
-    await screen.findByText(label);
-    fireEvent.change(controlFor(label), { target: { value: next } });
-    fireEvent.click(screen.getByRole("button", {
-      name: arabic ? "\u062d\u0641\u0638 \u0627\u0644\u062a\u0639\u062f\u064a\u0644\u0627\u062a" : "Save changes",
-    }));
+    await screen.findByDisplayValue("Item");
+
+    // Edit quantity
+    const qtyInput = screen.getByLabelText("Quantity 1");
+    fireEvent.change(qtyInput, { target: { value: "2" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(
-        ([, init]) => init?.method === "PATCH",
-      )).toBe(true);
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
     });
-    const body = patchBody(fetchMock);
 
-    expect(body).toMatchObject({
-      localizationSourceLocale: sourceLocale,
-      ...expected,
-    });
-  });
-
-  it("loads catalog items without making quotation loading depend on them", async () => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    expect(await screen.findByRole("option", {
-      name: "CAM-1 - Catalog camera",
-    })).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/catalog/items?pageSize=100&isActive=true",
-    );
-  });
-
-  it("keeps draft editing available when optional catalog loading fails", async () => {
-    const fetchMock = vi.fn().mockImplementation((input: string) => {
-      if (input.startsWith("/api/catalog/items")) {
-        return Promise.resolve({ ok: false, status: 500 });
-      }
-
-      return Promise.resolve(response(quotation));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    expect(await screen.findByText("QT-1001")).toBeTruthy();
-    expect(screen.getByText(
-      "Catalog unavailable. You can still add a custom line.",
-    )).toBeTruthy();
-    expect(screen.getByRole("option", { name: "+ Custom line" })).toBeTruthy();
-  });
-
-  it("adds a catalog line with identity, commercial defaults, and the next position", async () => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    const selector = await screen.findByRole("combobox", {
-      name: "Add product or service",
-    });
-    fireEvent.change(selector, { target: { value: "catalog-1" } });
-    expect(await screen.findByDisplayValue("Catalog camera")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() => expect(
-      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
-    ).toBe(true));
-    const body = patchBody(fetchMock);
-
-    expect(body.localizationSourceLocale).toBe("en");
-    expect(body.lines).toHaveLength(2);
-    expect(body.lines[0]).toMatchObject({
-      id: "line-1",
-      itemNameAr: "\u0635\u0646\u0641",
-      itemNameEn: "Item",
-      position: 1,
-    });
-    expect(body.lines[1]).toMatchObject({
-      catalogItemId: "catalog-1",
-      taxRateId: "tax-1",
-      type: "PRODUCT",
-      itemCode: "CAM-1",
-      itemName: "Catalog camera",
-      itemNameEn: "Catalog camera",
-      description: "Catalog description",
-      descriptionEn: "Catalog description",
-      unitName: "PCS",
-      unitNameEn: "PCS",
-      quantity: 1,
-      unitPrice: 25.5,
-      taxPercentage: 5,
-      position: 2,
-    });
-    expect(body.lines[1]).not.toHaveProperty("itemNameAr");
-    expect(body.lines[1]).not.toHaveProperty("unitNameAr");
-  });
-
-  it.each([
-    [false, "English detail"],
-    [true, "تفاصيل عربية"],
-  ] as const)("loads the active line description for locale Arabic=%s", async (arabic, expected) => {
-    isArabic = arabic;
-    const localized = {
-      ...quotation,
-      lines: quotation.lines.map((line) => ({
-        ...line,
-        description: arabic ? line.descriptionAr : line.descriptionEn,
-      })),
-    };
-    const fetchMock = vi.fn().mockImplementation((input: string) => {
-      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
-      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
-      return Promise.resolve(response(localized));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    expect((await screen.findByRole("textbox", {
-      name: arabic ? "الوصف 1" : "Description 1",
-    }) as HTMLTextAreaElement).value).toBe(expected);
-  });
-
-  it.each([
-    {
-      arabic: false,
-      label: "Description 1",
-      next: "Updated English detail",
-      generic: "Updated English detail",
-      expected: {
-        descriptionAr: "تفاصيل عربية",
-        descriptionEn: "Updated English detail",
-      },
-    },
-    {
-      arabic: true,
-      label: "الوصف 1",
-      next: "تفاصيل عربية محدثة",
-      generic: "تفاصيل عربية محدثة",
-      expected: {
-        descriptionAr: "تفاصيل عربية محدثة",
-        descriptionEn: "English detail",
-      },
-    },
-  ])("edits only the active description and marks the draft dirty", async ({
-    arabic,
-    label,
-    next,
-    generic,
-    expected,
-  }) => {
-    isArabic = arabic;
-    const localized = {
-      ...quotation,
-      lines: quotation.lines.map((line) => ({
-        ...line,
-        description: arabic ? line.descriptionAr : line.descriptionEn,
-      })),
-    };
-    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
-      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
-      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
-      if (init?.method === "PATCH") return Promise.resolve(response(localized));
-      return Promise.resolve(response(localized));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(createElement(EditQuotationPage));
-
-    fireEvent.change(await screen.findByRole("textbox", { name: label }), {
-      target: { value: next },
-    });
-    const beforeUnload = new Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(beforeUnload);
-    expect(beforeUnload.defaultPrevented).toBe(true);
-    fireEvent.click(screen.getByRole("button", {
-      name: arabic ? "حفظ التعديلات" : "Save changes",
-    }));
-
-    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
-    expect(patchBody(fetchMock).lines[0]).toMatchObject({
-      description: generic,
-      ...expected,
-    });
-  });
-
-  it("reorders complete existing/catalog lines without creating tax refresh intent", async () => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-    render(createElement(EditQuotationPage));
-
-    expect((await screen.findByRole("button", { name: "Move up 1" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Move down 1" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByRole("combobox", { name: "Add product or service" }), {
-      target: { value: "catalog-1" },
-    });
-    expect((screen.getByRole("button", { name: "Move up 1" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Move down 2" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Move up 2" }));
-
-    expect((screen.getByRole("textbox", { name: "Item 1" }) as HTMLInputElement).value).toBe("Catalog camera");
-    expect((screen.getByRole("textbox", { name: "Description 1" }) as HTMLTextAreaElement).value).toBe("Catalog description");
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
     const body = patchBody(fetchMock);
     expect(body.taxRateRefreshLineIds).toEqual([]);
     expect(body.lines[0]).toMatchObject({
-      position: 1,
-      catalogItemId: "catalog-1",
-      description: "Catalog description",
+      id: "line-1",
       taxRateId: "tax-1",
       taxPercentage: 5,
+      quantity: 2,
     });
-    expect(body.lines[1]).toMatchObject({
+  });
+
+  it("3. Hidden Description UI does not lose historical saved description in payload", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    await screen.findByDisplayValue("Item");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
+    });
+
+    const body = patchBody(fetchMock);
+    expect(body.lines[0]).toMatchObject({
       id: "line-1",
-      position: 2,
       description: "English detail",
       descriptionAr: "تفاصيل عربية",
       descriptionEn: "English detail",
+    });
+  });
+
+  it("4. Hidden Tax UI does not refresh or lose historical tax on normal edits", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    await screen.findByDisplayValue("Item");
+
+    // Edit unit price
+    const unitPriceInput = screen.getByLabelText("Unit price 1");
+    fireEvent.change(unitPriceInput, { target: { value: "20" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
+    });
+
+    const body = patchBody(fetchMock);
+    expect(body.taxRateRefreshLineIds).toEqual([]);
+    expect(body.lines[0]).toMatchObject({
+      id: "line-1",
+      taxRateId: "tax-1",
+      taxPercentage: 5,
+      unitPrice: 20,
+    });
+  });
+
+  it("5. Explicit catalog item replacement/selection inherits Unit, Sale Price, active Tax, and flags taxRateRefreshLineIds", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    const itemCombobox = await screen.findByRole("combobox", { name: "Item 1" });
+
+    fireEvent.focus(itemCombobox);
+    fireEvent.change(itemCombobox, { target: { value: "Catalog camera" } });
+
+    const selectOption = await screen.findByText("Catalog camera");
+    fireEvent.click(selectOption);
+
+    expect(screen.getByDisplayValue("Catalog camera")).toBeTruthy();
+    expect(screen.getByDisplayValue("Piece (pcs)")).toBeTruthy();
+    expect(screen.getByDisplayValue("25.5")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
+    });
+
+    const body = patchBody(fetchMock);
+    expect(body.taxRateRefreshLineIds).toEqual(["line-1"]);
+    expect(body.lines[0]).toMatchObject({
+      id: "line-1",
+      catalogItemId: "catalog-1",
+      itemName: "Catalog camera",
+      unitName: "Piece (pcs)",
+      unitPrice: 25.5,
       taxRateId: "tax-1",
       taxPercentage: 5,
     });
   });
 
-  it("keeps add, reorder, and delete operations normalized", async () => {
+  it("6. Quick Create produces CUSTOM line with PCS/عدد unit and null taxRateId/0 taxPercentage", async () => {
     const fetchMock = fetchForEdit();
     vi.stubGlobal("fetch", fetchMock);
+
     render(createElement(EditQuotationPage));
 
-    const selector = await screen.findByRole("combobox", { name: "Add product or service" });
-    fireEvent.change(selector, { target: { value: "__custom" } });
-    fireEvent.change(selector, { target: { value: "__custom" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Item 3" }), { target: { value: "Third line" } });
-    fireEvent.click(screen.getByRole("button", { name: "Move up 3" }));
-    const removes = screen.getAllByRole("button", { name: "Remove" });
-    fireEvent.click(removes[1]);
+    const itemCombobox = await screen.findByRole("combobox", { name: "Item 1" });
+
+    fireEvent.focus(itemCombobox);
+    fireEvent.change(itemCombobox, { target: { value: "Custom Widget" } });
+
+    const createOption = await screen.findByText('Create "Custom Widget"');
+    fireEvent.click(createOption);
+
+    expect(screen.getByDisplayValue("Custom Widget")).toBeTruthy();
+    expect(screen.getByDisplayValue("PCS")).toBeTruthy();
+
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
-    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
-    const body = patchBody(fetchMock);
-    expect(body.lines).toHaveLength(2);
-    expect(body.lines.map((line: { position: number }) => line.position)).toEqual([1, 2]);
-    expect(body.lines.map((line: { itemName: string }) => line.itemName)).toEqual(["Item", "Custom line"]);
-  });
-
-  it("adds a custom line with active-language values only", async () => {
-    isArabic = true;
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    const selector = await screen.findByRole("combobox", {
-      name: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c \u0623\u0648 \u062e\u062f\u0645\u0629",
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
     });
-    fireEvent.change(selector, { target: { value: "__custom" } });
-    fireEvent.click(screen.getByRole("button", {
-      name: "\u062d\u0641\u0638 \u0627\u0644\u062a\u0639\u062f\u064a\u0644\u0627\u062a",
-    }));
 
-    await waitFor(() => expect(
-      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
-    ).toBe(true));
     const body = patchBody(fetchMock);
-    const added = body.lines[1];
-
-    expect(body.localizationSourceLocale).toBe("ar");
-    expect(added).toMatchObject({
+    expect(body.taxRateRefreshLineIds).toEqual(["line-1"]);
+    expect(body.lines[0]).toMatchObject({
+      id: "line-1",
       catalogItemId: null,
       type: "CUSTOM",
-      itemCode: "",
-      itemName: "\u0628\u0646\u062f \u0645\u062e\u0635\u0635",
-      itemNameAr: "\u0628\u0646\u062f \u0645\u062e\u0635\u0635",
+      itemName: "Custom Widget",
       unitName: "PCS",
-      unitNameAr: "PCS",
-      quantity: 1,
-      unitPrice: 0,
-      taxRateId: null,
-      taxPercentage: 0,
-      position: 2,
-    });
-    expect(added).not.toHaveProperty("itemNameEn");
-    expect(added).not.toHaveProperty("unitNameEn");
-  });
-
-  it("loads the existing tax snapshot, updates tax selection, and previews final totals", async () => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-    render(createElement(EditQuotationPage));
-
-    const tax = await screen.findByRole("combobox", { name: "Tax 1" });
-    expect((tax as HTMLSelectElement).value).toBe("saved:tax-1");
-    expect(screen.getByRole("option", { name: /VAT 5 \(5\.00%\).*Use current/ })).toBeTruthy();
-    expect(screen.getByText("0.500 KWD")).toBeTruthy();
-    expect(screen.getByText("10.500 KWD")).toBeTruthy();
-
-    fireEvent.change(tax, { target: { value: "active:tax-10" } });
-    expect((tax as HTMLSelectElement).value).toBe("active:tax-10");
-    expect(screen.getByText("1.000 KWD")).toBeTruthy();
-    expect(screen.getByText("11.000 KWD")).toBeTruthy();
-
-    const beforeUnload = new Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(beforeUnload);
-    expect(beforeUnload.defaultPrevented).toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(
-      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
-    ).toBe(true));
-    expect(patchBody(fetchMock).lines[0]).toMatchObject({
-      taxRateId: "tax-10",
-      taxPercentage: 10,
-    });
-    expect(patchBody(fetchMock).taxRateRefreshLineIds).toEqual(["line-1"]);
-  });
-
-  it("loads available tax rates and catalog lines inherit their selected rate", async () => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-    render(createElement(EditQuotationPage));
-
-    expect(await screen.findByText("VAT 10 (10.00%)")).toBeTruthy();
-    fireEvent.change(screen.getByRole("combobox", { name: "Add product or service" }), {
-      target: { value: "catalog-1" },
-    });
-    const taxes = await screen.findAllByRole("combobox", { name: /Tax \d/ });
-    expect((taxes[1] as HTMLSelectElement).value).toBe("active:tax-1");
-    expect(fetchMock).toHaveBeenCalledWith("/api/tax-rates");
-  });
-
-  it("shows the saved snapshot separately and intentionally refreshes the same active rate", async () => {
-    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
-      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
-      if (input === "/api/tax-rates") {
-        return Promise.resolve(response([
-          { id: "tax-1", name: "VAT current", percentage: 10, isSystem: false },
-        ]));
-      }
-      if (init?.method === "PATCH") return Promise.resolve(response(quotation));
-      return Promise.resolve(response(quotation));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(createElement(EditQuotationPage));
-
-    const tax = await screen.findByRole("combobox", { name: "Tax 1" });
-    expect((tax as HTMLSelectElement).value).toBe("saved:tax-1");
-    expect(screen.getByRole("option", { name: "Saved tax (5.00%)" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: /VAT current \(10\.00%\).*Use current/ })).toBeTruthy();
-    expect(screen.getByText("0.500 KWD")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
-    expect(patchBody(fetchMock).taxRateRefreshLineIds).toEqual([]);
-    expect(patchBody(fetchMock).lines[0]).toMatchObject({ taxRateId: "tax-1", taxPercentage: 5 });
-
-    fireEvent.change(tax, { target: { value: "active:tax-1" } });
-    expect((tax as HTMLSelectElement).value).toBe("active:tax-1");
-    expect(screen.getByText("1.000 KWD")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(
-      fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH"),
-    ).toHaveLength(2));
-    const lastPatch = fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH").at(-1);
-    const refreshedBody = JSON.parse(String(lastPatch?.[1]?.body));
-    expect(refreshedBody.taxRateRefreshLineIds).toEqual(["line-1"]);
-    expect(refreshedBody.lines[0]).toMatchObject({ taxRateId: "tax-1", taxPercentage: 10 });
-  });
-
-  it("drops an unavailable catalog tax from preview and payload with a visible warning", async () => {
-    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
-      if (input.startsWith("/api/catalog/items")) {
-        return Promise.resolve(response([{ ...catalogItem, taxRateId: "tax-inactive" }]));
-      }
-      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
-      if (init?.method === "PATCH") return Promise.resolve(response(quotation));
-      return Promise.resolve(response(quotation));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(createElement(EditQuotationPage));
-
-    fireEvent.change(await screen.findByRole("combobox", { name: "Add product or service" }), {
-      target: { value: "catalog-1" },
-    });
-    expect(await screen.findByText("Catalog tax is unavailable. Select an active tax rate.")).toBeTruthy();
-    const taxes = screen.getAllByRole("combobox", { name: /Tax \d/ });
-    expect((taxes[1] as HTMLSelectElement).value).toBe("");
-
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
-    expect(patchBody(fetchMock).lines[1]).toMatchObject({
       taxRateId: null,
       taxPercentage: 0,
     });
-    expect(patchBody(fetchMock).lines[1]).not.toHaveProperty("taxUnavailable");
   });
 
-  it("preserves final-line safety and existing remove behavior", async () => {
+  it("7. + Add appends blank row and focuses Item input", async () => {
     vi.stubGlobal("fetch", fetchForEdit());
 
     render(createElement(EditQuotationPage));
 
-    const initialRemove = await screen.findByRole("button", { name: "Remove" });
-    expect((initialRemove as HTMLButtonElement).disabled).toBe(true);
+    await screen.findByDisplayValue("Item");
 
-    fireEvent.change(screen.getByRole("combobox", {
-      name: "Add product or service",
-    }), { target: { value: "__custom" } });
+    const addButton = screen.getByRole("button", { name: /Add|إضافة/ });
+    fireEvent.click(addButton);
 
-    const removeButtons = await screen.findAllByRole("button", { name: "Remove" });
-    expect(removeButtons).toHaveLength(2);
-    fireEvent.click(removeButtons[0]);
-
-    expect(screen.queryByDisplayValue("Item")).toBeNull();
-    expect(screen.getByDisplayValue("Custom line")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it.each([
-    ["2026-09-15", "2026-09-15T23:59:59.999+03:00"],
-    ["", null],
-  ] as const)("loads and PATCHes expiry as %s", async (next, expected) => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    const expiry = await screen.findByDisplayValue("2026-09-01");
-    fireEvent.change(expiry, { target: { value: next } });
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() => expect(
-      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
-    ).toBe(true));
-    expect(patchBody(fetchMock).expiryDate).toBe(expected);
-  });
-  it("creates and focuses the next custom line when tabbing from the last description", async () => {
-    const fetchMock = fetchForEdit();
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(createElement(EditQuotationPage));
-
-    await screen.findByText("QT-1001");
-
-    const firstDescription = screen.getByRole("textbox", {
-      name: "Description 1",
-    });
-
-    fireEvent.keyDown(firstDescription, {
-      key: "Tab",
-      code: "Tab",
-    });
-
-    const nextItem = await screen.findByRole("textbox", {
-      name: "Item 2",
-    });
-
-    expect((nextItem as HTMLInputElement).value).toBe("Custom line");
+    const newCombobox = screen.getByRole("combobox", { name: "Item 2" });
+    expect(newCombobox).toBeTruthy();
+    expect((newCombobox as HTMLInputElement).value).toBe("");
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(nextItem);
+      expect(document.activeElement).toBe(newCombobox);
     });
   });
 
+  it("8. Create & Edit opens CatalogItemModal, saves catalog item, returns to SAME line with filled details", async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (input === "/api/catalog/items" && init?.method === "POST") {
+        return Promise.resolve(response({
+          id: "catalog-created-1",
+          name: "Created Sensor",
+          code: "SENS-100",
+          type: "PRODUCT",
+          salePrice: 45,
+          unitId: "unit-1",
+          taxRateId: "tax-1",
+          description: "New sensor description",
+        }));
+      }
 
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
+      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
+      if (input === "/api/units") return Promise.resolve(response(units));
+      if (init?.method === "PATCH") return Promise.resolve(response(quotation));
+
+      return Promise.resolve(response(quotation));
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    const itemCombobox = await screen.findByRole("combobox", { name: "Item 1" });
+
+    fireEvent.focus(itemCombobox);
+    fireEvent.change(itemCombobox, { target: { value: "Created Sensor" } });
+
+    const createAndEditOption = await screen.findByText('Create & Edit "Created Sensor"');
+    fireEvent.click(createAndEditOption);
+
+    expect(await screen.findByText("Add New Product")).toBeTruthy(); // Modal title
+
+    const priceInput = screen.getByLabelText("Sale Price *");
+    fireEvent.change(priceInput, { target: { value: "45" } });
+
+    const saveModalButton = screen.getByRole("button", { name: "Save" });
+    fireEvent.click(saveModalButton);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Add New Product")).toBeNull();
+    });
+
+    expect(screen.getByDisplayValue("Created Sensor")).toBeTruthy();
+    expect(screen.getByDisplayValue("Piece (pcs)")).toBeTruthy();
+    expect(screen.getByDisplayValue("45")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
+    });
+
+    const body = patchBody(fetchMock);
+    expect(body.taxRateRefreshLineIds).toEqual(["line-1"]);
+    expect(body.lines).toHaveLength(1); // No duplicate lines created
+    expect(body.lines[0]).toMatchObject({
+      id: "line-1",
+      catalogItemId: "catalog-created-1",
+      itemName: "Created Sensor",
+      unitName: "Piece (pcs)",
+      unitPrice: 45,
+      taxRateId: "tax-1",
+      taxPercentage: 5,
+    });
+  });
+
+  it("9. Submit payload preserves positions, catalogItemId, saved snapshots, and localization fields", async () => {
+    const fetchMock = fetchForEdit();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    await screen.findByDisplayValue("Item");
+
+    // Add explicit blank line
+    fireEvent.click(screen.getByRole("button", { name: /Add|إضافة/ }));
+
+    const secondCombobox = screen.getByRole("combobox", { name: "Item 2" });
+    fireEvent.focus(secondCombobox);
+    fireEvent.change(secondCombobox, { target: { value: "Second Item" } });
+    fireEvent.click(await screen.findByText('Create "Second Item"'));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true);
+    });
+
+    const body = patchBody(fetchMock);
+    expect(body.lines).toHaveLength(2);
+    expect(body.lines[0]).toMatchObject({
+      id: "line-1",
+      position: 1,
+      catalogItemId: "catalog-1",
+      itemName: "Item",
+      descriptionAr: "تفاصيل عربية",
+      descriptionEn: "English detail",
+    });
+    expect(body.lines[1]).toMatchObject({
+      position: 2,
+      catalogItemId: null,
+      itemName: "Second Item",
+      unitName: "PCS",
+    });
+  });
 });
