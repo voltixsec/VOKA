@@ -133,6 +133,29 @@ export class PrismaContractRepository implements IContractRepository {
     };
 
     if (contract.id) {
+      if (typeof this.prisma.$transaction === "function") {
+        const updated = await this.prisma.$transaction(async (tx: any) => {
+          if (tx.contractLine) {
+            await tx.contractLine.deleteMany({ where: { contractId: contract.id } });
+          }
+          if (tx.contractMilestone) {
+            await tx.contractMilestone.deleteMany({ where: { contractId: contract.id } });
+          }
+          return await tx.contract.update({
+            where: {
+              id: contract.id,
+              companyId: contract.companyId,
+            },
+            data,
+            include: {
+              lines: true,
+              milestones: true,
+            },
+          });
+        });
+        return PrismaContractMapper.toDomain(updated);
+      }
+
       const updated = await this.prisma.contract.update({
         where: {
           id: contract.id,
