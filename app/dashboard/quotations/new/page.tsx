@@ -1451,7 +1451,7 @@ export default function NewQuotationPage() {
                       }}
                     />
 
-                    
+
                   </div>
 
                   <Input
@@ -1509,7 +1509,7 @@ export default function NewQuotationPage() {
                     }
                   />
 
-                  
+
 
                   <div className="flex min-h-9 items-center rounded-lg border border-white/10 bg-white/[0.03] px-2 text-sm font-semibold text-emerald-300">
                     {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
@@ -1533,7 +1533,7 @@ export default function NewQuotationPage() {
                     </Button>
               </div>
 
-                  
+
                 </div>
               ),
             )}
