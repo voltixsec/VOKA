@@ -2,7 +2,8 @@
 
 Current Product Frontier: **Phase 7 — Commercial Documents & Receivables**
 
-Status: Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
+Status: Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch; CTO review fixes are locally green but uncommitted and unmerged.
+Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at merge commit `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
 
@@ -471,8 +472,10 @@ Status: **CLOSED / MERGED** through PR #54 at
 Delivered the dense quotation composer UX with desktop-oriented continuous
 rows, keyboard-friendly entry and RTL/LTR parity.
 
-Phase 6.4 is formally closed. The current frontier is Phase 7 — Commercial
-Documents & Receivables. Its approved aggregate, provenance, direct-workflow and
-historical-snapshot invariants are defined in
-[ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md). No Phase 7 schema or
-application implementation is recorded by this documentation slice.
+Phase 6.4 is formally closed. Phase 7A Commercial Document Foundation and Phase
+7B.1 Contract MVP have been implemented according to
+[ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md), but are not yet closed or
+merged. The current CTO review worktree contains uncommitted blocker fixes and
+focused verification; see [the resume point](context/08_RESUME_POINT.md).
+- Commercial document kinds & provenance foundation delivered;
+- Contract domain aggregate, persistence, use cases & APIs delivered (DRAFT-first, direct contract support).
