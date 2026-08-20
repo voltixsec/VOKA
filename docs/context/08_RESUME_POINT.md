@@ -1,11 +1,11 @@
 # Resume Point
 
-Verified on: 2026-08-17 (Asia/Kuwait)
+Verified on: 2026-08-20 (Asia/Kuwait)
 
 ## Current Verified State
 
 - Canonical branch: `main`.
-- Current canonical main baseline: `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`.
+- Current canonical main baseline: `20c83d9c034189cbf40f907840fdaa81847c100b`.
 - Official baseline before Phase 6.2: `d19d2bd2e306a7db066532ff873e9af5ed3a8349`.
 - Phase 3 Proposal Composer UX is closed through PR #31.
 - Phase 4.1 Approved Quotation to Sales Order Draft is closed through PR #33.
@@ -15,6 +15,16 @@ Verified on: 2026-08-17 (Asia/Kuwait)
 - Phase 6.1 Text AI Sales Assistant / Structured Commercial Draft is closed and merged through PR #42 after green Quality CI.
 - Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 - Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
+- Phase 6.4A Localization Integrity is **CLOSED / MERGED** through PR #48 at
+  `32823da495d7564c810b1479bb0133b11741e905`.
+- Phase 6.4B Customer Master Data is **CLOSED / MERGED** through PR #50, with
+  bilingual Customer UX completion through PR #51 at
+  `fceba986768d09a69cb1c74fd7c90d62f2c53feb`.
+- Phase 6.4C Delivery Configuration & UX is **CLOSED / MERGED** through PR #52
+  at `a95dd42d32fed7022f006d1f4489c8715261dea9`.
+- Phase 6.4D Dense Quotation Composer UX is **CLOSED / MERGED** through PR #54
+  at `20c83d9c034189cbf40f907840fdaa81847c100b`.
+- Phase 6.4 Product Integrity & Stabilization is formally closed.
 
 ## Phase 4 Commercial Downstream Boundary
 
@@ -128,6 +138,43 @@ Final validation:
 
 Canonical Phase 6.3 merge: `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`
 
+## Phase 6.4 Delivered Boundary
+
+Phase 6.4 closed the stabilization sequence across localization integrity,
+Customer master data, delivery configuration/readiness UX and the dense
+Quotation composer.
+
+Canonical Phase 6.4 close: `20c83d9c034189cbf40f907840fdaa81847c100b`
+
+## Phase 7 Approved Architecture
+
+[ADR-010: Commercial Document Lifecycle](../ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md)
+is approved.
+
+Quotation-first is the recommended guided workflow, not a mandatory technical
+dependency. Contract and Invoice may each be created directly when the business
+process requires it. Quotation, SalesOrder, Contract, Invoice and Payment are
+first-class aggregates with distinct business meaning.
+
+Conceptual origins are `DIRECT`, `QUOTATION`, `SALES_ORDER` and `CONTRACT`.
+Origin is provenance, not ownership of a downstream aggregate's lifecycle.
+
+Historical Quotation, SalesOrder, Contract and Invoice meaning must not be
+silently rewritten or repriced from current Customer, Catalog, Unit, TaxRate,
+Price List or branding master data. Existing approved-Quotation and SalesOrder
+snapshot guarantees remain authoritative.
+
+Phase 7 delivery is sequenced as:
+
+- 7A — Commercial Document Foundation;
+- 7B — Contracts;
+- 7C — Invoices;
+- 7D — Payments & Receivables;
+- 7E — Document Conversion / Orchestration.
+
+This architecture synchronization does not implement Phase 7 schema,
+migrations, domain code, APIs, UI or payment accounting.
+
 ## Continuing Guardrails
 
 - Clean Architecture + DDD + dependency inversion.
@@ -140,20 +187,24 @@ Canonical Phase 6.3 merge: `8ad47179408e2753f1ece92aedb8d0e5ab0641d8`
 
 ## Next Session Start Point
 
-Phase 6.3 is closed and merged on canonical `main`.
+Phase 6.4 is closed and merged on canonical `main`.
 
 Start the next development session with `CTO START SESSION`.
 
-The next product frontier is **Phase 7.0 — Contracts & Invoices Architecture Assessment**.
+The next product frontier is **Phase 7A — Commercial Document Foundation**.
 
-Before any Phase 7 implementation or schema change, determine:
+Before implementation, translate ADR-010 into bounded CTO-approved acceptance
+criteria and decide only the concrete Phase 7A representation needed for:
 
-- whether Invoice authority begins from CONFIRMED Sales Order;
-- whether Contract is mandatory or optional in V1;
-- which immutable quotation/Sales Order/customer/branding snapshots flow downstream;
-- whether V1 supports one or multiple invoices per Sales Order;
-- how historical prices, discounts, taxes and currency remain immutable;
-- the minimum bounded V1 invoice/contract scope without expanding VOKA into a full accounting ERP.
+- provenance/origin representation;
+- common lifecycle and authorization boundaries;
+- tenant-safe repository/application contracts;
+- immutable historical snapshots;
+- idempotency and duplicate prevention where conversion exists;
+- backward compatibility with existing Quotation and SalesOrder behavior.
+
+Do not assume Quotation is mandatory and do not promise an unsupported
+conversion matrix.
 
 Active development workflow: CTO + local Terminal + Jules.
 GitHub is the durable source of truth across devices and Jules sessions.
