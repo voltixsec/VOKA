@@ -138,6 +138,114 @@ describe("UpdateContractUseCase", () => {
     expect(updated.totalAmount).toBe(630);
   });
 
+  it("preserves existing commercial line snapshots when PATCH does not include lines", async () => {
+    const existingCatalogContract = new Contract({
+      id: "contract-1",
+      companyId: "company-1",
+      number: "CN-202608-0001",
+      provenance: CommercialDocumentProvenance.direct(),
+      customerId: "customer-1",
+      customer: { name: "Existing Customer" },
+      lines: [
+        {
+          catalogItemId: "catalog-1",
+          taxRateId: "tax-old",
+          position: 1,
+          type: "SERVICE",
+          itemCode: "OLD-CODE",
+          itemName: "Historical Service",
+          itemNameAr: "Historical Service AR",
+          itemNameEn: "Historical Service",
+          unitName: "Day",
+          unitNameAr: "Day AR",
+          unitNameEn: "Day",
+          quantity: 2,
+          unitPrice: 111,
+          discountValue: 0,
+          discountAmount: 0,
+          taxPercentage: 3,
+          taxAmount: 6.66,
+          subtotal: 222,
+          totalAmount: 228.66,
+        },
+      ],
+      createdByName: "Original Creator",
+      createdByRole: "SALES",
+    });
+
+    vi.mocked(contracts.findById).mockResolvedValue(existingCatalogContract);
+
+    const updated = await useCase.execute({
+      ...baseDto(),
+      notes: "Only notes changed",
+    });
+
+    expect(references.getCatalogItemSnapshot).not.toHaveBeenCalled();
+    expect(references.resolveTaxRatePercentage).not.toHaveBeenCalled();
+
+    expect(updated.lines[0]).toMatchObject({
+      catalogItemId: "catalog-1",
+      taxRateId: "tax-old",
+      itemCode: "OLD-CODE",
+      itemName: "Historical Service",
+      unitName: "Day",
+      quantity: 2,
+      unitPrice: 111,
+      taxPercentage: 3,
+      subtotal: 222,
+      taxAmount: 6.66,
+      totalAmount: 228.66,
+    });
+  });
+  it("preserves an unchanged historical price list reference during unrelated PATCH", async () => {
+    const existingWithHistoricalPriceList = new Contract({
+      id: "contract-1",
+      companyId: "company-1",
+      number: "CN-202608-0001",
+      provenance: CommercialDocumentProvenance.direct(),
+      customerId: "customer-1",
+      customer: { name: "Existing Customer" },
+      priceListId: "historical-price-list",
+      lines: [
+        {
+          position: 1,
+          type: "SERVICE",
+          itemCode: "HIST-001",
+          itemName: "Historical Service",
+          itemNameAr: "Historical Service AR",
+          itemNameEn: "Historical Service",
+          unitName: "Day",
+          unitNameAr: "Day AR",
+          unitNameEn: "Day",
+          quantity: 1,
+          unitPrice: 100,
+          discountValue: 0,
+          discountAmount: 0,
+          taxPercentage: 0,
+          taxAmount: 0,
+          subtotal: 100,
+          totalAmount: 100,
+        },
+      ],
+      createdByName: "Original Creator",
+      createdByRole: "SALES",
+    });
+
+    vi.mocked(contracts.findById).mockResolvedValue(
+      existingWithHistoricalPriceList,
+    );
+
+    vi.mocked(references.isPriceListAvailable).mockResolvedValue(false);
+
+    const updated = await useCase.execute({
+      ...baseDto(),
+      notes: "Only notes changed",
+    });
+
+    expect(references.isPriceListAvailable).not.toHaveBeenCalled();
+    expect(updated.priceListId).toBe("historical-price-list");
+    expect(updated.notes).toBe("Only notes changed");
+  });
   it("updates milestones and validates percentage bounds", async () => {
     const updated = await useCase.execute({
       ...baseDto(),

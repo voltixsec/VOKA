@@ -80,7 +80,13 @@ export class UpdateContractUseCase {
         ? dto.priceListId?.trim() || null
         : existing.priceListId;
 
-    if (priceListId) {
+    const shouldValidatePriceList =
+      dto.priceListId !== undefined ||
+      dto.currencyCode !== undefined ||
+      dto.lines !== undefined;
+
+
+    if (priceListId && shouldValidatePriceList) {
       const priceListAvailable =
         await this.referenceResolver.isPriceListAvailable({
           companyId: dto.companyId,
@@ -96,144 +102,144 @@ export class UpdateContractUseCase {
       }
     }
 
-    const linesInput = dto.lines ?? existing.lines;
+    const canonicalLines =
+      dto.lines === undefined
+        ? existing.lines.map((line) => ({ ...line }))
+        : await Promise.all(
+            dto.lines.map(async (line) => {
+              const catalogItemId = line.catalogItemId?.trim() || null;
+              const requestedTaxRateId = line.taxRateId?.trim() || null;
 
-    const canonicalLines = await Promise.all(
-      linesInput.map(async (line) => {
-        const catalogItemId = line.catalogItemId?.trim() || null;
-        const requestedTaxRateId = line.taxRateId?.trim() || null;
+              if (catalogItemId) {
+                const catalogItem =
+                  await this.referenceResolver.getCatalogItemSnapshot(
+                    dto.companyId,
+                    catalogItemId,
+                  );
 
-        if (catalogItemId) {
-          const catalogItem =
-            await this.referenceResolver.getCatalogItemSnapshot(
-              dto.companyId,
-              catalogItemId,
-            );
+                if (!catalogItem) {
+                  throw new UpdateContractReferenceError(
+                    "CATALOG_ITEM_NOT_FOUND",
+                    "Catalog item was not found for the active company.",
+                  );
+                }
 
-          if (!catalogItem) {
-            throw new UpdateContractReferenceError(
-              "CATALOG_ITEM_NOT_FOUND",
-              "Catalog item was not found for the active company.",
-            );
-          }
+                const taxRateId =
+                  requestedTaxRateId ?? catalogItem.defaultTaxRateId;
 
-          const taxRateId =
-            requestedTaxRateId ?? catalogItem.defaultTaxRateId;
+                let taxPercentage = 0;
 
-          let taxPercentage = 0;
+                if (taxRateId) {
+                  const resolvedTaxPercentage =
+                    await this.referenceResolver.resolveTaxRatePercentage(
+                      dto.companyId,
+                      taxRateId,
+                    );
 
-          if (taxRateId) {
-            const resolvedTaxPercentage =
-              await this.referenceResolver.resolveTaxRatePercentage(
-                dto.companyId,
-                taxRateId,
-              );
+                  if (resolvedTaxPercentage === null) {
+                    throw new UpdateContractReferenceError(
+                      "TAX_RATE_NOT_FOUND",
+                      "Tax rate was not found for the active company.",
+                    );
+                  }
 
-            if (resolvedTaxPercentage === null) {
-              throw new UpdateContractReferenceError(
-                "TAX_RATE_NOT_FOUND",
-                "Tax rate was not found for the active company.",
-              );
-            }
+                  taxPercentage = resolvedTaxPercentage;
+                }
 
-            taxPercentage = resolvedTaxPercentage;
-          }
+                const resolvedPrice =
+                  await this.pricingService.resolveUnitPrice({
+                    companyId: dto.companyId,
+                    priceListId: priceListId ?? "",
+                    catalogItemId,
+                    quantity: line.quantity,
+                  });
 
-          const resolvedPrice =
-            await this.pricingService.resolveUnitPrice({
-              companyId: dto.companyId,
-              priceListId: priceListId ?? "",
-              catalogItemId,
-              quantity: line.quantity,
-            });
+                return {
+                  id: line.id,
+                  catalogItemId,
+                  taxRateId,
+                  position: line.position,
 
-          return {
-            id: line.id,
-            catalogItemId,
-            taxRateId,
-            position: line.position,
+                  type: catalogItem.type,
+                  itemCode: catalogItem.itemCode,
+                  itemName: catalogItem.itemName,
+                  itemNameAr: catalogItem.itemNameAr,
+                  itemNameEn: catalogItem.itemNameEn,
 
-            type: catalogItem.type,
-            itemCode: catalogItem.itemCode,
-            itemName: catalogItem.itemName,
-            itemNameAr: catalogItem.itemNameAr,
-            itemNameEn: catalogItem.itemNameEn,
+                  description:
+                    line.description ?? catalogItem.description,
+                  descriptionAr:
+                    line.descriptionAr ?? catalogItem.descriptionAr,
+                  descriptionEn:
+                    line.descriptionEn ?? catalogItem.descriptionEn,
 
-            description:
-              line.description ?? catalogItem.description,
-            descriptionAr:
-              line.descriptionAr ?? catalogItem.descriptionAr,
-            descriptionEn:
-              line.descriptionEn ?? catalogItem.descriptionEn,
+                  unitName: catalogItem.unitName,
+                  unitNameAr: catalogItem.unitNameAr,
+                  unitNameEn: catalogItem.unitNameEn,
 
-            unitName: catalogItem.unitName,
-            unitNameAr: catalogItem.unitNameAr,
-            unitNameEn: catalogItem.unitNameEn,
+                  quantity: line.quantity,
+                  unitPrice: resolvedPrice.unitPrice,
 
-            quantity: line.quantity,
-            unitPrice: resolvedPrice.unitPrice,
+                  discountType: line.discountType,
+                  discountValue: line.discountValue ?? 0,
+                  discountAmount: 0,
 
-            discountType: line.discountType,
-            discountValue: line.discountValue ?? 0,
-            discountAmount: 0,
+                  taxPercentage,
+                  taxAmount: 0,
+                  subtotal: 0,
+                  totalAmount: 0,
+                };
+              }
 
-            taxPercentage,
-            taxAmount: 0,
-            subtotal: 0,
-            totalAmount: 0,
-          };
-        }
+              let taxPercentage = 0;
 
-        let taxPercentage = 0;
+              if (requestedTaxRateId) {
+                const resolvedTaxPercentage =
+                  await this.referenceResolver.resolveTaxRatePercentage(
+                    dto.companyId,
+                    requestedTaxRateId,
+                  );
 
-        if (requestedTaxRateId) {
-          const resolvedTaxPercentage =
-            await this.referenceResolver.resolveTaxRatePercentage(
-              dto.companyId,
-              requestedTaxRateId,
-            );
+                if (resolvedTaxPercentage === null) {
+                  throw new UpdateContractReferenceError(
+                    "TAX_RATE_NOT_FOUND",
+                    "Tax rate was not found for the active company.",
+                  );
+                }
 
-          if (resolvedTaxPercentage === null) {
-            throw new UpdateContractReferenceError(
-              "TAX_RATE_NOT_FOUND",
-              "Tax rate was not found for the active company.",
-            );
-          }
+                taxPercentage = resolvedTaxPercentage;
+              }
 
-          taxPercentage = resolvedTaxPercentage;
-        }
+              return {
+                id: line.id,
+                catalogItemId: null,
+                taxRateId: requestedTaxRateId,
+                position: line.position,
+                type: line.type,
+                itemCode: line.itemCode,
+                itemName: line.itemName,
+                itemNameAr: line.itemNameAr,
+                itemNameEn: line.itemNameEn,
+                description: line.description,
+                descriptionAr: line.descriptionAr,
+                descriptionEn: line.descriptionEn,
+                unitName: line.unitName,
+                unitNameAr: line.unitNameAr,
+                unitNameEn: line.unitNameEn,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
 
-        return {
-          id: line.id,
-          catalogItemId: null,
-          taxRateId: requestedTaxRateId,
-          position: line.position,
-          type: line.type,
-          itemCode: line.itemCode,
-          itemName: line.itemName,
-          itemNameAr: line.itemNameAr,
-          itemNameEn: line.itemNameEn,
-          description: line.description,
-          descriptionAr: line.descriptionAr,
-          descriptionEn: line.descriptionEn,
-          unitName: line.unitName,
-          unitNameAr: line.unitNameAr,
-          unitNameEn: line.unitNameEn,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
+                discountType: line.discountType,
+                discountValue: line.discountValue ?? 0,
+                discountAmount: 0,
 
-          discountType: line.discountType,
-          discountValue: line.discountValue ?? 0,
-          discountAmount: 0,
-
-          taxPercentage,
-          taxAmount: 0,
-          subtotal: 0,
-          totalAmount: 0,
-        };
-      }),
-    );
-
+                taxPercentage,
+                taxAmount: 0,
+                subtotal: 0,
+                totalAmount: 0,
+              };
+            }),
+          );
     const contractDate = dto.contractDate !== undefined
       ? (dto.contractDate ? new Date(dto.contractDate) : new Date())
       : existing.contractDate;
