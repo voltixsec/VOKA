@@ -7,7 +7,6 @@ import {
   Card,
   EmptyState,
   Input,
-  Modal,
   SectionHeader,
   Table,
   TableBody,
@@ -18,6 +17,7 @@ import {
   TableRow,
 } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
+import { CatalogItemModal } from "../../../components/catalog/CatalogItemModal";
 
 type CatalogItemType = "PRODUCT" | "SERVICE";
 
@@ -423,173 +423,18 @@ export default function ProductsPage() {
         </Card>
       )}
 
-      {modalOpen && (
-        <Modal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          title={editingItem ? t("تعديل الصنف", "Edit Catalog Item") : formType === "PRODUCT" ? t("إضافة منتج جديد", "Add New Product") : t("إضافة خدمة جديدة", "Add New Service")}
-        >
-          <form onSubmit={handleSave} className="space-y-4">
-            {modalError && (
-              <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
-                {modalError}
-              </div>
-            )}
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("النوع", "Type")}</span>
-                <select
-                  value={formType}
-                  disabled={Boolean(editingItem)}
-                  onChange={(e) => setFormType(e.target.value as CatalogItemType)}
-                  className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
-                >
-                  <option value="PRODUCT">{t("منتج", "Product")}</option>
-                  <option value="SERVICE">{t("خدمة", "Service")}</option>
-                </select>
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("كود الصنف", "Item Code")} *</span>
-                <Input
-                  required
-                  value={formCode}
-                  disabled={Boolean(editingItem)}
-                  onChange={(e) => setFormCode(e.target.value)}
-                  placeholder="PROD-001"
-                />
-              </label>
-
-              <label className="space-y-1 md:col-span-2">
-                <span className="text-xs text-slate-400">{t("الاسم الأساسي", "Primary Name")} *</span>
-                <Input
-                  required
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder={t("اسم الصنف باللغة الأساسية", "Primary item name")}
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("الاسم بالعربية", "Arabic Name")}</span>
-                <Input
-                  dir="rtl"
-                  value={formNameAr}
-                  onChange={(e) => setFormNameAr(e.target.value)}
-                  placeholder="كاميرا مراقبة"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("الاسم بالإنجليزية", "English Name")}</span>
-                <Input
-                  dir="ltr"
-                  value={formNameEn}
-                  onChange={(e) => setFormNameEn(e.target.value)}
-                  placeholder="CCTV Camera"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("سعر البيع المرجعي", "Sale Price")} *</span>
-                <Input
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  required
-                  value={formSalePrice}
-                  onChange={(e) => setFormSalePrice(Number(e.target.value))}
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("رمز SKU (اختياري)", "SKU (optional)")}</span>
-                <Input
-                  value={formSku}
-                  onChange={(e) => setFormSku(e.target.value)}
-                  placeholder="SKU-1002"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("الوحدة", "Unit")}</span>
-                <select
-                  value={formUnitId}
-                  onChange={(e) => setFormUnitId(e.target.value)}
-                  className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
-                >
-                  <option value="">{t("اختر الوحدة", "Select unit")}</option>
-                  {units.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.name} ({unit.symbol})
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-slate-400">{t("الضريبة الافتراضية", "Default Tax Rate")}</span>
-                <select
-                  value={formTaxRateId}
-                  onChange={(e) => setFormTaxRateId(e.target.value)}
-                  className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3"
-                >
-                  <option value="">{t("بدون ضريبة", "No tax")}</option>
-                  {taxRates.map((rate) => (
-                    <option key={rate.id} value={rate.id}>
-                      {rate.name} ({rate.percentage.toFixed(2)}%)
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="space-y-1 md:col-span-2">
-                <span className="text-xs text-slate-400">{t("الوصف العربي", "Arabic Description")}</span>
-                <textarea
-                  dir="rtl"
-                  rows={2}
-                  value={formDescriptionAr}
-                  onChange={(e) => setFormDescriptionAr(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-sm text-white"
-                />
-              </label>
-
-              <label className="space-y-1 md:col-span-2">
-                <span className="text-xs text-slate-400">{t("الوصف الإنجليزي", "English Description")}</span>
-                <textarea
-                  dir="ltr"
-                  rows={2}
-                  value={formDescriptionEn}
-                  onChange={(e) => setFormDescriptionEn(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-sm text-white"
-                />
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-white/10 pt-4">
-              <label className="flex items-center gap-2 text-sm text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={formIsActive}
-                  onChange={(e) => setFormIsActive(e.target.checked)}
-                  className="h-4 w-4 rounded border-white/10 bg-slate-950 text-sky-400"
-                />
-                <span>{t("صنف نشط في الكتالوج", "Active catalog item")}</span>
-              </label>
-
-              <div className="flex gap-3">
-                <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
-                  {t("إلغاء", "Cancel")}
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? t("جاري الحفظ...", "Saving...") : t("حفظ", "Save")}
-                </Button>
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <CatalogItemModal
+        open={modalOpen}
+        initialType={formType}
+        initialItem={editingItem}
+        units={units}
+        taxRates={taxRates}
+        onClose={() => setModalOpen(false)}
+        onSaved={async () => {
+          setModalOpen(false);
+          await loadData();
+        }}
+      />
     </section>
   );
 }
