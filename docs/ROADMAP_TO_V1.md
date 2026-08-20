@@ -382,7 +382,7 @@ sequence.
 
 # Phase 7 — Commercial Documents & Receivables
 
-Status: **Architecture approved; implementation not started.**
+Status: **Phase 7A & Phase 7B.1 Contract MVP Delivered in handoff branch.**
 
 The governing decision is
 [ADR-010: Commercial Document Lifecycle](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
@@ -393,19 +393,18 @@ remain semantically distinct aggregates.
 
 ## 7A — Commercial Document Foundation
 
-- shared document provenance/origin semantics;
-- immutable snapshot rules;
-- common lifecycle boundaries;
-- tenant and authorization rules;
-- idempotent conversion boundaries where conversion exists;
-- no assumption that Quotation is mandatory.
+- **DELIVERED**: shared document provenance/origin semantics (`DIRECT`, `QUOTATION`, `SALES_ORDER`, `CONTRACT`);
+- **DELIVERED**: domain document kinds (`QUOTATION`, `SALES_ORDER`, `CONTRACT`, `INVOICE`, `PAYMENT`);
+- **DELIVERED**: shared commercial snapshot primitives (`CommercialCustomerSnapshot`, `CommercialLineSnapshot`, `CommercialTotals`);
+- **DELIVERED**: focused domain unit tests.
 
 ## 7B — Contracts
 
-- direct Contract creation;
-- optional upstream-source Contract creation;
-- terms, duration, milestones and installments;
-- immutable Contract snapshots.
+- **DELIVERED (7B.1 MVP)**: direct Contract creation;
+- **DELIVERED (7B.1 MVP)**: optional upstream-source Contract provenance support;
+- **DELIVERED (7B.1 MVP)**: terms, duration, milestones and installments model;
+- **DELIVERED (7B.1 MVP)**: immutable Contract snapshots & server-authoritative totals;
+- **DELIVERED (7B.1 MVP)**: Prisma schema & forward migration, repository, use cases & authenticated APIs.
 
 ## 7C — Invoices
 

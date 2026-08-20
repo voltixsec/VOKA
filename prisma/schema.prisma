@@ -79,6 +79,7 @@ model Company {
   salesOrderActivities    SalesOrderActivity[]
   quotationDeliveries     QuotationDelivery[]
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
+  contracts               Contract[]
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
 
@@ -98,6 +99,7 @@ model User {
   confirmedSalesOrders SalesOrder[]         @relation("SalesOrderConfirmedBy")
   cancelledSalesOrders SalesOrder[]         @relation("SalesOrderCancelledBy")
   salesOrderActivities SalesOrderActivity[]
+  createdContracts     Contract[]           @relation("ContractCreatedBy")
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 
@@ -163,6 +165,7 @@ model Customer {
   company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quotations        Quotation[]
   salesOrders       SalesOrder[]
+  contracts         Contract[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -198,6 +201,22 @@ enum SalesOrderStatus {
   DRAFT
   CONFIRMED
   CANCELLED
+}
+
+enum ContractStatus {
+  DRAFT
+}
+
+enum CommercialDocumentOrigin {
+  DIRECT
+  QUOTATION
+  SALES_ORDER
+  CONTRACT
+}
+
+enum MilestoneAmountType {
+  PERCENTAGE
+  FIXED_AMOUNT
 }
 
 enum LocalizationStatus {
@@ -292,6 +311,7 @@ model TaxRate {
   items           CatalogItem[]
   quotationLines  QuotationLine[]
   salesOrderLines SalesOrderLine[]
+  contractLines   ContractLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -348,6 +368,7 @@ model CatalogItem {
   priceListItems  PriceListItem[]
   quotationLines  QuotationLine[]
   salesOrderLines SalesOrderLine[]
+  contractLines   ContractLine[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -372,6 +393,7 @@ model PriceList {
   items       PriceListItem[]
   quotations  Quotation[]
   salesOrders SalesOrder[]
+  contracts   Contract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -742,4 +764,156 @@ model SalesOrderActivity {
   @@index([companyId, salesOrderId, createdAt])
   @@index([salesOrderId])
   @@index([actorUserId])
+}
+
+model Contract {
+  id String @id @default(cuid())
+
+  companyId String
+  number    String
+  status    ContractStatus @default(DRAFT)
+
+  origin     CommercialDocumentOrigin @default(DIRECT)
+  sourceKind String?
+  sourceId   String?
+
+  customerId   String
+  priceListId  String?
+  currencyCode String   @default("KWD")
+  contractDate DateTime @default(now())
+  startDate    DateTime?
+  endDate      DateTime?
+
+  customerName   String
+  customerNameAr String?
+  customerNameEn String?
+  customerEmail  String?
+  customerPhone  String?
+  customerTaxNo  String?
+  billingAddress String?
+
+  subjectAr       String?
+  subjectEn       String?
+  briefAr         String?
+  briefEn         String?
+  projectName     String?
+  projectNameAr   String?
+  projectNameEn   String?
+  attentionName   String?
+  attentionNameAr String?
+  attentionNameEn String?
+  scopeType       QuotationScopeType?
+
+  subtotal       Decimal       @db.Decimal(18, 3)
+  discountType   DiscountType?
+  discountValue  Decimal       @default(0) @db.Decimal(18, 3)
+  discountAmount Decimal       @default(0) @db.Decimal(18, 3)
+  taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
+  totalAmount    Decimal       @db.Decimal(18, 3)
+
+  notes                String?
+  notesAr              String?
+  notesEn              String?
+  termsAndConditions   String?
+  termsAndConditionsAr String?
+  termsAndConditionsEn String?
+
+  createdByUserId String?
+  createdByName   String
+  createdByRole   String
+
+  documentBrandSnapshot Json?
+
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer      Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  priceList     PriceList?          @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  createdByUser User?               @relation("ContractCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  lines         ContractLine[]
+  milestones    ContractMilestone[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, number])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, customerId])
+  @@index([companyId, contractDate])
+  @@index([customerId])
+  @@index([priceListId])
+  @@index([createdByUserId])
+  @@index([companyId, origin, sourceId])
+}
+
+model ContractLine {
+  id String @id @default(cuid())
+
+  contractId    String
+  sourceLineId  String?
+  catalogItemId String?
+  taxRateId     String?
+
+  position Int
+  type     CatalogItemType
+
+  itemCode      String?
+  itemName      String
+  itemNameAr    String?
+  itemNameEn    String?
+  description   String?
+  descriptionAr String?
+  descriptionEn String?
+  unitName      String?
+  unitNameAr    String?
+  unitNameEn    String?
+
+  quantity  Decimal @db.Decimal(18, 3)
+  unitPrice Decimal @db.Decimal(18, 3)
+
+  discountType   DiscountType?
+  discountValue  Decimal       @default(0) @db.Decimal(18, 3)
+  discountAmount Decimal       @default(0) @db.Decimal(18, 3)
+  taxPercentage  Decimal       @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(18, 3)
+  subtotal       Decimal       @db.Decimal(18, 3)
+  totalAmount    Decimal       @db.Decimal(18, 3)
+
+  contract    Contract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  taxRate     TaxRate?     @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contractId, position])
+  @@index([contractId])
+  @@index([catalogItemId])
+  @@index([taxRateId])
+}
+
+model ContractMilestone {
+  id String @id @default(cuid())
+
+  contractId String
+  position   Int
+
+  title         String
+  titleAr       String?
+  titleEn       String?
+  description   String?
+  descriptionAr String?
+  descriptionEn String?
+
+  amountType  MilestoneAmountType
+  percentage  Decimal?            @db.Decimal(5, 2)
+  fixedAmount Decimal?            @db.Decimal(18, 3)
+  dueDate     DateTime?
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contractId, position])
+  @@index([contractId])
 }
