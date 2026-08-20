@@ -66,3 +66,45 @@ Implemented and reviewed locally:
 
 Phase 7A and Phase 7B.1 remain on the review branch pending final acceptance and publication workflow.
 Do not begin **Phase 7B.2 / Contract UI / PDF rendering** or **Phase 7C Invoices** from this resume point until the current review changes are accepted and merged.
+
+<!-- ADR-011-UCL-RESUME -->
+
+## Approved Next Architecture — Universal Commercial Library
+
+On 2026-08-20 the CEO approved the Universal Commercial Library architecture.
+
+This decision must be preserved across future CTO sessions.
+
+VOKA will ultimately support a very large shared commercial knowledge library
+covering products and services across industries and countries.
+
+This does NOT mean loading all records into a tenant catalog, browser session or
+AI prompt.
+
+The permanent architecture is:
+
+Universal Commercial Library
+-> bounded retrieval
+-> explicit tenant adoption
+-> canonical Company Catalog
+-> Quotation / Contract / Sales Order / Invoice snapshots.
+
+The Company Catalog remains tenant-owned operational truth.
+
+The Universal Library is shared knowledge and discovery infrastructure.
+
+Required future capabilities include taxonomy, manufacturers, brands, models,
+variants, multilingual aliases, GTIN/EAN/UPC/MPN-style identifiers,
+specifications, extensible attributes, provenance, confidence, entity
+resolution, bundles/services, ingestion, source governance, licensing controls,
+search ranking, caching and AI retrieval.
+
+Performance is a hard architectural requirement:
+
+large server-side corpus + small indexed retrieval + small client payload +
+small AI context.
+
+Never implement full-library browser loading or full-library AI context.
+
+Canonical architecture:
+`docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.

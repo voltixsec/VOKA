@@ -572,3 +572,51 @@ Phase 6.4 Product Integrity & Stabilization is CLOSED / MERGED through PR #54 at
 `20c83d9c034189cbf40f907840fdaa81847c100b`.
 The next bounded product step is Phase 7A — Commercial Document Foundation,
 governed by [ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
+
+<!-- ADR-011-UCL-ROADMAP -->
+
+## Universal Commercial Library — Approved Architecture Track
+
+Status: ARCHITECTURE APPROVED / IMPLEMENTATION NOT STARTED
+
+The Universal Commercial Library is now an approved long-term VOKA capability.
+
+This track does not replace the existing Company Catalog.
+
+Target architecture:
+
+Universal commercial knowledge
+-> bounded retrieval
+-> tenant adoption
+-> Company Catalog
+-> commercial documents and historical snapshots.
+
+Mandatory performance contract:
+
+- no full catalog fetch;
+- bounded server-side search;
+- indexed retrieval;
+- pagination or cursor continuation;
+- lazy loading;
+- optional virtualization for large UI result sets;
+- small AI candidate retrieval rather than full-catalog prompts;
+- caching where safe;
+- future hybrid lexical / semantic retrieval.
+
+Planned implementation sequence:
+
+1. UCL-1 — global identity, taxonomy, provenance, adoption and retrieval
+   contracts.
+2. UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and
+   structured attributes.
+3. UCL-3 — ingestion, normalization, entity resolution, quality and confidence.
+4. UCL-4 — hybrid Company Catalog + Universal Library AI retrieval.
+5. UCL-5 — semantic/vector search, caching, ranking and scale validation.
+6. UCL-6 — controlled large-scale external data ingestion and ongoing
+   enrichment.
+
+No UCL implementation phase may weaken existing tenant isolation, pricing,
+taxation, document snapshot or historical integrity guarantees.
+
+Architecture source:
+`docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.

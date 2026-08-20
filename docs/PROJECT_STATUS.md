@@ -479,3 +479,22 @@ merged. The current CTO review worktree contains uncommitted blocker fixes and
 focused verification; see [the resume point](context/08_RESUME_POINT.md).
 - Commercial document kinds & provenance foundation delivered;
 - Contract domain aggregate, persistence, use cases & APIs delivered (DRAFT-first, direct contract support).
+
+<!-- ADR-011-UCL-PROJECT-STATUS -->
+
+## Universal Commercial Library Architecture
+
+Architecture decision: APPROVED.
+
+ADR-011 establishes VOKA's future shared Universal Commercial Library while
+preserving the existing Company Catalog as tenant-owned operational master
+data.
+
+No Universal Library implementation, schema migration or production data
+ingestion is part of this architecture-only change.
+
+The approved model requires bounded server-side retrieval, explicit tenant
+adoption, historical document isolation, provenance-aware ingestion and small
+AI candidate sets.
+
+Implementation remains a separately gated future workstream.
