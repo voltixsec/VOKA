@@ -329,9 +329,10 @@ The PDF renderer remains deterministic and AI-free.
 
 ## Phase 6.4 — Product Integrity & Stabilization
 
-Status: **ACTIVE**
+Status: **CLOSED / MERGED through PR #54 at `20c83d9c034189cbf40f907840fdaa81847c100b`.**
 
-Phase 6.4 was inserted after real UI validation exposed product-integrity gaps that must be closed before Phase 7.
+Phase 6.4 was inserted after real UI validation exposed product-integrity gaps
+that had to be closed before Phase 7. The stabilization sequence is now closed.
 
 ### 6.4A — Localization Integrity
 
@@ -352,9 +353,10 @@ Final validation: 8/8 focused Phase 6.4A tests, 22/22 Phase 6.3 routing tests, 1
 
 ### 6.4B — Customer Master Data
 
-Next bounded slice.
+Status: **CLOSED / MERGED through PR #50, with bilingual Customer UX completion
+through PR #51 at `fceba986768d09a69cb1c74fd7c90d62f2c53feb`.**
 
-Planned scope:
+Delivered boundary:
 
 - automatic tenant-safe Customer code generation;
 - bilingual Customer master-data naming;
@@ -362,25 +364,72 @@ Planned scope:
 
 ### 6.4C — Delivery Configuration & UX
 
-Planned.
+Status: **CLOSED / MERGED through PR #52 at
+`a95dd42d32fed7022f006d1f4489c8715261dea9`.**
+
+Delivered provider/configuration readiness visibility and delivery UX without
+falsely enabling unavailable channels.
 
 ### 6.4D — Dense Quotation Composer UX
 
-Planned.
+Status: **CLOSED / MERGED through PR #54 at
+`20c83d9c034189cbf40f907840fdaa81847c100b`.**
 
-Phase 7 remains frozen until the Phase 6.4 stabilization sequence and full commercial regression are complete.
+Delivered the dense quotation composer UX and completed the Phase 6.4 merge
+sequence.
 
 ---
 
-# Phase 7 — Contracts and invoices
+# Phase 7 — Commercial Documents & Receivables
 
-After quotation approval:
+Status: **Architecture approved; implementation not started.**
 
-- create contract / order where applicable
-- generate invoice
-- reuse customer/company/document branding
-- preserve quotation references
-- preserve currency/tax/discount values
+The governing decision is
+[ADR-010: Commercial Document Lifecycle](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
+Quotation-first is the recommended/default guided workflow where applicable,
+not a mandatory technical dependency. Direct Contract and Direct Invoice are
+first-class workflows. Quotation, SalesOrder, Contract, Invoice and Payment
+remain semantically distinct aggregates.
+
+## 7A — Commercial Document Foundation
+
+- shared document provenance/origin semantics;
+- immutable snapshot rules;
+- common lifecycle boundaries;
+- tenant and authorization rules;
+- idempotent conversion boundaries where conversion exists;
+- no assumption that Quotation is mandatory.
+
+## 7B — Contracts
+
+- direct Contract creation;
+- optional upstream-source Contract creation;
+- terms, duration, milestones and installments;
+- immutable Contract snapshots.
+
+## 7C — Invoices
+
+- direct Invoice creation;
+- upstream-source Invoice creation where applicable;
+- immutable Invoice snapshots;
+- server-authoritative totals, tax and currency.
+
+## 7D — Payments & Receivables
+
+- partial and full Payments;
+- Invoice settlement state;
+- Payment history and audit;
+- no silent financial mutations.
+
+## 7E — Document Conversion / Orchestration
+
+- explicit supported conversions between commercial documents;
+- provenance preservation;
+- idempotency and duplicate prevention;
+- human-controlled consequential actions.
+
+This roadmap does not promise a conversion until its source/target lifecycle,
+authorization, snapshot and idempotency rules have been designed and approved.
 
 ---
 
@@ -520,4 +569,7 @@ Important: Phase 5 is closed on `main` at
 Phase 6.1 Text AI Sales Assistant / Structured Draft is merged on `main` through PR #42 after green Quality CI.
 Phase 6.2 Voice Input Transport is CLOSED / MERGED through PR #44 at `0c94f521d07d4a2f78f4eb5d67c60e27ce686772`.
 Phase 6.3 AI Model Routing is CLOSED / MERGED through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
-The next bounded product step is Phase 6.4B — Customer Master Data. Phase 7 remains frozen until Phase 6.4 stabilization is formally closed.
+Phase 6.4 Product Integrity & Stabilization is CLOSED / MERGED through PR #54 at
+`20c83d9c034189cbf40f907840fdaa81847c100b`.
+The next bounded product step is Phase 7A — Commercial Document Foundation,
+governed by [ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).

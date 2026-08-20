@@ -1,6 +1,6 @@
 # Project Status
 
-Current Product Frontier: **Phase 6.4 — Product Integrity & Stabilization**
+Current Product Frontier: **Phase 7 — Commercial Documents & Receivables**
 
 Status: Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
@@ -10,9 +10,9 @@ Official pre-Phase-6.2 baseline:
 
 `d19d2bd2e306a7db066532ff873e9af5ed3a8349`
 
-Current canonical main baseline after Phase 6.4A merge:
+Current canonical main baseline after Phase 6.4D merge:
 
-`32823da495d7564c810b1479bb0133b11741e905`
+`20c83d9c034189cbf40f907840fdaa81847c100b`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -397,13 +397,16 @@ Core invariant:
 
 AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
 
-Next product frontier: Phase 7.0 Contracts & Invoices Architecture Assessment before any Phase 7 schema or implementation work.
+Phase 6.4 subsequently closed. The approved Phase 7 architecture is recorded in
+[ADR-010: Commercial Document Lifecycle](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
+Phase 7 implementation has not begun.
 
 ## Phase 6.4 — Product Integrity & Stabilization
 
-Status: **ACTIVE**
+Status: **CLOSED / MERGED**
 
-Phase 7 implementation is intentionally frozen until stabilization is complete.
+The stabilization sequence is closed on canonical `main` at
+`20c83d9c034189cbf40f907840fdaa81847c100b` through PR #54.
 
 ### Phase 6.4A — Localization Integrity
 
@@ -441,29 +444,35 @@ No Prisma schema changes, migrations, or dependency changes.
 
 ### Phase 6.4B — Customer Master Data
 
-Status: **NEXT**
+Status: **CLOSED / MERGED** through PR #50, with bilingual Customer UX
+completion through PR #51 at
+`fceba986768d09a69cb1c74fd7c90d62f2c53feb`.
 
-Objective:
+Delivered boundary:
 
 - server-generated tenant-safe Customer code;
 - bilingual Customer naming architecture;
-- preserve Customer authority and historical quotation/Sales Order snapshots;
+- preserved Customer authority and historical quotation/SalesOrder snapshots;
 - no automatic Customer creation from AI.
 
 ### Phase 6.4C — Delivery Configuration & UX
 
-Status: **PLANNED**
+Status: **CLOSED / MERGED** through PR #52 at
+`a95dd42d32fed7022f006d1f4489c8715261dea9`.
 
-Audit live Email / WhatsApp readiness, provider configuration visibility, and delivery UX without falsely enabling unavailable channels.
+Delivered configuration-readiness representation, provider visibility and
+delivery UX without falsely enabling unavailable channels.
 
 ### Phase 6.4D — Dense Quotation Composer UX
 
-Status: **PLANNED**
+Status: **CLOSED / MERGED** through PR #54 at
+`20c83d9c034189cbf40f907840fdaa81847c100b`.
 
-Desktop-first dense ERP-style quotation line editor with continuous rows, minimal vertical spacing, keyboard-friendly entry, and equivalent RTL/LTR behavior.
+Delivered the dense quotation composer UX with desktop-oriented continuous
+rows, keyboard-friendly entry and RTL/LTR parity.
 
-After Phase 6.4B–D, run full commercial regression:
-
-Customer → Products/Services → Quotation Arabic → English → PDF → Send → Approve → Sales Order
-
-Then formally close Phase 6.4 and reassess Phase 7.
+Phase 6.4 is formally closed. The current frontier is Phase 7 — Commercial
+Documents & Receivables. Its approved aggregate, provenance, direct-workflow and
+historical-snapshot invariants are defined in
+[ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md). No Phase 7 schema or
+application implementation is recorded by this documentation slice.
