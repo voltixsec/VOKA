@@ -80,6 +80,7 @@ model Company {
   quotationDeliveries     QuotationDelivery[]
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
   contracts               Contract[]
+  contractNumberSequences ContractNumberSequence[]
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
 
@@ -766,6 +767,15 @@ model SalesOrderActivity {
   @@index([actorUserId])
 }
 
+model ContractNumberSequence {
+  companyId String
+  yearMonth String
+  nextValue Int     @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, yearMonth])
+}
 model Contract {
   id String @id @default(cuid())
 

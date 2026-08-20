@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   roles: [] as string[][],
 }));
 
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+
 vi.mock(
   "@/src/infrastructure/persistence/prisma/contract/PrismaContractRepository",
   () => ({
@@ -164,5 +166,31 @@ describe("GET & POST /api/contracts", () => {
       }),
     );
     expect(resNoLines.status).toBe(400);
+  });
+
+  it("returns controlled boundaries for invalid status and tenant-safe missing customer", async () => {
+    const invalidStatus = await GET(
+      new Request("http://localhost/api/contracts?status=INVALID"),
+    );
+    expect(invalidStatus.status).toBe(400);
+    expect(await invalidStatus.json()).toMatchObject({
+      error: { code: "INVALID_CONTRACT_STATUS" },
+    });
+
+    mocks.findCustomerByIdAndCompanyId.mockResolvedValue(null);
+    const missingCustomer = await POST(
+      new Request("http://localhost/api/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: "cross-tenant-or-missing",
+          lines: [{ position: 1, type: "CUSTOM", itemName: "Line", quantity: 1, unitPrice: 10 }],
+        }),
+      }),
+    );
+    expect(missingCustomer.status).toBe(404);
+    expect(await missingCustomer.json()).toMatchObject({
+      error: { code: "CUSTOMER_NOT_FOUND" },
+    });
   });
 });

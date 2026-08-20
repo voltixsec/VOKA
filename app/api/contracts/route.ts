@@ -1,10 +1,17 @@
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
+  CreateContractReferenceError,
   CreateContractUseCase,
   ListContractsUseCase,
 } from "@/src/application/contract";
+import { ContractStatus } from "@/src/domain/contract";
 import { PrismaContractRepository } from "@/src/infrastructure/persistence/prisma/contract/PrismaContractRepository";
+import { PrismaContractReferenceResolver } from "@/src/infrastructure/persistence/prisma/contract/PrismaContractReferenceResolver";
+import {
+  PricingService,
+  type PricingDbClient,
+} from "@/src/application/pricing/services/PricingService";
 import { PrismaCustomerRepository } from "@/features/customers/infrastructure/prisma/PrismaCustomerRepository";
 import { serializeContract } from "./serialize-contract";
 
@@ -14,11 +21,21 @@ export const dynamic = "force-dynamic";
 const contractRepository = new PrismaContractRepository(prisma);
 const customerRepository = new PrismaCustomerRepository(prisma);
 
+const contractReferenceResolver =
+  new PrismaContractReferenceResolver(prisma);
+
+const pricingService = new PricingService(
+  prisma as unknown as PricingDbClient,
+);
+
 const createContractUseCase = new CreateContractUseCase(
   contractRepository,
   customerRepository,
+  contractReferenceResolver,
+  pricingService,
 );
 const listContractsUseCase = new ListContractsUseCase(contractRepository);
+const VALID_STATUSES: ContractStatus[] = [ContractStatus.DRAFT];
 
 function positiveInteger(value: string | null, fallback: number): number {
   if (value === null) return fallback;
@@ -36,7 +53,13 @@ export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request, _auth, company) => {
     const params = new URL(request.url).searchParams;
-    const status = params.get("status") || undefined;
+    const status = params.get("status");
+    if (status && !VALID_STATUSES.includes(status as ContractStatus)) {
+      throw ApiError.badRequest(
+        "INVALID_CONTRACT_STATUS",
+        "Contract status is invalid.",
+      );
+    }
     const customerId = params.get("customerId") || undefined;
     const search = params.get("search") || undefined;
     const page = positiveInteger(params.get("page"), 1);
@@ -44,7 +67,7 @@ export const GET = withCompanyAuth(
 
     const result = await listContractsUseCase.execute({
       companyId: company.companyId,
-      status,
+      status: status || undefined,
       customerId,
       search,
       page,
@@ -93,7 +116,6 @@ export const POST = withCompanyAuth(
       const contract = await createContractUseCase.execute({
         companyId: company.companyId,
         customerId: rawBody.customerId.trim(),
-        provenance: rawBody.provenance as any,
         priceListId: typeof rawBody.priceListId === "string" ? rawBody.priceListId : undefined,
         currencyCode: typeof rawBody.currencyCode === "string" ? rawBody.currencyCode : undefined,
         contractDate: typeof rawBody.contractDate === "string" ? rawBody.contractDate : undefined,
@@ -132,6 +154,12 @@ export const POST = withCompanyAuth(
         headers: { "Cache-Control": "no-store" },
       });
     } catch (error: any) {
+      if (error instanceof CreateContractReferenceError) {
+        if (error.code === "CUSTOMER_NOT_FOUND") {
+          throw ApiError.notFound(error.code, "Customer not found.");
+        }
+        throw ApiError.badRequest(error.code, error.message);
+      }
       if (error.name === "ContractDomainError" || error.name === "CommercialDomainError") {
         throw ApiError.badRequest("CONTRACT_DOMAIN_ERROR", error.message);
       }

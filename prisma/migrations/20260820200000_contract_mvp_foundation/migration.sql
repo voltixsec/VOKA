@@ -8,6 +8,14 @@ CREATE TYPE "CommercialDocumentOrigin" AS ENUM ('DIRECT', 'QUOTATION', 'SALES_OR
 CREATE TYPE "MilestoneAmountType" AS ENUM ('PERCENTAGE', 'FIXED_AMOUNT');
 
 -- CreateTable
+CREATE TABLE "ContractNumberSequence" (
+    "companyId" TEXT NOT NULL,
+    "yearMonth" TEXT NOT NULL,
+    "nextValue" INTEGER NOT NULL DEFAULT 1,
+
+    CONSTRAINT "ContractNumberSequence_pkey" PRIMARY KEY ("companyId","yearMonth")
+);
+-- CreateTable
 CREATE TABLE "Contract" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
@@ -162,6 +170,8 @@ CREATE UNIQUE INDEX "ContractMilestone_contractId_position_key" ON "ContractMile
 -- CreateIndex
 CREATE INDEX "ContractMilestone_contractId_idx" ON "ContractMilestone"("contractId");
 
+-- AddForeignKey
+ALTER TABLE "ContractNumberSequence" ADD CONSTRAINT "ContractNumberSequence_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 -- AddForeignKey
 ALTER TABLE "Contract" ADD CONSTRAINT "Contract_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

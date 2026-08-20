@@ -40,11 +40,6 @@ export interface CreateContractMilestoneInput {
 export interface CreateContractDto {
   companyId: string;
   customerId: string;
-  provenance?: {
-    origin: "DIRECT" | "QUOTATION" | "SALES_ORDER" | "CONTRACT";
-    sourceKind?: "QUOTATION" | "SALES_ORDER" | "CONTRACT" | null;
-    sourceId?: string | null;
-  };
   priceListId?: string | null;
   currencyCode?: string;
   contractDate?: string | Date;

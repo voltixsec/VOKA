@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 import { CommercialDocumentProvenance } from "@/src/domain/commercial";
 import { Contract } from "@/src/domain/contract";
 

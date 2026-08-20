@@ -13,34 +13,32 @@ export class PrismaContractRepository implements IContractRepository {
   async getNextContractNumber(companyId: string): Promise<string> {
     const now = new Date();
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const prefix = `CN-${yearMonth}-`;
 
-    const lastContract = await this.prisma.contract.findFirst({
-      where: {
-        companyId,
-        number: {
-          startsWith: prefix,
+    const nextValue = await this.prisma.$transaction(async (tx: any) => {
+      const sequence = await tx.contractNumberSequence.upsert({
+        where: {
+          companyId_yearMonth: {
+            companyId,
+            yearMonth,
+          },
         },
-      },
-      orderBy: {
-        number: "desc",
-      },
-      select: {
-        number: true,
-      },
+        create: {
+          companyId,
+          yearMonth,
+          nextValue: 2,
+        },
+        update: {
+          nextValue: {
+            increment: 1,
+          },
+        },
+      });
+
+      return sequence.nextValue - 1;
     });
 
-    if (!lastContract) {
-      return `${prefix}0001`;
-    }
-
-    const sequencePart = lastContract.number.substring(prefix.length);
-    const lastSeq = parseInt(sequencePart, 10);
-    const nextSeq = Number.isNaN(lastSeq) ? 1 : lastSeq + 1;
-
-    return `${prefix}${String(nextSeq).padStart(4, "0")}`;
+    return `CN-${yearMonth}-${String(nextValue).padStart(4, "0")}`;
   }
-
   async save(contract: Contract): Promise<Contract> {
     const data = {
       companyId: contract.companyId,
@@ -136,7 +134,10 @@ export class PrismaContractRepository implements IContractRepository {
 
     if (contract.id) {
       const updated = await this.prisma.contract.update({
-        where: { id: contract.id },
+        where: {
+          id: contract.id,
+          companyId: contract.companyId,
+        },
         data,
         include: {
           lines: true,
