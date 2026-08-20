@@ -1,6 +1,7 @@
 import { CatalogItemType } from "../../../../features/catalog";
 import {
   PrismaUniversalLibraryRepository,
+  InvalidUniversalCursorError,
   SearchUniversalLibrary,
 } from "../../../../features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "../../../../lib/api";
@@ -25,7 +26,10 @@ const allowedTypes: CatalogItemType[] = [
 function parsePositiveInteger(value: string | null): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw ApiError.badRequest("INVALID_LIMIT", "limit must be a positive integer.");
+  }
+  return parsed;
 }
 
 function parseBoolean(value: string | null): boolean | undefined {
@@ -54,14 +58,22 @@ export const GET = withCompanyAuth(
     const limit = parsePositiveInteger(searchParams.get("limit"));
     const cursor = searchParams.get("cursor") ?? undefined;
 
-    const result = await searchUniversalLibrary.execute({
-      query,
-      type: rawType as CatalogItemType | undefined,
-      categoryId,
-      isActive,
-      limit,
-      cursor,
-    });
+    let result;
+    try {
+      result = await searchUniversalLibrary.execute({
+        query,
+        type: rawType as CatalogItemType | undefined,
+        categoryId,
+        isActive,
+        limit,
+        cursor,
+      });
+    } catch (error) {
+      if (error instanceof InvalidUniversalCursorError) {
+        throw ApiError.badRequest("INVALID_CURSOR", "Universal Library cursor is invalid.");
+      }
+      throw error;
+    }
 
     return apiSuccess(result.items.map(serializeUniversalItem), {
       meta: {

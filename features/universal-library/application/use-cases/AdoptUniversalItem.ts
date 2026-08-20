@@ -13,6 +13,7 @@ export interface AdoptUniversalItemInput {
 export type AdoptUniversalItemError =
   | { code: "UNIVERSAL_ITEM_NOT_FOUND"; message: string }
   | { code: "UNIVERSAL_ITEM_INACTIVE"; message: string }
+  | { code: "INVALID_ADOPTION_INPUT"; message: string }
   | { code: "INVALID_TENANT_CONTEXT"; message: string };
 
 export class AdoptUniversalItem {
@@ -43,6 +44,20 @@ export class AdoptUniversalItem {
       };
     }
 
+    const code = input.code?.trim().toUpperCase() || undefined;
+    if (code && !/^[A-Z0-9][A-Z0-9-_]{0,49}$/.test(code)) {
+      return {
+        isSuccess: false,
+        error: { code: "INVALID_ADOPTION_INPUT", message: "Catalog item code is invalid." },
+      };
+    }
+    if (input.salePrice !== undefined && (!Number.isFinite(input.salePrice) || input.salePrice < 0)) {
+      return {
+        isSuccess: false,
+        error: { code: "INVALID_ADOPTION_INPUT", message: "Sale price must be a non-negative finite number." },
+      };
+    }
+
     const item = await this.repository.getItemById(input.universalItemId);
     if (!item) {
       return {
@@ -68,10 +83,10 @@ export class AdoptUniversalItem {
       companyId: input.companyId,
       universalItemId: input.universalItemId,
       adoptedByUserId: input.adoptedByUserId,
-      code: input.code,
+      code,
       salePrice: input.salePrice,
-      unitId: input.unitId,
-      taxRateId: input.taxRateId,
+      unitId: input.unitId?.trim() || undefined,
+      taxRateId: input.taxRateId?.trim() || undefined,
     });
 
     return {

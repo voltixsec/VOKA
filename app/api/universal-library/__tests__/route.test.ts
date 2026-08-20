@@ -63,6 +63,21 @@ vi.mock("../../../../lib/prisma", () => ({
     },
     $transaction: vi.fn().mockImplementation(async (callback: any) => {
       const tx = {
+        universalCatalogItem: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "ucl-item-1",
+            type: "PRODUCT",
+            name: "Global Solar Panel 400W",
+            nameAr: null,
+            nameEn: null,
+            description: null,
+            descriptionAr: null,
+            descriptionEn: null,
+            isActive: true,
+          }),
+        },
+        unit: { findFirst: vi.fn() },
+        taxRate: { findFirst: vi.fn() },
         catalogItem: {
           create: vi.fn().mockResolvedValue({
             id: "tenant-cat-999",
@@ -79,6 +94,7 @@ vi.mock("../../../../lib/prisma", () => ({
           }),
         },
         universalItemAdoption: {
+          findUnique: vi.fn().mockResolvedValue(null),
           create: vi.fn().mockResolvedValue({
             id: "adoption-777",
             companyId: "company-authenticated-456",
@@ -140,5 +156,18 @@ describe("Universal Library API Surface", () => {
     expect(body.success).toBe(true);
     expect(body.data.catalogItem.companyId).toBe("company-authenticated-456");
     expect(body.data.adoption.companyId).toBe("company-authenticated-456");
+  });
+
+  it.each([
+    [{ salePrice: "120" }, "salePrice"],
+    [{ salePrice: -1 }, "salePrice"],
+    [{ unitId: 42 }, "unitId"],
+    [{ taxRateId: false }, "taxRateId"],
+  ])("rejects malformed adoption input %#", async (payload, field) => {
+    const { POST } = await import("../items/[id]/adopt/route");
+    await expect(POST(new Request(
+      "http://localhost:3000/api/universal-library/items/ucl-item-1/adopt",
+      { method: "POST", body: JSON.stringify(payload) }
+    ) as any)).rejects.toMatchObject({ statusCode: 400, details: { field } });
   });
 });

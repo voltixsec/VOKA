@@ -1,6 +1,7 @@
 import {
   AdoptUniversalItem,
   PrismaUniversalLibraryRepository,
+  UniversalAdoptionError,
 } from "../../../../../../features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "../../../../../../lib/api";
 import { prisma } from "../../../../../../lib/prisma";
@@ -20,14 +21,24 @@ type AdoptBody = {
   taxRateId?: unknown;
 };
 
-function optionalString(value: unknown): string | undefined {
+function optionalString(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null) return undefined;
-  return typeof value === "string" ? value : undefined;
+  if (typeof value !== "string") {
+    throw ApiError.badRequest("INVALID_ADOPTION_INPUT", `${field} must be a string.`, { field });
+  }
+  return value.trim() || undefined;
 }
 
-function optionalNumber(value: unknown): number | undefined {
+function optionalNumber(value: unknown, field: string): number | undefined {
   if (value === undefined || value === null) return undefined;
-  return typeof value === "number" ? value : undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw ApiError.badRequest(
+      "INVALID_ADOPTION_INPUT",
+      `${field} must be a non-negative finite number.`,
+      { field }
+    );
+  }
+  return value;
 }
 
 function getItemIdFromAdoptUrl(request: Request): string {
@@ -45,22 +56,45 @@ export const POST = withCompanyAuth(
   async (request: Request, auth, company) => {
     const universalItemId = getItemIdFromAdoptUrl(request);
 
+    const rawBody = await request.text();
     let body: AdoptBody = {};
-    try {
-      body = (await request.json()) as AdoptBody;
-    } catch {
-      // Empty body is allowed
+    if (rawBody.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(rawBody);
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          throw new Error("invalid body");
+        }
+        body = parsed as AdoptBody;
+      } catch {
+        throw ApiError.badRequest("INVALID_JSON", "Request body must be a JSON object.");
+      }
     }
 
-    const result = await adoptUniversalItem.execute({
-      companyId: company.companyId,
-      universalItemId,
-      adoptedByUserId: auth.user.id,
-      code: optionalString(body.code),
-      salePrice: optionalNumber(body.salePrice),
-      unitId: optionalString(body.unitId),
-      taxRateId: optionalString(body.taxRateId),
-    });
+    const code = optionalString(body.code, "code")?.toUpperCase();
+    if (code && !/^[A-Z0-9][A-Z0-9-_]{0,49}$/.test(code)) {
+      throw ApiError.badRequest("INVALID_ADOPTION_INPUT", "code is invalid.", { field: "code" });
+    }
+
+    let result;
+    try {
+      result = await adoptUniversalItem.execute({
+        companyId: company.companyId,
+        universalItemId,
+        adoptedByUserId: auth.user.id,
+        code,
+        salePrice: optionalNumber(body.salePrice, "salePrice"),
+        unitId: optionalString(body.unitId, "unitId"),
+        taxRateId: optionalString(body.taxRateId, "taxRateId"),
+      });
+    } catch (error) {
+      if (error instanceof UniversalAdoptionError) {
+        if (error.code === "CATALOG_CODE_CONFLICT") {
+          throw ApiError.conflict(error.code, "Catalog item code is already in use.");
+        }
+        throw ApiError.badRequest(error.code, "A referenced adoption value is unavailable.");
+      }
+      throw error;
+    }
 
     if (!result.isSuccess) {
       const error = result.error!;

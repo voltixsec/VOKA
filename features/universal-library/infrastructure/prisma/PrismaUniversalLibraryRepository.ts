@@ -50,6 +50,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       where: whereClause,
     });
 
+    const cursor = params.cursor ? this.decodeCursor(params.cursor) : undefined;
     const records = await this.prisma.universalCatalogItem.findMany({
       where: whereClause,
       include: {
@@ -62,18 +63,30 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       },
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       take: limit + 1,
-      ...(params.cursor
+      ...(cursor
         ? {
-            cursor: { id: params.cursor },
-            skip: 1,
+            where: {
+              AND: [
+                whereClause,
+                {
+                  OR: [
+                    { createdAt: { lt: cursor.createdAt } },
+                    { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+                  ],
+                },
+              ],
+            },
           }
         : {}),
     });
 
     let nextCursor: string | undefined = undefined;
     if (records.length > limit) {
-      const nextItem = records.pop();
-      nextCursor = nextItem?.id;
+      records.pop();
+      const lastItem = records[records.length - 1];
+      nextCursor = lastItem
+        ? this.encodeCursor(lastItem.createdAt, lastItem.id)
+        : undefined;
     }
 
     const items = records.map((r) => this.mapItemToDomain(r));
@@ -122,9 +135,12 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       where: whereClause,
       include: {
         parent: true,
-        children: true,
       },
       orderBy: [{ name: "asc" }],
+      take: Math.max(
+        1,
+        Math.min(params.limit ?? 50, 100)
+      ),
     });
 
     return records.map((r) => this.mapCategoryToDomain(r));
@@ -164,7 +180,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
   public async adoptItem(
     params: AdoptUniversalItemParams
   ): Promise<AdoptUniversalItemResult> {
-    // 1. Check if adoption already exists
+    // Fast idempotency path. The transaction and unique constraint below remain authoritative.
     const existingAdoption = await this.prisma.universalItemAdoption.findUnique({
       where: {
         companyId_universalItemId: {
@@ -185,36 +201,52 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       };
     }
 
-    // 2. Fetch universal item
-    const universalItem = await this.prisma.universalCatalogItem.findUnique({
-      where: { id: params.universalItemId },
-    });
-
-    if (!universalItem) {
-      throw new Error(`Universal item '${params.universalItemId}' not found.`);
-    }
-
-    // 3. Adopt in transaction
-    const baseCode = params.code?.trim() || `UCL-${universalItem.id.substring(0, 8).toUpperCase()}`;
-    let code = baseCode;
-
-    // Code deduplication per tenant
-    const existingCode = await this.prisma.catalogItem.findUnique({
-      where: {
-        companyId_code: {
-          companyId: params.companyId,
-          code,
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+      const adoption = await tx.universalItemAdoption.findUnique({
+        where: {
+          companyId_universalItemId: {
+            companyId: params.companyId,
+            universalItemId: params.universalItemId,
+          },
         },
-      },
-    });
+        include: { catalogItem: true },
+      });
+      if (adoption?.catalogItem) return { existing: adoption };
 
-    if (existingCode) {
-      code = `${baseCode}-${Date.now().toString(36).toUpperCase()}`;
-    }
+      const universalItem = await tx.universalCatalogItem.findFirst({
+        where: { id: params.universalItemId, isActive: true },
+      });
+      if (!universalItem) throw new UniversalAdoptionError("UNIVERSAL_ITEM_NOT_ADOPTABLE");
 
-    const salePrice = params.salePrice ?? 0;
+      if (params.unitId) {
+        const unit = await tx.unit.findFirst({
+          where: {
+            id: params.unitId,
+            OR: [{ companyId: params.companyId }, { companyId: null }],
+          },
+          select: { id: true },
+        });
+        if (!unit) throw new UniversalAdoptionError("UNIT_NOT_FOUND");
+      }
 
-    const result = await this.prisma.$transaction(async (tx) => {
+      if (params.taxRateId) {
+        const taxRate = await tx.taxRate.findFirst({
+          where: {
+            id: params.taxRateId,
+            OR: [
+              { companyId: params.companyId },
+              { companyId: null, isSystem: true },
+            ],
+          },
+          select: { id: true },
+        });
+        if (!taxRate) throw new UniversalAdoptionError("TAX_RATE_NOT_FOUND");
+      }
+
+      const code = params.code?.trim().toUpperCase()
+        || `UCL-${universalItem.id.toUpperCase()}`;
+      const salePrice = params.salePrice ?? 0;
       const createdCatalogItem = await tx.catalogItem.create({
         data: {
           companyId: params.companyId,
@@ -249,13 +281,66 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         catalogItem: createdCatalogItem,
         adoption: createdAdoption,
       };
-    });
+      });
 
-    return {
-      catalogItem: this.mapCatalogItemToDomain(result.catalogItem),
-      adoption: this.mapAdoptionToDomain(result.adoption),
-      isNewAdoption: true,
-    };
+      if ("existing" in result && result.existing) {
+        return {
+          catalogItem: this.mapCatalogItemToDomain(result.existing.catalogItem),
+          adoption: this.mapAdoptionToDomain(result.existing),
+          isNewAdoption: false,
+        };
+      }
+
+      return {
+        catalogItem: this.mapCatalogItemToDomain(result.catalogItem),
+        adoption: this.mapAdoptionToDomain(result.adoption),
+        isNewAdoption: true,
+      };
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        const winner = await this.prisma.universalItemAdoption.findUnique({
+          where: {
+            companyId_universalItemId: {
+              companyId: params.companyId,
+              universalItemId: params.universalItemId,
+            },
+          },
+          include: { catalogItem: true },
+        });
+        if (winner?.catalogItem) {
+          return {
+            catalogItem: this.mapCatalogItemToDomain(winner.catalogItem),
+            adoption: this.mapAdoptionToDomain(winner),
+            isNewAdoption: false,
+          };
+        }
+        throw new UniversalAdoptionError("CATALOG_CODE_CONFLICT");
+      }
+      throw error;
+    }
+  }
+
+  private encodeCursor(createdAt: Date, id: string): string {
+    return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id }), "utf8")
+      .toString("base64url");
+  }
+
+  private decodeCursor(value: string): { createdAt: Date; id: string } {
+    try {
+      const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+      const createdAt = new Date(parsed.createdAt);
+      if (!parsed || typeof parsed.id !== "string" || !parsed.id || Number.isNaN(createdAt.getTime())) {
+        throw new Error("invalid");
+      }
+      return { createdAt, id: parsed.id };
+    } catch {
+      throw new InvalidUniversalCursorError();
+    }
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return typeof error === "object" && error !== null && "code" in error
+      && (error as { code?: unknown }).code === "P2002";
   }
 
   private mapItemToDomain(record: any): UniversalCatalogItem {
@@ -354,8 +439,8 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         description: record.description,
         descriptionAr: record.descriptionAr,
         descriptionEn: record.descriptionEn,
-        purchasePrice: record.purchasePrice ? record.purchasePrice.toNumber() : null,
-        salePrice: record.salePrice ? record.salePrice.toNumber() : 0,
+        purchasePrice: record.purchasePrice?.toNumber() ?? null,
+        salePrice: record.salePrice.toNumber(),
         trackInventory: record.trackInventory,
         allowDiscount: record.allowDiscount,
         imageUrl: record.imageUrl,
@@ -366,5 +451,17 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       },
       new UniqueEntityID(record.id)
     );
+  }
+}
+
+export class InvalidUniversalCursorError extends Error {
+  constructor() {
+    super("Universal Library cursor is invalid.");
+  }
+}
+
+export class UniversalAdoptionError extends Error {
+  constructor(public readonly code: "UNIVERSAL_ITEM_NOT_ADOPTABLE" | "UNIT_NOT_FOUND" | "TAX_RATE_NOT_FOUND" | "CATALOG_CODE_CONFLICT") {
+    super(code);
   }
 }

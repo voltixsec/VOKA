@@ -78,6 +78,12 @@ CREATE TABLE "UniversalItemAdoption" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "CatalogItem_companyId_id_key" ON "CatalogItem"("companyId", "id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UniversalCategory_code_key" ON "UniversalCategory"("code");
+
+-- CreateIndex
 CREATE INDEX "UniversalCategory_parentId_idx" ON "UniversalCategory"("parentId");
 
 -- CreateIndex
@@ -85,6 +91,9 @@ CREATE INDEX "UniversalCategory_isActive_idx" ON "UniversalCategory"("isActive")
 
 -- CreateIndex
 CREATE INDEX "UniversalCategory_name_idx" ON "UniversalCategory"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UniversalSource_type_externalRef_key" ON "UniversalSource"("type", "externalRef");
 
 -- CreateIndex
 CREATE INDEX "UniversalSource_type_idx" ON "UniversalSource"("type");
@@ -134,6 +143,9 @@ CREATE INDEX "UniversalItemAdoption_adoptedByUserId_idx" ON "UniversalItemAdopti
 -- CreateIndex
 CREATE UNIQUE INDEX "UniversalItemAdoption_companyId_universalItemId_key" ON "UniversalItemAdoption"("companyId", "universalItemId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "UniversalItemAdoption_companyId_catalogItemId_key" ON "UniversalItemAdoption"("companyId", "catalogItemId");
+
 -- AddForeignKey
 ALTER TABLE "UniversalCategory" ADD CONSTRAINT "UniversalCategory_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "UniversalCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -153,7 +165,10 @@ ALTER TABLE "UniversalItemAdoption" ADD CONSTRAINT "UniversalItemAdoption_compan
 ALTER TABLE "UniversalItemAdoption" ADD CONSTRAINT "UniversalItemAdoption_universalItemId_fkey" FOREIGN KEY ("universalItemId") REFERENCES "UniversalCatalogItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "UniversalItemAdoption" ADD CONSTRAINT "UniversalItemAdoption_catalogItemId_fkey" FOREIGN KEY ("catalogItemId") REFERENCES "CatalogItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "UniversalItemAdoption" ADD CONSTRAINT "UniversalItemAdoption_companyId_catalogItemId_fkey" FOREIGN KEY ("companyId", "catalogItemId") REFERENCES "CatalogItem"("companyId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "UniversalItemAdoption" ADD CONSTRAINT "UniversalItemAdoption_adoptedByUserId_fkey" FOREIGN KEY ("adoptedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Confidence is a normalized score when present.
+ALTER TABLE "UniversalItemProvenance" ADD CONSTRAINT "UniversalItemProvenance_confidence_check" CHECK ("confidence" IS NULL OR ("confidence" >= 0 AND "confidence" <= 1));

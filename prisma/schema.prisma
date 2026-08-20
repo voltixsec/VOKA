@@ -377,6 +377,7 @@ model CatalogItem {
   updatedAt         DateTime               @updatedAt
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId])
   @@index([companyId, type])
   @@index([companyId, name])
@@ -956,6 +957,7 @@ model UniversalCategory {
   children UniversalCategory[]    @relation("UniversalCategoryHierarchy")
   items    UniversalCatalogItem[]
 
+  @@unique([code])
   @@index([parentId])
   @@index([isActive])
   @@index([name])
@@ -974,6 +976,7 @@ model UniversalSource {
 
   itemProvenances UniversalItemProvenance[]
 
+  @@unique([type, externalRef])
   @@index([type])
   @@index([verificationStatus])
 }
@@ -1033,10 +1036,11 @@ model UniversalItemAdoption {
 
   company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
-  catalogItem   CatalogItem          @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  catalogItem   CatalogItem          @relation(fields: [companyId, catalogItemId], references: [companyId, id], onDelete: Cascade)
   adoptedByUser User?                @relation(fields: [adoptedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, universalItemId])
+  @@unique([companyId, catalogItemId])
   @@index([companyId])
   @@index([universalItemId])
   @@index([adoptedByUserId])

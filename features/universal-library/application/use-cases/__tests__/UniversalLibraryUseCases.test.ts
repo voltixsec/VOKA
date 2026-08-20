@@ -79,6 +79,14 @@ describe("Universal Library Application Use Cases", () => {
 
     expect(categories).toHaveLength(1);
     expect(categories[0].name).toBe("CCTV & Security");
+    expect(getCategories).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+  });
+
+  it("clamps taxonomy retrieval to the hard maximum", async () => {
+    const getCategories = vi.fn().mockResolvedValue([]);
+    const getTaxonomy = new GetUniversalTaxonomy({ getCategories } as unknown as IUniversalLibraryRepository);
+    await getTaxonomy.execute({ limit: 1000 });
+    expect(getCategories).toHaveBeenCalledWith(expect.objectContaining({ limit: 100 }));
   });
 
   it("rejects adoption of missing or inactive universal items", async () => {

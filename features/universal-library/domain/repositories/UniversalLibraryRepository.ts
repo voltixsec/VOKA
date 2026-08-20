@@ -7,6 +7,8 @@ import {
 
 export const MAX_UNIVERSAL_SEARCH_LIMIT = 50;
 export const DEFAULT_UNIVERSAL_SEARCH_LIMIT = 20;
+export const MAX_UNIVERSAL_TAXONOMY_LIMIT = 100;
+export const DEFAULT_UNIVERSAL_TAXONOMY_LIMIT = 50;
 
 export interface SearchUniversalLibraryParams {
   query?: string;
@@ -27,6 +29,7 @@ export interface GetCategoriesParams {
   parentId?: string | null;
   search?: string;
   isActive?: boolean;
+  limit?: number;
 }
 
 export interface AdoptUniversalItemParams {

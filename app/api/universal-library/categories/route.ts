@@ -2,7 +2,7 @@ import {
   GetUniversalTaxonomy,
   PrismaUniversalLibraryRepository,
 } from "../../../../features/universal-library";
-import { apiSuccess, withCompanyAuth } from "../../../../lib/api";
+import { ApiError, apiSuccess, withCompanyAuth } from "../../../../lib/api";
 import { prisma } from "../../../../lib/prisma";
 import { serializeUniversalCategory } from "../serialize-universal";
 
@@ -18,6 +18,15 @@ function parseBoolean(value: string | null): boolean | undefined {
   return undefined;
 }
 
+function parseLimit(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw ApiError.badRequest("INVALID_LIMIT", "limit must be a positive integer.");
+  }
+  return parsed;
+}
+
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request: Request) => {
@@ -31,6 +40,7 @@ export const GET = withCompanyAuth(
       parentId,
       search,
       isActive,
+      limit: parseLimit(searchParams.get("limit")),
     });
 
     return apiSuccess(categories.map(serializeUniversalCategory), {
