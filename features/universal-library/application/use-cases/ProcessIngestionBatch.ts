@@ -19,9 +19,12 @@ export class ProcessIngestionBatch {
 
   public async execute(params: ProcessIngestionBatchParams = {}): Promise<ProcessIngestionBatchSummary> {
     const rawBatchSize = params.batchSize ?? DEFAULT_INGESTION_BATCH_LIMIT;
-    const batchSize = Math.min(Math.max(1, rawBatchSize), MAX_INGESTION_BATCH_LIMIT);
+    if (!Number.isInteger(rawBatchSize) || rawBatchSize < 1 || rawBatchSize > MAX_INGESTION_BATCH_LIMIT) {
+      throw new Error(`batchSize must be an integer between 1 and ${MAX_INGESTION_BATCH_LIMIT}`);
+    }
+    const batchSize = rawBatchSize;
 
-    const pendingRecords = await this.repository.getPendingIngestionRecords(batchSize);
+    const pendingRecords = await this.repository.claimPendingIngestionRecords(batchSize);
 
     const summary: ProcessIngestionBatchSummary = {
       processedCount: pendingRecords.length,
@@ -34,16 +37,6 @@ export class ProcessIngestionBatch {
 
     for (const record of pendingRecords) {
       summary.recordIds.push(record.id);
-
-      if (record.status === "NEEDS_REVIEW") {
-        summary.needsReviewCount++;
-        continue;
-      }
-
-      if (record.status === "REJECTED") {
-        summary.rejectedCount++;
-        continue;
-      }
 
       if (!record.normalizedData) {
         await this.repository.updateIngestionRecordStatus(record.id, "REJECTED", {

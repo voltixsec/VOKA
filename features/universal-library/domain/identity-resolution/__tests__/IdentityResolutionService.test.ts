@@ -16,7 +16,7 @@ describe("IdentityResolutionService", () => {
   it("prioritizes existing source external ref match (Rule 1)", async () => {
     const context: IdentityResolutionContext = {
       findItemBySourceExternalRef: async () => ({ id: "item-src-1" }),
-      findItemByGlobalIdentifier: async () => ({ id: "item-global-1" }),
+      findItemsByGlobalIdentifier: async () => [{ id: "item-src-1" }],
     };
 
     const result = await IdentityResolutionService.resolveIdentity(
@@ -33,11 +33,11 @@ describe("IdentityResolutionService", () => {
 
   it("matches exact GTIN/EAN/UPC identifier (Rule 2)", async () => {
     const context: IdentityResolutionContext = {
-      findItemByGlobalIdentifier: async (type, val) => {
+      findItemsByGlobalIdentifier: async (type, val) => {
         if (type === "GTIN_13" && val === "6931847101234") {
-          return { id: "item-gtin-1" };
+          return [{ id: "item-gtin-1" }];
         }
-        return null;
+        return [];
       },
     };
 
@@ -55,11 +55,11 @@ describe("IdentityResolutionService", () => {
 
   it("matches manufacturer + MPN (Rule 3)", async () => {
     const context: IdentityResolutionContext = {
-      findItemByManufacturerMpn: async (_mId, mName, mpn) => {
+      findItemsByManufacturerMpn: async (mName, mpn) => {
         if (mName === "Hikvision" && mpn === "DS-2CD2143G0-I") {
-          return { id: "item-mpn-1" };
+          return [{ id: "item-mpn-1" }];
         }
-        return null;
+        return [];
       },
     };
 
@@ -91,6 +91,7 @@ describe("IdentityResolutionService", () => {
 
     const payloadNameOnly = NormalizationPipelineService.normalize({
       name: "Generic Camera",
+      manufacturerName: "Synthetic Manufacturer",
     });
 
     const result = await IdentityResolutionService.resolveIdentity(
@@ -103,5 +104,23 @@ describe("IdentityResolutionService", () => {
     expect(result.status).toBe("NEEDS_REVIEW");
     expect(result.matchedItemId).toBeNull();
     expect(result.confidenceReason).toBe("AMBIGUOUS_MULTIPLE_MATCHES");
+  });
+
+  it("routes conflicting source and exact identifier evidence to review", async () => {
+    const result = await IdentityResolutionService.resolveIdentity(samplePayload, "source-1", "ext-123", {
+      findItemBySourceExternalRef: async () => ({ id: "source-item" }),
+      findItemsByGlobalIdentifier: async () => [{ id: "identifier-item" }],
+    });
+    expect(result.status).toBe("NEEDS_REVIEW");
+    expect(result.matchedItemId).toBeNull();
+  });
+
+  it("does not auto-match a name without manufacturer evidence", async () => {
+    const payload = NormalizationPipelineService.normalize({ name: "Generic Camera" });
+    const result = await IdentityResolutionService.resolveIdentity(payload, "source-1", "ext-123", {
+      findItemsByConservativeName: async () => [{ id: "unsafe-name-match" }],
+    });
+    expect(result.status).toBe("NORMALIZED");
+    expect(result.matchedItemId).toBeNull();
   });
 });

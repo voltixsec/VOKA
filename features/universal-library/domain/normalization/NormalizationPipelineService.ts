@@ -1,6 +1,11 @@
 import { normalizeUniversalIdentifier } from "../identifiers/normalizeUniversalIdentifier";
 import type { UniversalIdentifierType } from "@/lib/generated/prisma/client";
 
+const IDENTIFIER_TYPES = new Set<UniversalIdentifierType>([
+  "GTIN", "GTIN_8", "GTIN_12", "GTIN_13", "GTIN_14", "EAN", "UPC", "MPN", "MODEL_NO", "EXTERNAL_ID",
+]);
+const MAX_COLLECTION_ENTRIES = 100;
+
 export interface RawIngestionPayloadInput {
   name?: string | null;
   nameAr?: string | null;
@@ -94,7 +99,7 @@ function normalizeLocale(val?: string | null): "EN" | "AR" | null {
   const upper = val.trim().toUpperCase();
   if (upper === "EN" || upper === "ENGLISH") return "EN";
   if (upper === "AR" || upper === "ARABIC") return "AR";
-  return null;
+  throw new Error(`Unsupported alias locale '${val}'.`);
 }
 
 function normalizeAliasType(val?: string | null): "MONIKER" | "SEARCH" | "SYNONYM" | "MPN" | "HISTORICAL" | "TRANSLITERATION" {
@@ -103,7 +108,7 @@ function normalizeAliasType(val?: string | null): "MONIKER" | "SEARCH" | "SYNONY
   if (["MONIKER", "SEARCH", "SYNONYM", "MPN", "HISTORICAL", "TRANSLITERATION"].includes(upper)) {
     return upper as any;
   }
-  return "SYNONYM";
+  throw new Error(`Unsupported alias type '${val}'.`);
 }
 
 function normalizeDataType(val?: string | null): "STRING" | "NUMBER" | "BOOLEAN" | "DECIMAL" | "SELECT" | "JSON" {
@@ -112,7 +117,7 @@ function normalizeDataType(val?: string | null): "STRING" | "NUMBER" | "BOOLEAN"
   if (["STRING", "NUMBER", "BOOLEAN", "DECIMAL", "SELECT", "JSON"].includes(upper)) {
     return upper as any;
   }
-  return "STRING";
+  throw new Error(`Unsupported attribute data type '${val}'.`);
 }
 
 function normalizeUnit(unit?: string | null): string | null {
@@ -129,7 +134,13 @@ function normalizeUnit(unit?: string | null): string | null {
 }
 
 export class NormalizationPipelineService {
-  public static normalize(payload: RawIngestionPayloadInput): NormalizedIngestionPayload {
+  public static normalize(
+    payload: RawIngestionPayloadInput,
+    context: { externalIdentifierSource?: string } = {}
+  ): NormalizedIngestionPayload {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("Raw payload must be an object.");
+    }
     const rawName = normalizeString(payload.name);
     const nameAr = normalizeString(payload.nameAr);
     const nameEn = normalizeString(payload.nameEn);
@@ -144,6 +155,8 @@ export class NormalizationPipelineService {
       const upperType = payload.type.trim().toUpperCase();
       if (["PRODUCT", "SERVICE", "SHIPPING", "LABOR", "DISCOUNT", "CUSTOM"].includes(upperType)) {
         type = upperType as any;
+      } else {
+        throw new Error(`Unsupported catalog item type '${payload.type}'.`);
       }
     }
 
@@ -171,38 +184,44 @@ export class NormalizationPipelineService {
     // Identifiers normalization using UCL-2 normalizeUniversalIdentifier
     const normalizedIdentifiers: NormalizedIngestionPayload["identifiers"] = [];
     if (payload.identifiers && Array.isArray(payload.identifiers)) {
+      if (payload.identifiers.length > MAX_COLLECTION_ENTRIES) {
+        throw new Error("Raw payload contains too many identifiers.");
+      }
       const seen = new Set<string>();
       for (const item of payload.identifiers) {
-        if (!item.identifierType || !item.value) continue;
+        if (!item || typeof item !== "object" || typeof item.identifierType !== "string" || typeof item.value !== "string") {
+          throw new Error("Raw payload contains a malformed identifier.");
+        }
         const typeUpper = item.identifierType.trim().toUpperCase() as UniversalIdentifierType;
-        try {
-          const normResult = normalizeUniversalIdentifier(
-            typeUpper,
-            item.value,
-            {
-              manufacturerId: manufacturerCode || manufacturerName || "TEMP_MFR",
-              source: normalizeString(item.source) || "RAW_SOURCE",
-            }
-          );
-          const key = `${typeUpper}:${normResult.normalizedValue}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            normalizedIdentifiers.push({
-              identifierType: typeUpper,
-              value: item.value.trim(),
-              normalizedValue: normResult.normalizedValue,
-              source: normalizeString(item.source),
-            });
-          }
-        } catch {
-          // Skip invalid identifier
+        if (!IDENTIFIER_TYPES.has(typeUpper)) {
+          throw new Error(`Unsupported identifier type '${item.identifierType}'.`);
+        }
+        const identifierSource = typeUpper === "EXTERNAL_ID"
+          ? normalizeString(context.externalIdentifierSource)
+          : null;
+        const normResult = normalizeUniversalIdentifier(typeUpper, item.value, {
+          manufacturerId: manufacturerCode || manufacturerName || undefined,
+          source: identifierSource || undefined,
+        });
+        const key = `${typeUpper}:${normResult.manufacturerId || ""}:${normResult.source || ""}:${normResult.normalizedValue}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          normalizedIdentifiers.push({
+            identifierType: typeUpper,
+            value: item.value.trim(),
+            normalizedValue: normResult.normalizedValue,
+            source: identifierSource,
+          });
         }
       }
+    } else if (payload.identifiers != null) {
+      throw new Error("Raw payload identifiers must be an array.");
     }
 
     // Aliases normalization
     const normalizedAliases: NormalizedIngestionPayload["aliases"] = [];
     if (payload.aliases && Array.isArray(payload.aliases)) {
+      if (payload.aliases.length > MAX_COLLECTION_ENTRIES) throw new Error("Raw payload contains too many aliases.");
       const seen = new Set<string>();
       for (const item of payload.aliases) {
         const aliasStr = normalizeString(item.alias);
@@ -221,11 +240,14 @@ export class NormalizationPipelineService {
           });
         }
       }
+    } else if (payload.aliases != null) {
+      throw new Error("Raw payload aliases must be an array.");
     }
 
     // Attributes normalization
     const normalizedAttributes: NormalizedIngestionPayload["attributes"] = [];
     if (payload.attributes && Array.isArray(payload.attributes)) {
+      if (payload.attributes.length > MAX_COLLECTION_ENTRIES) throw new Error("Raw payload contains too many attributes.");
       const seen = new Set<string>();
       for (const attr of payload.attributes) {
         const code = normalizeCasing(attr.code);
@@ -237,6 +259,19 @@ export class NormalizationPipelineService {
         const dataType = normalizeDataType(attr.dataType);
         const unit = normalizeUnit(attr.unit);
 
+        if ((dataType === "NUMBER" || dataType === "DECIMAL") && (typeof attr.value !== "number" || !Number.isFinite(attr.value))) {
+          throw new Error(`Attribute '${code}' requires a finite numeric value.`);
+        }
+        if (dataType === "BOOLEAN" && typeof attr.value !== "boolean") {
+          throw new Error(`Attribute '${code}' requires a boolean value.`);
+        }
+        if (["STRING", "SELECT"].includes(dataType) && typeof attr.value !== "string") {
+          throw new Error(`Attribute '${code}' requires a string value.`);
+        }
+        if (dataType === "JSON" && (attr.value === null || typeof attr.value !== "object" || Array.isArray(attr.value))) {
+          throw new Error(`Attribute '${code}' requires an object value.`);
+        }
+
         normalizedAttributes.push({
           code,
           name: attrName,
@@ -245,6 +280,8 @@ export class NormalizationPipelineService {
           unit,
         });
       }
+    } else if (payload.attributes != null) {
+      throw new Error("Raw payload attributes must be an array.");
     }
 
     return {

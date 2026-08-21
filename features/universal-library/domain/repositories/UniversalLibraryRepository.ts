@@ -119,8 +119,12 @@ export interface IUniversalLibraryRepository {
   // Ingestion Repository Extension
   getSourceById(sourceId: string): Promise<UniversalSource | null>;
   getIngestionRecordBySourceExternalId(sourceId: string, sourceExternalId: string): Promise<UniversalIngestionRecord | null>;
+  findActiveItemIdsByIdentifier(params: LookupIdentifierParams): Promise<string[]>;
+  findActiveItemIdsByManufacturerIdentifier(manufacturerName: string, identifierType: "MPN" | "MODEL_NO", value: string): Promise<string[]>;
+  findActiveItemIdsByManufacturerModel(manufacturerName: string, modelNumber: string): Promise<string[]>;
+  findActiveItemIdsByName(name: string, manufacturerName?: string | null): Promise<string[]>;
   saveIngestionRecord(input: SaveIngestionRecordInput): Promise<UniversalIngestionRecord>;
-  getPendingIngestionRecords(limit?: number): Promise<UniversalIngestionRecord[]>;
+  claimPendingIngestionRecords(limit?: number): Promise<UniversalIngestionRecord[]>;
   updateIngestionRecordStatus(
     id: string,
     status: IngestionStatus,

@@ -50,11 +50,13 @@ class InMemoryUniversalLibraryRepository implements Partial<IUniversalLibraryRep
     return record;
   }
 
-  async getPendingIngestionRecords(limit = 50) {
+  async claimPendingIngestionRecords(limit = 50) {
     const pending: UniversalIngestionRecord[] = [];
     for (const rec of this.ingestionRecords.values()) {
-      if (["RECEIVED", "NORMALIZED", "MATCHED"].includes(rec.status)) {
-        pending.push(rec);
+      if (["NORMALIZED", "MATCHED"].includes(rec.status)) {
+        const claimed = new UniversalIngestionRecord({ ...rec, status: "PROCESSING", processingStartedAt: new Date(), retryCount: rec.retryCount + 1, updatedAt: new Date() });
+        this.ingestionRecords.set(rec.id, claimed);
+        pending.push(claimed);
       }
       if (pending.length >= limit) break;
     }
@@ -122,6 +124,11 @@ class InMemoryUniversalLibraryRepository implements Partial<IUniversalLibraryRep
 
   async lookupByIdentifier() { return null; }
   async searchItems() { return { items: [], total: 0 }; }
+  async findActiveItemIdsByIdentifier() { return []; }
+  async findActiveItemIdsByManufacturerIdentifier() { return []; }
+  async findActiveItemIdsByManufacturerModel() { return []; }
+  async findActiveItemIdsByName() { return []; }
+  async getItemById() { return null; }
 }
 
 describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
@@ -219,6 +226,13 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
     ).rejects.toThrow("currently inactive");
   });
 
+  it("rejects source trust scores outside the database bounds", () => {
+    expect(() => new UniversalSource({
+      id: "bad-source", name: "Bad", type: "SYNTHETIC", verificationStatus: "UNVERIFIED",
+      trustScore: 1.01, createdAt: new Date(), updatedAt: new Date(),
+    })).toThrow("between 0 and 1");
+  });
+
   it("4. Normalization cleans whitespace, normalizes casing & UCL-2 identifiers", () => {
     const raw = {
       name: "  Samsung   Monitor  \u0041\u030a ",
@@ -253,7 +267,7 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
       activeSource.id,
       "ext-123",
       {
-        findItemByGlobalIdentifier: async () => ({ id: "canonical-item-gtin" }),
+        findItemsByGlobalIdentifier: async () => [{ id: "canonical-item-gtin" }],
       }
     );
 
@@ -265,6 +279,7 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
   it("6. Ambiguous weak matches result in NEEDS_REVIEW state instead of auto-merging", async () => {
     const payload = NormalizationPipelineService.normalize({
       name: "Generic 1080p Camera",
+      manufacturerName: "Synthetic Manufacturer",
     });
 
     const res = await IdentityResolutionService.resolveIdentity(
@@ -303,5 +318,62 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
     const publishedRecord = repo.ingestionRecords.get(summary.recordIds[0]);
     expect(publishedRecord?.status).toBe("PUBLISHED");
     expect(publishedRecord?.matchedItemId).toBeDefined();
+  });
+
+  it("8. hashes semantically identical objects independently of property order", async () => {
+    const ingest = new IngestSourceRecord(repo as any);
+    const first = await ingest.execute({
+      sourceId: activeSource.id,
+      sourceExternalId: "stable-json",
+      rawPayload: { name: "Stable Product", description: "Synthetic" },
+    });
+    const second = await ingest.execute({
+      sourceId: activeSource.id,
+      sourceExternalId: "stable-json",
+      rawPayload: { description: "Synthetic", name: "Stable Product" },
+    });
+    expect(second.isDuplicatePayload).toBe(true);
+    expect(second.ingestionRecord.payloadHash).toBe(first.ingestionRecord.payloadHash);
+  });
+
+  it("9. routes changes to an already published source record to review", async () => {
+    const ingest = new IngestSourceRecord(repo as any);
+    const process = new ProcessIngestionBatch(repo as any);
+    await ingest.execute({ sourceId: activeSource.id, sourceExternalId: "published-change", rawPayload: { name: "Original" } });
+    await process.execute({ batchSize: 1 });
+
+    const changed = await ingest.execute({
+      sourceId: activeSource.id,
+      sourceExternalId: "published-change",
+      rawPayload: { name: "Changed by source" },
+    });
+    expect(changed.ingestionRecord.status).toBe("NEEDS_REVIEW");
+    expect(changed.ingestionRecord.errorMessage).toContain("manual review");
+  });
+
+  it("10. rejects malformed or out-of-range batch limits", async () => {
+    const process = new ProcessIngestionBatch(repo as any);
+    await expect(process.execute({ batchSize: 0 })).rejects.toThrow("between 1 and 100");
+    await expect(process.execute({ batchSize: 101 })).rejects.toThrow("between 1 and 100");
+    await expect(process.execute({ batchSize: 1.5 })).rejects.toThrow("between 1 and 100");
+  });
+
+  it("11. isolates publication failure and keeps unrelated records processable", async () => {
+    const ingest = new IngestSourceRecord(repo as any);
+    await ingest.execute({ sourceId: activeSource.id, sourceExternalId: "fail-one", rawPayload: { name: "Failure" } });
+    await ingest.execute({ sourceId: activeSource.id, sourceExternalId: "pass-two", rawPayload: { name: "Success" } });
+    const originalPublish = repo.publishIngestionRecord.bind(repo);
+    let calls = 0;
+    repo.publishIngestionRecord = async (input: any) => {
+      calls++;
+      if (calls === 1) throw new Error("synthetic rollback");
+      return originalPublish(input);
+    };
+
+    const summary = await new ProcessIngestionBatch(repo as any).execute({ batchSize: 2 });
+    expect(summary.failedCount).toBe(1);
+    expect(summary.publishedCount).toBe(1);
+    expect([...repo.ingestionRecords.values()].map((record) => record.status)).toContain("FAILED");
+    expect([...repo.ingestionRecords.values()].map((record) => record.status)).toContain("PUBLISHED");
   });
 });

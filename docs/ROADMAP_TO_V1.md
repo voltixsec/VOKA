@@ -577,7 +577,7 @@ governed by [ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
 
 ## Universal Commercial Library — Approved Architecture Track
 
-Status: **UCL-1 Foundation MERGED TO MAIN at `fb1ac46f4cf47b4693966826f5cf374496efa582`; production migration deployment is not implied**
+Status: **UCL-1 and UCL-2 MERGED TO MAIN through `3834be9ff1a94bbe501fe69dd8ef4d7257e4efae`; UCL-3 is implemented in PR #62, CTO-reviewed locally, and pending merge. Production deployment is not implied.**
 
 The Universal Commercial Library is an approved long-term VOKA capability.
 
@@ -606,8 +606,8 @@ Mandatory performance contract:
 Implementation sequence:
 
 1. **UCL-1 — global identity, taxonomy, provenance, adoption and retrieval contracts (DELIVERED).**
-2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (IMPLEMENTED IN PR #61 / CTO REVIEW VERIFIED / PENDING MERGE).**
-3. UCL-3 — ingestion, normalization, entity resolution, quality and confidence.
+2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (MERGED).**
+3. **UCL-3 — ingestion, normalization, entity resolution, quality and confidence (IMPLEMENTED IN PR #62 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE; no external data ingested).**
 4. UCL-4 — hybrid Company Catalog + Universal Library AI retrieval.
 5. UCL-5 — semantic/vector search, caching, ranking and scale validation.
 6. UCL-6 — controlled large-scale external data ingestion and ongoing

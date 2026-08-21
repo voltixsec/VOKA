@@ -976,6 +976,7 @@ enum UniversalIngestionStatus {
   RECEIVED
   NORMALIZED
   MATCHED
+  PROCESSING
   PUBLISHED
   NEEDS_REVIEW
   REJECTED
@@ -1094,27 +1095,28 @@ model UniversalSource {
 }
 
 model UniversalIngestionRecord {
-  id               String                   @id @default(cuid())
-  sourceId         String
-  sourceExternalId String
-  entityType       String                   @default("ITEM")
-  rawPayload       Json
-  payloadHash      String
-  status           UniversalIngestionStatus @default(RECEIVED)
-  normalizedData   Json?
-  matchedItemId    String?
-  errorMessage     String?
-  retryCount       Int                      @default(0)
-  processedAt      DateTime?
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
+  id                  String                   @id @default(cuid())
+  sourceId            String
+  sourceExternalId    String
+  entityType          String                   @default("ITEM")
+  rawPayload          Json
+  payloadHash         String
+  status              UniversalIngestionStatus @default(RECEIVED)
+  normalizedData      Json?
+  matchedItemId       String?
+  errorMessage        String?
+  retryCount          Int                      @default(0)
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
-  source      UniversalSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  source      UniversalSource       @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   matchedItem UniversalCatalogItem? @relation(fields: [matchedItemId], references: [id], onDelete: SetNull)
 
   @@unique([sourceId, sourceExternalId])
   @@index([sourceId])
-  @@index([status, createdAt])
+  @@index([status, processingStartedAt, createdAt])
   @@index([payloadHash])
   @@index([matchedItemId])
 }

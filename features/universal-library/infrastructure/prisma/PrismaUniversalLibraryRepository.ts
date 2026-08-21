@@ -561,6 +561,78 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
     return record ? this.mapIngestionRecordToDomain(record) : null;
   }
 
+  public async findActiveItemIdsByIdentifier(params: LookupIdentifierParams): Promise<string[]> {
+    const normalized = normalizeUniversalIdentifier(params.identifierType, params.value, {
+      manufacturerId: params.manufacturerId,
+      source: params.source,
+    });
+    const globalTypes = ["GTIN", "GTIN_8", "GTIN_12", "GTIN_13", "GTIN_14", "EAN", "UPC"] as const;
+    const isGlobal = globalTypes.includes(params.identifierType as (typeof globalTypes)[number]);
+    const records = await this.prisma.universalItemIdentifier.findMany({
+      where: {
+        identifierType: isGlobal ? { in: [...globalTypes] } : params.identifierType,
+        normalizedValue: normalized.normalizedValue,
+        ...(normalized.manufacturerId ? { manufacturerId: normalized.manufacturerId } : {}),
+        ...(normalized.source ? { source: normalized.source } : {}),
+        universalItem: { isActive: true },
+      },
+      select: { universalItemId: true },
+      orderBy: { universalItemId: "asc" },
+      take: 2,
+    });
+    return records.map((record) => record.universalItemId);
+  }
+
+  public async findActiveItemIdsByManufacturerIdentifier(
+    manufacturerName: string,
+    identifierType: "MPN" | "MODEL_NO",
+    value: string
+  ): Promise<string[]> {
+    const normalizedValue = value.trim().replace(/\s+/g, " ").toUpperCase();
+    const records = await this.prisma.universalItemIdentifier.findMany({
+      where: {
+        identifierType,
+        normalizedValue,
+        manufacturer: { name: { equals: manufacturerName.trim(), mode: "insensitive" } },
+        universalItem: { isActive: true },
+      },
+      select: { universalItemId: true },
+      orderBy: { universalItemId: "asc" },
+      take: 2,
+    });
+    return records.map((record) => record.universalItemId);
+  }
+
+  public async findActiveItemIdsByManufacturerModel(manufacturerName: string, modelNumber: string): Promise<string[]> {
+    const records = await this.prisma.universalCatalogItem.findMany({
+      where: {
+        isActive: true,
+        modelNumber: { equals: modelNumber.trim(), mode: "insensitive" },
+        manufacturer: { name: { equals: manufacturerName.trim(), mode: "insensitive" } },
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take: 2,
+    });
+    return records.map((record) => record.id);
+  }
+
+  public async findActiveItemIdsByName(name: string, manufacturerName?: string | null): Promise<string[]> {
+    const records = await this.prisma.universalCatalogItem.findMany({
+      where: {
+        isActive: true,
+        name: { equals: name.trim(), mode: "insensitive" },
+        ...(manufacturerName
+          ? { manufacturer: { name: { equals: manufacturerName.trim(), mode: "insensitive" } } }
+          : { manufacturerId: null }),
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take: 2,
+    });
+    return records.map((record) => record.id);
+  }
+
   public async saveIngestionRecord(input: SaveIngestionRecordInput): Promise<UniversalIngestionRecord> {
     const record = await this.prisma.universalIngestionRecord.upsert({
       where: {
@@ -587,19 +659,35 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         normalizedData: input.normalizedData ? (input.normalizedData as any) : undefined,
         matchedItemId: input.matchedItemId,
         errorMessage: input.errorMessage,
+        processingStartedAt: null,
+        processedAt: null,
+        retryCount: 0,
       },
     });
     return this.mapIngestionRecordToDomain(record);
   }
 
-  public async getPendingIngestionRecords(limit = 50): Promise<UniversalIngestionRecord[]> {
-    const records = await this.prisma.universalIngestionRecord.findMany({
-      where: {
-        status: { in: ["RECEIVED", "NORMALIZED", "MATCHED"] },
-      },
-      orderBy: { createdAt: "asc" },
-      take: Math.min(Math.max(1, limit), 100),
-    });
+  public async claimPendingIngestionRecords(limit = 50): Promise<UniversalIngestionRecord[]> {
+    const boundedLimit = Math.min(Math.max(1, limit), 100);
+    const records = await this.prisma.$transaction(async (tx) => tx.$queryRaw<any[]>`
+      WITH candidates AS (
+        SELECT "id"
+        FROM "UniversalIngestionRecord"
+        WHERE "status" IN ('NORMALIZED', 'MATCHED')
+           OR ("status" = 'PROCESSING' AND "processingStartedAt" < CURRENT_TIMESTAMP - INTERVAL '15 minutes')
+        ORDER BY "createdAt" ASC, "id" ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${boundedLimit}
+      )
+      UPDATE "UniversalIngestionRecord" AS record
+      SET "status" = 'PROCESSING'::"UniversalIngestionStatus",
+          "processingStartedAt" = CURRENT_TIMESTAMP,
+          "retryCount" = record."retryCount" + 1,
+          "updatedAt" = CURRENT_TIMESTAMP
+      FROM candidates
+      WHERE record."id" = candidates."id"
+      RETURNING record.*
+    `);
     return records.map(r => this.mapIngestionRecordToDomain(r));
   }
 
@@ -624,29 +712,66 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
   public async publishIngestionRecord(input: PublishIngestionRecordInput): Promise<{ item: UniversalCatalogItem; isNewItem: boolean }> {
     const { ingestionRecordId, normalizedPayload, matchedItemId } = input;
 
-    const ingestionRecord = await this.prisma.universalIngestionRecord.findUnique({
-      where: { id: ingestionRecordId },
-      include: { source: true },
-    });
-    if (!ingestionRecord) {
-      throw new Error(`Ingestion record '${ingestionRecordId}' not found.`);
-    }
-
     return await this.prisma.$transaction(async (tx) => {
+      const lock = await tx.universalIngestionRecord.updateMany({
+        where: { id: ingestionRecordId, status: "PROCESSING" },
+        data: { processingStartedAt: new Date() },
+      });
+      if (lock.count !== 1) {
+        throw new Error("Ingestion record is not in a publishable processing state.");
+      }
+      const ingestionRecord = await tx.universalIngestionRecord.findUnique({
+        where: { id: ingestionRecordId },
+        include: { source: true },
+      });
+      if (!ingestionRecord || !ingestionRecord.source.isActive) {
+        throw new Error("Ingestion source is unavailable or inactive.");
+      }
+
+      let resolvedMatchedItemId = matchedItemId ?? null;
+      const globalTypes = ["GTIN", "GTIN_8", "GTIN_12", "GTIN_13", "GTIN_14", "EAN", "UPC"] as const;
+      const globalIdentifiers = normalizedPayload.identifiers.filter((identifier) =>
+        globalTypes.includes(identifier.identifierType as (typeof globalTypes)[number])
+      );
+      for (const identifier of globalIdentifiers) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ucl-global:${identifier.normalizedValue}`}, 0))`;
+        const candidates = await tx.universalItemIdentifier.findMany({
+          where: {
+            identifierType: { in: [...globalTypes] },
+            normalizedValue: identifier.normalizedValue,
+            universalItem: { isActive: true },
+          },
+          select: { universalItemId: true },
+          orderBy: { universalItemId: "asc" },
+          take: 2,
+        });
+        const candidateIds = [...new Set(candidates.map((candidate) => candidate.universalItemId))];
+        if (candidateIds.length > 1 || (candidateIds[0] && resolvedMatchedItemId && candidateIds[0] !== resolvedMatchedItemId)) {
+          throw new Error("Global identifier evidence is ambiguous or conflicting.");
+        }
+        if (candidateIds[0]) resolvedMatchedItemId = candidateIds[0];
+      }
+
       let targetItem: any = null;
       let isNewItem = false;
 
       // 1. Resolve or create Manufacturer
       let mfrId: string | null = null;
-      if (normalizedPayload.manufacturerName) {
-        const existingMfr = await tx.universalManufacturer.findFirst({
+      if (!resolvedMatchedItemId && normalizedPayload.manufacturerName) {
+        const manufacturerLockKey = `ucl-manufacturer:${(normalizedPayload.manufacturerCode || normalizedPayload.manufacturerName).toUpperCase()}`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${manufacturerLockKey}, 0))`;
+        const existingMfrs = await tx.universalManufacturer.findMany({
           where: {
             OR: [
               { name: { equals: normalizedPayload.manufacturerName, mode: "insensitive" as const } },
               ...(normalizedPayload.manufacturerCode ? [{ code: { equals: normalizedPayload.manufacturerCode, mode: "insensitive" as const } }] : []),
             ],
           },
+          orderBy: { id: "asc" },
+          take: 2,
         });
+        if (existingMfrs.length > 1) throw new Error("Manufacturer identity is ambiguous.");
+        const existingMfr = existingMfrs[0];
         if (existingMfr) {
           mfrId = existingMfr.id;
         } else {
@@ -660,17 +785,65 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         }
       }
 
+      if (!resolvedMatchedItemId && mfrId) {
+        const scopedIdentifiers = normalizedPayload.identifiers.filter((identifier) =>
+          identifier.identifierType === "MPN" || identifier.identifierType === "MODEL_NO"
+        );
+        for (const identifier of scopedIdentifiers) {
+          const scopedLockKey = `ucl-scoped:${mfrId}:${identifier.identifierType}:${identifier.normalizedValue}`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${scopedLockKey}, 0))`;
+          const candidates = await tx.universalItemIdentifier.findMany({
+            where: {
+              identifierType: identifier.identifierType,
+              manufacturerId: mfrId,
+              normalizedValue: identifier.normalizedValue,
+              universalItem: { isActive: true },
+            },
+            select: { universalItemId: true },
+            orderBy: { universalItemId: "asc" },
+            take: 2,
+          });
+          const candidateIds = [...new Set(candidates.map((candidate) => candidate.universalItemId))];
+          if (candidateIds.length > 1) throw new Error("Manufacturer-scoped identifier is ambiguous.");
+          if (candidateIds[0]) resolvedMatchedItemId = candidateIds[0];
+        }
+
+        if (!resolvedMatchedItemId && normalizedPayload.normalizedModelNumber) {
+          const modelLockKey = `ucl-model:${mfrId}:${normalizedPayload.normalizedModelNumber}`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${modelLockKey}, 0))`;
+          const candidates = await tx.universalCatalogItem.findMany({
+            where: {
+              manufacturerId: mfrId,
+              isActive: true,
+              modelNumber: { equals: normalizedPayload.normalizedModelNumber, mode: "insensitive" },
+            },
+            select: { id: true },
+            orderBy: { id: "asc" },
+            take: 2,
+          });
+          if (candidates.length > 1) throw new Error("Manufacturer model identity is ambiguous.");
+          if (candidates[0]) resolvedMatchedItemId = candidates[0].id;
+        }
+      }
+
       // 2. Resolve or create Brand
       let brandId: string | null = null;
-      if (normalizedPayload.brandName) {
-        const existingBrand = await tx.universalBrand.findFirst({
+      if (!resolvedMatchedItemId && normalizedPayload.brandName) {
+        const brandLockKey = `ucl-brand:${mfrId || "none"}:${(normalizedPayload.brandCode || normalizedPayload.brandName).toUpperCase()}`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${brandLockKey}, 0))`;
+        const existingBrands = await tx.universalBrand.findMany({
           where: {
+            manufacturerId: mfrId,
             OR: [
               { name: { equals: normalizedPayload.brandName, mode: "insensitive" as const } },
               ...(normalizedPayload.brandCode ? [{ code: { equals: normalizedPayload.brandCode, mode: "insensitive" as const } }] : []),
             ],
           },
+          orderBy: { id: "asc" },
+          take: 2,
         });
+        if (existingBrands.length > 1) throw new Error("Brand identity is ambiguous.");
+        const existingBrand = existingBrands[0];
         if (existingBrand) {
           brandId = existingBrand.id;
         } else {
@@ -687,15 +860,22 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 
       // 3. Resolve or create Product Family
       let familyId: string | null = null;
-      if (normalizedPayload.familyName) {
-        const existingFamily = await tx.universalProductFamily.findFirst({
+      if (!resolvedMatchedItemId && normalizedPayload.familyName) {
+        const familyLockKey = `ucl-family:${brandId || "none"}:${(normalizedPayload.familyCode || normalizedPayload.familyName).toUpperCase()}`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${familyLockKey}, 0))`;
+        const existingFamilies = await tx.universalProductFamily.findMany({
           where: {
+            brandId,
             OR: [
               { name: { equals: normalizedPayload.familyName, mode: "insensitive" as const } },
               ...(normalizedPayload.familyCode ? [{ code: { equals: normalizedPayload.familyCode, mode: "insensitive" as const } }] : []),
             ],
           },
+          orderBy: { id: "asc" },
+          take: 2,
         });
+        if (existingFamilies.length > 1) throw new Error("Product family identity is ambiguous.");
+        const existingFamily = existingFamilies[0];
         if (existingFamily) {
           familyId = existingFamily.id;
         } else {
@@ -712,7 +892,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 
       // 4. Resolve Category
       let categoryId: string | null = null;
-      if (normalizedPayload.categoryCode) {
+      if (!resolvedMatchedItemId && normalizedPayload.categoryCode) {
         const cat = await tx.universalCategory.findUnique({
           where: { code: normalizedPayload.categoryCode },
         });
@@ -720,25 +900,12 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       }
 
       // 5. Update matched item or Create new Canonical Item
-      if (matchedItemId) {
-        targetItem = await tx.universalCatalogItem.update({
-          where: { id: matchedItemId },
-          data: {
-            name: normalizedPayload.name,
-            nameAr: normalizedPayload.nameAr || undefined,
-            nameEn: normalizedPayload.nameEn || undefined,
-            searchName: normalizedPayload.name.toLowerCase(),
-            description: normalizedPayload.description || undefined,
-            descriptionAr: normalizedPayload.descriptionAr || undefined,
-            descriptionEn: normalizedPayload.descriptionEn || undefined,
-            manufacturerId: mfrId || undefined,
-            brandId: brandId || undefined,
-            familyId: familyId || undefined,
-            categoryId: categoryId || undefined,
-            modelNumber: normalizedPayload.modelNumber || undefined,
-            variantName: normalizedPayload.variantName || undefined,
-          },
+      if (resolvedMatchedItemId) {
+        targetItem = await tx.universalCatalogItem.findFirst({
+          where: { id: resolvedMatchedItemId, isActive: true },
         });
+        if (!targetItem) throw new Error("Matched canonical item is unavailable or inactive.");
+        mfrId = targetItem.manufacturerId;
       } else {
         isNewItem = true;
         targetItem = await tx.universalCatalogItem.create({
@@ -780,12 +947,12 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
             value: ident.value,
             normalizedValue: ident.normalizedValue,
             manufacturerId: isMpnOrModel ? mfrId : null,
-            source: isExternal ? (ident.source || ingestionRecord.source.name) : null,
+            source: isExternal ? ingestionRecord.sourceId : null,
           },
           update: {
             value: ident.value,
             manufacturerId: isMpnOrModel ? mfrId : undefined,
-            source: isExternal ? (ident.source || ingestionRecord.source.name) : undefined,
+            source: isExternal ? ingestionRecord.sourceId : undefined,
           },
         });
       }
@@ -812,7 +979,9 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       }
 
       // 8. Upsert Provenance Link
-      const trustScore = ingestionRecord.source.trustScore ? ingestionRecord.source.trustScore.toNumber() : 0.8;
+      const trustScore = ingestionRecord.source.trustScore !== null
+        ? ingestionRecord.source.trustScore.toNumber()
+        : 0;
       await tx.universalItemProvenance.upsert({
         where: {
           universalItemId_sourceId: {
@@ -833,9 +1002,58 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         },
       });
 
-      // 9. Update Ingestion Record Status to PUBLISHED
-      await tx.universalIngestionRecord.update({
-        where: { id: ingestionRecordId },
+      // 9. Persist typed attributes without bypassing UCL-2 value integrity.
+      for (const attribute of normalizedPayload.attributes) {
+        const attributeLockKey = `ucl-attribute:${attribute.code}`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attributeLockKey}, 0))`;
+        let definition = await tx.universalAttributeDefinition.findFirst({
+          where: { code: { equals: attribute.code, mode: "insensitive" } },
+        });
+        if (!definition) {
+          definition = await tx.universalAttributeDefinition.create({
+            data: {
+              code: attribute.code,
+              name: attribute.name || attribute.code,
+              dataType: attribute.dataType,
+              unitOfMeasure: attribute.unit,
+            },
+          });
+        }
+        if (definition.dataType !== attribute.dataType) {
+          throw new Error(`Attribute '${attribute.code}' conflicts with its canonical data type.`);
+        }
+
+        const valueData: any = {
+          valueString: null,
+          valueNumber: null,
+          valueBoolean: null,
+          valueJson: null,
+          unit: attribute.unit,
+        };
+        if (attribute.dataType === "NUMBER" || attribute.dataType === "DECIMAL") valueData.valueNumber = attribute.value;
+        else if (attribute.dataType === "BOOLEAN") valueData.valueBoolean = attribute.value;
+        else if (attribute.dataType === "JSON") valueData.valueJson = attribute.value;
+        else valueData.valueString = attribute.value;
+
+        await tx.universalItemAttributeValue.upsert({
+          where: {
+            universalItemId_attributeDefinitionId: {
+              universalItemId: targetItem.id,
+              attributeDefinitionId: definition.id,
+            },
+          },
+          create: {
+            universalItemId: targetItem.id,
+            attributeDefinitionId: definition.id,
+            ...valueData,
+          },
+          update: valueData,
+        });
+      }
+
+      // 10. Mark published only after every canonical write succeeds.
+      const published = await tx.universalIngestionRecord.updateMany({
+        where: { id: ingestionRecordId, status: "PROCESSING" },
         data: {
           status: "PUBLISHED",
           matchedItemId: targetItem.id,
@@ -843,6 +1061,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
           errorMessage: null,
         },
       });
+      if (published.count !== 1) throw new Error("Ingestion publication state changed concurrently.");
 
       const fullItem = await tx.universalCatalogItem.findUnique({
         where: { id: targetItem.id },
@@ -1110,6 +1329,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       matchedItemId: record.matchedItemId,
       errorMessage: record.errorMessage,
       retryCount: record.retryCount,
+      processingStartedAt: record.processingStartedAt,
       processedAt: record.processedAt,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,

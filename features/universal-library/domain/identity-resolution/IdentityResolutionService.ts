@@ -1,10 +1,9 @@
 import { NormalizedIngestionPayload } from "../normalization/NormalizationPipelineService";
 
 export interface IdentityResolutionContext {
-  // Database lookup functions provided by repository/service
-  findItemByGlobalIdentifier?: (identifierType: string, normalizedValue: string) => Promise<{ id: string } | null>;
-  findItemByManufacturerMpn?: (manufacturerId: string | null, manufacturerName: string | null, mpnValue: string) => Promise<{ id: string } | null>;
-  findItemByManufacturerModel?: (manufacturerId: string | null, manufacturerName: string | null, modelNumber: string) => Promise<{ id: string } | null>;
+  findItemsByGlobalIdentifier?: (identifierType: string, normalizedValue: string) => Promise<Array<{ id: string }>>;
+  findItemsByManufacturerMpn?: (manufacturerName: string, mpnValue: string) => Promise<Array<{ id: string }>>;
+  findItemsByManufacturerModel?: (manufacturerName: string, modelNumber: string) => Promise<Array<{ id: string }>>;
   findItemBySourceExternalRef?: (sourceId: string, sourceExternalId: string) => Promise<{ id: string } | null>;
   findItemsByConservativeName?: (normalizedName: string, manufacturerName: string | null) => Promise<Array<{ id: string }>>;
 }
@@ -36,69 +35,58 @@ export class IdentityResolutionService {
     context: IdentityResolutionContext
   ): Promise<IdentityResolutionResult> {
     // Rule 1: Existing source external reference mapping
-    if (context.findItemBySourceExternalRef) {
-      const existing = await context.findItemBySourceExternalRef(sourceId, sourceExternalId);
-      if (existing) {
-        return {
-          matchedItemId: existing.id,
-          confidenceReason: "EXISTING_SOURCE_EXTERNAL_REF",
-          status: "MATCHED",
-        };
-      }
-    }
+    const sourceCandidate = context.findItemBySourceExternalRef
+      ? await context.findItemBySourceExternalRef(sourceId, sourceExternalId)
+      : null;
 
     // Rule 2: Exact Trusted Global Commercial Identifiers (GTIN/EAN/UPC)
-    if (context.findItemByGlobalIdentifier) {
+    if (context.findItemsByGlobalIdentifier) {
       const globalIdentifiers = normalized.identifiers.filter(i => GLOBAL_IDENTIFIER_TYPES.has(i.identifierType));
+      const candidateIds = new Set<string>();
       for (const ident of globalIdentifiers) {
-        const item = await context.findItemByGlobalIdentifier(ident.identifierType, ident.normalizedValue);
-        if (item) {
-          return {
-            matchedItemId: item.id,
-            confidenceReason: "EXACT_GLOBAL_IDENTIFIER",
-            status: "MATCHED",
-          };
-        }
+        const items = await context.findItemsByGlobalIdentifier(ident.identifierType, ident.normalizedValue);
+        items.forEach((item) => candidateIds.add(item.id));
+      }
+      if (candidateIds.size > 1) return this.ambiguous();
+      if (candidateIds.size === 1) {
+        const id = [...candidateIds][0];
+        if (sourceCandidate && sourceCandidate.id !== id) return this.ambiguous();
+        return { matchedItemId: id, confidenceReason: sourceCandidate ? "EXISTING_SOURCE_EXTERNAL_REF" : "EXACT_GLOBAL_IDENTIFIER", status: "MATCHED" };
       }
     }
 
     // Rule 3: Manufacturer + MPN
-    if (context.findItemByManufacturerMpn && (normalized.manufacturerName || normalized.manufacturerCode)) {
+    if (context.findItemsByManufacturerMpn && (normalized.manufacturerName || normalized.manufacturerCode)) {
       const mpnIdentifiers = normalized.identifiers.filter(i => i.identifierType === "MPN");
+      const candidateIds = new Set<string>();
       for (const ident of mpnIdentifiers) {
-        const item = await context.findItemByManufacturerMpn(
-          null,
-          normalized.manufacturerName || normalized.manufacturerCode,
-          ident.normalizedValue
-        );
-        if (item) {
-          return {
-            matchedItemId: item.id,
-            confidenceReason: "EXACT_MANUFACTURER_MPN",
-            status: "MATCHED",
-          };
-        }
+        const items = await context.findItemsByManufacturerMpn(normalized.manufacturerName || normalized.manufacturerCode!, ident.normalizedValue);
+        items.forEach((item) => candidateIds.add(item.id));
+      }
+      if (candidateIds.size > 1) return this.ambiguous();
+      if (candidateIds.size === 1) {
+        const id = [...candidateIds][0];
+        if (sourceCandidate && sourceCandidate.id !== id) return this.ambiguous();
+        return { matchedItemId: id, confidenceReason: sourceCandidate ? "EXISTING_SOURCE_EXTERNAL_REF" : "EXACT_MANUFACTURER_MPN", status: "MATCHED" };
       }
     }
 
     // Rule 4: Manufacturer/Brand + Model Number
-    if (context.findItemByManufacturerModel && normalized.normalizedModelNumber && (normalized.manufacturerName || normalized.brandName)) {
-      const item = await context.findItemByManufacturerModel(
-        null,
-        normalized.manufacturerName || normalized.brandName,
-        normalized.normalizedModelNumber
-      );
-      if (item) {
-        return {
-          matchedItemId: item.id,
-          confidenceReason: "EXACT_MANUFACTURER_MODEL",
-          status: "MATCHED",
-        };
+    if (context.findItemsByManufacturerModel && normalized.normalizedModelNumber && normalized.manufacturerName) {
+      const items = await context.findItemsByManufacturerModel(normalized.manufacturerName, normalized.normalizedModelNumber);
+      if (items.length > 1) return this.ambiguous();
+      if (items.length === 1) {
+        if (sourceCandidate && sourceCandidate.id !== items[0].id) return this.ambiguous();
+        return { matchedItemId: items[0].id, confidenceReason: sourceCandidate ? "EXISTING_SOURCE_EXTERNAL_REF" : "EXACT_MANUFACTURER_MODEL", status: "MATCHED" };
       }
     }
 
+    if (sourceCandidate) {
+      return { matchedItemId: sourceCandidate.id, confidenceReason: "EXISTING_SOURCE_EXTERNAL_REF", status: "MATCHED" };
+    }
+
     // Rule 5: Conservative normalized identity rules
-    if (context.findItemsByConservativeName) {
+    if (context.findItemsByConservativeName && normalized.manufacturerName) {
       const candidates = await context.findItemsByConservativeName(
         normalized.name.toLowerCase(),
         normalized.manufacturerName
@@ -125,5 +113,9 @@ export class IdentityResolutionService {
       confidenceReason: "NO_MATCH",
       status: "NORMALIZED",
     };
+  }
+
+  private static ambiguous(): IdentityResolutionResult {
+    return { matchedItemId: null, confidenceReason: "AMBIGUOUS_MULTIPLE_MATCHES", status: "NEEDS_REVIEW" };
   }
 }

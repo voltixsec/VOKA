@@ -18,6 +18,7 @@ describe("NormalizationPipelineService", () => {
   it("normalizes GTIN/EAN/UPC and MPN identifiers using UCL-2 rules", () => {
     const res = NormalizationPipelineService.normalize({
       name: "Test Item",
+      manufacturerName: "Synthetic Manufacturer",
       identifiers: [
         { identifierType: "GTIN_13", value: " 0123456789012 " },
         { identifierType: "MPN", value: "  ds-2cd2143g0-i  " },
@@ -59,5 +60,19 @@ describe("NormalizationPipelineService", () => {
         name: "   ",
       })
     ).toThrow("Raw payload must provide at least one valid non-empty item name");
+  });
+
+  it("rejects manufacturer-scoped identifiers without manufacturer identity", () => {
+    expect(() => NormalizationPipelineService.normalize({
+      name: "Synthetic Item",
+      identifiers: [{ identifierType: "MPN", value: "PART-1" }],
+    })).toThrow("IDENTIFIER_MANUFACTURER_REQUIRED");
+  });
+
+  it("rejects unsupported identifier types instead of silently dropping them", () => {
+    expect(() => NormalizationPipelineService.normalize({
+      name: "Synthetic Item",
+      identifiers: [{ identifierType: "UNKNOWN", value: "value" }],
+    })).toThrow("Unsupported identifier type");
   });
 });

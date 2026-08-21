@@ -33,6 +33,9 @@ export class UniversalSource {
   public readonly updatedAt: Date;
 
   constructor(props: UniversalSourceProps) {
+    if (props.trustScore != null && (!Number.isFinite(props.trustScore) || props.trustScore < 0 || props.trustScore > 1)) {
+      throw new Error("trustScore must be between 0 and 1");
+    }
     this.id = props.id;
     this.name = props.name;
     this.type = props.type;

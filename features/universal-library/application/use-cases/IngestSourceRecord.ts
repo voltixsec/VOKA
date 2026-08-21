@@ -3,6 +3,7 @@ import { UniversalIngestionRecord } from "../../domain/entities/UniversalIngesti
 import { NormalizationPipelineService, RawIngestionPayloadInput } from "../../domain/normalization/NormalizationPipelineService";
 import { IdentityResolutionService } from "../../domain/identity-resolution/IdentityResolutionService";
 import { createHash } from "crypto";
+import { stableJsonStringify } from "../../domain/normalization/stableJson";
 
 export interface IngestSourceRecordParams {
   sourceId: string;
@@ -21,7 +22,9 @@ export class IngestSourceRecord {
   constructor(private readonly repository: IUniversalLibraryRepository) {}
 
   public async execute(params: IngestSourceRecordParams): Promise<IngestSourceRecordResult> {
-    const { sourceId, sourceExternalId, entityType, rawPayload } = params;
+    const sourceId = params.sourceId.trim();
+    const sourceExternalId = params.sourceExternalId.trim();
+    const { entityType, rawPayload } = params;
 
     if (!sourceId || sourceId.trim() === "") {
       throw new Error("sourceId is required");
@@ -42,14 +45,14 @@ export class IngestSourceRecord {
     // 2. Compute payload SHA-256 fingerprint hash
     const rawPayloadJson = rawPayload as unknown as Record<string, unknown>;
     const payloadHash = createHash("sha256")
-      .update(JSON.stringify(rawPayloadJson))
+      .update(stableJsonStringify(rawPayloadJson))
       .digest("hex");
 
     // 3. Check existing record for idempotency
     const existing = await this.repository.getIngestionRecordBySourceExternalId(sourceId, sourceExternalId);
 
     if (existing) {
-      if (existing.payloadHash === payloadHash) {
+      if (existing.payloadHash === payloadHash && existing.status !== "FAILED") {
         // Idempotent hit: exact same payload received repeatedly
         return {
           ingestionRecord: existing,
@@ -57,13 +60,28 @@ export class IngestSourceRecord {
           isNewRecord: false,
         };
       }
+      if (existing.status === "PUBLISHED") {
+        const normalized = NormalizationPipelineService.normalize(rawPayload, { externalIdentifierSource: sourceId });
+        const record = await this.repository.saveIngestionRecord({
+          sourceId,
+          sourceExternalId,
+          entityType: entityType || existing.entityType,
+          rawPayload: rawPayloadJson,
+          payloadHash,
+          status: "NEEDS_REVIEW",
+          normalizedData: normalized as unknown as Record<string, unknown>,
+          matchedItemId: existing.matchedItemId,
+          errorMessage: "Published source payload changed and requires manual review",
+        });
+        return { ingestionRecord: record, isDuplicatePayload: false, isNewRecord: false };
+      }
     }
 
     // 4. Normalize payload safely
     let normalized;
     let normalizeError: string | null = null;
     try {
-      normalized = NormalizationPipelineService.normalize(rawPayload);
+      normalized = NormalizationPipelineService.normalize(rawPayload, { externalIdentifierSource: sourceId });
     } catch (err: any) {
       normalizeError = err.message || "Failed to normalize raw payload";
     }
@@ -93,54 +111,15 @@ export class IngestSourceRecord {
       {
         findItemBySourceExternalRef: async (sId, extId) => {
           const rec = await this.repository.getIngestionRecordBySourceExternalId(sId, extId);
-          return rec?.matchedItemId ? { id: rec.matchedItemId } : null;
+          if (!rec?.matchedItemId) return null;
+          const item = await this.repository.getItemById(rec.matchedItemId);
+          return item?.isActive ? { id: item.id } : null;
         },
-        findItemByGlobalIdentifier: async (type, val) => {
-          const item = await this.repository.lookupByIdentifier({
-            identifierType: type as any,
-            value: val,
-          });
-          return item ? { id: item.id } : null;
-        },
-        findItemByManufacturerMpn: async (mId, mName, mpn) => {
-          const res = await this.repository.searchItems({
-            query: mpn,
-            limit: 10,
-          });
-          const matched = res.items.find(
-            it => {
-              const mfrMatch = (mId && it.manufacturerId === mId) ||
-                (mName && it.manufacturer?.name.toLowerCase() === mName.toLowerCase());
-              if (!mfrMatch) return false;
-              return it.modelNumber?.toUpperCase() === mpn.toUpperCase() ||
-                     it.identifiers.some(id => id.identifierType === "MPN" && id.normalizedValue === mpn);
-            }
-          );
-          return matched ? { id: matched.id } : null;
-        },
-        findItemByManufacturerModel: async (mId, mName, model) => {
-          const res = await this.repository.searchItems({
-            modelNumber: model,
-            limit: 10,
-          });
-          const matched = res.items.find(
-            it => {
-              const mfrMatch = (mId && it.manufacturerId === mId) ||
-                (mName && it.manufacturer?.name.toLowerCase() === mName.toLowerCase());
-              if (!mfrMatch) return false;
-              return it.modelNumber?.toUpperCase() === model.toUpperCase();
-            }
-          );
-          return matched ? { id: matched.id } : null;
-        },
+        findItemsByGlobalIdentifier: async (type, val) => (await this.repository.findActiveItemIdsByIdentifier({ identifierType: type as any, value: val })).map(id => ({ id })),
+        findItemsByManufacturerMpn: async (mName, mpn) => (await this.repository.findActiveItemIdsByManufacturerIdentifier(mName, "MPN", mpn)).map(id => ({ id })),
+        findItemsByManufacturerModel: async (mName, model) => (await this.repository.findActiveItemIdsByManufacturerModel(mName, model)).map(id => ({ id })),
         findItemsByConservativeName: async (name, mName) => {
-          const res = await this.repository.searchItems({
-            query: name,
-            limit: 5,
-          });
-          return res.items
-            .filter(it => it.name.toLowerCase() === name && (!mName || it.manufacturer?.name.toLowerCase() === mName.toLowerCase()))
-            .map(it => ({ id: it.id }));
+          return (await this.repository.findActiveItemIdsByName(name, mName)).map(id => ({ id }));
         },
       }
     );
