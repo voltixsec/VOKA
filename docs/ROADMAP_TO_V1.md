@@ -577,7 +577,7 @@ governed by [ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
 
 ## Universal Commercial Library — Approved Architecture Track
 
-Status: **UCL-1 through UCL-3 MERGED TO MAIN through `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a`; UCL-4 is implemented in PR #63, CTO-reviewed locally, and pending merge. Production deployment is not implied.**
+Status: **UCL-1 through UCL-3 MERGED TO MAIN through `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a`; UCL-4 MERGED IN PR #63; UCL-5 IMPLEMENTED & VALIDATED LOCALLY / PENDING PR REVIEW & CTO MERGE ON FEATURE BRANCH.**
 
 The Universal Commercial Library is an approved long-term VOKA capability.
 
@@ -601,17 +601,16 @@ Mandatory performance contract:
 - optional virtualization for large UI result sets;
 - small AI candidate retrieval rather than full-catalog prompts;
 - caching where safe;
-- future hybrid lexical / semantic retrieval.
+- optional hybrid lexical / semantic retrieval.
 
 Implementation sequence:
 
 1. **UCL-1 — global identity, taxonomy, provenance, adoption and retrieval contracts (DELIVERED).**
 2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (MERGED).**
 3. **UCL-3 — ingestion, normalization, entity resolution, quality and confidence (MERGED; no external data ingested).**
-4. **UCL-4 — hybrid Company Catalog + Universal Library AI retrieval (IMPLEMENTED IN PR #63 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE).**
-5. UCL-5 — semantic/vector search, caching, ranking and scale validation.
-6. UCL-6 — controlled large-scale external data ingestion and ongoing
-   enrichment.
+4. **UCL-4 — hybrid Company Catalog + Universal Library AI retrieval (MERGED).**
+5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (IMPLEMENTED & VALIDATED; PENDING PR MERGE).**
+6. UCL-6 — controlled large-scale external data ingestion and ongoing enrichment.
 
 No UCL implementation phase may weaken existing tenant isolation, pricing,
 taxation, document snapshot or historical integrity guarantees.

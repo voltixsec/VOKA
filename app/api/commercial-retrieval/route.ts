@@ -3,6 +3,7 @@ import {
   PrismaHybridRetrievalRepository,
   RetrieveCommercialCandidates,
   toAICandidateProjection,
+  SearchStrategy,
 } from "@/features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,16 @@ function parseBoundedText(value: string | null, field: string, maxLength: number
   return normalized;
 }
 
+function parseStrategy(value: string | null): SearchStrategy | undefined {
+  if (!value) return undefined;
+  if (value === "lexical" || value === "hybrid") return value;
+  throw ApiError.badRequest(
+    "INVALID_STRATEGY",
+    "strategy must be 'lexical' or 'hybrid'.",
+    { field: "strategy" }
+  );
+}
+
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request: Request, _auth, company) => {
@@ -90,6 +101,7 @@ export const GET = withCompanyAuth(
       throw ApiError.badRequest("INACTIVE_RETRIEVAL_NOT_ALLOWED", "Commercial retrieval only returns active candidates.", { field: "isActive" });
     }
     const limit = parseLimit(searchParams.get("limit"));
+    const strategy = parseStrategy(searchParams.get("strategy"));
 
     const result = await retrieveCommercialCandidates.execute({
       companyId: company.companyId,
@@ -101,6 +113,7 @@ export const GET = withCompanyAuth(
       locale,
       isActive: true,
       limit,
+      strategy,
     });
 
     return apiSuccess(result.candidates.map(toAICandidateProjection), {
