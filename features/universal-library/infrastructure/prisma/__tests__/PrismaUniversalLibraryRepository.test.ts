@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { PrismaUniversalLibraryRepository, UniversalAdoptionError } from "../PrismaUniversalLibraryRepository";
+import {
+  AmbiguousUniversalIdentifierError,
+  PrismaUniversalLibraryRepository,
+  UniversalAdoptionError,
+} from "../PrismaUniversalLibraryRepository";
 
 const now = new Date("2026-08-21T12:00:00.000Z");
 const item = (id: string) => ({
@@ -125,14 +129,14 @@ describe("PrismaUniversalLibraryRepository", () => {
   });
 
   it("looks up items by exact typed identifier", async () => {
-    const findFirst = vi.fn().mockResolvedValue({
+    const findMany = vi.fn().mockResolvedValue([{
       id: "ident-1", universalItemId: "item-1", identifierType: "GTIN_13",
       value: "6941218201234", normalizedValue: "6941218201234", source: null,
       createdAt: now, updatedAt: now,
       universalItem: item("item-1"),
-    });
+    }]);
     const repository = new PrismaUniversalLibraryRepository({
-      universalItemIdentifier: { findFirst },
+      universalItemIdentifier: { findMany },
     } as any);
 
     const result = await repository.lookupByIdentifier({
@@ -140,9 +144,77 @@ describe("PrismaUniversalLibraryRepository", () => {
     });
 
     expect(result?.id).toBe("item-1");
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { identifierType: "GTIN_13", normalizedValue: "6941218201234" },
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        identifierType: "GTIN_13",
+        normalizedValue: "6941218201234",
+        universalItem: { isActive: true },
+      }),
+      take: 2,
     }));
+  });
+
+  it("requires manufacturer scope for MPN lookup and preserves exact scoped matching", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: { findMany },
+    } as any);
+    await expect(repository.lookupByIdentifier({
+      identifierType: "MPN", value: "ds-2cd",
+    })).rejects.toMatchObject({ code: "IDENTIFIER_MANUFACTURER_REQUIRED" });
+    await repository.lookupByIdentifier({
+      identifierType: "MPN", value: " ds-2cd ", manufacturerId: "mfg-1",
+    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        identifierType: "MPN",
+        normalizedValue: "DS-2CD",
+        manufacturerId: "mfg-1",
+      }),
+    }));
+  });
+
+  it("preserves case for source-scoped external identifiers", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: { findMany },
+    } as any);
+    await repository.lookupByIdentifier({
+      identifierType: "EXTERNAL_ID", value: " AbC-123 ", source: "vendor-a",
+    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        normalizedValue: "AbC-123",
+        source: "vendor-a",
+      }),
+    }));
+  });
+
+  it("fails safely if corrupted data makes exact identifier lookup ambiguous", async () => {
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: {
+        findMany: vi.fn().mockResolvedValue([
+          { universalItem: item("item-1") },
+          { universalItem: item("item-2") },
+        ]),
+      },
+    } as any);
+    await expect(repository.lookupByIdentifier({
+      identifierType: "GTIN_13", value: "6941218201234",
+    })).rejects.toBeInstanceOf(AmbiguousUniversalIdentifierError);
+  });
+
+  it("keeps list search projections bounded and excludes detail-only collections", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalCatalogItem: { findMany, count: vi.fn().mockResolvedValue(0) },
+    } as any);
+    await repository.searchItems({ query: "camera" });
+    const include = findMany.mock.calls[0][0].include;
+    expect(include).not.toHaveProperty("aliases");
+    expect(include).not.toHaveProperty("identifiers");
+    expect(include).not.toHaveProperty("attributeValues");
+    expect(include).not.toHaveProperty("provenances");
   });
 
   it("returns an existing zero-price adoption without writing", async () => {

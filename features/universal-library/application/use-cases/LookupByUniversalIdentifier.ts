@@ -7,6 +7,8 @@ import {
 export interface LookupByUniversalIdentifierInput {
   identifierType: UniversalIdentifierType;
   value: string;
+  manufacturerId?: string;
+  source?: string;
 }
 
 export class LookupByUniversalIdentifier {
@@ -22,6 +24,10 @@ export class LookupByUniversalIdentifier {
     return this.repository.lookupByIdentifier({
       identifierType: input.identifierType,
       value: input.value.trim(),
+      ...(input.manufacturerId?.trim()
+        ? { manufacturerId: input.manufacturerId.trim() }
+        : {}),
+      ...(input.source?.trim() ? { source: input.source.trim() } : {}),
     });
   }
 }

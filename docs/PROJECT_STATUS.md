@@ -484,7 +484,7 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 ## Universal Commercial Library Architecture & UCL-2 Identity Enrichment
 
-Status: **UCL-2 Identity Enrichment IMPLEMENTED / VERIFIED / PENDING MERGE on branch `feature/ucl-2-commercial-identity-enrichment`.**
+Status: **UCL-2 Identity Enrichment IMPLEMENTED in PR #61 / CTO REVIEW VERIFIED / PENDING MERGE on branch `feature/ucl-2-commercial-identity-enrichment-14889466178845048672`.**
 
 ADR-011 establishes VOKA's shared Universal Commercial Library while
 preserving the existing Company Catalog as tenant-owned operational master data.

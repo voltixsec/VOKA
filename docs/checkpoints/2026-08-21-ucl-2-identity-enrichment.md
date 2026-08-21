@@ -2,9 +2,9 @@
 
 Date: 2026-08-21
 
-Status: IMPLEMENTED / VERIFIED / PENDING MERGE
+Status: IMPLEMENTED IN PR #61 / CTO REVIEW VERIFIED / PENDING MERGE
 
-Branch: `feature/ucl-2-commercial-identity-enrichment`
+Branch: `feature/ucl-2-commercial-identity-enrichment-14889466178845048672`
 
 Base: `fb1ac46f4cf47b4693966826f5cf374496efa582` (UCL-1 Foundation)
 
@@ -21,7 +21,7 @@ It introduces manufacturers, brands, product families, model and variant relatio
 - `UniversalBrand`: Brand identity with optional manufacturer ownership link (`logoUrl`, `manufacturerId`).
 - `UniversalProductFamily`: Product family/series classification (`brandId`).
 - `UniversalItemAlias`: Multilingual monikers, synonyms, and search aliases (`universalItemId`, `alias`, `locale`, `aliasType`).
-- `UniversalItemIdentifier`: Exact typed external identifiers (`GTIN`, `EAN`, `UPC`, `MPN`, `MODEL_NO`, `EXTERNAL_ID`) with normalized upper-case lookup semantics.
+- `UniversalItemIdentifier`: Exact typed external identifiers with numeric global identity, manufacturer-scoped MPN/model identity, and source-scoped external identity.
 - `UniversalAttributeDefinition`: Flexible specification attribute definitions (`code`, `dataType`, `unitOfMeasure`, `isRequired`).
 - `UniversalItemAttributeValue`: Structured specification values linked to definitions (`valueString`, `valueNumber`, `valueBoolean`, `valueJson`, `unit`).
 - `UniversalCatalogItem` enrichment: added relationships/fields for `manufacturerId`, `brandId`, `familyId`, `modelNumber`, `variantName`, parent/child hierarchy (`parentId`, `variants`), `aliases`, `identifiers`, and `attributeValues`.
@@ -37,7 +37,7 @@ It introduces manufacturers, brands, product families, model and variant relatio
 
 ### 3. Infrastructure & API Surface
 - Repository: `PrismaUniversalLibraryRepository` implements bounded search for manufacturers, brands, exact typed identifier lookup, alias/model filtering, and attribute mapping.
-- Bounded Retrieval Guarantee: Bounded limit (max 50) and cursor pagination preserved across all endpoints.
+- Bounded Retrieval Guarantee: item search retains deterministic cursor pagination; manufacturer and brand searches enforce a maximum of 50 results.
 - API Endpoints:
   - `GET /api/universal-library/manufacturers`
   - `GET /api/universal-library/brands`
@@ -55,4 +55,5 @@ It introduces manufacturers, brands, product families, model and variant relatio
 
 1. **NO EXTERNAL DATASETS INGESTED**: This phase provides schema and application capabilities only. Internet dataset scraping or mass commercial dataset ingestion belongs to a later controlled phase (UCL-6).
 2. **UCL-3 NOT STARTED**: Ingestion, normalization, entity resolution, and confidence scoring remain deferred to Phase UCL-3.
-3. **PENDING MERGE**: UCL-2 changes are committed to `feature/ucl-2-commercial-identity-enrichment` and pending PR review.
+3. **PENDING MERGE**: UCL-2 is implemented in PR #61 on `feature/ucl-2-commercial-identity-enrichment-14889466178845048672`. The migration is not deployed.
+4. **FOUNDATION ONLY**: No seed product dataset or external commercial dataset was added, and UCL-3 has not started.

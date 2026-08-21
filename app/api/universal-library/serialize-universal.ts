@@ -112,7 +112,7 @@ export function serializeUniversalIdentifier(ident: UniversalItemIdentifier) {
     universalItemId: ident.universalItemId,
     identifierType: ident.identifierType,
     value: ident.value,
-    normalizedValue: ident.normalizedValue,
+    manufacturerId: ident.manufacturerId,
     source: ident.source,
     createdAt: ident.createdAt.toISOString(),
     updatedAt: ident.updatedAt.toISOString(),

@@ -23,6 +23,8 @@ export interface SearchUniversalLibraryParams {
   modelNumber?: string;
   identifierType?: UniversalIdentifierType;
   identifierValue?: string;
+  identifierManufacturerId?: string;
+  identifierSource?: string;
   isActive?: boolean;
   limit?: number;
   cursor?: string;
@@ -57,6 +59,8 @@ export interface SearchBrandsParams {
 export interface LookupIdentifierParams {
   identifierType: UniversalIdentifierType;
   value: string;
+  manufacturerId?: string;
+  source?: string;
 }
 
 export interface AdoptUniversalItemParams {

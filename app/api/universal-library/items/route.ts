@@ -3,6 +3,7 @@ import type { UniversalIdentifierType } from "../../../../lib/generated/prisma/c
 import {
   PrismaUniversalLibraryRepository,
   InvalidUniversalCursorError,
+  InvalidUniversalIdentifierError,
   SearchUniversalLibrary,
 } from "../../../../features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "../../../../lib/api";
@@ -47,9 +48,10 @@ function parsePositiveInteger(value: string | null): number | undefined {
 }
 
 function parseBoolean(value: string | null): boolean | undefined {
+  if (value === null) return undefined;
   if (value === "true") return true;
   if (value === "false") return false;
-  return undefined;
+  throw ApiError.badRequest("INVALID_BOOLEAN", "Boolean filter must be true or false.");
 }
 
 export const GET = withCompanyAuth(
@@ -85,6 +87,15 @@ export const GET = withCompanyAuth(
     const familyId = searchParams.get("familyId") ?? undefined;
     const modelNumber = searchParams.get("modelNumber") ?? undefined;
     const identifierValue = searchParams.get("identifierValue") ?? undefined;
+    const identifierManufacturerId =
+      searchParams.get("identifierManufacturerId") ?? undefined;
+    const identifierSource = searchParams.get("identifierSource") ?? undefined;
+    if (Boolean(rawIdentifierType) !== Boolean(identifierValue?.trim())) {
+      throw ApiError.badRequest(
+        "INCOMPLETE_IDENTIFIER_FILTER",
+        "identifierType and identifierValue must be supplied together."
+      );
+    }
     const isActive = parseBoolean(searchParams.get("isActive"));
     const limit = parsePositiveInteger(searchParams.get("limit"));
     const cursor = searchParams.get("cursor") ?? undefined;
@@ -101,6 +112,8 @@ export const GET = withCompanyAuth(
         modelNumber,
         identifierType: rawIdentifierType as UniversalIdentifierType | undefined,
         identifierValue,
+        identifierManufacturerId,
+        identifierSource,
         isActive,
         limit,
         cursor,
@@ -108,6 +121,9 @@ export const GET = withCompanyAuth(
     } catch (error) {
       if (error instanceof InvalidUniversalCursorError) {
         throw ApiError.badRequest("INVALID_CURSOR", "Universal Library cursor is invalid.");
+      }
+      if (error instanceof InvalidUniversalIdentifierError) {
+        throw ApiError.badRequest(error.code, "Identifier value or scope is invalid.");
       }
       throw error;
     }

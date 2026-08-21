@@ -969,6 +969,7 @@ enum UniversalAttributeDataType {
   BOOLEAN
   DECIMAL
   SELECT
+  JSON
 }
 
 model UniversalCategory {
@@ -996,7 +997,7 @@ model UniversalCategory {
 
 model UniversalManufacturer {
   id          String   @id @default(cuid())
-  code        String?  @unique
+  code        String?
   name        String
   nameAr      String?
   nameEn      String?
@@ -1007,9 +1008,11 @@ model UniversalManufacturer {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  brands UniversalBrand[]
-  items  UniversalCatalogItem[]
+  brands      UniversalBrand[]
+  items       UniversalCatalogItem[]
+  identifiers UniversalItemIdentifier[]
 
+  @@index([code])
   @@index([isActive])
   @@index([name])
 }
@@ -1017,7 +1020,7 @@ model UniversalManufacturer {
 model UniversalBrand {
   id             String   @id @default(cuid())
   manufacturerId String?
-  code           String?  @unique
+  code           String?
   name           String
   nameAr         String?
   nameEn         String?
@@ -1032,6 +1035,7 @@ model UniversalBrand {
   items           UniversalCatalogItem[]
 
   @@index([manufacturerId])
+  @@index([code])
   @@index([isActive])
   @@index([name])
 }
@@ -1039,7 +1043,7 @@ model UniversalBrand {
 model UniversalProductFamily {
   id          String   @id @default(cuid())
   brandId     String?
-  code        String?  @unique
+  code        String?
   name        String
   nameAr      String?
   nameEn      String?
@@ -1052,6 +1056,7 @@ model UniversalProductFamily {
   items UniversalCatalogItem[]
 
   @@index([brandId])
+  @@index([code])
   @@index([isActive])
   @@index([name])
 }
@@ -1133,7 +1138,7 @@ model UniversalItemAlias {
 
   universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
 
-  @@unique([universalItemId, alias, locale])
+  @@index([universalItemId, alias, locale])
   @@index([universalItemId])
   @@index([alias])
 }
@@ -1144,14 +1149,17 @@ model UniversalItemIdentifier {
   identifierType  UniversalIdentifierType
   value           String
   normalizedValue String
+  manufacturerId  String?
   source          String?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
-  universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+  universalItem UniversalCatalogItem   @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+  manufacturer  UniversalManufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: Restrict)
 
   @@unique([universalItemId, identifierType, normalizedValue])
   @@index([universalItemId])
+  @@index([manufacturerId])
   @@index([identifierType, normalizedValue])
   @@index([normalizedValue])
 }
@@ -1159,7 +1167,7 @@ model UniversalItemIdentifier {
 model UniversalAttributeDefinition {
   id            String                     @id @default(cuid())
   categoryId    String?
-  code          String                     @unique
+  code          String
   name          String
   nameAr        String?
   nameEn        String?

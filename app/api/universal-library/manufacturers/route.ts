@@ -22,9 +22,10 @@ function parsePositiveInteger(value: string | null): number | undefined {
 }
 
 function parseBoolean(value: string | null): boolean | undefined {
+  if (value === null) return undefined;
   if (value === "true") return true;
   if (value === "false") return false;
-  return undefined;
+  throw ApiError.badRequest("INVALID_BOOLEAN", "Boolean filter must be true or false.");
 }
 
 export const GET = withCompanyAuth(

@@ -17,6 +17,8 @@ export interface SearchUniversalLibraryInput {
   modelNumber?: string;
   identifierType?: UniversalIdentifierType;
   identifierValue?: string;
+  identifierManufacturerId?: string;
+  identifierSource?: string;
   isActive?: boolean;
   limit?: number;
   cursor?: string;
@@ -39,6 +41,8 @@ export class SearchUniversalLibrary {
       modelNumber: input.modelNumber?.trim() || undefined,
       identifierType: input.identifierType,
       identifierValue: input.identifierValue?.trim() || undefined,
+      identifierManufacturerId: input.identifierManufacturerId?.trim() || undefined,
+      identifierSource: input.identifierSource?.trim() || undefined,
       isActive: input.isActive ?? true,
       limit: boundedLimit,
       cursor: input.cursor,

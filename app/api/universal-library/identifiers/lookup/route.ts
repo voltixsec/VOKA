@@ -2,6 +2,8 @@ import type { UniversalIdentifierType } from "../../../../../lib/generated/prism
 import {
   LookupByUniversalIdentifier,
   PrismaUniversalLibraryRepository,
+  AmbiguousUniversalIdentifierError,
+  InvalidUniversalIdentifierError,
 } from "../../../../../features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "../../../../../lib/api";
 import { prisma } from "../../../../../lib/prisma";
@@ -32,6 +34,8 @@ export const GET = withCompanyAuth(
     const searchParams = new URL(request.url).searchParams;
     const type = searchParams.get("type");
     const value = searchParams.get("value") ?? searchParams.get("v");
+    const manufacturerId = searchParams.get("manufacturerId") ?? undefined;
+    const source = searchParams.get("source") ?? undefined;
 
     if (!type || !allowedIdentifierTypes.includes(type as UniversalIdentifierType)) {
       throw ApiError.badRequest(
@@ -49,10 +53,26 @@ export const GET = withCompanyAuth(
       );
     }
 
-    const item = await lookupByUniversalIdentifier.execute({
-      identifierType: type as UniversalIdentifierType,
-      value: value.trim(),
-    });
+    let item;
+    try {
+      item = await lookupByUniversalIdentifier.execute({
+        identifierType: type as UniversalIdentifierType,
+        value: value.trim(),
+        manufacturerId,
+        source,
+      });
+    } catch (error) {
+      if (error instanceof InvalidUniversalIdentifierError) {
+        throw ApiError.badRequest(error.code, "Identifier value or scope is invalid.");
+      }
+      if (error instanceof AmbiguousUniversalIdentifierError) {
+        throw ApiError.conflict(
+          "AMBIGUOUS_UNIVERSAL_IDENTIFIER",
+          "Identifier matched more than one universal item."
+        );
+      }
+      throw error;
+    }
 
     if (!item) {
       throw ApiError.notFound(

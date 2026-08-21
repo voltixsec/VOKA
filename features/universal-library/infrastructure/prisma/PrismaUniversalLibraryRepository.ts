@@ -25,6 +25,7 @@ import {
   UniversalAttributeDefinition,
   UniversalItemAttributeValue,
   VerificationStatus,
+  normalizeUniversalIdentifier,
 } from "../../domain";
 
 export class PrismaUniversalLibraryRepository implements IUniversalLibraryRepository {
@@ -52,7 +53,14 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
             identifiers: {
               some: {
                 identifierType: params.identifierType,
-                normalizedValue: params.identifierValue.trim().toUpperCase(),
+                ...normalizeUniversalIdentifier(
+                  params.identifierType,
+                  params.identifierValue,
+                  {
+                    manufacturerId: params.identifierManufacturerId,
+                    source: params.identifierSource,
+                  }
+                ),
               },
             },
           }
@@ -106,19 +114,6 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         family: {
           include: {
             brand: true,
-          },
-        },
-        parent: true,
-        aliases: true,
-        identifiers: true,
-        attributeValues: {
-          include: {
-            attributeDefinition: true,
-          },
-        },
-        provenances: {
-          include: {
-            source: true,
           },
         },
       },
@@ -217,7 +212,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       include: {
         parent: true,
       },
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ name: "asc" }, { id: "asc" }],
       take: Math.max(1, Math.min(params.limit ?? 50, 100)),
     });
 
@@ -258,7 +253,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 
     const records = await this.prisma.universalManufacturer.findMany({
       where: whereClause,
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ name: "asc" }, { id: "asc" }],
       take: limit,
     });
 
@@ -297,7 +292,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       include: {
         manufacturer: true,
       },
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ name: "asc" }, { id: "asc" }],
       take: limit,
     });
 
@@ -318,12 +313,19 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
   public async lookupByIdentifier(
     params: LookupIdentifierParams
   ): Promise<UniversalCatalogItem | null> {
-    const normalizedValue = params.value.trim().toUpperCase();
+    const normalized = normalizeUniversalIdentifier(
+      params.identifierType,
+      params.value,
+      { manufacturerId: params.manufacturerId, source: params.source }
+    );
 
-    const identifierRecord = await this.prisma.universalItemIdentifier.findFirst({
+    const identifierRecords = await this.prisma.universalItemIdentifier.findMany({
       where: {
         identifierType: params.identifierType,
-        normalizedValue,
+        normalizedValue: normalized.normalizedValue,
+        ...(normalized.manufacturerId ? { manufacturerId: normalized.manufacturerId } : {}),
+        ...(normalized.source ? { source: normalized.source } : {}),
+        universalItem: { isActive: true },
       },
       include: {
         universalItem: {
@@ -356,9 +358,14 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
           },
         },
       },
+      take: 2,
     });
 
-    if (!identifierRecord || !identifierRecord.universalItem) {
+    if (identifierRecords.length > 1) {
+      throw new AmbiguousUniversalIdentifierError();
+    }
+    const identifierRecord = identifierRecords[0];
+    if (!identifierRecord?.universalItem) {
       return null;
     }
 
@@ -666,6 +673,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       identifierType: record.identifierType,
       value: record.value,
       normalizedValue: record.normalizedValue,
+      manufacturerId: record.manufacturerId,
       source: record.source,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -800,6 +808,12 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 export class InvalidUniversalCursorError extends Error {
   constructor() {
     super("Universal Library cursor is invalid.");
+  }
+}
+
+export class AmbiguousUniversalIdentifierError extends Error {
+  constructor() {
+    super("Universal identifier resolved ambiguously.");
   }
 }
 

@@ -6,6 +6,7 @@ export interface UniversalItemIdentifierProps {
   identifierType: UniversalIdentifierType;
   value: string;
   normalizedValue: string;
+  manufacturerId?: string | null;
   source?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -17,6 +18,7 @@ export class UniversalItemIdentifier {
   public readonly identifierType: UniversalIdentifierType;
   public readonly value: string;
   public readonly normalizedValue: string;
+  public readonly manufacturerId: string | null;
   public readonly source: string | null;
   public readonly createdAt: Date;
   public readonly updatedAt: Date;
@@ -26,7 +28,8 @@ export class UniversalItemIdentifier {
     this.universalItemId = props.universalItemId;
     this.identifierType = props.identifierType;
     this.value = props.value;
-    this.normalizedValue = props.normalizedValue ?? props.value.toUpperCase().trim();
+    this.normalizedValue = props.normalizedValue;
+    this.manufacturerId = props.manufacturerId ?? null;
     this.source = props.source ?? null;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
