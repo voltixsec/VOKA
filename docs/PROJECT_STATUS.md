@@ -533,4 +533,8 @@ UCL-5 Search Intelligence & Scale Validation delivered:
 - Synthetic bounded-retrieval contract harness (`ScaleValidationHarness.test.ts`) exercising declared 10k, 50k, and 100k cardinalities without claiming a database benchmark;
 - Strict strategy validation parameter on `GET /api/commercial-retrieval`.
 
-NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION PERFORMED. SCALE DATA IS SYNTHETIC ONLY. LEXICAL FALLBACK REMAINS AVAILABLE. UCL-6 NOT STARTED. UCL-5 IMPLEMENTATION IS PENDING PR MERGE.
+NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION PERFORMED. SCALE DATA IS SYNTHETIC ONLY. LEXICAL FALLBACK REMAINS AVAILABLE. UCL-5 IS MERGED.
+
+### UCL-6 Controlled Data Acquisition
+
+Status: **IMPLEMENTED ON FEATURE BRANCH / PENDING CTO REVIEW.** UCL-6 adds fail-closed source governance, bounded HTTP/SSRF controls, atomic quota reservation, dry-run, acquisition-run audit, data minimization, and provenance-linked UCL-3 staging. **REAL PILOT EXECUTED: NO.** No external data, canonical items, or tenant Catalog records were created. Migration is not deployed. UCL-7 is not started.

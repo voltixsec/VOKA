@@ -95,6 +95,10 @@ export interface SaveIngestionRecordInput {
   normalizedData?: Record<string, unknown> | null;
   matchedItemId?: string | null;
   errorMessage?: string | null;
+  acquisitionRunId?: string | null;
+  canonicalSourceUrl?: string | null;
+  fetchedAt?: Date | null;
+  attributionText?: string | null;
 }
 
 export interface PublishIngestionRecordInput {

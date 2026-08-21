@@ -610,7 +610,7 @@ Implementation sequence:
 3. **UCL-3 — ingestion, normalization, entity resolution, quality and confidence (MERGED; no external data ingested).**
 4. **UCL-4 — hybrid Company Catalog + Universal Library AI retrieval (MERGED).**
 5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (IMPLEMENTED & VALIDATED; PENDING PR MERGE).**
-6. UCL-6 — controlled large-scale external data ingestion and ongoing enrichment.
+6. **UCL-6 — controlled external data acquisition and source governance (IMPLEMENTED ON FEATURE BRANCH; REAL PILOT NOT EXECUTED; PENDING CTO REVIEW).**
 
 No UCL implementation phase may weaken existing tenant isolation, pricing,
 taxation, document snapshot or historical integrity guarantees.

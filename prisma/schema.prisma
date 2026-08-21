@@ -983,6 +983,36 @@ enum UniversalIngestionStatus {
   FAILED
 }
 
+enum UniversalSourceApprovalState {
+  DRAFT
+  APPROVED
+  PAUSED
+  BLOCKED
+}
+
+enum UniversalPolicyState {
+  UNKNOWN
+  ALLOWED
+  DISALLOWED
+}
+
+enum UniversalSourceHealth {
+  UNKNOWN
+  HEALTHY
+  DEGRADED
+  BLOCKED
+}
+
+enum UniversalAcquisitionRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  BLOCKED
+  CANCELLED
+}
+
 model UniversalCategory {
   id          String   @id @default(cuid())
   parentId    String?
@@ -1073,25 +1103,79 @@ model UniversalProductFamily {
 }
 
 model UniversalSource {
-  id                 String                      @id @default(cuid())
-  name               String
-  type               String
-  externalRef        String?
-  url                String?
-  licenseInfo        String?
-  verificationStatus UniversalVerificationStatus @default(UNVERIFIED)
-  isActive           Boolean                     @default(true)
-  trustScore         Decimal?                    @db.Decimal(3, 2)
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
+  id                         String                       @id @default(cuid())
+  name                       String
+  type                       String
+  externalRef                String?
+  url                        String?
+  licenseInfo                String?
+  verificationStatus         UniversalVerificationStatus  @default(UNVERIFIED)
+  isActive                   Boolean                      @default(true)
+  trustScore                 Decimal?                     @db.Decimal(3, 2)
+  acquisitionMode            String                       @default("HTTP_JSON")
+  licenseReferenceUrl        String?
+  robotsPolicy               String?
+  attributionRequired        Boolean                      @default(false)
+  commercialUseState         UniversalPolicyState         @default(UNKNOWN)
+  redistributionState        UniversalPolicyState         @default(UNKNOWN)
+  maxRequestsPerMinute       Int                          @default(5)
+  maxRecordsPerRun           Int                          @default(100)
+  maxRecordsPerDay           Int                          @default(500)
+  acquisitionTimeoutMs       Int                          @default(10000)
+  maxRetries                 Int                          @default(2)
+  lastAcquisitionSucceededAt DateTime?
+  lastAcquisitionFailedAt    DateTime?
+  healthStatus               UniversalSourceHealth        @default(UNKNOWN)
+  governanceNotes            String?
+  approvalState              UniversalSourceApprovalState @default(DRAFT)
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
 
   itemProvenances  UniversalItemProvenance[]
   ingestionRecords UniversalIngestionRecord[]
+  acquisitionRuns  UniversalAcquisitionRun[]
 
   @@unique([type, externalRef])
   @@index([type])
   @@index([verificationStatus])
   @@index([isActive])
+  @@index([approvalState, isActive])
+  @@index([healthStatus])
+}
+
+model UniversalAcquisitionRun {
+  id                   String                        @id @default(cuid())
+  sourceId             String
+  initiatedByUserId    String
+  dryRun               Boolean
+  status               UniversalAcquisitionRunStatus @default(QUEUED)
+  requestedLimit       Int
+  reservedRequestCount Int                           @default(1)
+  fetchedCount         Int                           @default(0)
+  acceptedCount        Int                           @default(0)
+  stagedCount          Int                           @default(0)
+  duplicateCount       Int                           @default(0)
+  changedCount         Int                           @default(0)
+  reviewRequiredCount  Int                           @default(0)
+  publishedCount       Int                           @default(0)
+  rejectedCount        Int                           @default(0)
+  failedCount          Int                           @default(0)
+  retryCount           Int                           @default(0)
+  continuationCursor   String?
+  safeErrorSummary     String?
+  policySnapshot       Json
+  startedAt            DateTime                      @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+
+  source           UniversalSource            @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  ingestionRecords UniversalIngestionRecord[]
+  provenances      UniversalItemProvenance[]
+
+  @@index([sourceId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
 }
 
 model UniversalIngestionRecord {
@@ -1110,15 +1194,21 @@ model UniversalIngestionRecord {
   processedAt         DateTime?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
+  acquisitionRunId    String?
+  canonicalSourceUrl  String?
+  fetchedAt           DateTime?
+  attributionText     String?
 
-  source      UniversalSource       @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  matchedItem UniversalCatalogItem? @relation(fields: [matchedItemId], references: [id], onDelete: SetNull)
+  source         UniversalSource          @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  matchedItem    UniversalCatalogItem?    @relation(fields: [matchedItemId], references: [id], onDelete: SetNull)
+  acquisitionRun UniversalAcquisitionRun? @relation(fields: [acquisitionRunId], references: [id], onDelete: SetNull)
 
   @@unique([sourceId, sourceExternalId])
   @@index([sourceId])
   @@index([status, processingStartedAt, createdAt])
   @@index([payloadHash])
   @@index([matchedItemId])
+  @@index([acquisitionRunId])
 }
 
 model UniversalCatalogItem {
@@ -1251,21 +1341,28 @@ model UniversalItemAttributeValue {
 }
 
 model UniversalItemProvenance {
-  id              String   @id @default(cuid())
-  universalItemId String
-  sourceId        String
-  externalRef     String?
-  confidence      Decimal? @db.Decimal(3, 2)
-  observedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  universalItemId     String
+  sourceId            String
+  externalRef         String?
+  confidence          Decimal? @db.Decimal(3, 2)
+  observedAt          DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  acquisitionRunId    String?
+  canonicalSourceUrl  String?
+  attributionText     String?
+  licenseReferenceUrl String?
+  rawPayloadHash      String?
 
-  universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
-  source        UniversalSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  universalItem  UniversalCatalogItem     @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+  source         UniversalSource          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  acquisitionRun UniversalAcquisitionRun? @relation(fields: [acquisitionRunId], references: [id], onDelete: SetNull)
 
   @@unique([universalItemId, sourceId])
   @@index([universalItemId])
   @@index([sourceId])
+  @@index([acquisitionRunId])
 }
 
 model UniversalItemAdoption {
