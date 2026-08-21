@@ -1,5 +1,6 @@
 export * from "./UniversalCategory";
 export * from "./UniversalSource";
+export * from "./UniversalIngestionRecord";
 export * from "./UniversalItemProvenance";
 export * from "./UniversalCatalogItem";
 export * from "./UniversalItemAdoption";

@@ -482,9 +482,9 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 <!-- ADR-011-UCL-PROJECT-STATUS -->
 
-## Universal Commercial Library Architecture & UCL-2 Identity Enrichment
+## Universal Commercial Library Architecture & UCL-3 Ingestion Pipeline
 
-Status: **UCL-2 Identity Enrichment IMPLEMENTED in PR #61 / CTO REVIEW VERIFIED / PENDING MERGE on branch `feature/ucl-2-commercial-identity-enrichment-14889466178845048672`.**
+Status: **UCL-2 MERGED TO MAIN at `3834be9ff1a94bbe501fe69dd8ef4d7257e4efae`; UCL-3 IMPLEMENTED in PR #62 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE.**
 
 ADR-011 establishes VOKA's shared Universal Commercial Library while
 preserving the existing Company Catalog as tenant-owned operational master data.
@@ -507,4 +507,11 @@ UCL-2 Commercial Identity Enrichment delivered:
 - API endpoints for `/api/universal-library/manufacturers`, `/api/universal-library/brands`, and `/api/universal-library/identifiers/lookup`;
 - Database migration `20260821120000_ucl_2_identity_enrichment`.
 
-NO EXTERNAL DATASETS INGESTED. UCL-3 NOT STARTED.
+UCL-3 ingestion machinery delivered in PR #62:
+- raw source staging, deterministic hashing and source-scoped idempotency;
+- conservative normalization and identity resolution;
+- bounded atomic batch processing and transactional publication;
+- OWNER/ADMIN-only administrative APIs;
+- migration `20260821180000_ucl_3_ingestion_normalization`.
+
+NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. UCL-4 NOT STARTED. UCL-3 IS NOT PRODUCTION DEPLOYED.
