@@ -1,7 +1,9 @@
 import { CatalogItemType } from "../../../../features/catalog";
+import type { UniversalIdentifierType } from "../../../../lib/generated/prisma/client";
 import {
   PrismaUniversalLibraryRepository,
   InvalidUniversalCursorError,
+  InvalidUniversalIdentifierError,
   SearchUniversalLibrary,
 } from "../../../../features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "../../../../lib/api";
@@ -23,6 +25,19 @@ const allowedTypes: CatalogItemType[] = [
   "CUSTOM",
 ];
 
+const allowedIdentifierTypes: UniversalIdentifierType[] = [
+  "GTIN",
+  "GTIN_8",
+  "GTIN_12",
+  "GTIN_13",
+  "GTIN_14",
+  "EAN",
+  "UPC",
+  "MPN",
+  "MODEL_NO",
+  "EXTERNAL_ID",
+];
+
 function parsePositiveInteger(value: string | null): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
@@ -33,9 +48,10 @@ function parsePositiveInteger(value: string | null): number | undefined {
 }
 
 function parseBoolean(value: string | null): boolean | undefined {
+  if (value === null) return undefined;
   if (value === "true") return true;
   if (value === "false") return false;
-  return undefined;
+  throw ApiError.badRequest("INVALID_BOOLEAN", "Boolean filter must be true or false.");
 }
 
 export const GET = withCompanyAuth(
@@ -52,8 +68,34 @@ export const GET = withCompanyAuth(
       );
     }
 
+    const rawIdentifierType = searchParams.get("identifierType");
+    if (
+      rawIdentifierType &&
+      !allowedIdentifierTypes.includes(rawIdentifierType as UniversalIdentifierType)
+    ) {
+      throw ApiError.badRequest(
+        "INVALID_IDENTIFIER_TYPE",
+        "Identifier type is invalid.",
+        { field: "identifierType" }
+      );
+    }
+
     const query = searchParams.get("q") ?? searchParams.get("query") ?? undefined;
     const categoryId = searchParams.get("categoryId") ?? undefined;
+    const manufacturerId = searchParams.get("manufacturerId") ?? undefined;
+    const brandId = searchParams.get("brandId") ?? undefined;
+    const familyId = searchParams.get("familyId") ?? undefined;
+    const modelNumber = searchParams.get("modelNumber") ?? undefined;
+    const identifierValue = searchParams.get("identifierValue") ?? undefined;
+    const identifierManufacturerId =
+      searchParams.get("identifierManufacturerId") ?? undefined;
+    const identifierSource = searchParams.get("identifierSource") ?? undefined;
+    if (Boolean(rawIdentifierType) !== Boolean(identifierValue?.trim())) {
+      throw ApiError.badRequest(
+        "INCOMPLETE_IDENTIFIER_FILTER",
+        "identifierType and identifierValue must be supplied together."
+      );
+    }
     const isActive = parseBoolean(searchParams.get("isActive"));
     const limit = parsePositiveInteger(searchParams.get("limit"));
     const cursor = searchParams.get("cursor") ?? undefined;
@@ -64,6 +106,14 @@ export const GET = withCompanyAuth(
         query,
         type: rawType as CatalogItemType | undefined,
         categoryId,
+        manufacturerId,
+        brandId,
+        familyId,
+        modelNumber,
+        identifierType: rawIdentifierType as UniversalIdentifierType | undefined,
+        identifierValue,
+        identifierManufacturerId,
+        identifierSource,
         isActive,
         limit,
         cursor,
@@ -71,6 +121,9 @@ export const GET = withCompanyAuth(
     } catch (error) {
       if (error instanceof InvalidUniversalCursorError) {
         throw ApiError.badRequest("INVALID_CURSOR", "Universal Library cursor is invalid.");
+      }
+      if (error instanceof InvalidUniversalIdentifierError) {
+        throw ApiError.badRequest(error.code, "Identifier value or scope is invalid.");
       }
       throw error;
     }

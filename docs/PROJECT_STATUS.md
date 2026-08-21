@@ -482,9 +482,9 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 <!-- ADR-011-UCL-PROJECT-STATUS -->
 
-## Universal Commercial Library Architecture & UCL-1 Foundation
+## Universal Commercial Library Architecture & UCL-2 Identity Enrichment
 
-Status: **UCL-1 Foundation IMPLEMENTED in PR #60 on feature branch `feature/ucl-1-universal-library-foundation-11068716017962874356`; pending merge and deployment.**
+Status: **UCL-2 Identity Enrichment IMPLEMENTED in PR #61 / CTO REVIEW VERIFIED / PENDING MERGE on branch `feature/ucl-2-commercial-identity-enrichment-14889466178845048672`.**
 
 ADR-011 establishes VOKA's shared Universal Commercial Library while
 preserving the existing Company Catalog as tenant-owned operational master data.
@@ -496,7 +496,15 @@ UCL-1 Foundation delivered:
 - Explicit tenant adoption boundary (`UniversalItemAdoption`, `AdoptUniversalItem`);
 - Server-side technology-independent bounded retrieval (`IUniversalLibraryRepository`, `PrismaUniversalLibraryRepository`, max page size limit 50, cursor pagination);
 - Authenticated API endpoints under `app/api/universal-library/`;
-- Database migration `20260821000000_ucl_1_foundation`;
-- Automated test coverage (130 test files / 785 tests passing).
+- Database migration `20260821000000_ucl_1_foundation`.
 
-Remaining UCL-2+ capabilities (brands/manufacturers/models/variants, ingestion pipeline, AI hybrid retrieval, vector search) are intentionally deferred.
+UCL-2 Commercial Identity Enrichment delivered:
+- Universal manufacturers (`UniversalManufacturer`), brands (`UniversalBrand`), and product families (`UniversalProductFamily`);
+- Model number and variant hierarchy (`parentId`, `modelNumber`, `variantName`, `variants`);
+- Multilingual aliases (`UniversalItemAlias`);
+- Exact typed external identifiers (`UniversalItemIdentifier`: GTIN, EAN, UPC, MPN, MODEL_NO) with normalized exact lookup (`LookupByUniversalIdentifier`);
+- Structured attribute definitions (`UniversalAttributeDefinition`) and typed attribute values (`UniversalItemAttributeValue`);
+- API endpoints for `/api/universal-library/manufacturers`, `/api/universal-library/brands`, and `/api/universal-library/identifiers/lookup`;
+- Database migration `20260821120000_ucl_2_identity_enrichment`.
+
+NO EXTERNAL DATASETS INGESTED. UCL-3 NOT STARTED.

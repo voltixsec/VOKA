@@ -1,4 +1,5 @@
 import { CatalogItemType } from "../../../catalog";
+import type { UniversalIdentifierType } from "@/lib/generated/prisma/client";
 import {
   DEFAULT_UNIVERSAL_SEARCH_LIMIT,
   IUniversalLibraryRepository,
@@ -10,6 +11,14 @@ export interface SearchUniversalLibraryInput {
   query?: string;
   type?: CatalogItemType;
   categoryId?: string;
+  manufacturerId?: string;
+  brandId?: string;
+  familyId?: string;
+  modelNumber?: string;
+  identifierType?: UniversalIdentifierType;
+  identifierValue?: string;
+  identifierManufacturerId?: string;
+  identifierSource?: string;
   isActive?: boolean;
   limit?: number;
   cursor?: string;
@@ -26,6 +35,14 @@ export class SearchUniversalLibrary {
       query: input.query?.trim() || undefined,
       type: input.type,
       categoryId: input.categoryId,
+      manufacturerId: input.manufacturerId,
+      brandId: input.brandId,
+      familyId: input.familyId,
+      modelNumber: input.modelNumber?.trim() || undefined,
+      identifierType: input.identifierType,
+      identifierValue: input.identifierValue?.trim() || undefined,
+      identifierManufacturerId: input.identifierManufacturerId?.trim() || undefined,
+      identifierSource: input.identifierSource?.trim() || undefined,
       isActive: input.isActive ?? true,
       limit: boundedLimit,
       cursor: input.cursor,

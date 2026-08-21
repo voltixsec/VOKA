@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  UniversalCatalogItem,
+  UniversalItemIdentifier,
+} from "../../../../features/universal-library";
+import { serializeUniversalItem } from "../serialize-universal";
 
 vi.mock("../../../../lib/api/with-company-auth", () => ({
   withCompanyAuth: (_roles: string[], handler: any) => {
@@ -124,6 +129,33 @@ vi.mock("../../../../lib/prisma", () => ({
 }));
 
 describe("Universal Library API Surface", () => {
+  it("does not expose internal normalized identifier values", () => {
+    const timestamp = new Date("2026-08-21T00:00:00Z");
+    const serialized = serializeUniversalItem(new UniversalCatalogItem({
+      id: "item-1",
+      type: "PRODUCT",
+      name: "Camera",
+      isActive: true,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      identifiers: [new UniversalItemIdentifier({
+        id: "identifier-1",
+        universalItemId: "item-1",
+        identifierType: "MPN",
+        value: "DS-2CD",
+        normalizedValue: "DS-2CD",
+        manufacturerId: "mfg-1",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })],
+    }));
+    expect(serialized.identifiers[0]).toMatchObject({
+      value: "DS-2CD",
+      manufacturerId: "mfg-1",
+    });
+    expect(serialized.identifiers[0]).not.toHaveProperty("normalizedValue");
+  });
+
   it("GET /api/universal-library/items returns bounded universal results", async () => {
     const { GET } = await import("../items/route");
 
@@ -169,5 +201,31 @@ describe("Universal Library API Surface", () => {
       "http://localhost:3000/api/universal-library/items/ucl-item-1/adopt",
       { method: "POST", body: JSON.stringify(payload) }
     ) as any)).rejects.toMatchObject({ statusCode: 400, details: { field } });
+  });
+
+  it("rejects incomplete identifier filters and malformed boolean filters", async () => {
+    const { GET } = await import("../items/route");
+    await expect(GET(new Request(
+      "http://localhost:3000/api/universal-library/items?identifierType=GTIN_13"
+    ) as any)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INCOMPLETE_IDENTIFIER_FILTER",
+    });
+    await expect(GET(new Request(
+      "http://localhost:3000/api/universal-library/items?isActive=maybe"
+    ) as any)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INVALID_BOOLEAN",
+    });
+  });
+
+  it("requires manufacturer scope for exact MPN lookup", async () => {
+    const { GET } = await import("../identifiers/lookup/route");
+    await expect(GET(new Request(
+      "http://localhost:3000/api/universal-library/identifiers/lookup?type=MPN&value=DS-2CD"
+    ) as any)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "IDENTIFIER_MANUFACTURER_REQUIRED",
+    });
   });
 });

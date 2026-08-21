@@ -3,12 +3,17 @@ import {
   AdoptUniversalItem,
   GetUniversalItem,
   GetUniversalTaxonomy,
+  LookupByUniversalIdentifier,
+  SearchUniversalBrands,
+  SearchUniversalManufacturers,
   SearchUniversalLibrary,
 } from "../index";
 import {
   IUniversalLibraryRepository,
+  UniversalBrand,
   UniversalCatalogItem,
   UniversalCategory,
+  UniversalManufacturer,
 } from "../../../domain";
 
 describe("Universal Library Application Use Cases", () => {
@@ -87,6 +92,71 @@ describe("Universal Library Application Use Cases", () => {
     const getTaxonomy = new GetUniversalTaxonomy({ getCategories } as unknown as IUniversalLibraryRepository);
     await getTaxonomy.execute({ limit: 1000 });
     expect(getCategories).toHaveBeenCalledWith(expect.objectContaining({ limit: 100 }));
+  });
+
+  it("searches manufacturers with bounded limit", async () => {
+    const mockMfg = new UniversalManufacturer({
+      id: "mfg-1",
+      name: "Schneider Electric",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const searchManufacturers = vi.fn().mockResolvedValue([mockMfg]);
+    const repository = { searchManufacturers } as unknown as IUniversalLibraryRepository;
+    const searchMfgUseCase = new SearchUniversalManufacturers(repository);
+
+    const result = await searchMfgUseCase.execute({ query: "Schneider", limit: 200 });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Schneider Electric");
+    expect(searchManufacturers).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "Schneider", limit: 50 })
+    );
+  });
+
+  it("searches brands filtered by manufacturer", async () => {
+    const mockBrand = new UniversalBrand({
+      id: "brand-1",
+      manufacturerId: "mfg-1",
+      name: "APC",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const searchBrands = vi.fn().mockResolvedValue([mockBrand]);
+    const repository = { searchBrands } as unknown as IUniversalLibraryRepository;
+    const searchBrandUseCase = new SearchUniversalBrands(repository);
+
+    const result = await searchBrandUseCase.execute({
+      query: "APC",
+      manufacturerId: "mfg-1",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("APC");
+    expect(searchBrands).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "APC", manufacturerId: "mfg-1", limit: 20 })
+    );
+  });
+
+  it("performs exact typed identifier lookup", async () => {
+    const lookupByIdentifier = vi.fn().mockResolvedValue(mockItem);
+    const repository = { lookupByIdentifier } as unknown as IUniversalLibraryRepository;
+    const lookupUseCase = new LookupByUniversalIdentifier(repository);
+
+    const result = await lookupUseCase.execute({
+      identifierType: "GTIN_13",
+      value: " 6941218201234 ",
+    });
+
+    expect(result?.id).toBe("ucl-1");
+    expect(lookupByIdentifier).toHaveBeenCalledWith({
+      identifierType: "GTIN_13",
+      value: "6941218201234",
+    });
   });
 
   it("rejects adoption of missing or inactive universal items", async () => {

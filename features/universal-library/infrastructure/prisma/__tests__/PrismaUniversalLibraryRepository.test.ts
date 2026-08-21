@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { PrismaUniversalLibraryRepository, UniversalAdoptionError } from "../PrismaUniversalLibraryRepository";
+import {
+  AmbiguousUniversalIdentifierError,
+  PrismaUniversalLibraryRepository,
+  UniversalAdoptionError,
+} from "../PrismaUniversalLibraryRepository";
 
 const now = new Date("2026-08-21T12:00:00.000Z");
 const item = (id: string) => ({
   id, type: "PRODUCT", name: id, nameAr: null, nameEn: null, searchName: id,
   description: null, descriptionAr: null, descriptionEn: null, categoryId: null,
-  isActive: true, createdAt: now, updatedAt: now, category: null, provenances: [],
+  manufacturerId: null, brandId: null, familyId: null, modelNumber: null,
+  variantName: null, parentId: null, isActive: true, createdAt: now, updatedAt: now,
+  category: null, manufacturer: null, brand: null, family: null, parent: null,
+  variants: [], aliases: [], identifiers: [], attributeValues: [], provenances: [],
 });
 const catalog = () => ({
   id: "catalog-1", companyId: "company-1", categoryId: null, unitId: null,
@@ -82,6 +89,132 @@ describe("PrismaUniversalLibraryRepository", () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       take: 100, include: { parent: true },
     }));
+  });
+
+  it("searches manufacturers with bounded limits", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "mfg-1", name: "Hikvision", code: "HIK", countryCode: "CN",
+        websiteUrl: null, description: null, isActive: true, createdAt: now, updatedAt: now,
+      },
+    ]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalManufacturer: { findMany },
+    } as any);
+
+    const result = await repository.searchManufacturers({ query: "Hikvision", limit: 10 });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Hikvision");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 }));
+  });
+
+  it("searches brands with manufacturer filter", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "brand-1", manufacturerId: "mfg-1", code: "HIK-IP", name: "Hikvision IP",
+        logoUrl: null, description: null, isActive: true, createdAt: now, updatedAt: now,
+        manufacturer: null,
+      },
+    ]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalBrand: { findMany },
+    } as any);
+
+    const result = await repository.searchBrands({ manufacturerId: "mfg-1" });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Hikvision IP");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ manufacturerId: "mfg-1" }),
+    }));
+  });
+
+  it("looks up items by exact typed identifier", async () => {
+    const findMany = vi.fn().mockResolvedValue([{
+      id: "ident-1", universalItemId: "item-1", identifierType: "GTIN_13",
+      value: "6941218201234", normalizedValue: "6941218201234", source: null,
+      createdAt: now, updatedAt: now,
+      universalItem: item("item-1"),
+    }]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: { findMany },
+    } as any);
+
+    const result = await repository.lookupByIdentifier({
+      identifierType: "GTIN_13", value: " 6941218201234 ",
+    });
+
+    expect(result?.id).toBe("item-1");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        identifierType: "GTIN_13",
+        normalizedValue: "6941218201234",
+        universalItem: { isActive: true },
+      }),
+      take: 2,
+    }));
+  });
+
+  it("requires manufacturer scope for MPN lookup and preserves exact scoped matching", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: { findMany },
+    } as any);
+    await expect(repository.lookupByIdentifier({
+      identifierType: "MPN", value: "ds-2cd",
+    })).rejects.toMatchObject({ code: "IDENTIFIER_MANUFACTURER_REQUIRED" });
+    await repository.lookupByIdentifier({
+      identifierType: "MPN", value: " ds-2cd ", manufacturerId: "mfg-1",
+    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        identifierType: "MPN",
+        normalizedValue: "DS-2CD",
+        manufacturerId: "mfg-1",
+      }),
+    }));
+  });
+
+  it("preserves case for source-scoped external identifiers", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: { findMany },
+    } as any);
+    await repository.lookupByIdentifier({
+      identifierType: "EXTERNAL_ID", value: " AbC-123 ", source: "vendor-a",
+    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        normalizedValue: "AbC-123",
+        source: "vendor-a",
+      }),
+    }));
+  });
+
+  it("fails safely if corrupted data makes exact identifier lookup ambiguous", async () => {
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: {
+        findMany: vi.fn().mockResolvedValue([
+          { universalItem: item("item-1") },
+          { universalItem: item("item-2") },
+        ]),
+      },
+    } as any);
+    await expect(repository.lookupByIdentifier({
+      identifierType: "GTIN_13", value: "6941218201234",
+    })).rejects.toBeInstanceOf(AmbiguousUniversalIdentifierError);
+  });
+
+  it("keeps list search projections bounded and excludes detail-only collections", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalCatalogItem: { findMany, count: vi.fn().mockResolvedValue(0) },
+    } as any);
+    await repository.searchItems({ query: "camera" });
+    const include = findMany.mock.calls[0][0].include;
+    expect(include).not.toHaveProperty("aliases");
+    expect(include).not.toHaveProperty("identifiers");
+    expect(include).not.toHaveProperty("attributeValues");
+    expect(include).not.toHaveProperty("provenances");
   });
 
   it("returns an existing zero-price adoption without writing", async () => {
