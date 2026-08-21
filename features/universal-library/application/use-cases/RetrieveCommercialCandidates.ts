@@ -4,9 +4,7 @@ import {
   CommercialRankingService,
   IHybridRetrievalRepository,
   IEmbeddingProvider,
-  DeterministicFakeEmbeddingProvider,
   IRetrievalCache,
-  BoundedMemoryRetrievalCache,
   RetrievalObservability,
   SearchStrategy,
   SemanticVectorService,
@@ -40,8 +38,8 @@ export interface RetrieveCommercialCandidatesOutput {
 
 export class RetrieveCommercialCandidates {
   private readonly rankingService: CommercialRankingService;
-  private readonly embeddingProvider: IEmbeddingProvider;
-  private readonly cache: IRetrievalCache<RetrieveCommercialCandidatesOutput>;
+  private readonly embeddingProvider?: IEmbeddingProvider;
+  private readonly cache?: IRetrievalCache<RetrieveCommercialCandidatesOutput>;
 
   constructor(
     private readonly repository: IHybridRetrievalRepository,
@@ -49,8 +47,10 @@ export class RetrieveCommercialCandidates {
     cache?: IRetrievalCache<RetrieveCommercialCandidatesOutput>
   ) {
     this.rankingService = new CommercialRankingService();
-    this.embeddingProvider = embeddingProvider ?? new DeterministicFakeEmbeddingProvider();
-    this.cache = cache ?? new BoundedMemoryRetrievalCache<RetrieveCommercialCandidatesOutput>();
+    this.embeddingProvider = embeddingProvider;
+    // Tenant commercial candidates include mutable price/unit data. Caching is
+    // opt-in so production callers must pair it with an explicit invalidation policy.
+    this.cache = cache;
   }
 
   public async execute(
@@ -80,6 +80,9 @@ export class RetrieveCommercialCandidates {
     }
 
     const query = input.query?.normalize("NFC").replace(/\s+/g, " ").trim() || undefined;
+    if (query && query.length > 200) {
+      throw new Error("query must not exceed 200 characters.");
+    }
 
     // Check Cache
     const cacheKeyParams = {
@@ -94,11 +97,16 @@ export class RetrieveCommercialCandidates {
       strategy: requestedStrategy,
     };
 
-    const cachedResult = await this.cache.get(cacheKeyParams);
+    let cachedResult: RetrieveCommercialCandidatesOutput | null = null;
+    try {
+      cachedResult = this.cache ? await this.cache.get(cacheKeyParams) : null;
+    } catch {
+      // A cache adapter is optional acceleration and must never break retrieval.
+    }
     if (cachedResult) {
-      RetrievalObservability.record({
-        companyId,
-        strategyUsed: requestedStrategy,
+      this.recordObservability({
+        tenantScoped: true,
+        strategyUsed: cachedResult.meta.strategy,
         lexicalCandidateCount: 0,
         semanticCandidateCount: 0,
         finalCandidateCount: cachedResult.candidates.length,
@@ -121,25 +129,32 @@ export class RetrieveCommercialCandidates {
 
     const universalOnlyFilter = Boolean(input.manufacturerId || input.brandId);
 
-    let actualStrategyUsed: SearchStrategy = requestedStrategy;
+    let actualStrategyUsed: SearchStrategy = "lexical";
     let rawSemanticCandidates: CommercialCandidate[] = [];
     let queryEmbedding: number[] | null = null;
 
     // Optional Semantic Path Execution
-    if (requestedStrategy === "hybrid" && query) {
+    if (
+      requestedStrategy === "hybrid" &&
+      query &&
+      this.embeddingProvider &&
+      this.repository.fetchSemanticCandidates
+    ) {
       try {
         queryEmbedding = await this.embeddingProvider.embed(query);
-        if (queryEmbedding && this.repository.fetchSemanticCandidates) {
-          rawSemanticCandidates = await this.repository.fetchSemanticCandidates({
-            queryEmbedding,
-            type: input.type,
-            categoryId: input.categoryId,
-            manufacturerId: input.manufacturerId,
-            brandId: input.brandId,
-            isActive,
-            limit: oversampleLimit,
-          });
+        if (!SemanticVectorService.isValidEmbedding(queryEmbedding, this.embeddingProvider.dimensions)) {
+          throw new Error("Embedding provider returned an invalid query vector.");
         }
+        rawSemanticCandidates = (await this.repository.fetchSemanticCandidates({
+          queryEmbedding,
+          type: input.type,
+          categoryId: input.categoryId,
+          manufacturerId: input.manufacturerId,
+          brandId: input.brandId,
+          isActive,
+          limit: oversampleLimit,
+        })).slice(0, oversampleLimit);
+        actualStrategyUsed = "hybrid";
       } catch {
         // Fallback gracefully to lexical search on embedding provider or index failure
         actualStrategyUsed = "lexical";
@@ -170,7 +185,9 @@ export class RetrieveCommercialCandidates {
 
     // Combine Universal candidates (deduplicating lexical + semantic if any)
     const combinedUniversalMap = new Map<string, CommercialCandidate>();
-    for (const uCand of [...rawUniversalCandidates, ...rawSemanticCandidates]) {
+    // Lexical candidates are canonical projections and win if the semantic adapter
+    // returns the same item with a thinner payload.
+    for (const uCand of [...rawSemanticCandidates, ...rawUniversalCandidates]) {
       if (uCand.linkedUniversalItemId) {
         combinedUniversalMap.set(uCand.linkedUniversalItemId, uCand);
       }
@@ -246,9 +263,12 @@ export class RetrieveCommercialCandidates {
       const catCand = this.localizeCandidate(rawCatCand, input.locale);
 
       let semanticScore: number | undefined;
-      if (queryEmbedding && catCand.displayName) {
+      if (queryEmbedding && this.embeddingProvider && catCand.displayName) {
         try {
           const candidateEmbedding = await this.embeddingProvider.embed(catCand.displayName);
+          if (!SemanticVectorService.isValidEmbedding(candidateEmbedding, this.embeddingProvider.dimensions)) {
+            throw new Error("Embedding provider returned an invalid candidate vector.");
+          }
           semanticScore = SemanticVectorService.cosineSimilarity(queryEmbedding, candidateEmbedding);
         } catch {
           // Candidate embedding failure falls back safely without breaking retrieval
@@ -284,9 +304,12 @@ export class RetrieveCommercialCandidates {
       const uId = univCand.linkedUniversalItemId!;
 
       let semanticScore: number | undefined;
-      if (queryEmbedding && univCand.displayName) {
+      if (queryEmbedding && this.embeddingProvider && univCand.displayName) {
         try {
           const candidateEmbedding = await this.embeddingProvider.embed(univCand.displayName);
+          if (!SemanticVectorService.isValidEmbedding(candidateEmbedding, this.embeddingProvider.dimensions)) {
+            throw new Error("Embedding provider returned an invalid candidate vector.");
+          }
           semanticScore = SemanticVectorService.cosineSimilarity(queryEmbedding, candidateEmbedding);
         } catch {
           // Candidate embedding failure falls back safely without breaking retrieval
@@ -355,11 +378,17 @@ export class RetrieveCommercialCandidates {
     };
 
     // Save to Cache
-    await this.cache.set(cacheKeyParams, resultOutput);
+    try {
+      if (this.cache) {
+        await this.cache.set(cacheKeyParams, resultOutput);
+      }
+    } catch {
+      // A cache adapter is optional acceleration and must never break retrieval.
+    }
 
     // Record Observability
-    RetrievalObservability.record({
-      companyId,
+    this.recordObservability({
+      tenantScoped: true,
       strategyUsed: actualStrategyUsed,
       lexicalCandidateCount: rawCatalogCandidates.length + rawUniversalCandidates.length,
       semanticCandidateCount: rawSemanticCandidates.length,
@@ -373,6 +402,16 @@ export class RetrieveCommercialCandidates {
     });
 
     return resultOutput;
+  }
+
+  private recordObservability(
+    metrics: Parameters<typeof RetrievalObservability.record>[0]
+  ): void {
+    try {
+      RetrievalObservability.record(metrics);
+    } catch {
+      // Observability must never become a retrieval dependency.
+    }
   }
 
   private localizeCandidate(candidate: CommercialCandidate, locale?: "ar" | "en"): CommercialCandidate {

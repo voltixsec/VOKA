@@ -9,6 +9,12 @@ export interface SearchableEntityInput {
 }
 
 export class SemanticVectorService {
+  public static isValidEmbedding(vector: unknown, dimensions?: number): vector is number[] {
+    return Array.isArray(vector) &&
+      vector.length > 0 &&
+      (dimensions === undefined || vector.length === dimensions) &&
+      vector.every((value) => typeof value === "number" && Number.isFinite(value));
+  }
   /**
    * Constructs compact search string using only canonical Universal Library fields.
    * Strictly omits raw ingestion payloads, tenant-private pricing/tax, and historical documents.
@@ -46,7 +52,7 @@ export class SemanticVectorService {
    * Returns a float between -1.0 and 1.0 (or 0 if vector magnitude is 0).
    */
   public static cosineSimilarity(vecA: number[], vecB: number[]): number {
-    if (vecA.length !== vecB.length || vecA.length === 0) {
+    if (!this.isValidEmbedding(vecA) || !this.isValidEmbedding(vecB, vecA.length)) {
       return 0;
     }
 
@@ -64,6 +70,7 @@ export class SemanticVectorService {
       return 0;
     }
 
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    return Number.isFinite(similarity) ? Math.min(1, Math.max(-1, similarity)) : 0;
   }
 }

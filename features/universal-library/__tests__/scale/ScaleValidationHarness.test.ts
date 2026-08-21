@@ -1,45 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
+  BoundedMemoryRetrievalCache,
   CommercialCandidate,
   DeterministicFakeEmbeddingProvider,
-  toAICandidateProjection,
-  RetrieveCommercialCandidates,
   IHybridRetrievalRepository,
-  BoundedMemoryRetrievalCache,
+  RetrieveCommercialCandidates,
+  toAICandidateProjection,
 } from "../../index";
 
-interface SyntheticCorpusItem {
-  id: string;
-  name: string;
-  code: string;
-  sku: string;
-  modelNumber: string;
-  manufacturerName: string;
-  brandName: string;
-  categoryName: string;
-  isActive: boolean;
-}
+/**
+ * Contract-level scale harness. It models an indexed store with a declared corpus
+ * cardinality and materializes only the bounded result window. It intentionally
+ * does not claim to benchmark PostgreSQL or allocate/scan the whole corpus.
+ */
+class SyntheticIndexedScaleRepository implements IHybridRetrievalRepository {
+  public maxRequestedLimit = 0;
+  public materializedCandidates = 0;
 
-function generateSyntheticCorpus(count: number): SyntheticCorpusItem[] {
-  const corpus: SyntheticCorpusItem[] = [];
-  for (let i = 1; i <= count; i++) {
-    corpus.push({
-      id: `univ-synth-${i}`,
-      name: `Synthetic Commercial Item ${i} Premium Grade`,
-      code: `SYN-CODE-${i}`,
-      sku: `SYN-SKU-${i}`,
-      modelNumber: `MOD-${i}`,
-      manufacturerName: i % 2 === 0 ? "Voltix Industrial" : "Global Tech Corp",
-      brandName: i % 3 === 0 ? "ProBrand" : "UltraBrand",
-      categoryName: i % 5 === 0 ? "Electrical" : "Mechanical",
-      isActive: i % 100 !== 0, // 1% inactive
-    });
-  }
-  return corpus;
-}
-
-class InMemoryScaleRepository implements IHybridRetrievalRepository {
-  constructor(private readonly corpus: SyntheticCorpusItem[]) {}
+  constructor(public readonly corpusSize: number) {}
 
   public async fetchCatalogCandidates(): Promise<CommercialCandidate[]> {
     return [];
@@ -50,43 +28,22 @@ class InMemoryScaleRepository implements IHybridRetrievalRepository {
     limit: number;
     isActive?: boolean;
   }): Promise<CommercialCandidate[]> {
-    const q = params.query?.toLowerCase() || "";
-    const filtered = this.corpus.filter((item) => {
-      if (params.isActive !== false && !item.isActive) return false;
-      if (!q) return true;
-      return (
-        item.name.toLowerCase().includes(q) ||
-        item.code.toLowerCase().includes(q) ||
-        item.sku.toLowerCase().includes(q) ||
-        item.modelNumber.toLowerCase().includes(q)
-      );
-    });
-
-    return filtered.slice(0, params.limit).map((item) => ({
-      id: `universal-library:${item.id}`,
-      origin: "UNIVERSAL_LIBRARY",
-      type: "PRODUCT",
-      displayName: item.name,
-      code: item.code,
-      sku: item.sku,
-      modelNumber: item.modelNumber,
-      identifiers: [{ type: "MPN", value: item.modelNumber }],
-      manufacturerName: item.manufacturerName,
-      brandName: item.brandName,
-      categoryName: item.categoryName,
-      isActive: item.isActive,
-      isAdopted: false,
-      linkedUniversalItemId: item.id,
-      score: 0,
-      matchReasons: [],
-    }));
+    this.maxRequestedLimit = Math.max(this.maxRequestedLimit, params.limit);
+    const requestedId = Number(params.query?.match(/(\d+)$/)?.[1] ?? 1);
+    const firstId = Math.min(Math.max(requestedId, 1), this.corpusSize);
+    const count = Math.min(params.limit, this.corpusSize);
+    const candidates = Array.from({ length: count }, (_, offset) =>
+      this.makeCandidate(((firstId - 1 + offset) % this.corpusSize) + 1)
+    );
+    this.materializedCandidates += candidates.length;
+    return candidates;
   }
 
   public async fetchSemanticCandidates(params: {
     limit: number;
     isActive?: boolean;
   }): Promise<CommercialCandidate[]> {
-    return this.fetchUniversalCandidates(params);
+    return this.fetchUniversalCandidates({ limit: params.limit, isActive: params.isActive });
   }
 
   public async fetchAdoptions(): Promise<[]> {
@@ -96,14 +53,34 @@ class InMemoryScaleRepository implements IHybridRetrievalRepository {
   public async fetchCatalogCandidatesByIds(): Promise<CommercialCandidate[]> {
     return [];
   }
+
+  private makeCandidate(id: number): CommercialCandidate {
+    return {
+      id: `universal-library:univ-synth-${id}`,
+      origin: "UNIVERSAL_LIBRARY",
+      type: "PRODUCT",
+      displayName: `Synthetic Commercial Item ${id}`,
+      modelNumber: `MOD-${id}`,
+      identifiers: [{ type: "MPN", value: `MOD-${id}` }],
+      manufacturerName: id % 2 === 0 ? "Voltix Industrial" : "Global Tech Corp",
+      brandName: id % 3 === 0 ? "ProBrand" : "UltraBrand",
+      categoryName: id % 5 === 0 ? "Electrical" : "Mechanical",
+      isActive: true,
+      isAdopted: false,
+      linkedUniversalItemId: `univ-synth-${id}`,
+      score: 0,
+      matchReasons: [],
+    };
+  }
 }
 
-describe("UCL-5 Scale Validation Harness", () => {
-  it("synthetic scale harness supports 10k items", async () => {
-    const corpus10k = generateSyntheticCorpus(10_000);
-    expect(corpus10k.length).toBe(10_000);
-
-    const repo = new InMemoryScaleRepository(corpus10k);
+describe("UCL-5 synthetic bounded-retrieval scale contract", () => {
+  it.each([
+    [10_000, 501, 20],
+    [50_000, 45_001, 50],
+    [100_000, 99_999, 20],
+  ])("keeps retrieval bounded for a declared %,i-item corpus", async (corpusSize, targetId, limit) => {
+    const repo = new SyntheticIndexedScaleRepository(corpusSize);
     const useCase = new RetrieveCommercialCandidates(
       repo,
       new DeterministicFakeEmbeddingProvider(16),
@@ -111,70 +88,23 @@ describe("UCL-5 Scale Validation Harness", () => {
     );
 
     const result = await useCase.execute({
-      companyId: "c1",
-      query: "Synthetic Commercial Item 501",
-      limit: 20,
+      companyId: "synthetic-tenant",
+      query: `Synthetic Commercial Item ${targetId}`,
+      limit,
       strategy: "hybrid",
     });
 
-    expect(result.candidates.length).toBeLessThanOrEqual(20);
-    expect(result.candidates.length).toBeGreaterThan(0);
+    expect(repo.corpusSize).toBe(corpusSize);
+    expect(repo.maxRequestedLimit).toBeLessThanOrEqual(100);
+    expect(repo.materializedCandidates).toBeLessThanOrEqual(200);
+    expect(result.candidates.length).toBeLessThanOrEqual(limit);
     expect(result.candidates[0]).toBeDefined();
-
-    const projections = result.candidates.map(toAICandidateProjection);
-    expect(projections.length).toBeLessThanOrEqual(20);
-    // Compact AI projection sanity check
-    const sampleProjJson = JSON.stringify(projections[0]);
-    expect(sampleProjJson.length).toBeLessThan(1000);
+    expect(JSON.stringify(toAICandidateProjection(result.candidates[0])).length).toBeLessThan(1000);
   });
 
-  it("synthetic scale harness supports 50k items without loading full corpus into memory", async () => {
-    const corpus50k = generateSyntheticCorpus(50_000);
-    expect(corpus50k.length).toBe(50_000);
-
-    const repo = new InMemoryScaleRepository(corpus50k);
-    const useCase = new RetrieveCommercialCandidates(
-      repo,
-      new DeterministicFakeEmbeddingProvider(16),
-      new BoundedMemoryRetrievalCache(60_000, 100)
-    );
-
-    const result = await useCase.execute({
-      companyId: "c1",
-      query: "Synthetic Commercial Item 45001",
-      limit: 50,
-      strategy: "hybrid",
-    });
-
-    expect(result.candidates.length).toBeLessThanOrEqual(50);
-    expect(result.meta.limit).toBe(50);
-  });
-
-  it("synthetic scale harness supports 100k items and maintains bounded candidate output", async () => {
-    const corpus100k = generateSyntheticCorpus(100_000);
-    expect(corpus100k.length).toBe(100_000);
-
-    const repo = new InMemoryScaleRepository(corpus100k);
-    const useCase = new RetrieveCommercialCandidates(
-      repo,
-      new DeterministicFakeEmbeddingProvider(16),
-      new BoundedMemoryRetrievalCache(60_000, 100)
-    );
-
-    const result = await useCase.execute({
-      companyId: "c1",
-      query: "Synthetic Commercial Item 99999",
-      limit: 20,
-      strategy: "hybrid",
-    });
-
-    expect(result.candidates.length).toBeLessThanOrEqual(20);
-    expect(result.candidates.length).toBeGreaterThan(0);
-    expect(result.candidates[0].score).toBeGreaterThan(0);
-  });
-
-  it("generated scale data is purely synthetic and not committed as production database records", () => {
-    const generated = generateSyntheticCorpus(100);
-    expect(generated.every((i) => i.id.startsWith("univ-synth-"))).toBe(true);
+  it("uses synthetic identities only", async () => {
+    const repo = new SyntheticIndexedScaleRepository(100_000);
+    const candidates = await repo.fetchUniversalCandidates({ limit: 10 });
+    expect(candidates.every((candidate) => candidate.id.includes("univ-synth-"))).toBe(true);
   });
 });

@@ -141,7 +141,12 @@ export class CommercialRankingService {
     // Bounded between 0 and 1000 points so semantic score NEVER overrides strong exact identity evidence
     // (exact code = 10k, exact identifier = 9k, exact model = 8k, exact name = 7k)
     let boundedSemanticScore = 0;
-    if (params.semanticScore !== undefined && params.semanticScore > 0) {
+    if (
+      lexicalScore < 7_000 &&
+      params.semanticScore !== undefined &&
+      Number.isFinite(params.semanticScore) &&
+      params.semanticScore > 0
+    ) {
       boundedSemanticScore = Math.min(Math.max(params.semanticScore, 0), 1) * 1_000;
       if (boundedSemanticScore > 100) {
         matchReasons.add("ALIAS_MATCH"); // signal semantic match

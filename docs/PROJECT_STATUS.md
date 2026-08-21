@@ -524,13 +524,13 @@ UCL-4 Hybrid Commercial Retrieval delivered in PR #63:
 
 UCL-5 Search Intelligence & Scale Validation delivered:
 - Technology-independent search strategy abstraction (`lexical` | `hybrid`);
-- Optional semantic retrieval path with fallback to lexical when semantic index or provider is offline;
+- Optional semantic retrieval boundary with fallback to lexical when no real semantic adapter/provider is configured;
 - Provider-neutral embedding interface (`IEmbeddingProvider`) with zero-network `DeterministicFakeEmbeddingProvider`;
 - Derived embedding lifecycle service (`RebuildSemanticIndex`) operating strictly on canonical Universal Library fields;
-- Bounded tenant-safe memory cache (`BoundedMemoryRetrievalCache`) strictly incorporating `companyId`;
+- Bounded tenant-safe opt-in memory cache (`BoundedMemoryRetrievalCache`) incorporating `companyId`, with production activation requiring an explicit commercial-data invalidation policy;
 - Hybrid deterministic ranking combining exact identity signals (exact code 10,000, exact barcode 9,000, exact model 8,000, exact name 7,000) with bounded semantic similarity scores (0..1,000);
 - Structured observability (`RetrievalObservability`);
-- Synthetic scale validation harness (`ScaleValidationHarness.test.ts`) validating 10k, 50k, and 100k synthetic item corpora;
+- Synthetic bounded-retrieval contract harness (`ScaleValidationHarness.test.ts`) exercising declared 10k, 50k, and 100k cardinalities without claiming a database benchmark;
 - Strict strategy validation parameter on `GET /api/commercial-retrieval`.
 
 NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION PERFORMED. SCALE DATA IS SYNTHETIC ONLY. LEXICAL FALLBACK REMAINS AVAILABLE. UCL-6 NOT STARTED. UCL-5 IMPLEMENTATION IS PENDING PR MERGE.

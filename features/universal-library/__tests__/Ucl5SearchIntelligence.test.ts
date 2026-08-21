@@ -22,6 +22,22 @@ class FailingEmbeddingProvider implements IEmbeddingProvider {
   }
 }
 
+class MalformedEmbeddingProvider implements IEmbeddingProvider {
+  public readonly dimensions = 3;
+  public async embed(): Promise<number[]> {
+    return [1, Number.NaN, Number.POSITIVE_INFINITY];
+  }
+  public async embedBatch(): Promise<number[][]> {
+    return [[1, Number.NaN, Number.POSITIVE_INFINITY]];
+  }
+}
+
+class ThrowingCache {
+  public async get(): Promise<never> { throw new Error("cache unavailable"); }
+  public async set(): Promise<never> { throw new Error("cache unavailable"); }
+  public clear(): void {}
+}
+
 class TestHybridRepository implements IHybridRetrievalRepository {
   public catalogItems: CommercialCandidate[] = [];
   public universalItems: CommercialCandidate[] = [];
@@ -261,7 +277,29 @@ describe("UCL-5 Search Intelligence & Scale Validation Regression Suite", () => 
       strategy: "hybrid",
     });
 
+    expect(result.meta.strategy).toBe("lexical");
     expect(result.candidates.length).toBeGreaterThan(0);
+  });
+
+  it("malformed semantic vectors fall back to lexical", async () => {
+    const useCase = new RetrieveCommercialCandidates(repo, new MalformedEmbeddingProvider(), cache);
+    const result = await useCase.execute({
+      companyId: "company-1",
+      query: "MOT-500",
+      strategy: "hybrid",
+    });
+    expect(result.meta.strategy).toBe("lexical");
+    expect(result.candidates[0].code).toBe("MOT-500");
+  });
+
+  it("cache adapter failures do not break lexical retrieval", async () => {
+    const useCase = new RetrieveCommercialCandidates(repo, undefined, new ThrowingCache());
+    const result = await useCase.execute({
+      companyId: "company-1",
+      query: "MOT-500",
+      strategy: "lexical",
+    });
+    expect(result.candidates[0].code).toBe("MOT-500");
   });
 
   // 6. cache hit
@@ -295,8 +333,19 @@ describe("UCL-5 Search Intelligence & Scale Validation Regression Suite", () => 
     const key2 = cache.generateKey({ companyId: "comp-B", query: "item" });
 
     expect(key1).not.toEqual(key2);
-    expect(key1.startsWith("comp-A")).toBe(true);
-    expect(key2.startsWith("comp-B")).toBe(true);
+    expect(JSON.parse(key1)[0]).toBe("comp-A");
+    expect(JSON.parse(key2)[0]).toBe("comp-B");
+  });
+
+  it("cache values are isolated from consumer mutation", async () => {
+    const value = { candidates: [{ id: "one" }] };
+    await cache.set({ companyId: "comp-A", query: "item" }, value);
+    value.candidates[0].id = "mutated-before-read";
+    const first = await cache.get({ companyId: "comp-A", query: "item" });
+    expect(first.candidates[0].id).toBe("one");
+    first.candidates[0].id = "mutated-after-read";
+    const second = await cache.get({ companyId: "comp-A", query: "item" });
+    expect(second.candidates[0].id).toBe("one");
   });
 
   // 9. no cross-tenant cache leakage
@@ -370,6 +419,20 @@ describe("UCL-5 Search Intelligence & Scale Validation Regression Suite", () => 
     expect(result.candidates[0].matchReasons).toContain("EXACT_CODE");
   });
 
+  it("semantic scoring cannot reorder strong exact identity tiers", () => {
+    const rankingService = new CommercialRankingService();
+    const exactModel = rankingService.calculateScore({
+      ...repo.universalItems[0],
+      modelNumber: "MODEL-1",
+    }, { query: "MODEL-1", semanticScore: 0 });
+    const exactName = rankingService.calculateScore({
+      ...repo.universalItems[0],
+      displayName: "MODEL-1",
+      modelNumber: null,
+    }, { query: "MODEL-1", semanticScore: 1 });
+    expect(exactModel.score).toBeGreaterThan(exactName.score);
+  });
+
   // 17. adoption collapse preserved
   it("17. adoption collapse preserved", async () => {
     repo.adoptions = [
@@ -410,7 +473,8 @@ describe("UCL-5 Search Intelligence & Scale Validation Regression Suite", () => 
     expect(recent.length).toBeGreaterThan(0);
     const metric = recent[recent.length - 1];
 
-    expect(metric.companyId).toBe("company-1");
+    expect(metric.tenantScoped).toBe(true);
+    expect((metric as any).companyId).toBeUndefined();
     expect(metric.strategyUsed).toBe("lexical");
     expect(typeof metric.lexicalCandidateCount).toBe("number");
     expect((metric as any).rawPayload).toBeUndefined();

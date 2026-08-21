@@ -1,6 +1,5 @@
 import { IEmbeddingProvider } from "../../domain/embeddings/EmbeddingProvider";
 import { SemanticVectorService } from "../../domain/embeddings/SemanticVectorService";
-import { DeterministicFakeEmbeddingProvider } from "../../domain/embeddings/DeterministicFakeEmbeddingProvider";
 
 export interface UniversalCatalogItemForIndexing {
   id: string;
@@ -33,8 +32,8 @@ export interface RebuildSemanticIndexOutput {
 export class RebuildSemanticIndex {
   private readonly embeddingProvider: IEmbeddingProvider;
 
-  constructor(embeddingProvider?: IEmbeddingProvider) {
-    this.embeddingProvider = embeddingProvider ?? new DeterministicFakeEmbeddingProvider();
+  constructor(embeddingProvider: IEmbeddingProvider) {
+    this.embeddingProvider = embeddingProvider;
   }
 
   public async execute(input: RebuildSemanticIndexInput): Promise<RebuildSemanticIndexOutput> {
@@ -56,7 +55,14 @@ export class RebuildSemanticIndex {
           categoryName: item.categoryName,
         });
 
+        if (!searchableText) {
+          throw new Error("Cannot index an item without searchable canonical content.");
+        }
+
         const embedding = await this.embeddingProvider.embed(searchableText);
+        if (!SemanticVectorService.isValidEmbedding(embedding, this.embeddingProvider.dimensions)) {
+          throw new Error("Embedding provider returned an invalid vector.");
+        }
 
         indexedItems.push({
           itemId: item.id,

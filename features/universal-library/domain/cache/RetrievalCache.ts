@@ -22,6 +22,12 @@ export class BoundedMemoryRetrievalCache<T> implements IRetrievalCache<T> {
   private readonly maxCapacity: number;
 
   constructor(defaultTtlMs: number = 60_000, maxCapacity: number = 1_000) {
+    if (!Number.isFinite(defaultTtlMs) || defaultTtlMs <= 0) {
+      throw new Error("defaultTtlMs must be a positive finite number.");
+    }
+    if (!Number.isInteger(maxCapacity) || maxCapacity <= 0) {
+      throw new Error("maxCapacity must be a positive integer.");
+    }
     this.defaultTtlMs = defaultTtlMs;
     this.maxCapacity = maxCapacity;
   }
@@ -36,8 +42,8 @@ export class BoundedMemoryRetrievalCache<T> implements IRetrievalCache<T> {
     const lim = p.limit ?? 20;
     const strat = p.strategy || "hybrid";
 
-    // Tenant identity companyId MUST be included in key to prevent cross-tenant leakage
-    return `${p.companyId}:${q}:${type}:${cat}:${mfg}:${brand}:${loc}:${lim}:${strat}`;
+    // JSON tuple encoding prevents delimiter collisions while retaining tenant identity.
+    return JSON.stringify([p.companyId.trim(), q, type, cat, mfg, brand, loc, lim, strat]);
   }
 
   public async get(keyParams: CacheKeyParams): Promise<T | null> {
@@ -51,7 +57,7 @@ export class BoundedMemoryRetrievalCache<T> implements IRetrievalCache<T> {
         return null;
       }
 
-      return entry.value;
+      return structuredClone(entry.value);
     } catch {
       // Cache failure must never break retrieval
       return null;
@@ -61,7 +67,9 @@ export class BoundedMemoryRetrievalCache<T> implements IRetrievalCache<T> {
   public async set(keyParams: CacheKeyParams, value: T, ttlMs?: number): Promise<void> {
     try {
       const key = this.generateKey(keyParams);
-      const ttl = ttlMs ?? this.defaultTtlMs;
+      const requestedTtl = ttlMs ?? this.defaultTtlMs;
+      const ttl = Math.min(Math.max(requestedTtl, 1), this.defaultTtlMs);
+      if (!Number.isFinite(requestedTtl)) return;
       const expiresAt = Date.now() + ttl;
 
       // Evict oldest entries if capacity exceeded
@@ -72,7 +80,7 @@ export class BoundedMemoryRetrievalCache<T> implements IRetrievalCache<T> {
         }
       }
 
-      this.store.set(key, { value, expiresAt });
+      this.store.set(key, { value: structuredClone(value), expiresAt });
     } catch {
       // Ignore cache write errors safely
     }

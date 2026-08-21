@@ -8,7 +8,6 @@ import {
 import {
   FetchCatalogCandidatesParams,
   FetchUniversalCandidatesParams,
-  FetchSemanticCandidatesParams,
   IHybridRetrievalRepository,
   UniversalAdoptionLink,
 } from "../../domain/repositories/HybridRetrievalRepository";
@@ -145,20 +144,6 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
     }) : [];
 
     return this.mergeBounded(exactRecords, records, params.limit).map((r) => this.mapUniversalItemToCandidate(r));
-  }
-
-  public async fetchSemanticCandidates(
-    params: FetchSemanticCandidatesParams
-  ): Promise<CommercialCandidate[]> {
-    // Graceful fallback to Universal candidate fetch when DB vector extension is absent
-    return this.fetchUniversalCandidates({
-      type: params.type,
-      categoryId: params.categoryId,
-      manufacturerId: params.manufacturerId,
-      brandId: params.brandId,
-      isActive: params.isActive,
-      limit: params.limit,
-    });
   }
 
   public async fetchAdoptions(

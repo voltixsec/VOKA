@@ -1,5 +1,5 @@
 export interface RetrievalObservabilityMetrics {
-  companyId: string;
+  tenantScoped: true;
   strategyUsed: "lexical" | "hybrid";
   lexicalCandidateCount: number;
   semanticCandidateCount: number;
@@ -21,7 +21,7 @@ export class RetrievalObservability {
    */
   public static record(metrics: RetrievalObservabilityMetrics): void {
     const sanitized: RetrievalObservabilityMetrics = {
-      companyId: metrics.companyId,
+      tenantScoped: true,
       strategyUsed: metrics.strategyUsed,
       lexicalCandidateCount: metrics.lexicalCandidateCount,
       semanticCandidateCount: metrics.semanticCandidateCount,
@@ -42,7 +42,7 @@ export class RetrievalObservability {
   }
 
   public static getRecentMetrics(): RetrievalObservabilityMetrics[] {
-    return [...RetrievalObservability.logs];
+    return structuredClone(RetrievalObservability.logs);
   }
 
   public static clear(): void {

@@ -609,7 +609,7 @@ Implementation sequence:
 2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (MERGED).**
 3. **UCL-3 — ingestion, normalization, entity resolution, quality and confidence (MERGED; no external data ingested).**
 4. **UCL-4 — hybrid Company Catalog + Universal Library AI retrieval (MERGED).**
-5. **UCL-5 — search intelligence, optional semantic retrieval, caching, hybrid ranking, observability and synthetic scale validation (IMPLEMENTED & VALIDATED; PENDING PR MERGE).**
+5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (IMPLEMENTED & VALIDATED; PENDING PR MERGE).**
 6. UCL-6 — controlled large-scale external data ingestion and ongoing enrichment.
 
 No UCL implementation phase may weaken existing tenant isolation, pricing,
