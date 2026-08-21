@@ -7,3 +7,4 @@ export * from "./AdoptUniversalItem";
 export * from "./SearchUniversalManufacturers";
 export * from "./SearchUniversalBrands";
 export * from "./LookupByUniversalIdentifier";
+export * from "./RetrieveCommercialCandidates";

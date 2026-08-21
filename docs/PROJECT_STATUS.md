@@ -514,4 +514,12 @@ UCL-3 ingestion machinery delivered in PR #62:
 - OWNER/ADMIN-only administrative APIs;
 - migration `20260821180000_ucl_3_ingestion_normalization`.
 
-NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. UCL-4 NOT STARTED. UCL-3 IS NOT PRODUCTION DEPLOYED.
+UCL-4 Hybrid Commercial Retrieval delivered:
+- Technology-independent hybrid retrieval domain contract (`CommercialCandidate`);
+- Deterministic lexical ranking engine (`CommercialRankingService`);
+- Automatic adoption collapse into tenant `CatalogItem` candidates;
+- Authenticated `GET /api/commercial-retrieval` API endpoint;
+- Compact AI candidate projection (`toAICandidateProjection`);
+- Bounded oversampling and hard limit enforcement (default 20, max 50).
+
+NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO VECTOR/EMBEDDING SEARCH IMPLEMENTED. UCL-5 NOT STARTED. IMPLEMENTATION PENDING CTO MERGE.
