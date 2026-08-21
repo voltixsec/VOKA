@@ -19,13 +19,17 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
     params: FetchCatalogCandidatesParams
   ): Promise<CommercialCandidate[]> {
     const search = params.query?.trim();
+    const baseWhere: any = {
+      companyId: params.companyId,
+      ...(params.type ? { type: params.type } : {}),
+      ...(params.categoryId ? { categoryId: params.categoryId } : {}),
+      ...(params.isActive === undefined ? { isActive: true } : { isActive: params.isActive }),
+    };
+    const include = { unit: true, category: true } as const;
 
     const records = await this.prisma.catalogItem.findMany({
       where: {
-        companyId: params.companyId,
-        ...(params.type ? { type: params.type } : {}),
-        ...(params.categoryId ? { categoryId: params.categoryId } : {}),
-        ...(params.isActive === undefined ? { isActive: true } : { isActive: params.isActive }),
+        ...baseWhere,
         ...(search
           ? {
               OR: [
@@ -42,29 +46,50 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
             }
           : {}),
       },
-      include: {
-        unit: true,
-        category: true,
-      },
+      include,
       take: params.limit,
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     });
 
-    return records.map((r) => this.mapCatalogItemToCandidate(r));
+    const exactRecords = search ? await this.prisma.catalogItem.findMany({
+      where: {
+        ...baseWhere,
+        OR: [
+          { code: { equals: search, mode: "insensitive" } },
+          { sku: { equals: search, mode: "insensitive" } },
+          { barcode: { equals: search, mode: "insensitive" } },
+        ],
+      },
+      include,
+      take: Math.min(params.limit, 10),
+      orderBy: { id: "asc" },
+    }) : [];
+
+    return this.mergeBounded(exactRecords, records, params.limit).map((r) => this.mapCatalogItemToCandidate(r));
   }
 
   public async fetchUniversalCandidates(
     params: FetchUniversalCandidatesParams
   ): Promise<CommercialCandidate[]> {
     const search = params.query?.trim();
+    const baseWhere: any = {
+      ...(params.type ? { type: params.type } : {}),
+      ...(params.categoryId ? { categoryId: params.categoryId } : {}),
+      ...(params.manufacturerId ? { manufacturerId: params.manufacturerId } : {}),
+      ...(params.brandId ? { brandId: params.brandId } : {}),
+      ...(params.isActive === undefined ? { isActive: true } : { isActive: params.isActive }),
+    };
+    const include = {
+      manufacturer: true,
+      brand: true,
+      category: true,
+      identifiers: { orderBy: { id: "asc" as const }, take: 20 },
+      aliases: { orderBy: { id: "asc" as const }, take: 20 },
+    };
 
     const records = await this.prisma.universalCatalogItem.findMany({
       where: {
-        ...(params.type ? { type: params.type } : {}),
-        ...(params.categoryId ? { categoryId: params.categoryId } : {}),
-        ...(params.manufacturerId ? { manufacturerId: params.manufacturerId } : {}),
-        ...(params.brandId ? { brandId: params.brandId } : {}),
-        ...(params.isActive === undefined ? { isActive: true } : { isActive: params.isActive }),
+        ...baseWhere,
         ...(search
           ? {
               OR: [
@@ -91,18 +116,34 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
             }
           : {}),
       },
-      include: {
-        manufacturer: true,
-        brand: true,
-        category: true,
-        identifiers: true,
-        aliases: true,
-      },
+      include,
       take: params.limit,
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     });
 
-    return records.map((r) => this.mapUniversalItemToCandidate(r));
+    const normalizedQueries = search ? [...new Set([
+      search,
+      search.replace(/[\s-]+/g, ""),
+      search.replace(/\s+/g, " ").toUpperCase(),
+    ])] : [];
+    const exactRecords = search ? await this.prisma.universalCatalogItem.findMany({
+      where: {
+        ...baseWhere,
+        OR: [
+          { name: { equals: search, mode: "insensitive" } },
+          { nameAr: { equals: search, mode: "insensitive" } },
+          { nameEn: { equals: search, mode: "insensitive" } },
+          { modelNumber: { equals: search, mode: "insensitive" } },
+          { aliases: { some: { alias: { equals: search, mode: "insensitive" } } } },
+          { identifiers: { some: { normalizedValue: { in: normalizedQueries } } } },
+        ],
+      },
+      include,
+      take: Math.min(params.limit, 20),
+      orderBy: { id: "asc" },
+    }) : [];
+
+    return this.mergeBounded(exactRecords, records, params.limit).map((r) => this.mapUniversalItemToCandidate(r));
   }
 
   public async fetchAdoptions(
@@ -122,6 +163,9 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
           ...(catalogItemIds.length > 0 ? [{ catalogItemId: { in: catalogItemIds } }] : []),
         ],
       },
+      select: { id: true, companyId: true, universalItemId: true, catalogItemId: true },
+      orderBy: { id: "asc" },
+      take: 200,
     });
 
     return records.map((r) => ({
@@ -141,12 +185,13 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
     const records = await this.prisma.catalogItem.findMany({
       where: {
         companyId,
-        id: { in: catalogItemIds },
+        id: { in: [...new Set(catalogItemIds)].slice(0, 100) },
       },
       include: {
         unit: true,
         category: true,
       },
+      orderBy: { id: "asc" },
     });
 
     return records.map((r) => this.mapCatalogItemToCandidate(r));
@@ -155,10 +200,10 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
   private mapCatalogItemToCandidate(record: any): CommercialCandidate {
     const identifiers: CandidateIdentifier[] = [];
     if (record.sku) {
-      identifiers.push({ type: "SKU", value: record.sku });
+      identifiers.push({ type: "SKU", value: record.sku, normalizedValue: record.sku.trim().toLowerCase() });
     }
     if (record.barcode) {
-      identifiers.push({ type: "BARCODE", value: record.barcode });
+      identifiers.push({ type: "BARCODE", value: record.barcode, normalizedValue: record.barcode.trim().toLowerCase() });
     }
 
     const unit: CandidateUnit | null = record.unit
@@ -179,14 +224,18 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
       identifiers,
       aliases: [],
       manufacturerName: null,
+      manufacturerId: null,
       brandName: null,
+      brandId: null,
       categoryId: record.categoryId,
       categoryName: record.category?.name ?? null,
       isActive: Boolean(record.isActive),
       isAdopted: false,
       linkedCatalogItemId: record.id,
       linkedUniversalItemId: null,
-      salePrice: record.salePrice != null ? Number(record.salePrice) : null,
+      salePrice: record.salePrice != null
+        ? (typeof record.salePrice.toNumber === "function" ? record.salePrice.toNumber() : Number(record.salePrice))
+        : null,
       unit,
       description: record.description,
       descriptionAr: record.descriptionAr,
@@ -200,6 +249,7 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
     const identifiers: CandidateIdentifier[] = (record.identifiers || []).map((i: any) => ({
       type: i.identifierType,
       value: i.value,
+      normalizedValue: i.normalizedValue,
     }));
 
     const aliases: string[] = (record.aliases || []).map((a: any) => a.alias);
@@ -218,7 +268,9 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
       identifiers,
       aliases,
       manufacturerName: record.manufacturer?.name ?? null,
+      manufacturerId: record.manufacturerId ?? null,
       brandName: record.brand?.name ?? null,
+      brandId: record.brandId ?? null,
       categoryId: record.categoryId,
       categoryName: record.category?.name ?? null,
       isActive: Boolean(record.isActive),
@@ -233,5 +285,14 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
       score: 0,
       matchReasons: [],
     };
+  }
+
+  private mergeBounded<T extends { id: string }>(preferred: T[], fallback: T[], limit: number): T[] {
+    const merged = new Map<string, T>();
+    for (const record of [...preferred, ...fallback]) {
+      if (!merged.has(record.id)) merged.set(record.id, record);
+      if (merged.size >= limit) break;
+    }
+    return [...merged.values()];
   }
 }

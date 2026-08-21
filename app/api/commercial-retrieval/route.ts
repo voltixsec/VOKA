@@ -2,6 +2,7 @@ import { CatalogItemType } from "@/features/catalog";
 import {
   PrismaHybridRetrievalRepository,
   RetrieveCommercialCandidates,
+  toAICandidateProjection,
 } from "@/features/universal-library";
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
@@ -55,6 +56,16 @@ function parseLocale(value: string | null): "ar" | "en" | undefined {
   );
 }
 
+function parseBoundedText(value: string | null, field: string, maxLength: number): string | undefined {
+  if (value === null) return undefined;
+  const normalized = value.normalize("NFC").replace(/\s+/g, " ").trim();
+  if (!normalized && field === "q") return undefined;
+  if (!normalized || normalized.length > maxLength) {
+    throw ApiError.badRequest("INVALID_QUERY_PARAMETER", `${field} is invalid.`, { field });
+  }
+  return normalized;
+}
+
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request: Request, _auth, company) => {
@@ -69,12 +80,15 @@ export const GET = withCompanyAuth(
       );
     }
 
-    const query = searchParams.get("q") ?? searchParams.get("query") ?? undefined;
-    const categoryId = searchParams.get("categoryId") ?? undefined;
-    const manufacturerId = searchParams.get("manufacturerId") ?? undefined;
-    const brandId = searchParams.get("brandId") ?? undefined;
+    const query = parseBoundedText(searchParams.get("q") ?? searchParams.get("query"), "q", 200);
+    const categoryId = parseBoundedText(searchParams.get("categoryId"), "categoryId", 200);
+    const manufacturerId = parseBoundedText(searchParams.get("manufacturerId"), "manufacturerId", 200);
+    const brandId = parseBoundedText(searchParams.get("brandId"), "brandId", 200);
     const locale = parseLocale(searchParams.get("locale"));
     const isActive = parseBoolean(searchParams.get("isActive"));
+    if (isActive === false) {
+      throw ApiError.badRequest("INACTIVE_RETRIEVAL_NOT_ALLOWED", "Commercial retrieval only returns active candidates.", { field: "isActive" });
+    }
     const limit = parseLimit(searchParams.get("limit"));
 
     const result = await retrieveCommercialCandidates.execute({
@@ -85,11 +99,11 @@ export const GET = withCompanyAuth(
       manufacturerId,
       brandId,
       locale,
-      isActive,
+      isActive: true,
       limit,
     });
 
-    return apiSuccess(result.candidates, {
+    return apiSuccess(result.candidates.map(toAICandidateProjection), {
       meta: result.meta,
       headers: {
         "Cache-Control": "no-store",

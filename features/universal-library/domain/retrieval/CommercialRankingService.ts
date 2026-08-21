@@ -23,7 +23,7 @@ export class CommercialRankingService {
     },
     params: RankingParams = {}
   ): { score: number; matchReasons: MatchReason[] } {
-    let score = 0;
+    let lexicalScore = 0;
     const matchReasons = new Set<MatchReason>();
 
     const query = params.query?.trim().toLowerCase();
@@ -34,17 +34,23 @@ export class CommercialRankingService {
         candidate.code?.trim().toLowerCase() === query ||
         candidate.sku?.trim().toLowerCase() === query;
       if (codeMatch) {
-        score += 1000;
+        lexicalScore = Math.max(lexicalScore, 10_000);
         matchReasons.add("EXACT_CODE");
       }
 
       // 2. Exact Identifier / Barcode Match
       const barcodeMatch = candidate.barcode?.trim().toLowerCase() === query;
-      const identifierMatch = candidate.identifiers.some(
-        (id) => id.value.trim().toLowerCase() === query
+      const identifierQueries = new Set([
+        query,
+        query.replace(/[\s-]+/g, ""),
+        query.replace(/\s+/g, " ").toUpperCase(),
+      ]);
+      const identifierMatch = candidate.identifiers.some((id) =>
+        identifierQueries.has((id.normalizedValue || id.value).trim()) ||
+        identifierQueries.has((id.normalizedValue || id.value).trim().toLowerCase())
       );
       if (barcodeMatch || identifierMatch) {
-        score += 950;
+        lexicalScore = Math.max(lexicalScore, 9_000);
         matchReasons.add("EXACT_IDENTIFIER");
       }
 
@@ -52,7 +58,7 @@ export class CommercialRankingService {
       const modelMatch =
         candidate.modelNumber?.trim().toLowerCase() === query;
       if (modelMatch) {
-        score += 800;
+        lexicalScore = Math.max(lexicalScore, 8_000);
         matchReasons.add("EXACT_MODEL");
       }
 
@@ -62,7 +68,7 @@ export class CommercialRankingService {
         candidate.nameAr?.trim().toLowerCase() === query ||
         candidate.nameEn?.trim().toLowerCase() === query;
       if (exactNameMatch) {
-        score += 700;
+        lexicalScore = Math.max(lexicalScore, 7_000);
         matchReasons.add("EXACT_NAME");
       }
 
@@ -75,10 +81,10 @@ export class CommercialRankingService {
       );
 
       if (aliasExact) {
-        score += 500;
+        lexicalScore = Math.max(lexicalScore, 6_000);
         matchReasons.add("ALIAS_MATCH");
       } else if (aliasPartial) {
-        score += 300;
+        lexicalScore = Math.max(lexicalScore, 5_000);
         matchReasons.add("ALIAS_MATCH");
       }
 
@@ -92,34 +98,46 @@ export class CommercialRankingService {
         candidate.descriptionEn?.toLowerCase().includes(query);
 
       if (partialNameMatch && !exactNameMatch) {
-        score += 200;
+        lexicalScore = Math.max(lexicalScore, 4_000);
         matchReasons.add("PARTIAL_NAME_MATCH");
       }
     } else {
       // When query is empty, base relevancy on structural fit
-      score += 100;
+      lexicalScore = 1_000;
     }
+
+    let structuralScore = 0;
 
     // Category Proximity Signal
     if (params.categoryId && candidate.categoryId === params.categoryId) {
-      score += 100;
+      structuralScore += 20;
       matchReasons.add("CATEGORY_MATCH");
     }
 
     // Type Match Signal
     if (params.type && candidate.type === params.type) {
-      score += 50;
+      structuralScore += 10;
       matchReasons.add("TYPE_MATCH");
+    }
+
+    if (params.manufacturerId && candidate.manufacturerId === params.manufacturerId) {
+      structuralScore += 20;
+      matchReasons.add("MANUFACTURER_MATCH");
+    }
+
+    if (params.brandId && candidate.brandId === params.brandId) {
+      structuralScore += 20;
+      matchReasons.add("BRAND_MATCH");
     }
 
     // Company Catalog Priority Signal
     if (candidate.origin === "COMPANY_CATALOG") {
-      score += 100;
+      structuralScore += 100;
       matchReasons.add("COMPANY_CATALOG_PRIORITY");
     }
 
     return {
-      score,
+      score: lexicalScore + structuralScore,
       matchReasons: Array.from(matchReasons),
     };
   }
@@ -139,11 +157,13 @@ export class CommercialRankingService {
       if (a.origin !== b.origin) {
         return a.origin === "COMPANY_CATALOG" ? -1 : 1;
       }
-      const nameCompare = a.displayName.localeCompare(b.displayName);
+      const aName = a.displayName.normalize("NFC");
+      const bName = b.displayName.normalize("NFC");
+      const nameCompare = aName < bName ? -1 : aName > bName ? 1 : 0;
       if (nameCompare !== 0) {
         return nameCompare;
       }
-      return a.id.localeCompare(b.id);
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
   }
 }

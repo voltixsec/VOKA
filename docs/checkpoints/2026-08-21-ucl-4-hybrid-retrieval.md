@@ -2,9 +2,9 @@
 
 Date: 2026-08-21
 
-Status: IMPLEMENTED IN PR / PENDING CTO MERGE
+Status: IMPLEMENTED IN PR #63 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE
 
-Branch: `feature/ucl-4-hybrid-commercial-retrieval`
+Branch: `feature/ucl-4-hybrid-commercial-retrieval-16049865403825810872`
 
 Base SHA: `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a`
 
@@ -18,7 +18,7 @@ It provides a single, technology-independent retrieval capability connecting ten
 
 - **Company Catalog remains tenant commercial truth**: Operational priority is granted to Company Catalog candidates because they carry approved tenant pricing, tax, units, and configuration.
 - **Universal Library remains shared knowledge**: Universal items serve as discovery and enrichment candidates only. Mutable Universal records are never used as commercial document authority for Quotations, Contracts, Sales Orders, or Invoices.
-- **Duplicate / Adoption Collapse**: Universal items already adopted into an authenticated company's catalog via `UniversalItemAdoption` collapse into the tenant `CatalogItem` candidate.
+- **Duplicate / Adoption Collapse**: Universal items already adopted into an authenticated company's catalog via `UniversalItemAdoption` collapse into the tenant `CatalogItem` candidate. Retrieval never creates an adoption.
 - **AI Context Efficiency**: AI Sales Assistant receives only bounded, ranked candidates. The complete catalog or Universal Library is never loaded into prompt context or browser memory.
 - **Tenant Isolation**: Company Catalog queries strictly enforce authenticated server `companyId` scoping. Foreign tenant CatalogItems can never appear.
 - **Deterministic Lexical Ranking**: Lexical/structured ranking prioritizes exact code/SKU matches, exact Universal identifier matches (GTIN, MPN, UPC), exact model/name matches, and Company Catalog origin priority with deterministic tie-breaking.
@@ -30,7 +30,7 @@ It provides a single, technology-independent retrieval capability connecting ten
 - **NO REAL GLOBAL CATALOG POPULATION**: Large-scale commercial population is deferred to UCL-6.
 - **NO VECTOR / EMBEDDING SEARCH**: Lexical and structured search only; vector search belongs to UCL-5.
 - **UCL-5 NOT STARTED**: Semantic search, vector databases, and custom AI embeddings remain deferred to UCL-5.
-- **PENDING CTO MERGE**: Implementation is committed on the feature branch pending CTO merge and deployment.
+- **PENDING MERGE**: Implementation is locally CTO-verified on the review branch; merge and deployment remain separate approvals.
 
 ## Delivered Code Surface
 

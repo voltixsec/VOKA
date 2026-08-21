@@ -156,10 +156,20 @@ describe("RetrieveCommercialCandidates Use Case", () => {
     };
 
     const useCase = new RetrieveCommercialCandidates(repository);
-    await useCase.execute({ companyId, limit: 100 });
+    await useCase.execute({ companyId, limit: 50 });
 
     expect(fetchCatalogCandidates).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 100 }) // oversample limit capped at 100
     );
+  });
+
+  it("rejects invalid direct-call limits instead of silently clamping", async () => {
+    const repository = {
+      fetchCatalogCandidates: vi.fn(), fetchUniversalCandidates: vi.fn(), fetchAdoptions: vi.fn(), fetchCatalogCandidatesByIds: vi.fn(),
+    } as unknown as IHybridRetrievalRepository;
+    const useCase = new RetrieveCommercialCandidates(repository);
+    await expect(useCase.execute({ companyId, limit: 0 })).rejects.toThrow("between 1 and 50");
+    await expect(useCase.execute({ companyId, limit: 51 })).rejects.toThrow("between 1 and 50");
+    await expect(useCase.execute({ companyId, limit: 1.5 })).rejects.toThrow("between 1 and 50");
   });
 });

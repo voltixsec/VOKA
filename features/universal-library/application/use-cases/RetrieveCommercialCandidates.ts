@@ -38,27 +38,36 @@ export class RetrieveCommercialCandidates {
   public async execute(
     input: RetrieveCommercialCandidatesInput
   ): Promise<RetrieveCommercialCandidatesOutput> {
-    if (!input.companyId?.trim()) {
+    const companyId = input.companyId?.trim();
+    if (!companyId) {
       throw new Error("companyId is required for commercial candidate retrieval.");
     }
 
     const rawLimit = input.limit ?? DEFAULT_HYBRID_RETRIEVAL_LIMIT;
-    const boundedLimit = Math.max(1, Math.min(rawLimit, MAX_HYBRID_RETRIEVAL_LIMIT));
+    if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > MAX_HYBRID_RETRIEVAL_LIMIT) {
+      throw new Error(`limit must be an integer between 1 and ${MAX_HYBRID_RETRIEVAL_LIMIT}.`);
+    }
+    const boundedLimit = rawLimit;
     const oversampleLimit = Math.min(boundedLimit * 2, 100);
-    const isActive = input.isActive ?? true;
+    if (input.isActive === false) {
+      throw new Error("Commercial retrieval only returns active candidates.");
+    }
+    const isActive = true;
+    const query = input.query?.normalize("NFC").replace(/\s+/g, " ").trim() || undefined;
+    const universalOnlyFilter = Boolean(input.manufacturerId || input.brandId);
 
     // Fetch initial candidate batches in parallel
     const [rawCatalogCandidates, rawUniversalCandidates] = await Promise.all([
-      this.repository.fetchCatalogCandidates({
-        companyId: input.companyId,
-        query: input.query,
+      universalOnlyFilter ? Promise.resolve([]) : this.repository.fetchCatalogCandidates({
+        companyId,
+        query,
         type: input.type,
         categoryId: input.categoryId,
         isActive,
         limit: oversampleLimit,
       }),
       this.repository.fetchUniversalCandidates({
-        query: input.query,
+        query,
         type: input.type,
         categoryId: input.categoryId,
         manufacturerId: input.manufacturerId,
@@ -78,7 +87,7 @@ export class RetrieveCommercialCandidates {
 
     // Fetch adoption links for company
     const adoptions = await this.repository.fetchAdoptions(
-      input.companyId,
+      companyId,
       universalItemIds,
       catalogItemIds
     );
@@ -87,6 +96,7 @@ export class RetrieveCommercialCandidates {
     const catalogToUniversalMap = new Map<string, string>();
 
     for (const adoption of adoptions) {
+      if (adoption.companyId !== companyId) continue;
       universalToCatalogMap.set(adoption.universalItemId, adoption.catalogItemId);
       catalogToUniversalMap.set(adoption.catalogItemId, adoption.universalItemId);
     }
@@ -112,13 +122,13 @@ export class RetrieveCommercialCandidates {
 
     if (missingCatalogIdsToFetch.length > 0) {
       const fetchedMissing = await this.repository.fetchCatalogCandidatesByIds(
-        input.companyId,
-        missingCatalogIdsToFetch
+        companyId,
+        [...new Set(missingCatalogIdsToFetch)].slice(0, oversampleLimit)
       );
       for (const fetched of fetchedMissing) {
         if (fetched.linkedCatalogItemId) {
           // Verify active state if required
-          if (!isActive || (isActive && fetched.isActive)) {
+          if (fetched.isActive === isActive) {
             catalogCandidateMap.set(fetched.linkedCatalogItemId, fetched);
           }
         }
@@ -127,7 +137,7 @@ export class RetrieveCommercialCandidates {
 
     // Score all catalog candidates
     const rankingParams = {
-      query: input.query,
+      query,
       type: input.type,
       categoryId: input.categoryId,
       manufacturerId: input.manufacturerId,
@@ -135,7 +145,8 @@ export class RetrieveCommercialCandidates {
     };
 
     const scoredCatalogCandidates: CommercialCandidate[] = [];
-    for (const catCand of catalogCandidateMap.values()) {
+    for (const rawCatCand of catalogCandidateMap.values()) {
+      const catCand = this.localizeCandidate(rawCatCand, input.locale);
       const { score, matchReasons } = this.rankingService.calculateScore(catCand, rankingParams);
 
       const linkedUnivId = catalogToUniversalMap.get(catCand.linkedCatalogItemId!);
@@ -156,7 +167,8 @@ export class RetrieveCommercialCandidates {
 
     const unadoptedUniversalCandidates: CommercialCandidate[] = [];
 
-    for (const univCand of rawUniversalCandidates) {
+    for (const rawUnivCand of rawUniversalCandidates) {
+      const univCand = this.localizeCandidate(rawUnivCand, input.locale);
       const uId = univCand.linkedUniversalItemId!;
       const { score, matchReasons } = this.rankingService.calculateScore(univCand, rankingParams);
 
@@ -174,6 +186,16 @@ export class RetrieveCommercialCandidates {
           tenantCand.matchReasons = Array.from(
             new Set([...tenantCand.matchReasons, ...matchReasons])
           );
+        } else {
+          // A stale or cross-tenant-inconsistent adoption must never hide a
+          // globally discoverable candidate or collapse to foreign data.
+          unadoptedUniversalCandidates.push({
+            ...univCand,
+            score,
+            matchReasons,
+            isAdopted: false,
+            linkedCatalogItemId: null,
+          });
         }
         // Suppress univCand (do not push to unadoptedUniversalCandidates)
       } else {
@@ -205,5 +227,12 @@ export class RetrieveCommercialCandidates {
         limit: boundedLimit,
       },
     };
+  }
+
+  private localizeCandidate(candidate: CommercialCandidate, locale?: "ar" | "en"): CommercialCandidate {
+    const localizedName = locale === "ar" ? candidate.nameAr : locale === "en" ? candidate.nameEn : null;
+    return localizedName?.trim()
+      ? { ...candidate, displayName: localizedName.trim() }
+      : { ...candidate };
   }
 }

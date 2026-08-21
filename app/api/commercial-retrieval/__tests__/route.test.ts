@@ -74,6 +74,9 @@ describe("Commercial Retrieval API Surface", () => {
     expect(body.data).toHaveLength(2);
     expect(body.data[0].origin).toBe("COMPANY_CATALOG");
     expect(body.data[1].origin).toBe("UNIVERSAL_LIBRARY");
+    expect(body.data[0].identifiers).toBeUndefined();
+    expect(body.data[0].aliases).toBeUndefined();
+    expect(body.data[0].description).toBeUndefined();
     expect(body.meta.totalCandidates).toBe(2);
     expect(body.meta.limit).toBe(10);
   });
@@ -113,6 +116,18 @@ describe("Commercial Retrieval API Surface", () => {
     await expect(GET(req2 as any)).rejects.toMatchObject({
       statusCode: 400,
       code: "INVALID_LOCALE",
+    });
+  });
+
+  it("rejects inactive retrieval and oversized query text", async () => {
+    const { GET } = await import("../route");
+    await expect(GET(new Request("http://localhost:3000/api/commercial-retrieval?isActive=false") as any)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INACTIVE_RETRIEVAL_NOT_ALLOWED",
+    });
+    await expect(GET(new Request(`http://localhost:3000/api/commercial-retrieval?q=${"x".repeat(201)}`) as any)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INVALID_QUERY_PARAMETER",
     });
   });
 });

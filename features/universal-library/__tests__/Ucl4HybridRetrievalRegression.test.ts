@@ -64,7 +64,9 @@ describe("UCL-4 Hybrid Retrieval Comprehensive Regression Suite (22 Invariants)"
     identifiers: [{ type: "GTIN_13", value: "6941218201234" }],
     aliases: ["Hikvision Bullet", "4MP Bullet"],
     manufacturerName: "Hikvision",
+    manufacturerId: "mfr-hikvision",
     brandName: "Hikvision",
+    brandId: "brand-hikvision",
     categoryId: "cat-cctv",
     categoryName: "CCTV",
     isActive: true,
@@ -85,7 +87,9 @@ describe("UCL-4 Hybrid Retrieval Comprehensive Regression Suite (22 Invariants)"
     identifiers: [{ type: "GTIN_13", value: "6941234567890" }],
     aliases: ["Dome Camera 4MP"],
     manufacturerName: "Hikvision",
+    manufacturerId: "mfr-hikvision",
     brandName: "Hikvision",
+    brandId: "brand-hikvision",
     categoryId: "cat-cctv",
     categoryName: "CCTV",
     isActive: true,
@@ -313,7 +317,7 @@ describe("UCL-4 Hybrid Retrieval Comprehensive Regression Suite (22 Invariants)"
   it("12. Oversampling remains bounded", async () => {
     const repo = createMockRepo({});
     const useCase = new RetrieveCommercialCandidates(repo);
-    await useCase.execute({ companyId: companyA, limit: 100 });
+    await useCase.execute({ companyId: companyA, limit: 50 });
 
     expect(repo.fetchCatalogCandidates).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 100 })
@@ -325,13 +329,8 @@ describe("UCL-4 Hybrid Retrieval Comprehensive Regression Suite (22 Invariants)"
     const repo = createMockRepo({});
     const useCase = new RetrieveCommercialCandidates(repo);
 
-    // Limit <= 0 is bounded to min 1
-    const clampedLower = await useCase.execute({ companyId: companyA, limit: -5 });
-    expect(clampedLower.meta.limit).toBe(1);
-
-    // Limit > 50 is bounded to hard maximum 50
-    const clampedUpper = await useCase.execute({ companyId: companyA, limit: 200 });
-    expect(clampedUpper.meta.limit).toBe(50);
+    await expect(useCase.execute({ companyId: companyA, limit: -5 })).rejects.toThrow("between 1 and 50");
+    await expect(useCase.execute({ companyId: companyA, limit: 200 })).rejects.toThrow("between 1 and 50");
   });
 
   // 14. Empty query behavior is explicitly defined and bounded
@@ -431,5 +430,30 @@ describe("UCL-4 Hybrid Retrieval Comprehensive Regression Suite (22 Invariants)"
 
     // Verify all candidates originate strictly from local repository mocks (synthetic test fixtures)
     expect(result.candidates.every(c => c.id.startsWith("company-catalog:") || c.id.startsWith("universal-library:"))).toBe(true);
+  });
+
+  it("does not let a stale or foreign adoption hide a Universal candidate", async () => {
+    const staleAdoption: UniversalAdoptionLink = {
+      id: "stale", companyId: companyA, universalItemId: "ucl-item-1", catalogItemId: "foreign-catalog-id",
+    };
+    const repo = createMockRepo({ adoptions: [staleAdoption] });
+    const result = await new RetrieveCommercialCandidates(repo).execute({ companyId: companyA, query: "Hikvision" });
+    expect(result.candidates.find((candidate) => candidate.id === "universal-library:ucl-item-1")).toBeDefined();
+  });
+
+  it("uses Universal filtering as authority for manufacturer-scoped retrieval", async () => {
+    const repo = createMockRepo({});
+    const result = await new RetrieveCommercialCandidates(repo).execute({ companyId: companyA, manufacturerId: "mfr-hikvision" });
+    expect(repo.fetchCatalogCandidates).not.toHaveBeenCalled();
+    expect(repo.fetchUniversalCandidates).toHaveBeenCalledWith(expect.objectContaining({ manufacturerId: "mfr-hikvision" }));
+    expect(result.candidates[0].matchReasons).toContain("MANUFACTURER_MATCH");
+  });
+
+  it("uses the requested locale without mutating repository candidates", async () => {
+    const localized = { ...universalItem1, nameAr: "كاميرا عالمية" };
+    const repo = createMockRepo({ universal: [localized] });
+    const result = await new RetrieveCommercialCandidates(repo).execute({ companyId: companyA, locale: "ar" });
+    expect(result.candidates.find((candidate) => candidate.id === localized.id)?.displayName).toBe("كاميرا عالمية");
+    expect(localized.displayName).toBe("Hikvision 4MP Bullet Camera");
   });
 });

@@ -10,12 +10,15 @@ export type MatchReason =
   | "ALIAS_MATCH"
   | "COMPANY_CATALOG_PRIORITY"
   | "CATEGORY_MATCH"
+  | "MANUFACTURER_MATCH"
+  | "BRAND_MATCH"
   | "PARTIAL_NAME_MATCH"
   | "TYPE_MATCH";
 
 export interface CandidateIdentifier {
   type: string;
   value: string;
+  normalizedValue?: string;
 }
 
 export interface CandidateUnit {
@@ -38,7 +41,9 @@ export interface CommercialCandidate {
   identifiers: CandidateIdentifier[];
   aliases?: string[];
   manufacturerName?: string | null;
+  manufacturerId?: string | null;
   brandName?: string | null;
+  brandId?: string | null;
   categoryId?: string | null;
   categoryName?: string | null;
   isActive: boolean;

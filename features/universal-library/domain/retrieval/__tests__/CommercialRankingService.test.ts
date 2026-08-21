@@ -51,7 +51,7 @@ describe("CommercialRankingService & Candidate Projections", () => {
     const scoredUniversal = rankingService.calculateScore(universalCandidate, { query: "6941218201234" });
 
     expect(scoredUniversal.matchReasons).toContain("EXACT_IDENTIFIER");
-    expect(scoredUniversal.score).toBe(950); // Exact identifier
+    expect(scoredUniversal.score).toBe(9000); // Exact identifier tier
     expect(scoredCompany.score).toBe(100); // Only company priority base
     expect(scoredUniversal.score).toBeGreaterThan(scoredCompany.score);
   });
@@ -72,6 +72,27 @@ describe("CommercialRankingService & Candidate Projections", () => {
     expect(sorted[0].id).toBe("c"); // Highest score (800)
     expect(sorted[1].id).toBe("a"); // Equal score (500), but COMPANY_CATALOG before UNIVERSAL_LIBRARY
     expect(sorted[2].id).toBe("b");
+  });
+
+  it("never lets stacked Universal signals outrank an exact Company code", () => {
+    const query = "CAM-01";
+    const stackedUniversal = {
+      ...universalCandidate,
+      displayName: query,
+      modelNumber: query,
+      aliases: [query],
+      identifiers: [{ type: "MPN", value: query, normalizedValue: query }],
+    };
+    expect(rankingService.calculateScore(companyCandidate, { query }).score)
+      .toBeGreaterThan(rankingService.calculateScore(stackedUniversal, { query }).score);
+  });
+
+  it("matches normalized numeric identifiers", () => {
+    const scored = rankingService.calculateScore({
+      ...universalCandidate,
+      identifiers: [{ type: "GTIN_13", value: "6941218201234", normalizedValue: "6941218201234" }],
+    }, { query: "694-1218-201234" });
+    expect(scored.matchReasons).toContain("EXACT_IDENTIFIER");
   });
 
   it("creates compact AI projections without raw payload leakage", () => {
