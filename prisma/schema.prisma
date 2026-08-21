@@ -81,6 +81,7 @@ model Company {
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
   contracts               Contract[]
   contractNumberSequences ContractNumberSequence[]
+  universalAdoptions      UniversalItemAdoption[]
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
 
@@ -89,20 +90,21 @@ model Company {
 }
 
 model User {
-  id                   String               @id @default(cuid())
-  email                String               @unique
+  id                   String                  @id @default(cuid())
+  email                String                  @unique
   name                 String?
   passwordHash         String?
-  locale               Locale               @default(EN)
-  isActive             Boolean              @default(true)
+  locale               Locale                  @default(EN)
+  isActive             Boolean                 @default(true)
   memberships          CompanyMember[]
-  createdSalesOrders   SalesOrder[]         @relation("SalesOrderCreatedBy")
-  confirmedSalesOrders SalesOrder[]         @relation("SalesOrderConfirmedBy")
-  cancelledSalesOrders SalesOrder[]         @relation("SalesOrderCancelledBy")
+  createdSalesOrders   SalesOrder[]            @relation("SalesOrderCreatedBy")
+  confirmedSalesOrders SalesOrder[]            @relation("SalesOrderConfirmedBy")
+  cancelledSalesOrders SalesOrder[]            @relation("SalesOrderCancelledBy")
   salesOrderActivities SalesOrderActivity[]
-  createdContracts     Contract[]           @relation("ContractCreatedBy")
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  createdContracts     Contract[]              @relation("ContractCreatedBy")
+  universalAdoptions   UniversalItemAdoption[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
   @@index([isActive])
 }
@@ -366,14 +368,16 @@ model CatalogItem {
 
   taxRate TaxRate? @relation(fields: [taxRateId], references: [id])
 
-  priceListItems  PriceListItem[]
-  quotationLines  QuotationLine[]
-  salesOrderLines SalesOrderLine[]
-  contractLines   ContractLine[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  priceListItems    PriceListItem[]
+  quotationLines    QuotationLine[]
+  salesOrderLines   SalesOrderLine[]
+  contractLines     ContractLine[]
+  universalAdoption UniversalItemAdoption?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId])
   @@index([companyId, type])
   @@index([companyId, name])
@@ -770,12 +774,13 @@ model SalesOrderActivity {
 model ContractNumberSequence {
   companyId String
   yearMonth String
-  nextValue Int     @default(1)
+  nextValue Int    @default(1)
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@id([companyId, yearMonth])
 }
+
 model Contract {
   id String @id @default(cuid())
 
@@ -789,8 +794,8 @@ model Contract {
 
   customerId   String
   priceListId  String?
-  currencyCode String   @default("KWD")
-  contractDate DateTime @default(now())
+  currencyCode String    @default("KWD")
+  contractDate DateTime  @default(now())
   startDate    DateTime?
   endDate      DateTime?
 
@@ -926,4 +931,117 @@ model ContractMilestone {
 
   @@unique([contractId, position])
   @@index([contractId])
+}
+
+enum UniversalVerificationStatus {
+  UNVERIFIED
+  SOURCE_VERIFIED
+  CROSS_VERIFIED
+  CURATED
+  DEPRECATED
+}
+
+model UniversalCategory {
+  id          String   @id @default(cuid())
+  parentId    String?
+  code        String?
+  name        String
+  nameAr      String?
+  nameEn      String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   UniversalCategory?     @relation("UniversalCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children UniversalCategory[]    @relation("UniversalCategoryHierarchy")
+  items    UniversalCatalogItem[]
+
+  @@unique([code])
+  @@index([parentId])
+  @@index([isActive])
+  @@index([name])
+}
+
+model UniversalSource {
+  id                 String                      @id @default(cuid())
+  name               String
+  type               String
+  externalRef        String?
+  url                String?
+  licenseInfo        String?
+  verificationStatus UniversalVerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  itemProvenances UniversalItemProvenance[]
+
+  @@unique([type, externalRef])
+  @@index([type])
+  @@index([verificationStatus])
+}
+
+model UniversalCatalogItem {
+  id            String          @id @default(cuid())
+  type          CatalogItemType
+  name          String
+  nameAr        String?
+  nameEn        String?
+  searchName    String?
+  description   String?
+  descriptionAr String?
+  descriptionEn String?
+  categoryId    String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  category    UniversalCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  provenances UniversalItemProvenance[]
+  adoptions   UniversalItemAdoption[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([categoryId])
+  @@index([searchName])
+  @@index([name])
+  @@index([createdAt])
+}
+
+model UniversalItemProvenance {
+  id              String   @id @default(cuid())
+  universalItemId String
+  sourceId        String
+  externalRef     String?
+  confidence      Decimal? @db.Decimal(3, 2)
+  observedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+  source        UniversalSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([universalItemId, sourceId])
+  @@index([universalItemId])
+  @@index([sourceId])
+}
+
+model UniversalItemAdoption {
+  id              String   @id @default(cuid())
+  companyId       String
+  universalItemId String
+  catalogItemId   String   @unique
+  adoptedByUserId String?
+  adoptedAt       DateTime @default(now())
+
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+  catalogItem   CatalogItem          @relation(fields: [companyId, catalogItemId], references: [companyId, id], onDelete: Cascade)
+  adoptedByUser User?                @relation(fields: [adoptedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, universalItemId])
+  @@unique([companyId, catalogItemId])
+  @@index([companyId])
+  @@index([universalItemId])
+  @@index([adoptedByUserId])
 }

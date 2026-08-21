@@ -482,19 +482,21 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 <!-- ADR-011-UCL-PROJECT-STATUS -->
 
-## Universal Commercial Library Architecture
+## Universal Commercial Library Architecture & UCL-1 Foundation
 
-Architecture decision: APPROVED.
+Status: **UCL-1 Foundation IMPLEMENTED in PR #60 on feature branch `feature/ucl-1-universal-library-foundation-11068716017962874356`; pending merge and deployment.**
 
-ADR-011 establishes VOKA's future shared Universal Commercial Library while
-preserving the existing Company Catalog as tenant-owned operational master
-data.
+ADR-011 establishes VOKA's shared Universal Commercial Library while
+preserving the existing Company Catalog as tenant-owned operational master data.
 
-No Universal Library implementation, schema migration or production data
-ingestion is part of this architecture-only change.
+UCL-1 Foundation delivered:
+- Global commercial identity model (`UniversalCatalogItem`);
+- Hierarchical commercial taxonomy model (`UniversalCategory`);
+- Source & provenance models (`UniversalSource`, `UniversalItemProvenance`);
+- Explicit tenant adoption boundary (`UniversalItemAdoption`, `AdoptUniversalItem`);
+- Server-side technology-independent bounded retrieval (`IUniversalLibraryRepository`, `PrismaUniversalLibraryRepository`, max page size limit 50, cursor pagination);
+- Authenticated API endpoints under `app/api/universal-library/`;
+- Database migration `20260821000000_ucl_1_foundation`;
+- Automated test coverage (130 test files / 785 tests passing).
 
-The approved model requires bounded server-side retrieval, explicit tenant
-adoption, historical document isolation, provenance-aware ingestion and small
-AI candidate sets.
-
-Implementation remains a separately gated future workstream.
+Remaining UCL-2+ capabilities (brands/manufacturers/models/variants, ingestion pipeline, AI hybrid retrieval, vector search) are intentionally deferred.
