@@ -972,6 +972,16 @@ enum UniversalAttributeDataType {
   JSON
 }
 
+enum UniversalIngestionStatus {
+  RECEIVED
+  NORMALIZED
+  MATCHED
+  PUBLISHED
+  NEEDS_REVIEW
+  REJECTED
+  FAILED
+}
+
 model UniversalCategory {
   id          String   @id @default(cuid())
   parentId    String?
@@ -1069,14 +1079,44 @@ model UniversalSource {
   url                String?
   licenseInfo        String?
   verificationStatus UniversalVerificationStatus @default(UNVERIFIED)
+  isActive           Boolean                     @default(true)
+  trustScore         Decimal?                    @db.Decimal(3, 2)
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt
 
-  itemProvenances UniversalItemProvenance[]
+  itemProvenances  UniversalItemProvenance[]
+  ingestionRecords UniversalIngestionRecord[]
 
   @@unique([type, externalRef])
   @@index([type])
   @@index([verificationStatus])
+  @@index([isActive])
+}
+
+model UniversalIngestionRecord {
+  id               String                   @id @default(cuid())
+  sourceId         String
+  sourceExternalId String
+  entityType       String                   @default("ITEM")
+  rawPayload       Json
+  payloadHash      String
+  status           UniversalIngestionStatus @default(RECEIVED)
+  normalizedData   Json?
+  matchedItemId    String?
+  errorMessage     String?
+  retryCount       Int                      @default(0)
+  processedAt      DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  source      UniversalSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  matchedItem UniversalCatalogItem? @relation(fields: [matchedItemId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceId, sourceExternalId])
+  @@index([sourceId])
+  @@index([status, createdAt])
+  @@index([payloadHash])
+  @@index([matchedItemId])
 }
 
 model UniversalCatalogItem {
@@ -1102,17 +1142,18 @@ model UniversalCatalogItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  category        UniversalCategory?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  manufacturer    UniversalManufacturer?        @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
-  brand           UniversalBrand?               @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  family          UniversalProductFamily?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
-  parent          UniversalCatalogItem?         @relation("UniversalCatalogItemVariants", fields: [parentId], references: [id], onDelete: SetNull)
-  variants        UniversalCatalogItem[]        @relation("UniversalCatalogItemVariants")
-  provenances     UniversalItemProvenance[]
-  adoptions       UniversalItemAdoption[]
-  aliases         UniversalItemAlias[]
-  identifiers     UniversalItemIdentifier[]
-  attributeValues UniversalItemAttributeValue[]
+  category         UniversalCategory?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  manufacturer     UniversalManufacturer?        @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  brand            UniversalBrand?               @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  family           UniversalProductFamily?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  parent           UniversalCatalogItem?         @relation("UniversalCatalogItemVariants", fields: [parentId], references: [id], onDelete: SetNull)
+  variants         UniversalCatalogItem[]        @relation("UniversalCatalogItemVariants")
+  provenances      UniversalItemProvenance[]
+  adoptions        UniversalItemAdoption[]
+  aliases          UniversalItemAlias[]
+  identifiers      UniversalItemIdentifier[]
+  attributeValues  UniversalItemAttributeValue[]
+  ingestionRecords UniversalIngestionRecord[]
 
   @@index([type])
   @@index([isActive])

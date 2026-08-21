@@ -13,6 +13,8 @@ export interface UniversalSourceProps {
   url?: string | null;
   licenseInfo?: string | null;
   verificationStatus: VerificationStatus;
+  isActive?: boolean;
+  trustScore?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +27,8 @@ export class UniversalSource {
   public readonly url: string | null;
   public readonly licenseInfo: string | null;
   public readonly verificationStatus: VerificationStatus;
+  public readonly isActive: boolean;
+  public readonly trustScore: number | null;
   public readonly createdAt: Date;
   public readonly updatedAt: Date;
 
@@ -36,6 +40,8 @@ export class UniversalSource {
     this.url = props.url ?? null;
     this.licenseInfo = props.licenseInfo ?? null;
     this.verificationStatus = props.verificationStatus;
+    this.isActive = props.isActive ?? true;
+    this.trustScore = props.trustScore !== undefined ? props.trustScore : null;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }

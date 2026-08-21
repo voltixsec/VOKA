@@ -1,4 +1,6 @@
 export * from "./SearchUniversalLibrary";
+export * from "./IngestSourceRecord";
+export * from "./ProcessIngestionBatch";
 export * from "./GetUniversalItem";
 export * from "./GetUniversalTaxonomy";
 export * from "./AdoptUniversalItem";

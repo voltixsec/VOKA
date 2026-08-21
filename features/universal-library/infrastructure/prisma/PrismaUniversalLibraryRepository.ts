@@ -24,6 +24,10 @@ import {
   UniversalItemIdentifier,
   UniversalAttributeDefinition,
   UniversalItemAttributeValue,
+  UniversalIngestionRecord,
+  IngestionStatus,
+  SaveIngestionRecordInput,
+  PublishIngestionRecordInput,
   VerificationStatus,
   normalizeUniversalIdentifier,
 } from "../../domain";
@@ -533,6 +537,334 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
     }
   }
 
+  // --- Ingestion Repository Extensions ---
+
+  public async getSourceById(sourceId: string): Promise<UniversalSource | null> {
+    const record = await this.prisma.universalSource.findUnique({
+      where: { id: sourceId },
+    });
+    return record ? this.mapSourceToDomain(record) : null;
+  }
+
+  public async getIngestionRecordBySourceExternalId(
+    sourceId: string,
+    sourceExternalId: string
+  ): Promise<UniversalIngestionRecord | null> {
+    const record = await this.prisma.universalIngestionRecord.findUnique({
+      where: {
+        sourceId_sourceExternalId: {
+          sourceId,
+          sourceExternalId,
+        },
+      },
+    });
+    return record ? this.mapIngestionRecordToDomain(record) : null;
+  }
+
+  public async saveIngestionRecord(input: SaveIngestionRecordInput): Promise<UniversalIngestionRecord> {
+    const record = await this.prisma.universalIngestionRecord.upsert({
+      where: {
+        sourceId_sourceExternalId: {
+          sourceId: input.sourceId,
+          sourceExternalId: input.sourceExternalId,
+        },
+      },
+      create: {
+        sourceId: input.sourceId,
+        sourceExternalId: input.sourceExternalId,
+        entityType: input.entityType || "ITEM",
+        rawPayload: input.rawPayload as any,
+        payloadHash: input.payloadHash,
+        status: input.status,
+        normalizedData: input.normalizedData ? (input.normalizedData as any) : undefined,
+        matchedItemId: input.matchedItemId,
+        errorMessage: input.errorMessage,
+      },
+      update: {
+        rawPayload: input.rawPayload as any,
+        payloadHash: input.payloadHash,
+        status: input.status,
+        normalizedData: input.normalizedData ? (input.normalizedData as any) : undefined,
+        matchedItemId: input.matchedItemId,
+        errorMessage: input.errorMessage,
+      },
+    });
+    return this.mapIngestionRecordToDomain(record);
+  }
+
+  public async getPendingIngestionRecords(limit = 50): Promise<UniversalIngestionRecord[]> {
+    const records = await this.prisma.universalIngestionRecord.findMany({
+      where: {
+        status: { in: ["RECEIVED", "NORMALIZED", "MATCHED"] },
+      },
+      orderBy: { createdAt: "asc" },
+      take: Math.min(Math.max(1, limit), 100),
+    });
+    return records.map(r => this.mapIngestionRecordToDomain(r));
+  }
+
+  public async updateIngestionRecordStatus(
+    id: string,
+    status: IngestionStatus,
+    extra?: { normalizedData?: Record<string, unknown> | null; matchedItemId?: string | null; errorMessage?: string | null; processedAt?: Date | null }
+  ): Promise<UniversalIngestionRecord> {
+    const record = await this.prisma.universalIngestionRecord.update({
+      where: { id },
+      data: {
+        status,
+        ...(extra?.normalizedData !== undefined ? { normalizedData: extra.normalizedData as any } : {}),
+        ...(extra?.matchedItemId !== undefined ? { matchedItemId: extra.matchedItemId } : {}),
+        ...(extra?.errorMessage !== undefined ? { errorMessage: extra.errorMessage } : {}),
+        ...(extra?.processedAt !== undefined ? { processedAt: extra.processedAt } : {}),
+      },
+    });
+    return this.mapIngestionRecordToDomain(record);
+  }
+
+  public async publishIngestionRecord(input: PublishIngestionRecordInput): Promise<{ item: UniversalCatalogItem; isNewItem: boolean }> {
+    const { ingestionRecordId, normalizedPayload, matchedItemId } = input;
+
+    const ingestionRecord = await this.prisma.universalIngestionRecord.findUnique({
+      where: { id: ingestionRecordId },
+      include: { source: true },
+    });
+    if (!ingestionRecord) {
+      throw new Error(`Ingestion record '${ingestionRecordId}' not found.`);
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      let targetItem: any = null;
+      let isNewItem = false;
+
+      // 1. Resolve or create Manufacturer
+      let mfrId: string | null = null;
+      if (normalizedPayload.manufacturerName) {
+        const existingMfr = await tx.universalManufacturer.findFirst({
+          where: {
+            OR: [
+              { name: { equals: normalizedPayload.manufacturerName, mode: "insensitive" as const } },
+              ...(normalizedPayload.manufacturerCode ? [{ code: { equals: normalizedPayload.manufacturerCode, mode: "insensitive" as const } }] : []),
+            ],
+          },
+        });
+        if (existingMfr) {
+          mfrId = existingMfr.id;
+        } else {
+          const newMfr = await tx.universalManufacturer.create({
+            data: {
+              name: normalizedPayload.manufacturerName,
+              code: normalizedPayload.manufacturerCode,
+            },
+          });
+          mfrId = newMfr.id;
+        }
+      }
+
+      // 2. Resolve or create Brand
+      let brandId: string | null = null;
+      if (normalizedPayload.brandName) {
+        const existingBrand = await tx.universalBrand.findFirst({
+          where: {
+            OR: [
+              { name: { equals: normalizedPayload.brandName, mode: "insensitive" as const } },
+              ...(normalizedPayload.brandCode ? [{ code: { equals: normalizedPayload.brandCode, mode: "insensitive" as const } }] : []),
+            ],
+          },
+        });
+        if (existingBrand) {
+          brandId = existingBrand.id;
+        } else {
+          const newBrand = await tx.universalBrand.create({
+            data: {
+              name: normalizedPayload.brandName,
+              code: normalizedPayload.brandCode,
+              manufacturerId: mfrId,
+            },
+          });
+          brandId = newBrand.id;
+        }
+      }
+
+      // 3. Resolve or create Product Family
+      let familyId: string | null = null;
+      if (normalizedPayload.familyName) {
+        const existingFamily = await tx.universalProductFamily.findFirst({
+          where: {
+            OR: [
+              { name: { equals: normalizedPayload.familyName, mode: "insensitive" as const } },
+              ...(normalizedPayload.familyCode ? [{ code: { equals: normalizedPayload.familyCode, mode: "insensitive" as const } }] : []),
+            ],
+          },
+        });
+        if (existingFamily) {
+          familyId = existingFamily.id;
+        } else {
+          const newFamily = await tx.universalProductFamily.create({
+            data: {
+              name: normalizedPayload.familyName,
+              code: normalizedPayload.familyCode,
+              brandId,
+            },
+          });
+          familyId = newFamily.id;
+        }
+      }
+
+      // 4. Resolve Category
+      let categoryId: string | null = null;
+      if (normalizedPayload.categoryCode) {
+        const cat = await tx.universalCategory.findUnique({
+          where: { code: normalizedPayload.categoryCode },
+        });
+        if (cat) categoryId = cat.id;
+      }
+
+      // 5. Update matched item or Create new Canonical Item
+      if (matchedItemId) {
+        targetItem = await tx.universalCatalogItem.update({
+          where: { id: matchedItemId },
+          data: {
+            name: normalizedPayload.name,
+            nameAr: normalizedPayload.nameAr || undefined,
+            nameEn: normalizedPayload.nameEn || undefined,
+            searchName: normalizedPayload.name.toLowerCase(),
+            description: normalizedPayload.description || undefined,
+            descriptionAr: normalizedPayload.descriptionAr || undefined,
+            descriptionEn: normalizedPayload.descriptionEn || undefined,
+            manufacturerId: mfrId || undefined,
+            brandId: brandId || undefined,
+            familyId: familyId || undefined,
+            categoryId: categoryId || undefined,
+            modelNumber: normalizedPayload.modelNumber || undefined,
+            variantName: normalizedPayload.variantName || undefined,
+          },
+        });
+      } else {
+        isNewItem = true;
+        targetItem = await tx.universalCatalogItem.create({
+          data: {
+            type: normalizedPayload.type as CatalogItemType,
+            name: normalizedPayload.name,
+            nameAr: normalizedPayload.nameAr,
+            nameEn: normalizedPayload.nameEn,
+            searchName: normalizedPayload.name.toLowerCase(),
+            description: normalizedPayload.description,
+            descriptionAr: normalizedPayload.descriptionAr,
+            descriptionEn: normalizedPayload.descriptionEn,
+            manufacturerId: mfrId,
+            brandId,
+            familyId,
+            categoryId,
+            modelNumber: normalizedPayload.modelNumber,
+            variantName: normalizedPayload.variantName,
+          },
+        });
+      }
+
+      // 6. Upsert Identifiers
+      for (const ident of normalizedPayload.identifiers) {
+        const isMpnOrModel = ident.identifierType === "MPN" || ident.identifierType === "MODEL_NO";
+        const isExternal = ident.identifierType === "EXTERNAL_ID";
+
+        await tx.universalItemIdentifier.upsert({
+          where: {
+            universalItemId_identifierType_normalizedValue: {
+              universalItemId: targetItem.id,
+              identifierType: ident.identifierType,
+              normalizedValue: ident.normalizedValue,
+            },
+          },
+          create: {
+            universalItemId: targetItem.id,
+            identifierType: ident.identifierType,
+            value: ident.value,
+            normalizedValue: ident.normalizedValue,
+            manufacturerId: isMpnOrModel ? mfrId : null,
+            source: isExternal ? (ident.source || ingestionRecord.source.name) : null,
+          },
+          update: {
+            value: ident.value,
+            manufacturerId: isMpnOrModel ? mfrId : undefined,
+            source: isExternal ? (ident.source || ingestionRecord.source.name) : undefined,
+          },
+        });
+      }
+
+      // 7. Upsert Aliases
+      for (const alias of normalizedPayload.aliases) {
+        const existingAlias = await tx.universalItemAlias.findFirst({
+          where: {
+            universalItemId: targetItem.id,
+            alias: { equals: alias.alias, mode: "insensitive" },
+            locale: alias.locale,
+          },
+        });
+        if (!existingAlias) {
+          await tx.universalItemAlias.create({
+            data: {
+              universalItemId: targetItem.id,
+              alias: alias.alias,
+              locale: alias.locale,
+              aliasType: alias.aliasType,
+            },
+          });
+        }
+      }
+
+      // 8. Upsert Provenance Link
+      const trustScore = ingestionRecord.source.trustScore ? ingestionRecord.source.trustScore.toNumber() : 0.8;
+      await tx.universalItemProvenance.upsert({
+        where: {
+          universalItemId_sourceId: {
+            universalItemId: targetItem.id,
+            sourceId: ingestionRecord.sourceId,
+          },
+        },
+        create: {
+          universalItemId: targetItem.id,
+          sourceId: ingestionRecord.sourceId,
+          externalRef: ingestionRecord.sourceExternalId,
+          confidence: trustScore,
+        },
+        update: {
+          externalRef: ingestionRecord.sourceExternalId,
+          confidence: trustScore,
+          observedAt: new Date(),
+        },
+      });
+
+      // 9. Update Ingestion Record Status to PUBLISHED
+      await tx.universalIngestionRecord.update({
+        where: { id: ingestionRecordId },
+        data: {
+          status: "PUBLISHED",
+          matchedItemId: targetItem.id,
+          processedAt: new Date(),
+          errorMessage: null,
+        },
+      });
+
+      const fullItem = await tx.universalCatalogItem.findUnique({
+        where: { id: targetItem.id },
+        include: {
+          category: true,
+          manufacturer: true,
+          brand: true,
+          family: true,
+          aliases: true,
+          identifiers: true,
+          attributeValues: true,
+          provenances: { include: { source: true } },
+        },
+      });
+
+      return {
+        item: this.mapItemToDomain(fullItem),
+        isNewItem,
+      };
+    });
+  }
+
   private encodeCursor(createdAt: Date, id: string): string {
     return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id }), "utf8")
       .toString("base64url");
@@ -745,19 +1077,42 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       observedAt: record.observedAt,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
-      source: record.source
-        ? new UniversalSource({
-            id: record.source.id,
-            name: record.source.name,
-            type: record.source.type,
-            externalRef: record.source.externalRef,
-            url: record.source.url,
-            licenseInfo: record.source.licenseInfo,
-            verificationStatus: record.source.verificationStatus as VerificationStatus,
-            createdAt: record.source.createdAt,
-            updatedAt: record.source.updatedAt,
-          })
-        : null,
+      source: record.source ? this.mapSourceToDomain(record.source) : null,
+    });
+  }
+
+  private mapSourceToDomain(record: any): UniversalSource {
+    return new UniversalSource({
+      id: record.id,
+      name: record.name,
+      type: record.type,
+      externalRef: record.externalRef,
+      url: record.url,
+      licenseInfo: record.licenseInfo,
+      verificationStatus: record.verificationStatus as VerificationStatus,
+      isActive: record.isActive,
+      trustScore: record.trustScore ? record.trustScore.toNumber() : null,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    });
+  }
+
+  private mapIngestionRecordToDomain(record: any): UniversalIngestionRecord {
+    return new UniversalIngestionRecord({
+      id: record.id,
+      sourceId: record.sourceId,
+      sourceExternalId: record.sourceExternalId,
+      entityType: record.entityType,
+      rawPayload: record.rawPayload as Record<string, unknown>,
+      payloadHash: record.payloadHash,
+      status: record.status as IngestionStatus,
+      normalizedData: record.normalizedData as Record<string, unknown> | null,
+      matchedItemId: record.matchedItemId,
+      errorMessage: record.errorMessage,
+      retryCount: record.retryCount,
+      processedAt: record.processedAt,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
     });
   }
 
