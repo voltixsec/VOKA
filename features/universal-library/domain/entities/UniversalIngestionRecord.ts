@@ -24,6 +24,10 @@ export interface UniversalIngestionRecordProps {
   processedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  acquisitionRunId?: string | null;
+  canonicalSourceUrl?: string | null;
+  fetchedAt?: Date | null;
+  attributionText?: string | null;
 }
 
 export class UniversalIngestionRecord {
@@ -42,6 +46,10 @@ export class UniversalIngestionRecord {
   public readonly processedAt: Date | null;
   public readonly createdAt: Date;
   public readonly updatedAt: Date;
+  public readonly acquisitionRunId: string | null;
+  public readonly canonicalSourceUrl: string | null;
+  public readonly fetchedAt: Date | null;
+  public readonly attributionText: string | null;
 
   constructor(props: UniversalIngestionRecordProps) {
     if (!props.sourceId || props.sourceId.trim() === "") {
@@ -70,5 +78,9 @@ export class UniversalIngestionRecord {
     this.processedAt = props.processedAt ?? null;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
+    this.acquisitionRunId = props.acquisitionRunId ?? null;
+    this.canonicalSourceUrl = props.canonicalSourceUrl ?? null;
+    this.fetchedAt = props.fetchedAt ?? null;
+    this.attributionText = props.attributionText ?? null;
   }
 }

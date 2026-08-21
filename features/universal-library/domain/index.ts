@@ -10,3 +10,4 @@ export * from "./embeddings/DeterministicFakeEmbeddingProvider";
 export * from "./embeddings/SemanticVectorService";
 export * from "./cache/RetrievalCache";
 export * from "./observability/RetrievalObservability";
+export * from "./acquisition";

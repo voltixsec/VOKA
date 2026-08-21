@@ -651,6 +651,10 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         normalizedData: input.normalizedData ? (input.normalizedData as any) : undefined,
         matchedItemId: input.matchedItemId,
         errorMessage: input.errorMessage,
+        acquisitionRunId: input.acquisitionRunId,
+        canonicalSourceUrl: input.canonicalSourceUrl,
+        fetchedAt: input.fetchedAt,
+        attributionText: input.attributionText,
       },
       update: {
         rawPayload: input.rawPayload as any,
@@ -662,6 +666,10 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         processingStartedAt: null,
         processedAt: null,
         retryCount: 0,
+        acquisitionRunId: input.acquisitionRunId,
+        canonicalSourceUrl: input.canonicalSourceUrl,
+        fetchedAt: input.fetchedAt,
+        attributionText: input.attributionText,
       },
     });
     return this.mapIngestionRecordToDomain(record);
@@ -994,11 +1002,21 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
           sourceId: ingestionRecord.sourceId,
           externalRef: ingestionRecord.sourceExternalId,
           confidence: trustScore,
+          acquisitionRunId: ingestionRecord.acquisitionRunId,
+          canonicalSourceUrl: ingestionRecord.canonicalSourceUrl,
+          licenseReferenceUrl: ingestionRecord.source.licenseReferenceUrl,
+          rawPayloadHash: ingestionRecord.payloadHash,
+          attributionText: ingestionRecord.attributionText,
         },
         update: {
           externalRef: ingestionRecord.sourceExternalId,
           confidence: trustScore,
           observedAt: new Date(),
+          acquisitionRunId: ingestionRecord.acquisitionRunId,
+          canonicalSourceUrl: ingestionRecord.canonicalSourceUrl,
+          licenseReferenceUrl: ingestionRecord.source.licenseReferenceUrl,
+          rawPayloadHash: ingestionRecord.payloadHash,
+          attributionText: ingestionRecord.attributionText,
         },
       });
 
@@ -1333,6 +1351,10 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       processedAt: record.processedAt,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
+      acquisitionRunId: record.acquisitionRunId,
+      canonicalSourceUrl: record.canonicalSourceUrl,
+      fetchedAt: record.fetchedAt,
+      attributionText: record.attributionText,
     });
   }
 

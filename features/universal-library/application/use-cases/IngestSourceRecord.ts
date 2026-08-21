@@ -10,6 +10,10 @@ export interface IngestSourceRecordParams {
   sourceExternalId: string;
   entityType?: string;
   rawPayload: RawIngestionPayloadInput;
+  acquisitionRunId?: string;
+  canonicalSourceUrl?: string;
+  fetchedAt?: Date;
+  attributionText?: string;
 }
 
 export interface IngestSourceRecordResult {
@@ -25,6 +29,7 @@ export class IngestSourceRecord {
     const sourceId = params.sourceId.trim();
     const sourceExternalId = params.sourceExternalId.trim();
     const { entityType, rawPayload } = params;
+    const acquisitionMetadata = { acquisitionRunId: params.acquisitionRunId, canonicalSourceUrl: params.canonicalSourceUrl, fetchedAt: params.fetchedAt, attributionText: params.attributionText };
 
     if (!sourceId || sourceId.trim() === "") {
       throw new Error("sourceId is required");
@@ -72,6 +77,7 @@ export class IngestSourceRecord {
           normalizedData: normalized as unknown as Record<string, unknown>,
           matchedItemId: existing.matchedItemId,
           errorMessage: "Published source payload changed and requires manual review",
+          ...acquisitionMetadata,
         });
         return { ingestionRecord: record, isDuplicatePayload: false, isNewRecord: false };
       }
@@ -95,6 +101,7 @@ export class IngestSourceRecord {
         payloadHash,
         status: "REJECTED",
         errorMessage: normalizeError || "Invalid raw payload",
+        ...acquisitionMetadata,
       });
       return {
         ingestionRecord: record,
@@ -134,6 +141,7 @@ export class IngestSourceRecord {
       normalizedData: normalized as unknown as Record<string, unknown>,
       matchedItemId: resolution.matchedItemId,
       errorMessage: resolution.status === "NEEDS_REVIEW" ? "Ambiguous match or low confidence requires manual review" : null,
+      ...acquisitionMetadata,
     });
 
     return {
