@@ -577,7 +577,7 @@ governed by [ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
 
 ## Universal Commercial Library — Approved Architecture Track
 
-Status: **UCL-1 through UCL-3 MERGED TO MAIN through `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a`; UCL-4 MERGED IN PR #63; UCL-5 IMPLEMENTED & VALIDATED LOCALLY / PENDING PR REVIEW & CTO MERGE ON FEATURE BRANCH.**
+Status: **UCL-1 THROUGH UCL-6 CLOSED / MERGED TO MAIN AT `42832749399ca9c9c22e2a8a908f4ea5c88b57c6`; REAL-DATA SOURCE SELECTION UNDER CTO REVIEW; UCL-7 NOT STARTED.**
 
 The Universal Commercial Library is an approved long-term VOKA capability.
 
@@ -609,8 +609,20 @@ Implementation sequence:
 2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (MERGED).**
 3. **UCL-3 — ingestion, normalization, entity resolution, quality and confidence (MERGED; no external data ingested).**
 4. **UCL-4 — hybrid Company Catalog + Universal Library AI retrieval (MERGED).**
-5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (IMPLEMENTED & VALIDATED; PENDING PR MERGE).**
-6. **UCL-6 — controlled external data acquisition and source governance (IMPLEMENTED ON FEATURE BRANCH; REAL PILOT NOT EXECUTED; PENDING CTO REVIEW).**
+5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (MERGED IN PR #64).**
+6. **UCL-6 — controlled external data acquisition and source governance (MERGED IN PR #65).**
+
+Real-data source qualification after UCL-6 is evidence gathering, not UCL-7.
+Wikidata remains a possible supplemental taxonomy/reference source after mapping
+review. Open Icecat is technically useful only as a supplementary identity and
+specification source, and its current license is not approved for direct VOKA
+production generative-AI use.
+
+Before any next pilot, the CTO must select one bounded option: a stratified
+500-record Building analysis, Industrial/Lab vertical `2835`, ETIM
+qualification, or manufacturer feeds. No option is selected by this roadmap.
+See [UCL Source Strategy](UCL_SOURCE_STRATEGY.md) and
+[UCL Pilot Index](UCL_PILOT_INDEX.md).
 
 No UCL implementation phase may weaken existing tenant isolation, pricing,
 taxation, document snapshot or historical integrity guarantees.

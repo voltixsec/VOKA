@@ -11,9 +11,9 @@ Official pre-Phase-6.2 baseline:
 
 `d19d2bd2e306a7db066532ff873e9af5ed3a8349`
 
-Current canonical main baseline after Phase 6.4D merge:
+Current canonical main baseline after UCL-6 merge:
 
-`20c83d9c034189cbf40f907840fdaa81847c100b`
+`42832749399ca9c9c22e2a8a908f4ea5c88b57c6`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -482,9 +482,9 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 <!-- ADR-011-UCL-PROJECT-STATUS -->
 
-## Universal Commercial Library Architecture & UCL-5 Search Intelligence & Scale Validation
+## Universal Commercial Library Architecture & Real-Data Source Pilots
 
-Status: **UCL-5 IMPLEMENTED & VALIDATED LOCALLY / PENDING PR REVIEW & CTO MERGE ON FEATURE BRANCH.**
+Status: **UCL-1 THROUGH UCL-6 CLOSED / MERGED. REAL-DATA SOURCE SELECTION REMAINS UNDER CTO REVIEW. UCL-7 NOT STARTED.**
 
 ADR-011 establishes VOKA's shared Universal Commercial Library while
 preserving the existing Company Catalog as tenant-owned operational master data.
@@ -537,4 +537,17 @@ NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG PO
 
 ### UCL-6 Controlled Data Acquisition
 
-Status: **IMPLEMENTED ON FEATURE BRANCH / PENDING CTO REVIEW.** UCL-6 adds fail-closed source governance, bounded HTTP/SSRF controls, atomic quota reservation, dry-run, acquisition-run audit, data minimization, and provenance-linked UCL-3 staging. **REAL PILOT EXECUTED: NO.** No external data, canonical items, or tenant Catalog records were created. Migration is not deployed. UCL-7 is not started.
+Status: **CLOSED / MERGED** through PR #65 at `42832749399ca9c9c22e2a8a908f4ea5c88b57c6`. UCL-6 adds fail-closed source governance, bounded HTTP/SSRF controls, atomic quota reservation, dry-run, acquisition-run audit, data minimization, and provenance-linked UCL-3 staging.
+
+Post-merge real-data qualification remained dry-run-only. Two bounded Wikidata
+runs returned zero records. Open Icecat technical pilots confirmed useful
+identity/specification data but also material category bias, contamination and
+freshness problems. Its current Open Content License is not approved for direct
+VOKA production generative-AI use. The current decision is
+`ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`, conditional on separate licensing
+and quality controls. No canonical items, ingestion staging records or tenant
+Catalog records were created.
+
+See [UCL Source Strategy](UCL_SOURCE_STRATEGY.md),
+[UCL Pilot Index](UCL_PILOT_INDEX.md), and the
+[session-close checkpoint](checkpoints/2026-08-21-ucl-real-data-source-pilots-session-close.md).
