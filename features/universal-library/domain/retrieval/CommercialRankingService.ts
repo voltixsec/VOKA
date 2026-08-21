@@ -10,11 +10,12 @@ export interface RankingParams {
   categoryId?: string;
   manufacturerId?: string;
   brandId?: string;
+  semanticScore?: number; // Optional semantic similarity score 0.0 - 1.0
 }
 
 export class CommercialRankingService {
   /**
-   * Calculates score and match reasons for a given candidate based on query and filters.
+   * Calculates score and match reasons for a given candidate based on query, filters, and optional semantic similarity.
    */
   public calculateScore(
     candidate: Omit<CommercialCandidate, "score" | "matchReasons"> & {
@@ -136,8 +137,19 @@ export class CommercialRankingService {
       matchReasons.add("COMPANY_CATALOG_PRIORITY");
     }
 
+    // Optional Semantic Similarity Signal
+    // Bounded between 0 and 1000 points so semantic score NEVER overrides strong exact identity evidence
+    // (exact code = 10k, exact identifier = 9k, exact model = 8k, exact name = 7k)
+    let boundedSemanticScore = 0;
+    if (params.semanticScore !== undefined && params.semanticScore > 0) {
+      boundedSemanticScore = Math.min(Math.max(params.semanticScore, 0), 1) * 1_000;
+      if (boundedSemanticScore > 100) {
+        matchReasons.add("ALIAS_MATCH"); // signal semantic match
+      }
+    }
+
     return {
-      score: lexicalScore + structuralScore,
+      score: lexicalScore + structuralScore + boundedSemanticScore,
       matchReasons: Array.from(matchReasons),
     };
   }

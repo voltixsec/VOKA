@@ -482,9 +482,9 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 <!-- ADR-011-UCL-PROJECT-STATUS -->
 
-## Universal Commercial Library Architecture & UCL-4 Hybrid Retrieval
+## Universal Commercial Library Architecture & UCL-5 Search Intelligence & Scale Validation
 
-Status: **UCL-3 MERGED TO MAIN through `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a`; UCL-4 IMPLEMENTED in PR #63 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE.**
+Status: **UCL-5 IMPLEMENTED & VALIDATED LOCALLY / PENDING PR REVIEW & CTO MERGE ON FEATURE BRANCH.**
 
 ADR-011 establishes VOKA's shared Universal Commercial Library while
 preserving the existing Company Catalog as tenant-owned operational master data.
@@ -514,7 +514,7 @@ UCL-3 ingestion machinery delivered in PR #62:
 - OWNER/ADMIN-only administrative APIs;
 - migration `20260821180000_ucl_3_ingestion_normalization`.
 
-UCL-4 Hybrid Commercial Retrieval delivered:
+UCL-4 Hybrid Commercial Retrieval delivered in PR #63:
 - Technology-independent hybrid retrieval domain contract (`CommercialCandidate`);
 - Deterministic lexical ranking engine (`CommercialRankingService`);
 - Collapse of already-adopted Universal items into tenant `CatalogItem` candidates, without creating adoptions;
@@ -522,4 +522,15 @@ UCL-4 Hybrid Commercial Retrieval delivered:
 - Compact AI candidate projection (`toAICandidateProjection`);
 - Bounded oversampling and hard limit enforcement (default 20, max 50).
 
-NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION. NO VECTOR/EMBEDDING SEARCH IMPLEMENTED. UCL-5 NOT STARTED. UCL-4 IS NOT PRODUCTION DEPLOYED AND REMAINS PENDING MERGE.
+UCL-5 Search Intelligence & Scale Validation delivered:
+- Technology-independent search strategy abstraction (`lexical` | `hybrid`);
+- Optional semantic retrieval path with fallback to lexical when semantic index or provider is offline;
+- Provider-neutral embedding interface (`IEmbeddingProvider`) with zero-network `DeterministicFakeEmbeddingProvider`;
+- Derived embedding lifecycle service (`RebuildSemanticIndex`) operating strictly on canonical Universal Library fields;
+- Bounded tenant-safe memory cache (`BoundedMemoryRetrievalCache`) strictly incorporating `companyId`;
+- Hybrid deterministic ranking combining exact identity signals (exact code 10,000, exact barcode 9,000, exact model 8,000, exact name 7,000) with bounded semantic similarity scores (0..1,000);
+- Structured observability (`RetrievalObservability`);
+- Synthetic scale validation harness (`ScaleValidationHarness.test.ts`) validating 10k, 50k, and 100k synthetic item corpora;
+- Strict strategy validation parameter on `GET /api/commercial-retrieval`.
+
+NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION PERFORMED. SCALE DATA IS SYNTHETIC ONLY. LEXICAL FALLBACK REMAINS AVAILABLE. UCL-6 NOT STARTED. UCL-5 IMPLEMENTATION IS PENDING PR MERGE.
