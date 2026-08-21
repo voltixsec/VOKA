@@ -5,7 +5,10 @@ const now = new Date("2026-08-21T12:00:00.000Z");
 const item = (id: string) => ({
   id, type: "PRODUCT", name: id, nameAr: null, nameEn: null, searchName: id,
   description: null, descriptionAr: null, descriptionEn: null, categoryId: null,
-  isActive: true, createdAt: now, updatedAt: now, category: null, provenances: [],
+  manufacturerId: null, brandId: null, familyId: null, modelNumber: null,
+  variantName: null, parentId: null, isActive: true, createdAt: now, updatedAt: now,
+  category: null, manufacturer: null, brand: null, family: null, parent: null,
+  variants: [], aliases: [], identifiers: [], attributeValues: [], provenances: [],
 });
 const catalog = () => ({
   id: "catalog-1", companyId: "company-1", categoryId: null, unitId: null,
@@ -81,6 +84,64 @@ describe("PrismaUniversalLibraryRepository", () => {
     await repository.getCategories({ limit: 999 });
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       take: 100, include: { parent: true },
+    }));
+  });
+
+  it("searches manufacturers with bounded limits", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "mfg-1", name: "Hikvision", code: "HIK", countryCode: "CN",
+        websiteUrl: null, description: null, isActive: true, createdAt: now, updatedAt: now,
+      },
+    ]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalManufacturer: { findMany },
+    } as any);
+
+    const result = await repository.searchManufacturers({ query: "Hikvision", limit: 10 });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Hikvision");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 }));
+  });
+
+  it("searches brands with manufacturer filter", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "brand-1", manufacturerId: "mfg-1", code: "HIK-IP", name: "Hikvision IP",
+        logoUrl: null, description: null, isActive: true, createdAt: now, updatedAt: now,
+        manufacturer: null,
+      },
+    ]);
+    const repository = new PrismaUniversalLibraryRepository({
+      universalBrand: { findMany },
+    } as any);
+
+    const result = await repository.searchBrands({ manufacturerId: "mfg-1" });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Hikvision IP");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ manufacturerId: "mfg-1" }),
+    }));
+  });
+
+  it("looks up items by exact typed identifier", async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      id: "ident-1", universalItemId: "item-1", identifierType: "GTIN_13",
+      value: "6941218201234", normalizedValue: "6941218201234", source: null,
+      createdAt: now, updatedAt: now,
+      universalItem: item("item-1"),
+    });
+    const repository = new PrismaUniversalLibraryRepository({
+      universalItemIdentifier: { findFirst },
+    } as any);
+
+    const result = await repository.lookupByIdentifier({
+      identifierType: "GTIN_13", value: " 6941218201234 ",
+    });
+
+    expect(result?.id).toBe("item-1");
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { identifierType: "GTIN_13", normalizedValue: "6941218201234" },
     }));
   });
 

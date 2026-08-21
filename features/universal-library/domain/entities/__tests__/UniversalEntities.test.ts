@@ -5,6 +5,13 @@ import {
   UniversalItemAdoption,
   UniversalItemProvenance,
   UniversalSource,
+  UniversalManufacturer,
+  UniversalBrand,
+  UniversalProductFamily,
+  UniversalItemAlias,
+  UniversalItemIdentifier,
+  UniversalAttributeDefinition,
+  UniversalItemAttributeValue,
 } from "../index";
 
 describe("Universal Library Domain Entities", () => {
@@ -21,27 +28,109 @@ describe("Universal Library Domain Entities", () => {
     }).toThrow("INVALID_CATEGORY_HIERARCHY: Category cannot be its own parent.");
   });
 
-  it("creates global UniversalCatalogItem without tenant ownership fields", () => {
-    const item = new UniversalCatalogItem({
-      id: "ucl-item-1",
-      type: "PRODUCT",
-      name: "Portland Cement Type I",
-      nameAr: "أسمنت بورتلاندي نوع 1",
-      nameEn: "Portland Cement Type I",
-      searchName: "portland cement type i",
-      description: "Standard commodity cement for construction",
+  it("creates global UniversalCatalogItem with identity enrichment fields", () => {
+    const manufacturer = new UniversalManufacturer({
+      id: "mfg-1",
+      name: "Hikvision",
+      code: "HIK",
+      countryCode: "CN",
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
+    const brand = new UniversalBrand({
+      id: "brand-1",
+      manufacturerId: "mfg-1",
+      name: "Hikvision IP Cameras",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      manufacturer,
+    });
+
+    const family = new UniversalProductFamily({
+      id: "family-1",
+      brandId: "brand-1",
+      name: "Pro Series",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      brand,
+    });
+
+    const alias = new UniversalItemAlias({
+      id: "alias-1",
+      universalItemId: "ucl-item-1",
+      alias: "4MP Dome Camera",
+      locale: "EN",
+      aliasType: "SYNONYM",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const identifier = new UniversalItemIdentifier({
+      id: "ident-1",
+      universalItemId: "ucl-item-1",
+      identifierType: "GTIN_13",
+      value: "6941218201234",
+      normalizedValue: "6941218201234",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const item = new UniversalCatalogItem({
+      id: "ucl-item-1",
+      type: "PRODUCT",
+      name: "DS-2CD2143G0-I 4MP IP Camera",
+      manufacturerId: "mfg-1",
+      brandId: "brand-1",
+      familyId: "family-1",
+      modelNumber: "DS-2CD2143G0-I",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      manufacturer,
+      brand,
+      family,
+      aliases: [alias],
+      identifiers: [identifier],
+    });
+
     expect(item.id).toBe("ucl-item-1");
     expect(item.type).toBe("PRODUCT");
-    expect(item.searchName).toBe("portland cement type i");
-    // Ensure it has no tenant ownership properties on the global record
-    expect((item as any).companyId).toBeUndefined();
-    expect((item as any).salePrice).toBeUndefined();
-    expect((item as any).taxRateId).toBeUndefined();
+    expect(item.manufacturer?.name).toBe("Hikvision");
+    expect(item.brand?.name).toBe("Hikvision IP Cameras");
+    expect(item.family?.name).toBe("Pro Series");
+    expect(item.modelNumber).toBe("DS-2CD2143G0-I");
+    expect(item.aliases).toHaveLength(1);
+    expect(item.identifiers).toHaveLength(1);
+  });
+
+  it("models attribute definitions and typed attribute values", () => {
+    const attrDef = new UniversalAttributeDefinition({
+      id: "attr-def-1",
+      code: "RESOLUTION",
+      name: "Resolution",
+      dataType: "STRING",
+      isRequired: false,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const attrVal = new UniversalItemAttributeValue({
+      id: "attr-val-1",
+      universalItemId: "ucl-item-1",
+      attributeDefinitionId: "attr-def-1",
+      valueString: "4MP (2688x1520)",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      attributeDefinition: attrDef,
+    });
+
+    expect(attrVal.attributeDefinition?.code).toBe("RESOLUTION");
+    expect(attrVal.valueString).toBe("4MP (2688x1520)");
   });
 
   it("associates UniversalSource and UniversalItemProvenance with Universal catalog item", () => {

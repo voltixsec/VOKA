@@ -606,8 +606,7 @@ Mandatory performance contract:
 Implementation sequence:
 
 1. **UCL-1 — global identity, taxonomy, provenance, adoption and retrieval contracts (DELIVERED).**
-2. UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and
-   structured attributes.
+2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (IMPLEMENTED / VERIFIED / PENDING MERGE).**
 3. UCL-3 — ingestion, normalization, entity resolution, quality and confidence.
 4. UCL-4 — hybrid Company Catalog + Universal Library AI retrieval.
 5. UCL-5 — semantic/vector search, caching, ranking and scale validation.

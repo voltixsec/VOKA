@@ -941,6 +941,36 @@ enum UniversalVerificationStatus {
   DEPRECATED
 }
 
+enum UniversalIdentifierType {
+  GTIN
+  GTIN_8
+  GTIN_12
+  GTIN_13
+  GTIN_14
+  EAN
+  UPC
+  MPN
+  MODEL_NO
+  EXTERNAL_ID
+}
+
+enum UniversalAliasType {
+  MONIKER
+  SEARCH
+  SYNONYM
+  MPN
+  HISTORICAL
+  TRANSLITERATION
+}
+
+enum UniversalAttributeDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  DECIMAL
+  SELECT
+}
+
 model UniversalCategory {
   id          String   @id @default(cuid())
   parentId    String?
@@ -953,12 +983,75 @@ model UniversalCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  parent   UniversalCategory?     @relation("UniversalCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children UniversalCategory[]    @relation("UniversalCategoryHierarchy")
-  items    UniversalCatalogItem[]
+  parent               UniversalCategory?             @relation("UniversalCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children             UniversalCategory[]            @relation("UniversalCategoryHierarchy")
+  items                UniversalCatalogItem[]
+  attributeDefinitions UniversalAttributeDefinition[]
 
   @@unique([code])
   @@index([parentId])
+  @@index([isActive])
+  @@index([name])
+}
+
+model UniversalManufacturer {
+  id          String   @id @default(cuid())
+  code        String?  @unique
+  name        String
+  nameAr      String?
+  nameEn      String?
+  countryCode String?
+  websiteUrl  String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  brands UniversalBrand[]
+  items  UniversalCatalogItem[]
+
+  @@index([isActive])
+  @@index([name])
+}
+
+model UniversalBrand {
+  id             String   @id @default(cuid())
+  manufacturerId String?
+  code           String?  @unique
+  name           String
+  nameAr         String?
+  nameEn         String?
+  logoUrl        String?
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  manufacturer    UniversalManufacturer?   @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  productFamilies UniversalProductFamily[]
+  items           UniversalCatalogItem[]
+
+  @@index([manufacturerId])
+  @@index([isActive])
+  @@index([name])
+}
+
+model UniversalProductFamily {
+  id          String   @id @default(cuid())
+  brandId     String?
+  code        String?  @unique
+  name        String
+  nameAr      String?
+  nameEn      String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  brand UniversalBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  items UniversalCatalogItem[]
+
+  @@index([brandId])
   @@index([isActive])
   @@index([name])
 }
@@ -992,20 +1085,118 @@ model UniversalCatalogItem {
   descriptionAr String?
   descriptionEn String?
   categoryId    String?
-  isActive      Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
 
-  category    UniversalCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  provenances UniversalItemProvenance[]
-  adoptions   UniversalItemAdoption[]
+  manufacturerId String?
+  brandId        String?
+  familyId       String?
+  modelNumber    String?
+  variantName    String?
+  parentId       String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category        UniversalCategory?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  manufacturer    UniversalManufacturer?        @relation(fields: [manufacturerId], references: [id], onDelete: SetNull)
+  brand           UniversalBrand?               @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  family          UniversalProductFamily?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  parent          UniversalCatalogItem?         @relation("UniversalCatalogItemVariants", fields: [parentId], references: [id], onDelete: SetNull)
+  variants        UniversalCatalogItem[]        @relation("UniversalCatalogItemVariants")
+  provenances     UniversalItemProvenance[]
+  adoptions       UniversalItemAdoption[]
+  aliases         UniversalItemAlias[]
+  identifiers     UniversalItemIdentifier[]
+  attributeValues UniversalItemAttributeValue[]
 
   @@index([type])
   @@index([isActive])
   @@index([categoryId])
+  @@index([manufacturerId])
+  @@index([brandId])
+  @@index([familyId])
+  @@index([parentId])
+  @@index([modelNumber])
   @@index([searchName])
   @@index([name])
   @@index([createdAt])
+}
+
+model UniversalItemAlias {
+  id              String             @id @default(cuid())
+  universalItemId String
+  alias           String
+  locale          Locale?
+  aliasType       UniversalAliasType @default(SYNONYM)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+
+  @@unique([universalItemId, alias, locale])
+  @@index([universalItemId])
+  @@index([alias])
+}
+
+model UniversalItemIdentifier {
+  id              String                  @id @default(cuid())
+  universalItemId String
+  identifierType  UniversalIdentifierType
+  value           String
+  normalizedValue String
+  source          String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  universalItem UniversalCatalogItem @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+
+  @@unique([universalItemId, identifierType, normalizedValue])
+  @@index([universalItemId])
+  @@index([identifierType, normalizedValue])
+  @@index([normalizedValue])
+}
+
+model UniversalAttributeDefinition {
+  id            String                     @id @default(cuid())
+  categoryId    String?
+  code          String                     @unique
+  name          String
+  nameAr        String?
+  nameEn        String?
+  dataType      UniversalAttributeDataType @default(STRING)
+  unitOfMeasure String?
+  description   String?
+  isRequired    Boolean                    @default(false)
+  isActive      Boolean                    @default(true)
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  category            UniversalCategory?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  itemAttributeValues UniversalItemAttributeValue[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([code])
+}
+
+model UniversalItemAttributeValue {
+  id                    String   @id @default(cuid())
+  universalItemId       String
+  attributeDefinitionId String
+  valueString           String?
+  valueNumber           Decimal? @db.Decimal(18, 4)
+  valueBoolean          Boolean?
+  valueJson             Json?
+  unit                  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  universalItem       UniversalCatalogItem         @relation(fields: [universalItemId], references: [id], onDelete: Cascade)
+  attributeDefinition UniversalAttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([universalItemId, attributeDefinitionId])
+  @@index([universalItemId])
+  @@index([attributeDefinitionId])
 }
 
 model UniversalItemProvenance {

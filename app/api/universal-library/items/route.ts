@@ -1,4 +1,5 @@
 import { CatalogItemType } from "../../../../features/catalog";
+import type { UniversalIdentifierType } from "../../../../lib/generated/prisma/client";
 import {
   PrismaUniversalLibraryRepository,
   InvalidUniversalCursorError,
@@ -21,6 +22,19 @@ const allowedTypes: CatalogItemType[] = [
   "LABOR",
   "DISCOUNT",
   "CUSTOM",
+];
+
+const allowedIdentifierTypes: UniversalIdentifierType[] = [
+  "GTIN",
+  "GTIN_8",
+  "GTIN_12",
+  "GTIN_13",
+  "GTIN_14",
+  "EAN",
+  "UPC",
+  "MPN",
+  "MODEL_NO",
+  "EXTERNAL_ID",
 ];
 
 function parsePositiveInteger(value: string | null): number | undefined {
@@ -52,8 +66,25 @@ export const GET = withCompanyAuth(
       );
     }
 
+    const rawIdentifierType = searchParams.get("identifierType");
+    if (
+      rawIdentifierType &&
+      !allowedIdentifierTypes.includes(rawIdentifierType as UniversalIdentifierType)
+    ) {
+      throw ApiError.badRequest(
+        "INVALID_IDENTIFIER_TYPE",
+        "Identifier type is invalid.",
+        { field: "identifierType" }
+      );
+    }
+
     const query = searchParams.get("q") ?? searchParams.get("query") ?? undefined;
     const categoryId = searchParams.get("categoryId") ?? undefined;
+    const manufacturerId = searchParams.get("manufacturerId") ?? undefined;
+    const brandId = searchParams.get("brandId") ?? undefined;
+    const familyId = searchParams.get("familyId") ?? undefined;
+    const modelNumber = searchParams.get("modelNumber") ?? undefined;
+    const identifierValue = searchParams.get("identifierValue") ?? undefined;
     const isActive = parseBoolean(searchParams.get("isActive"));
     const limit = parsePositiveInteger(searchParams.get("limit"));
     const cursor = searchParams.get("cursor") ?? undefined;
@@ -64,6 +95,12 @@ export const GET = withCompanyAuth(
         query,
         type: rawType as CatalogItemType | undefined,
         categoryId,
+        manufacturerId,
+        brandId,
+        familyId,
+        modelNumber,
+        identifierType: rawIdentifierType as UniversalIdentifierType | undefined,
+        identifierValue,
         isActive,
         limit,
         cursor,

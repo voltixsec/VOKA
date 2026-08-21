@@ -1,6 +1,12 @@
 import { CatalogItemType } from "../../../catalog";
 import { UniversalCategory } from "./UniversalCategory";
 import { UniversalItemProvenance } from "./UniversalItemProvenance";
+import { UniversalManufacturer } from "./UniversalManufacturer";
+import { UniversalBrand } from "./UniversalBrand";
+import { UniversalProductFamily } from "./UniversalProductFamily";
+import { UniversalItemAlias } from "./UniversalItemAlias";
+import { UniversalItemIdentifier } from "./UniversalItemIdentifier";
+import { UniversalItemAttributeValue } from "./UniversalItemAttributeValue";
 
 export interface UniversalCatalogItemProps {
   id: string;
@@ -13,11 +19,25 @@ export interface UniversalCatalogItemProps {
   descriptionAr?: string | null;
   descriptionEn?: string | null;
   categoryId?: string | null;
+  manufacturerId?: string | null;
+  brandId?: string | null;
+  familyId?: string | null;
+  modelNumber?: string | null;
+  variantName?: string | null;
+  parentId?: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
   category?: UniversalCategory | null;
+  manufacturer?: UniversalManufacturer | null;
+  brand?: UniversalBrand | null;
+  family?: UniversalProductFamily | null;
+  parent?: UniversalCatalogItem | null;
+  variants?: UniversalCatalogItem[];
   provenances?: UniversalItemProvenance[];
+  aliases?: UniversalItemAlias[];
+  identifiers?: UniversalItemIdentifier[];
+  attributeValues?: UniversalItemAttributeValue[];
 }
 
 export class UniversalCatalogItem {
@@ -31,11 +51,25 @@ export class UniversalCatalogItem {
   public readonly descriptionAr: string | null;
   public readonly descriptionEn: string | null;
   public readonly categoryId: string | null;
+  public readonly manufacturerId: string | null;
+  public readonly brandId: string | null;
+  public readonly familyId: string | null;
+  public readonly modelNumber: string | null;
+  public readonly variantName: string | null;
+  public readonly parentId: string | null;
   public readonly isActive: boolean;
   public readonly createdAt: Date;
   public readonly updatedAt: Date;
   public readonly category: UniversalCategory | null;
+  public readonly manufacturer: UniversalManufacturer | null;
+  public readonly brand: UniversalBrand | null;
+  public readonly family: UniversalProductFamily | null;
+  public readonly parent: UniversalCatalogItem | null;
+  public readonly variants: UniversalCatalogItem[];
   public readonly provenances: UniversalItemProvenance[];
+  public readonly aliases: UniversalItemAlias[];
+  public readonly identifiers: UniversalItemIdentifier[];
+  public readonly attributeValues: UniversalItemAttributeValue[];
 
   constructor(props: UniversalCatalogItemProps) {
     this.id = props.id;
@@ -48,10 +82,24 @@ export class UniversalCatalogItem {
     this.descriptionAr = props.descriptionAr ?? null;
     this.descriptionEn = props.descriptionEn ?? null;
     this.categoryId = props.categoryId ?? null;
+    this.manufacturerId = props.manufacturerId ?? null;
+    this.brandId = props.brandId ?? null;
+    this.familyId = props.familyId ?? null;
+    this.modelNumber = props.modelNumber ?? null;
+    this.variantName = props.variantName ?? null;
+    this.parentId = props.parentId ?? null;
     this.isActive = props.isActive;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
     this.category = props.category ?? null;
+    this.manufacturer = props.manufacturer ?? null;
+    this.brand = props.brand ?? null;
+    this.family = props.family ?? null;
+    this.parent = props.parent ?? null;
+    this.variants = props.variants ?? [];
     this.provenances = props.provenances ?? [];
+    this.aliases = props.aliases ?? [];
+    this.identifiers = props.identifiers ?? [];
+    this.attributeValues = props.attributeValues ?? [];
   }
 }
