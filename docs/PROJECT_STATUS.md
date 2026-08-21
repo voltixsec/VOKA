@@ -482,9 +482,9 @@ focused verification; see [the resume point](context/08_RESUME_POINT.md).
 
 <!-- ADR-011-UCL-PROJECT-STATUS -->
 
-## Universal Commercial Library Architecture & UCL-3 Ingestion Pipeline
+## Universal Commercial Library Architecture & UCL-4 Hybrid Retrieval
 
-Status: **UCL-2 MERGED TO MAIN at `3834be9ff1a94bbe501fe69dd8ef4d7257e4efae`; UCL-3 IMPLEMENTED in PR #62 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE.**
+Status: **UCL-3 MERGED TO MAIN through `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a`; UCL-4 IMPLEMENTED in PR #63 / CTO REVIEW VERIFIED LOCALLY / PENDING MERGE.**
 
 ADR-011 establishes VOKA's shared Universal Commercial Library while
 preserving the existing Company Catalog as tenant-owned operational master data.
@@ -514,4 +514,12 @@ UCL-3 ingestion machinery delivered in PR #62:
 - OWNER/ADMIN-only administrative APIs;
 - migration `20260821180000_ucl_3_ingestion_normalization`.
 
-NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. UCL-4 NOT STARTED. UCL-3 IS NOT PRODUCTION DEPLOYED.
+UCL-4 Hybrid Commercial Retrieval delivered:
+- Technology-independent hybrid retrieval domain contract (`CommercialCandidate`);
+- Deterministic lexical ranking engine (`CommercialRankingService`);
+- Collapse of already-adopted Universal items into tenant `CatalogItem` candidates, without creating adoptions;
+- Authenticated `GET /api/commercial-retrieval` API endpoint;
+- Compact AI candidate projection (`toAICandidateProjection`);
+- Bounded oversampling and hard limit enforcement (default 20, max 50).
+
+NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION. NO VECTOR/EMBEDDING SEARCH IMPLEMENTED. UCL-5 NOT STARTED. UCL-4 IS NOT PRODUCTION DEPLOYED AND REMAINS PENDING MERGE.
