@@ -251,6 +251,87 @@ export class QuotationLocalizationJobRunner implements IQuotationLocalizationRun
         lines: completion.lines,
         completedAt: new Date(),
       });
+
+      if (completed) {
+        // Dual-write generic localized persistence for Phase B
+        try {
+          const { PrismaLocalizedContentRepository } = await import(
+            "../../persistence/prisma/localization/PrismaLocalizedContentRepository"
+          );
+          const { LocalizedContentStatus } = await import(
+            "../../../domain/localization/types/LocalizedContentStatus"
+          );
+          const { computeSourceHash } = await import(
+            "../../../application/localization/services/computeSourceHash"
+          );
+
+          const locRepo = new PrismaLocalizedContentRepository();
+          const targetLocale = analysis.sourceLocale === "ar" ? "en" : "ar";
+          const variantsToUpsert: Array<any> = [];
+
+          // Helper to register source & target localized content
+          const registerField = (fieldKey: string, sourceText: string | null | undefined, targetText: string | null | undefined) => {
+            if (sourceText && sourceText.trim()) {
+              const hash = computeSourceHash(sourceText);
+              variantsToUpsert.push({
+                companyId: params.companyId,
+                resourceType: "Quotation",
+                resourceId: params.quotationId,
+                fieldKey,
+                locale: analysis.sourceLocale,
+                sourceLocale: analysis.sourceLocale,
+                text: sourceText,
+                status: LocalizedContentStatus.VALID,
+                sourceHash: hash,
+              });
+              if (targetText && targetText.trim()) {
+                variantsToUpsert.push({
+                  companyId: params.companyId,
+                  resourceType: "Quotation",
+                  resourceId: params.quotationId,
+                  fieldKey,
+                  locale: targetLocale,
+                  sourceLocale: analysis.sourceLocale,
+                  text: targetText,
+                  status: LocalizedContentStatus.VALID,
+                  sourceHash: hash,
+                });
+              }
+            }
+          };
+
+          registerField("subject", analysis.sourceLocale === "ar" ? quotation.subjectAr : quotation.subjectEn, analysis.sourceLocale === "ar" ? completion.header.subjectEn : completion.header.subjectAr);
+          registerField("brief", analysis.sourceLocale === "ar" ? quotation.briefAr : quotation.briefEn, analysis.sourceLocale === "ar" ? completion.header.briefEn : completion.header.briefAr);
+          registerField("projectName", analysis.sourceLocale === "ar" ? quotation.projectNameAr : quotation.projectNameEn, analysis.sourceLocale === "ar" ? completion.header.projectNameEn : completion.header.projectNameAr);
+          registerField("attentionName", analysis.sourceLocale === "ar" ? quotation.attentionNameAr : quotation.attentionNameEn, analysis.sourceLocale === "ar" ? completion.header.attentionNameEn : completion.header.attentionNameAr);
+          registerField("notes", analysis.sourceLocale === "ar" ? quotation.notesAr : quotation.notesEn, analysis.sourceLocale === "ar" ? completion.header.notesEn : completion.header.notesAr);
+          registerField("termsAndConditions", analysis.sourceLocale === "ar" ? quotation.termsAndConditionsAr : quotation.termsAndConditionsEn, analysis.sourceLocale === "ar" ? completion.header.termsAndConditionsEn : completion.header.termsAndConditionsAr);
+
+          for (const line of completion.lines) {
+            const qLine = quotation.lines.find((l) => l.id === line.id);
+            if (qLine) {
+              const srcItem = analysis.sourceLocale === "ar" ? qLine.itemNameAr : qLine.itemNameEn;
+              const tgtItem = analysis.sourceLocale === "ar" ? line.itemNameEn : line.itemNameAr;
+              registerField(`line:${line.id}:itemName`, srcItem, tgtItem);
+
+              const srcDesc = analysis.sourceLocale === "ar" ? qLine.descriptionAr : qLine.descriptionEn;
+              const tgtDesc = analysis.sourceLocale === "ar" ? line.descriptionEn : line.descriptionAr;
+              registerField(`line:${line.id}:description`, srcDesc, tgtDesc);
+
+              const srcUnit = analysis.sourceLocale === "ar" ? qLine.unitNameAr : qLine.unitNameEn;
+              const tgtUnit = analysis.sourceLocale === "ar" ? line.unitNameEn : line.unitNameAr;
+              registerField(`line:${line.id}:unitName`, srcUnit, tgtUnit);
+            }
+          }
+
+          if (variantsToUpsert.length > 0) {
+            await locRepo.upsertManyVariants(variantsToUpsert);
+          }
+        } catch (error) {
+          console.error(`[QuotationLocalizationJobRunner] Generic persistence failed for quotation ${params.quotationId}:`, error);
+        }
+      }
+
       return completed ? "COMPLETED" : "STALE";
     } catch (error) {
       const failed = await this.repository.failLocalization({

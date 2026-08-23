@@ -225,6 +225,64 @@ export class UpdateQuotationUseCase {
         quotation,
       );
 
+      // Invalidate generic localized persistence variants for updated fields (Phase B)
+      try {
+        const { PrismaLocalizedContentRepository } = await import(
+          "../../../infrastructure/persistence/prisma/localization/PrismaLocalizedContentRepository"
+        );
+        const locRepo = new PrismaLocalizedContentRepository();
+
+        const fieldKeysToInvalidate: string[] = [];
+
+        // Check if header fields changed
+        if (processedDto.subjectAr !== undefined || processedDto.subjectEn !== undefined) {
+          fieldKeysToInvalidate.push("subject");
+        }
+        if (processedDto.briefAr !== undefined || processedDto.briefEn !== undefined) {
+          fieldKeysToInvalidate.push("brief");
+        }
+        if (processedDto.projectNameAr !== undefined || processedDto.projectNameEn !== undefined || processedDto.projectName !== undefined) {
+          fieldKeysToInvalidate.push("projectName");
+        }
+        if (processedDto.attentionNameAr !== undefined || processedDto.attentionNameEn !== undefined || processedDto.attentionName !== undefined) {
+          fieldKeysToInvalidate.push("attentionName");
+        }
+        if (processedDto.notesAr !== undefined || processedDto.notesEn !== undefined || processedDto.notes !== undefined) {
+          fieldKeysToInvalidate.push("notes");
+        }
+        if (processedDto.termsAndConditionsAr !== undefined || processedDto.termsAndConditionsEn !== undefined || processedDto.termsAndConditions !== undefined) {
+          fieldKeysToInvalidate.push("termsAndConditions");
+        }
+
+        // Check line fields
+        if (Array.isArray(processedDto.lines)) {
+          for (const line of processedDto.lines) {
+            if (line.id) {
+              if (line.itemNameAr !== undefined || line.itemNameEn !== undefined || line.itemName !== undefined) {
+                fieldKeysToInvalidate.push(`line:${line.id}:itemName`);
+              }
+              if (line.descriptionAr !== undefined || line.descriptionEn !== undefined || line.description !== undefined) {
+                fieldKeysToInvalidate.push(`line:${line.id}:description`);
+              }
+              if (line.unitNameAr !== undefined || line.unitNameEn !== undefined || line.unitName !== undefined) {
+                fieldKeysToInvalidate.push(`line:${line.id}:unitName`);
+              }
+            }
+          }
+        }
+
+        if (fieldKeysToInvalidate.length > 0 && quotation.companyId && quotation.id) {
+          await locRepo.invalidateFields({
+            companyId: quotation.companyId,
+            resourceType: "Quotation",
+            resourceId: quotation.id,
+            fieldKeys: fieldKeysToInvalidate,
+          });
+        }
+      } catch (error) {
+        console.error(`[UpdateQuotationUseCase] Generic localization invalidation failed for quotation ${quotation.id}:`, error);
+      }
+
       return {
         success: true,
         data: undefined,
