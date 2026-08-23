@@ -609,8 +609,25 @@ Implementation sequence:
 2. **UCL-2 — Brand, Manufacturer, models, variants, aliases, identifiers and structured attributes (MERGED).**
 3. **UCL-3 — ingestion, normalization, entity resolution, quality and confidence (MERGED; no external data ingested).**
 4. **UCL-4 — hybrid Company Catalog + Universal Library AI retrieval (MERGED).**
-5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (IMPLEMENTED & VALIDATED; PENDING PR MERGE).**
-6. **UCL-6 — controlled external data acquisition and source governance (IMPLEMENTED ON FEATURE BRANCH; REAL PILOT NOT EXECUTED; PENDING CTO REVIEW).**
+5. **UCL-5 — search intelligence, optional semantic boundary with lexical production fallback, caching, hybrid ranking, observability and synthetic bounded-retrieval contract validation (MERGED - PR #64).**
+6. **UCL-6 — controlled external data acquisition and source governance (MERGED - PR #65).**
+7. **UCL Real-Data Source Validation — controlled source pilots & qualification (COMPLETED & RECORDED).**
+
+### UCL Real-Data Source Validation & Next CTO Options
+
+Status: **PILOT EVALUATIONS COMPLETED / DOCUMENTED.**
+
+Decisions & Outcomes:
+- Wikidata: Product population dry runs returned 0 results. Wikidata is not the preferred primary catalog population source. Preserved for taxonomy, knowledge, and manufacturer relationships.
+- Open Icecat: Technical API access confirmed (`APC LR1250I` / ID `2975`). Building & Construction (4776) and Lighting (2332) quality pilots evaluated. Recommended as supplementary identity/spec enrichment source only (`ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`). Open-license interpretation requires legal clarification before production AI use.
+- Pilot Review Console UI preserved locally on branch `review/ucl-icecat-pilot-ui-lighting`.
+- UCL-7 is NOT started.
+
+Possible Next CTO Options for UCL Source Strategy (DO NOT START IN THIS TASK):
+- **Option A:** Improve Building & Construction sampling using stratified/random sampling across all sub-categories.
+- **Option B:** Pilot Industrial & Lab Equipment vertical (`2835`).
+- **Option C:** Begin ETIM taxonomy classification qualification.
+- **Option D:** Qualify direct manufacturer-specific product feeds.
 
 No UCL implementation phase may weaken existing tenant isolation, pricing,
 taxation, document snapshot or historical integrity guarantees.
