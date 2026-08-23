@@ -674,36 +674,29 @@ Current execution order:
 
 1. **Multilingual Localization V2 / OpenAI**
    - Phase A foundation complete: provider-independent BCP-47 boundary, OpenAI Responses API adapter, exact protected-token enforcement, and French/Chinese architectural proofs
-   - Phase B pending: generic persisted localized variants, migration and compatibility rollout
+   - Phase B persistence complete and merged via PR #72 (`LocalizedContent` model with BCP-47 canonicalization and dual-write support)
 
-2. **Manual UI Product Acceptance**
-   - quotations
-   - Sales Assistant
-   - customers/products
-   - Sales Orders
-   - Contracts
-   - PDFs
-   - language switching
+2. **Core Functional Completion Gates Preserved:**
+   - **Manual Core Product Acceptance:** Quotations, Sales Assistant, Customers/Products, Sales Orders, Contracts, PDFs, Language Switching
+   - **Voice End-to-End Acceptance:** Real browser microphone validation over transport-agnostic pipeline without audio persistence
+   - **Universal Commercial Library Population:** Governed multi-source population, normalization, classification, localization, publication
+   - **Smart System Coverage Expansion:** Extending versioned deterministic engineering templates
 
-3. **Voice End-to-End Acceptance**
-   - real browser microphone validation
-   - same text/application pipeline
-   - no audio persistence
-
-4. **Universal Commercial Library Population**
-   - governed multi-source population
-   - normalization
-   - deduplication
-   - classification
-   - localization
-   - publication
-
-5. **Smart System Coverage Expansion**
-   - extend the existing deterministic versioned engine
-   - no duplicate system architecture
-
-After completion:
-
-**Release Hardening → Staging → Real-user Pilot → V1 Release**
+3. **Authoritative V1 Product Closure Execution Sequence:**
+   *(Detailed in [V1 Product Experience, Branding & Product Closure Requirements](product/V1_PRODUCT_EXPERIENCE_AND_BRANDING.md))*
+   1. OpenAI Production Connection & Translation Acceptance
+   2. Email + WhatsApp Commercial Delivery Closure
+   3. Manual Core Product Acceptance
+   4. Voice End-to-End Acceptance
+   5. Universal Commercial Library Population
+   6. Smart System Coverage Expansion
+   7. Product Performance Pass
+   8. Brand System / Themes / Logo / Signature
+   9. Landing Page Rebuild & Dashboard Alignment
+   10. Full Product Acceptance
+   11. Release Hardening
+   12. Staging
+   13. Real-user Pilot
+   14. V1 Release
 
 The Product Integrity regression suite is a safety net and does not by itself mark VOKA as pilot-ready.

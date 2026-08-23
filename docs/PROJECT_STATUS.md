@@ -576,13 +576,31 @@ Status: **IN PROGRESS / NOT RELEASE READY**
 
 The automated product-integrity regression suite provides a strong safety net across core quotation and Smart System journeys, but it does not constitute final product acceptance.
 
-Current mandatory completion gates:
+Current mandatory completion gates & execution order:
 
-1. Multilingual Localization V2 / OpenAI.
-2. Manual UI Product Acceptance.
-3. Voice End-to-End Acceptance.
-4. Universal Commercial Library Population.
-5. Smart System Coverage Expansion.
+See [V1 Product Experience, Branding & Product Closure Requirements](product/V1_PRODUCT_EXPERIENCE_AND_BRANDING.md) for the authoritative requirements across all 10 workstreams.
+
+Mandatory core completion gates preserved:
+- Manual Core Product Acceptance
+- Voice End-to-End Acceptance
+- Universal Commercial Library Population
+- Smart System Coverage Expansion
+
+Authoritative execution sequence following Multilingual Phase B persistence (PR #72):
+1. OpenAI Production Connection & Translation Acceptance
+2. Email + WhatsApp Commercial Delivery Closure
+3. Manual Core Product Acceptance
+4. Voice End-to-End Acceptance
+5. Universal Commercial Library Population
+6. Smart System Coverage Expansion
+7. Product Performance Pass
+8. Brand System / Themes / Logo / Signature
+9. Landing Page Rebuild & Dashboard Alignment
+10. Full Product Acceptance
+11. Release Hardening
+12. Staging
+13. Real-user Pilot
+14. V1 Release
 
 Release Hardening, Staging and Real-user Pilot occur only after these gates are closed.
 
@@ -590,12 +608,11 @@ Regression checkpoint:
 
 `docs/checkpoints/2026-08-25-v1-product-integrity-regression-baseline.md`
 
-## Multilingual Localization V2 / OpenAI — Phase A
+## Multilingual Localization V2 / OpenAI — Phase A & Phase B
 
-Status: **FOUNDATION COMPLETE / PHASE B GENERIC PERSISTENCE PENDING**
+Status: **COMPLETE / MERGED via PR #72**
 
-The provider-neutral BCP-47 translation boundary, OpenAI Responses API adapter,
-strict protected-token validation, and French/Chinese architectural proofs are
-implemented. Existing Arabic/English persistence is unchanged. Generic locale
-persistence, schema migration, rollout and backfill remain Phase B work; this
-does not close the V1 globalization gate or authorize release/pilot.
+Phase A provider-neutral BCP-47 translation boundary, OpenAI Responses API adapter,
+strict protected-token validation, and French/Chinese architectural proofs were delivered.
+Phase B generic multilingual persistence (`LocalizedContent` model with BCP-47 canonicalization,
+SHA-256 source hashing, dual-write support, and read fallback) was merged through PR #72 at `728480f23ff90c342dd3007f12e9f09b42201b5c`.
