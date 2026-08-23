@@ -1,8 +1,10 @@
 # Project Status
 
-Current Product Frontier: **V1 Smart Sales Assistant End-to-End Hardening**
+Current Product Frontier: **V1 Product Completion & Globalization**
 
-Status: V1 Smart Sales Assistant End-to-End Hardening completed and verified; complete proof flows for CCTV, Gypsum Board, conversational confirmation, zero fabrication, and voice transport boundary validated with 1000/1000 passing tests across 148 test files.
+Status: **IN PROGRESS / NOT RELEASE READY.** The Product Integrity regression
+suite is an automated safety net only; it is not manual product acceptance and
+does not establish release or real-user-pilot readiness.
 Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch.
 Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
@@ -12,9 +14,9 @@ Official pre-Phase-6.2 baseline:
 
 `d19d2bd2e306a7db066532ff873e9af5ed3a8349`
 
-Current canonical main baseline after Phase 6.4D merge:
+Current authoritative main baseline:
 
-`20c83d9c034189cbf40f907840fdaa81847c100b`
+`2bd203198a043a44dd4278b96739df3c0f7d1622`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
@@ -567,3 +569,23 @@ Delivered:
 - Interactive UI workspace updates in `/dashboard/sales-assistant` rendering Smart System badges and provenance labels;
 - Reusable transport-agnostic application contract supporting Web Text, Web Mic (`useVoiceInput`), and future Android Text/Mic;
 - Full unit, integration, adversarial, and UI test coverage.
+
+## V1 Product Completion & Globalization
+
+Status: **IN PROGRESS / NOT RELEASE READY**
+
+The automated product-integrity regression suite provides a strong safety net across core quotation and Smart System journeys, but it does not constitute final product acceptance.
+
+Current mandatory completion gates:
+
+1. Multilingual Localization V2 / OpenAI.
+2. Manual UI Product Acceptance.
+3. Voice End-to-End Acceptance.
+4. Universal Commercial Library Population.
+5. Smart System Coverage Expansion.
+
+Release Hardening, Staging and Real-user Pilot occur only after these gates are closed.
+
+Regression checkpoint:
+
+`docs/checkpoints/2026-08-25-v1-product-integrity-regression-baseline.md`

@@ -663,3 +663,51 @@ Mandatory Invariants & Hardening:
 - Voice transport (`useVoiceInput`) serves as an input transport only; no backend audio persistence or audio schema additions.
 - Application contract is transport-agnostic and ready for future Android text/voice submission.
 - Integrates seamlessly with existing canonical quotation composer (`/dashboard/quotations/new`).
+
+---
+
+# V1 Product Completion & Globalization
+
+Status: **ACTIVE**
+
+Current execution order:
+
+1. **Multilingual Localization V2 / OpenAI**
+   - provider-independent multilingual core
+   - OpenAI production adapter
+   - configurable locales
+   - protected commercial identifiers
+   - persisted localized variants
+   - third-language architectural proof
+
+2. **Manual UI Product Acceptance**
+   - quotations
+   - Sales Assistant
+   - customers/products
+   - Sales Orders
+   - Contracts
+   - PDFs
+   - language switching
+
+3. **Voice End-to-End Acceptance**
+   - real browser microphone validation
+   - same text/application pipeline
+   - no audio persistence
+
+4. **Universal Commercial Library Population**
+   - governed multi-source population
+   - normalization
+   - deduplication
+   - classification
+   - localization
+   - publication
+
+5. **Smart System Coverage Expansion**
+   - extend the existing deterministic versioned engine
+   - no duplicate system architecture
+
+After completion:
+
+**Release Hardening → Staging → Real-user Pilot → V1 Release**
+
+The Product Integrity regression suite is a safety net and does not by itself mark VOKA as pilot-ready.
