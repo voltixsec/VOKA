@@ -9,11 +9,16 @@ import type {
 import { SALES_ASSISTANT_MAX_LINES } from "../dto/AISalesAssistantDto";
 import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesIntent";
 import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
+import { SmartSystemBuilderService } from "../../smart-system/services/SmartSystemBuilderService";
 
 const FALLBACK_WARNING =
   "Structured AI extraction was unavailable or invalid; conservative heuristic extraction was used.";
+const DETERMINISTIC_SYSTEM_WARNING =
+  "Smart System quantities were derived exclusively by the server-owned deterministic template; AI output was not used for engineering quantities.";
 
 export class AISalesAssistantExtractor {
+  private readonly smartSystemBuilder = new SmartSystemBuilderService();
+
   constructor(
     private readonly provider?: AISalesAssistantPort | null,
   ) {}
@@ -23,6 +28,17 @@ export class AISalesAssistantExtractor {
     sourceLocale: SalesAssistantSourceLocale,
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
+
+    // Engineering-system intent is always resolved by server-owned rules. The
+    // untrusted AI provider must never get authority over component quantities.
+    if (this.smartSystemBuilder.detectSystemIntent(trimmed)) {
+      const intent = this.heuristicExtract(trimmed, sourceLocale);
+      return {
+        intent,
+        extractionMode: "heuristic",
+        warnings: [DETERMINISTIC_SYSTEM_WARNING, ...(intent.warnings ?? [])],
+      };
+    }
 
     if (this.provider) {
       try {
@@ -59,6 +75,76 @@ export class AISalesAssistantExtractor {
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
   ): ExtractedSalesIntent {
+    const systemMatch = this.smartSystemBuilder.detectSystemIntent(prompt);
+
+    if (systemMatch) {
+      const calcResult = this.smartSystemBuilder.calculateSystem(
+        systemMatch.systemType,
+        systemMatch.extractedParameters,
+      );
+
+      if (calcResult) {
+        const customerMention = this.extractCustomerMention(
+          prompt,
+          sourceLocale,
+        );
+        const customerEmail =
+          prompt.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ??
+          null;
+
+        const lines: ExtractedLineItem[] = calcResult.components.map((c) => ({
+          text: sourceLocale === "ar" ? c.nameAr : c.nameEn,
+          // Engineering audit detail remains separate from the commercial line
+          // description and is not copied into the quotation composer.
+          description: null,
+          quantity: c.quantity,
+          requestedUnitText: c.unit,
+          requestedPrice: null, // AI & System templates do not invent prices
+          typeIntent: c.itemType === "SERVICE" ? "SERVICE" : "PRODUCT",
+          provenance: c.provenance,
+          formulaExplanation: c.formulaExplanation,
+          componentKey: c.componentKey,
+        }));
+
+        const systemWarnings = [
+          sourceLocale === "ar"
+            ? `تم احتساب البنود والكميات تلقائياً عبر محرّك النظام المحدد: ${calcResult.systemNameAr}`
+            : `System derived using deterministic template: ${calcResult.systemNameEn}`,
+          ...calcResult.warnings,
+        ];
+
+        // Preserve requested price if present in prompt
+        const priceMatch = prompt.match(/(?:\u0628\u0633\u0639\u0631|\u0633\u0639\u0631|\bat\b|\bprice\b)\s*[:=-]?\s*(\d+(?:\.\d+)?)/i);
+        if (priceMatch) {
+          const reqPrice = Number(priceMatch[1]);
+          for (const l of lines) {
+            if (l.typeIntent === "PRODUCT" && l.componentKey?.includes("CAMERA")) {
+              l.requestedPrice = reqPrice;
+            }
+          }
+        }
+
+        return {
+          sourceLocale,
+          customerMention,
+          customerEmail,
+          subject: customerMention
+            ? sourceLocale === "ar"
+              ? `عرض سعر - ${calcResult.systemNameAr} - ${customerMention}`
+              : `Quotation - ${calcResult.systemNameEn} - ${customerMention}`
+            : sourceLocale === "ar"
+            ? `عرض سعر - ${calcResult.systemNameAr}`
+            : `Quotation - ${calcResult.systemNameEn}`,
+          scopeType: this.extractScopeType(prompt),
+          currencyCode: this.extractCurrency(prompt),
+          lines,
+          notes: sourceLocale === "ar" ? calcResult.systemNameAr : calcResult.systemNameEn,
+          warnings: systemWarnings,
+          smartSystem: calcResult,
+        };
+      }
+    }
+
     const customerMention = this.extractCustomerMention(
       prompt,
       sourceLocale,

@@ -1,8 +1,9 @@
 # Project Status
 
-Current Product Frontier: **Phase 7 — Commercial Documents & Receivables**
+Current Product Frontier: **Smart System Builder V1 Foundation**
 
-Status: Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch; CTO review fixes are locally green but uncommitted and unmerged.
+Status: Smart System Builder V1 Foundation & Gypsum/CCTV proof system templates implemented and verified on local feature branch; pending CTO review.
+Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch.
 Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at merge commit `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
@@ -548,3 +549,17 @@ Delivered & Merged:
 - Interactive Pilot Review Console UI built locally on branch `review/ucl-icecat-pilot-ui-lighting` (`C:\Dev\VOKA-worktrees\ucl-icecat-pilot-ui-lighting`) at `http://localhost:3000/admin/ucl-pilot/icecat` operating on local JSON payloads with production 404 guards.
 - Security Invariants: Zero production database migrations deployed, zero canonical products published, zero tenant catalog mutations, zero credentials committed.
 - UCL-7 is NOT started.
+
+## Smart System Builder V1 Foundation
+
+Status: **IMPLEMENTED & VERIFIED LOCALLY / PENDING PR REVIEW**
+
+Delivered:
+- Core domain architecture (`SystemTemplateRegistry`, `ISystemTemplate`, `SystemComponent`, `SystemCalculationResult`, `ProvenanceType`);
+- Gypsum Board System Template (`GypsumBoardSystemTemplate`) with configurable defaults and explicit material formulas;
+- CCTV Security System Template (`CctvSystemTemplate`) with camera count, NVR channel dimensioning, HDD retention, PoE ports, cabling, and commissioning;
+- Smart System Builder service (`SmartSystemBuilderService`) integrated into `AISalesAssistantExtractor` and `AISalesAssistantResolver`;
+- Provenance transparency (`USER_PROVIDED`, `CALCULATED`, `SUGGESTED`) across DTOs and API responses (`POST /api/ai/sales-assistant/draft`);
+- Interactive UI workspace updates in `/dashboard/sales-assistant` rendering Smart System badges and provenance labels;
+- Reusable transport-agnostic application contract supporting Web Text, Web Mic (`useVoiceInput`), and future Android Text/Mic;
+- Full unit, integration, and UI test coverage.

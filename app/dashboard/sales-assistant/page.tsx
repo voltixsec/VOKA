@@ -92,6 +92,10 @@ export default function SalesAssistantPage(props: any) {
 
   const handleApplyToComposer = () => {
     if (!proposal) return;
+    if (proposal.smartSystem && proposal.smartSystem.status !== "COMPLETE") {
+      setError(isArabic ? "يجب استكمال مدخلات النظام الحرجة أولاً." : "Complete the critical system inputs before applying the draft.");
+      return;
+    }
     try {
       sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(proposal));
       router.push("/dashboard/quotations/new");
@@ -302,7 +306,8 @@ export default function SalesAssistantPage(props: any) {
             <button
               type="button"
               onClick={handleApplyToComposer}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300 transition"
+              disabled={Boolean(proposal.smartSystem && proposal.smartSystem.status !== "COMPLETE")}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 transition"
             >
               {isArabic ? "تطبيق على نموذج عرض السعر" : "Apply to Quotation Composer"}
             </button>
@@ -365,10 +370,49 @@ export default function SalesAssistantPage(props: any) {
             )}
           </div>
 
+          {proposal.smartSystem && (
+            <div className={`rounded-2xl border p-5 ${proposal.smartSystem.status === "COMPLETE" ? "border-sky-400/20 bg-sky-400/5" : "border-amber-400/30 bg-amber-400/10"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-white">
+                  {isArabic ? proposal.smartSystem.systemNameAr : proposal.smartSystem.systemNameEn}
+                </p>
+                <span className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1 text-[11px] font-semibold text-slate-200">
+                  {proposal.smartSystem.status}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {proposal.smartSystem.inputs.map((input) => (
+                  <div key={input.name} className="rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs">
+                    <p className="text-slate-400">{isArabic ? input.labelAr : input.labelEn}</p>
+                    <p className="mt-1 font-semibold text-white">{input.value == null ? "—" : String(input.value)} {input.unit ?? ""}</p>
+                    <span className={input.provenance === "USER_PROVIDED" ? "text-emerald-300" : "text-amber-300"}>
+                      {input.provenance}{input.isDefault ? (isArabic ? " — قيمة افتراضية" : " — default") : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {proposal.smartSystem.missingInputs.length > 0 && (
+                <p className="mt-3 text-xs font-semibold text-amber-200">
+                  {isArabic ? "مدخلات مطلوبة: " : "Required inputs: "}{proposal.smartSystem.missingInputs.join(", ")}
+                </p>
+              )}
+              {proposal.smartSystem.warnings.length > 0 && (
+                <ul className="mt-3 space-y-1 text-xs text-amber-100">
+                  {proposal.smartSystem.warnings.map((warning) => <li key={warning}>• {warning}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Lines Table */}
           <div className="rounded-2xl border border-white/10 bg-slate-950 overflow-hidden">
-            <div className="p-4 border-b border-white/10 text-xs font-semibold text-slate-400 uppercase">
-              {isArabic ? "بنود عرض السعر والمطابقة بالكتالوج" : "BOQ Line Items & Catalog Resolution"}
+            <div className="p-4 border-b border-white/10 flex items-center justify-between text-xs font-semibold text-slate-400 uppercase">
+              <span>{isArabic ? "بنود عرض السعر والمطابقة بالكتالوج" : "BOQ Line Items & Catalog Resolution"}</span>
+              {proposal.smartSystem && (
+                <span className="rounded-full bg-sky-400/10 border border-sky-400/30 px-3 py-1 text-sky-300 font-medium normal-case">
+                  {isArabic ? `محرّك النظام: ${proposal.smartSystem.systemNameAr}` : `Smart System: ${proposal.smartSystem.systemNameEn}`}
+                </span>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -377,6 +421,7 @@ export default function SalesAssistantPage(props: any) {
                   <tr>
                     <th className="p-4 text-start">#</th>
                     <th className="p-4 text-start">{isArabic ? "البند" : "Item"}</th>
+                    <th className="p-4 text-start">{isArabic ? "مصدر الكمية" : "Provenance"}</th>
                     <th className="p-4 text-start">{isArabic ? "الكتالوج" : "Catalog Match"}</th>
                     <th className="p-4 text-center">{isArabic ? "الكمية" : "Qty"}</th>
                     <th className="p-4 text-end">{isArabic ? "السعر المطلوبة" : "Req. Price"}</th>
@@ -392,6 +437,23 @@ export default function SalesAssistantPage(props: any) {
                         <p className="font-semibold text-white">{line.itemName}</p>
                         {line.description && (
                           <p className="text-xs text-slate-400 mt-0.5">{line.description}</p>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {line.provenance === "CALCULATED" ? (
+                          <span className="inline-block rounded-lg bg-sky-400/10 text-sky-300 text-[11px] px-2 py-0.5 border border-sky-400/20 font-mono">
+                            CALCULATED
+                          </span>
+                        ) : line.provenance === "USER_PROVIDED" ? (
+                          <span className="inline-block rounded-lg bg-emerald-400/10 text-emerald-300 text-[11px] px-2 py-0.5 border border-emerald-400/20 font-mono">
+                            USER_PROVIDED
+                          </span>
+                        ) : line.provenance === "SUGGESTED" ? (
+                          <span className="inline-block rounded-lg bg-amber-400/10 text-amber-300 text-[11px] px-2 py-0.5 border border-amber-400/20 font-mono">
+                            SUGGESTED
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">—</span>
                         )}
                       </td>
                       <td className="p-4">

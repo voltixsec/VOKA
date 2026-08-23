@@ -634,3 +634,27 @@ taxation, document snapshot or historical integrity guarantees.
 
 Architecture source:
 `docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.
+
+---
+
+# Smart System Builder V1 Foundation
+
+Status: **IMPLEMENTED & VERIFIED LOCALLY**
+
+Pipeline:
+Natural Language / Voice
+-> System Intent & Input Extraction
+-> System Template Selection
+-> Deterministic Calculation Engine
+-> Product / Component Mapping with Provenance (`USER_PROVIDED`, `CALCULATED`, `SUGGESTED`)
+-> Editable Commercial Quotation Draft
+
+Initial Proof Systems:
+1. **GYPSUM BOARD**: Board sheets, C-Studs, U-Tracks, Drywall Screws, Joint Tape, Joint Compound, Anchors, Insulation, Finishing Labor.
+2. **CCTV**: Camera units, NVR recorder channels, Surveillance HDDs, PoE switch ports, Rack cabinet, Cat6 rolls, RJ45 accessories, Commissioning services.
+
+Boundary Rules:
+- AI proposes inputs and system identity; AI NEVER invents engineering quantities.
+- Calculation logic is deterministic and rule-based.
+- Reusable application contract compatible with Web Text, Web Mic, and future Android transports.
+- Integrates seamlessly with existing quotation composer (`/dashboard/quotations/new`).

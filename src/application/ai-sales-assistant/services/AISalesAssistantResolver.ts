@@ -179,6 +179,19 @@ export class AISalesAssistantResolver {
       canonicalLines.length === 0 ||
       canonicalLines.some((line) => line.reviewRequired);
 
+    const smartSystem = intent.smartSystem
+      ? {
+          systemType: intent.smartSystem.systemType,
+          templateVersion: intent.smartSystem.templateVersion,
+          systemNameAr: intent.smartSystem.systemNameAr,
+          systemNameEn: intent.smartSystem.systemNameEn,
+          status: intent.smartSystem.status,
+          inputs: intent.smartSystem.inputs,
+          missingInputs: intent.smartSystem.missingInputs,
+          warnings: intent.smartSystem.warnings,
+        }
+      : null;
+
     return {
       customer,
       proposal: {
@@ -202,7 +215,8 @@ export class AISalesAssistantResolver {
       termsAndConditions: terms,
       termsAndConditionsAr: sourceLocale === "ar" ? terms : null,
       termsAndConditionsEn: sourceLocale === "en" ? terms : null,
-      reviewRequired,
+      reviewRequired: reviewRequired || Boolean(smartSystem && smartSystem.status !== "COMPLETE"),
+      smartSystem,
       metadata: {
         sourceLocale,
         extractionMode,
@@ -411,6 +425,9 @@ export class AISalesAssistantResolver {
       taxRateId: item.taxRateId,
       taxPercentage: 0,
       reviewRequired: extracted.quantity == null,
+      provenance: extracted.provenance,
+      formulaExplanation: extracted.formulaExplanation,
+      componentKey: extracted.componentKey,
     };
   }
 
@@ -455,6 +472,9 @@ export class AISalesAssistantResolver {
       taxRateId: null,
       taxPercentage: 0,
       reviewRequired: true,
+      provenance: extracted.provenance,
+      formulaExplanation: extracted.formulaExplanation,
+      componentKey: extracted.componentKey,
     };
   }
 

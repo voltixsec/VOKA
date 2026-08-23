@@ -1,4 +1,5 @@
 import type { QuotationScopeType } from "../../../domain/quotation/types/QuotationScopeType";
+import type { SystemCalculationResult } from "../../../domain/smart-system";
 
 export const SALES_ASSISTANT_PROMPT_MAX_LENGTH = 4_000;
 export const SALES_ASSISTANT_MAX_LINES = 20;
@@ -26,6 +27,9 @@ export interface ExtractedLineItem {
   typeIntent?: SalesItemIntent;
   uncertainty?: string | null;
   warnings?: string[];
+  provenance?: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
+  formulaExplanation?: string;
+  componentKey?: string;
 }
 
 export interface ExtractedSalesIntent {
@@ -46,6 +50,8 @@ export interface ExtractedSalesIntent {
   notes?: string | null;
   uncertainty?: string | null;
   warnings?: string[];
+  /** Server-owned deterministic context. Provider output is never allowed to set this. */
+  smartSystem?: SystemCalculationResult | null;
 }
 
 export interface ExtractedIntentResult {
@@ -106,6 +112,9 @@ export interface ResolvedLineItem {
   taxRateId: string | null;
   taxPercentage: number;
   reviewRequired: boolean;
+  provenance?: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
+  formulaExplanation?: string;
+  componentKey?: string;
 }
 
 export interface DraftProposalFinancials {
@@ -139,6 +148,24 @@ export interface SalesAssistantDraftProposal {
   termsAndConditionsAr: string | null;
   termsAndConditionsEn: string | null;
   reviewRequired: boolean;
+  smartSystem?: {
+    systemType: string;
+    templateVersion: string;
+    systemNameAr: string;
+    systemNameEn: string;
+    status: "COMPLETE" | "NEEDS_CONFIRMATION" | "INVALID_INPUT";
+    inputs: Array<{
+      name: string;
+      labelAr: string;
+      labelEn: string;
+      value: number | string | boolean | null;
+      unit?: string | null;
+      provenance: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
+      isDefault?: boolean;
+    }>;
+    missingInputs: string[];
+    warnings: string[];
+  } | null;
   metadata: {
     sourceLocale: SalesAssistantSourceLocale;
     extractionMode: "provider" | "heuristic";
