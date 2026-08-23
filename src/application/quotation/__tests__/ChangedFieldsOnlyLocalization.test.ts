@@ -12,6 +12,16 @@ import type { IQuotationReferenceValidator } from "../repositories/IQuotationRef
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
 import { UpdateQuotationUseCase } from "../use-cases/UpdateQuotationUseCase";
 
+const localizedContentMocks = vi.hoisted(() => ({ invalidateFields: vi.fn().mockResolvedValue(0) }));
+vi.mock(
+  "../../../infrastructure/persistence/prisma/localization/PrismaLocalizedContentRepository",
+  () => ({
+    PrismaLocalizedContentRepository: class {
+      invalidateFields = localizedContentMocks.invalidateFields;
+    },
+  }),
+);
+
 const mockTranslationPort: TranslationPort = {
   translateMany: vi.fn(),
 };
@@ -117,6 +127,25 @@ function createSampleQuotation(): Quotation {
 }
 
 describe("Changed-fields-only localization (Field-specific Target Invalidation)", () => {
+  it("invalidates generic fields with the trusted quotation tenant even when companyId is absent from the processed DTO", async () => {
+    localizedContentMocks.invalidateFields.mockClear();
+    const initialQuotation = createSampleQuotation();
+    const repository = createRepository(initialQuotation);
+    const dto = {
+      quotationId: "quotation-1",
+      subjectEn: "Updated camera quotation",
+      lines: initialQuotation.lines.map((line) => ({
+        id: line.id, position: line.position, type: line.type, itemName: line.itemName,
+        quantity: line.quantity, unitPrice: line.unitPrice,
+      })),
+    } as Parameters<UpdateQuotationUseCase["execute"]>[0];
+
+    expect((await new UpdateQuotationUseCase(repository, createReferenceValidator()).execute(dto)).success).toBe(true);
+    expect(localizedContentMocks.invalidateFields).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: "company-1", resourceType: "Quotation", resourceId: "quotation-1",
+      fieldKeys: expect.arrayContaining(["subject"]),
+    }));
+  });
   it("1. Changing only itemNameAr on one existing line clears only that line's itemNameEn and preserves all other localized targets", async () => {
     const initialQuotation = createSampleQuotation();
     const repository = createRepository(initialQuotation);

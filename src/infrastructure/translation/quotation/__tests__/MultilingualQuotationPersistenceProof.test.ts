@@ -7,6 +7,7 @@ import { LocalizedContent } from "../../../../domain/localization/entities/Local
 import { analyzeQuotationLocalization } from "../../../../application/quotation/services/QuotationLocalizationAnalyzer";
 import { createQuotationLocalizationSourceSignature } from "../../../../application/quotation/services/QuotationLocalizationSourceSignature";
 import type { ILocalizedContentRepository } from "../../../../application/localization/repositories/ILocalizedContentRepository";
+import { computeSourceHash } from "../../../../application/localization/services/computeSourceHash";
 
 class FakeQuotationRepositoryForProof {
   public quotationMap = new Map<string, Quotation>();
@@ -82,6 +83,7 @@ class FakeLocalizedContentRepository implements ILocalizedContentRepository {
       sourceLocale: params.sourceLocale,
       text: params.text,
       status: params.status,
+      sourceHash: params.sourceHash,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -201,6 +203,7 @@ describe("Multilingual Quotation Persistence Proof (fr-FR & zh-CN)", () => {
       sourceLocale: "ar",
       text: "Fourniture et installation du système d'alarme incendie",
       status: LocalizedContentStatus.VALID,
+      sourceHash: computeSourceHash(arabicQuotation.subjectAr ?? ""),
     });
 
     await locRepo.upsertVariant({
@@ -212,6 +215,7 @@ describe("Multilingual Quotation Persistence Proof (fr-FR & zh-CN)", () => {
       sourceLocale: "ar",
       text: "火灾报警系统的供货与安装",
       status: LocalizedContentStatus.VALID,
+      sourceHash: computeSourceHash(arabicQuotation.subjectAr ?? ""),
     });
 
     // Read back generic French & Chinese content upon reopening quotation

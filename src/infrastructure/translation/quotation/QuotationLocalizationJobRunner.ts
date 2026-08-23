@@ -300,25 +300,25 @@ export class QuotationLocalizationJobRunner implements IQuotationLocalizationRun
             }
           };
 
-          registerField("subject", quotation.subjectAr || quotation.subjectEn, analysis.sourceLocale === "ar" ? completion.header.subjectEn : completion.header.subjectAr);
-          registerField("brief", quotation.briefAr || quotation.briefEn, analysis.sourceLocale === "ar" ? completion.header.briefEn : completion.header.briefAr);
-          registerField("projectName", quotation.projectNameAr || quotation.projectNameEn || quotation.projectName, analysis.sourceLocale === "ar" ? completion.header.projectNameEn : completion.header.projectNameAr);
-          registerField("attentionName", quotation.attentionNameAr || quotation.attentionNameEn || quotation.attentionName, analysis.sourceLocale === "ar" ? completion.header.attentionNameEn : completion.header.attentionNameAr);
-          registerField("notes", quotation.notesAr || quotation.notesEn || quotation.notes, analysis.sourceLocale === "ar" ? completion.header.notesEn : completion.header.notesAr);
-          registerField("termsAndConditions", quotation.termsAndConditionsAr || quotation.termsAndConditionsEn || quotation.termsAndConditions, analysis.sourceLocale === "ar" ? completion.header.termsAndConditionsEn : completion.header.termsAndConditionsAr);
+          registerField("subject", analysis.sourceLocale === "ar" ? quotation.subjectAr : quotation.subjectEn, analysis.sourceLocale === "ar" ? completion.header.subjectEn : completion.header.subjectAr);
+          registerField("brief", analysis.sourceLocale === "ar" ? quotation.briefAr : quotation.briefEn, analysis.sourceLocale === "ar" ? completion.header.briefEn : completion.header.briefAr);
+          registerField("projectName", analysis.sourceLocale === "ar" ? quotation.projectNameAr : quotation.projectNameEn, analysis.sourceLocale === "ar" ? completion.header.projectNameEn : completion.header.projectNameAr);
+          registerField("attentionName", analysis.sourceLocale === "ar" ? quotation.attentionNameAr : quotation.attentionNameEn, analysis.sourceLocale === "ar" ? completion.header.attentionNameEn : completion.header.attentionNameAr);
+          registerField("notes", analysis.sourceLocale === "ar" ? quotation.notesAr : quotation.notesEn, analysis.sourceLocale === "ar" ? completion.header.notesEn : completion.header.notesAr);
+          registerField("termsAndConditions", analysis.sourceLocale === "ar" ? quotation.termsAndConditionsAr : quotation.termsAndConditionsEn, analysis.sourceLocale === "ar" ? completion.header.termsAndConditionsEn : completion.header.termsAndConditionsAr);
 
           for (const line of completion.lines) {
             const qLine = quotation.lines.find((l) => l.id === line.id);
             if (qLine) {
-              const srcItem = qLine.itemNameAr || qLine.itemNameEn || qLine.itemName;
+              const srcItem = analysis.sourceLocale === "ar" ? qLine.itemNameAr : qLine.itemNameEn;
               const tgtItem = analysis.sourceLocale === "ar" ? line.itemNameEn : line.itemNameAr;
               registerField(`line:${line.id}:itemName`, srcItem, tgtItem);
 
-              const srcDesc = qLine.descriptionAr || qLine.descriptionEn || qLine.description;
+              const srcDesc = analysis.sourceLocale === "ar" ? qLine.descriptionAr : qLine.descriptionEn;
               const tgtDesc = analysis.sourceLocale === "ar" ? line.descriptionEn : line.descriptionAr;
               registerField(`line:${line.id}:description`, srcDesc, tgtDesc);
 
-              const srcUnit = qLine.unitNameAr || qLine.unitNameEn || qLine.unitName;
+              const srcUnit = analysis.sourceLocale === "ar" ? qLine.unitNameAr : qLine.unitNameEn;
               const tgtUnit = analysis.sourceLocale === "ar" ? line.unitNameEn : line.unitNameAr;
               registerField(`line:${line.id}:unitName`, srcUnit, tgtUnit);
             }

@@ -271,9 +271,9 @@ export class UpdateQuotationUseCase {
           }
         }
 
-        if (fieldKeysToInvalidate.length > 0 && processedDto.companyId && quotation.id) {
+        if (fieldKeysToInvalidate.length > 0 && quotation.companyId && quotation.id) {
           await locRepo.invalidateFields({
-            companyId: processedDto.companyId,
+            companyId: quotation.companyId,
             resourceType: "Quotation",
             resourceId: quotation.id,
             fieldKeys: fieldKeysToInvalidate,

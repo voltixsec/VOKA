@@ -2,6 +2,7 @@ import type { Quotation } from "../../../domain/quotation";
 import { PrismaLocalizedContentRepository } from "../../../infrastructure/persistence/prisma/localization/PrismaLocalizedContentRepository";
 import { LocalizedContentStatus } from "../../../domain/localization/types/LocalizedContentStatus";
 import { isValidLocale, normalizeLocale } from "../../translation/ports/TranslationPort";
+import { computeSourceHash } from "./computeSourceHash";
 
 import type { ILocalizedContentRepository } from "../repositories/ILocalizedContentRepository";
 
@@ -47,18 +48,57 @@ export async function resolveQuotationGenericLocale(
     unitName: (isAr ? (line.unitNameAr || line.unitName) : isEn ? (line.unitNameEn || line.unitName) : line.unitName) ?? null,
   }));
 
+  const fallback = { ...fallbackHeader, lines: fallbackLines };
+  const companyId = quotation.companyId?.trim();
+  const resourceId = quotation.id?.trim();
+  if (!companyId || !resourceId) return fallback;
+
+  const authoritativeSource = (fieldKey: string, sourceLocale: string): string | null => {
+    const sourceIsAr = sourceLocale === "ar" || sourceLocale.startsWith("ar-");
+    const sourceIsEn = sourceLocale === "en" || sourceLocale.startsWith("en-");
+    if (!sourceIsAr && !sourceIsEn) return null;
+
+    const headerFields: Record<string, [string | null, string | null]> = {
+      subject: [quotation.subjectAr, quotation.subjectEn],
+      brief: [quotation.briefAr, quotation.briefEn],
+      projectName: [quotation.projectNameAr, quotation.projectNameEn],
+      attentionName: [quotation.attentionNameAr, quotation.attentionNameEn],
+      notes: [quotation.notesAr, quotation.notesEn],
+      termsAndConditions: [quotation.termsAndConditionsAr, quotation.termsAndConditionsEn],
+    };
+    const header = headerFields[fieldKey];
+    if (header) return sourceIsAr ? header[0] : header[1];
+
+    const match = /^line:(.+):(itemName|description|unitName)$/.exec(fieldKey);
+    if (!match) return null;
+    const line = quotation.lines.find((candidate) => candidate.id === match[1]);
+    if (!line) return null;
+    const lineFields = {
+      itemName: [line.itemNameAr, line.itemNameEn],
+      description: [line.descriptionAr, line.descriptionEn],
+      unitName: [line.unitNameAr, line.unitNameEn],
+    } as const;
+    const values = lineFields[match[2] as keyof typeof lineFields];
+    return (sourceIsAr ? values[0] : values[1]) ?? null;
+  };
+
   try {
     const locRepo = customRepository ?? new PrismaLocalizedContentRepository();
     const records = await locRepo.findByResourceAndLocale({
-      companyId: quotation.companyId ?? "",
+      companyId,
       resourceType: "Quotation",
-      resourceId: quotation.id ?? "",
+      resourceId,
       locale: normLocale,
     });
 
     const validMap = new Map<string, string>();
     for (const r of records) {
-      if (r.status === LocalizedContentStatus.VALID) {
+      const sourceText = authoritativeSource(r.fieldKey, r.sourceLocale);
+      if (
+        r.status === LocalizedContentStatus.VALID &&
+        sourceText?.trim() &&
+        r.sourceHash === computeSourceHash(sourceText)
+      ) {
         validMap.set(r.fieldKey, r.text);
       }
     }
@@ -79,9 +119,6 @@ export async function resolveQuotationGenericLocale(
     };
   } catch (error) {
     console.error(`[resolveQuotationGenericLocale] Failed to query generic persistence for quotation ${quotation.id}:`, error);
-    return {
-      ...fallbackHeader,
-      lines: fallbackLines,
-    };
+    return fallback;
   }
 }
