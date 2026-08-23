@@ -16,8 +16,9 @@ This document formally captures the remaining V1 product-closure work for VOKA, 
 
 ### Context & Implementation Reality
 - OpenAI is designated as the primary production translation provider for VOKA.
+- Multilingual Localization V2 Phase B generic persistence is COMPLETE and merged via PR #72 (`LocalizedContent` model with BCP-47 canonicalization and dual-write support).
 - The translation engine operates behind the provider-neutral `TranslationPort` abstraction (`OpenAITranslationAdapter`).
-- Code support for `VOKA_TRANSLATION_PROVIDER=openai` and model selection via `VOKA_TRANSLATION_OPENAI_MODEL` (defaulting to `gpt-5.6-sol`) is implemented.
+- Code support for `VOKA_TRANSLATION_PROVIDER=openai` and configurable model selection via `VOKA_TRANSLATION_OPENAI_MODEL` is implemented. The final production translation model selection is determined by measured benchmark and empirical translation acceptance testing rather than assumed defaults.
 
 ### Production Requirements & Acceptance Gate
 1. **Environment & Operations Isolation:**
@@ -204,18 +205,21 @@ Under NO circumstances shall updating company branding assets mutate or alter hi
 
 ## Workstream 10: Intended V1 Execution Sequence
 
-Following the completion of Multilingual Phase B persistence, the authoritative product-closure sequence for V1 is established as follows:
+Following the completion and merge of Multilingual Phase B persistence (PR #72), the authoritative product-closure execution sequence for V1 is established as follows (incorporating all core functional acceptance gates and new V1 closure workstreams):
 
 1. **OpenAI Production Connection & Translation Acceptance**
 2. **Email + WhatsApp Commercial Delivery Closure**
-3. **Manual Core Product Acceptance**
-4. **Product Performance Pass**
-5. **Brand System / Themes / Logo / Signature**
-6. **Landing Page Rebuild & Dashboard Alignment**
-7. **Full Product Acceptance**
-8. **Release Hardening**
-9. **Staging**
-10. **Real-user Pilot**
-11. **V1 Release**
+3. **Manual Core Product Acceptance** (Quotations, Sales Assistant, Customers/Products, Sales Orders, Contracts, PDFs, Language Switching)
+4. **Voice End-to-End Acceptance** (Real browser microphone validation over transport-agnostic pipeline without audio persistence)
+5. **Universal Commercial Library Population** (Governed multi-source population, normalization, classification, localization, publication)
+6. **Smart System Coverage Expansion** (Extending versioned deterministic engineering templates)
+7. **Product Performance Pass** (Holistic profiling and latency/bundle/query optimization across app)
+8. **Brand System / Themes / Logo / Signature** (Centralized theme tokens, Logo generator/upload, Signature capture/cleanup)
+9. **Landing Page Rebuild & Dashboard Alignment** (Simplified natural Arabic/English commercial copy, mobile-first, CTA alignment)
+10. **Full Product Acceptance**
+11. **Release Hardening**
+12. **Staging**
+13. **Real-user Pilot**
+14. **V1 Release**
 
 *Note:* None of these steps may be marked as complete until fully proven through automated tests and manual acceptance verification.
