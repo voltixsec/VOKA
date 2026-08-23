@@ -16,10 +16,23 @@ Official pre-Phase-6.2 baseline:
 
 Current authoritative main baseline:
 
-`2bd203198a043a44dd4278b96739df3c0f7d1622`
+`f881aefdcd0f7900271523fc3b278c0767ee1290`
 
 Phase 5 was merged through PR #40 after independent CTO review and green
 GitHub Quality CI.
+
+## Gate 1 — Multilingual Localization V2 / OpenAI (Phase A)
+
+Status: **Phase A Foundation Completed / Persistence Expansion (Phase B) Pending**
+
+Delivered in Phase A:
+- Provider-neutral `TranslationPort` evolution supporting extensible BCP-47 locale tags (`ar`, `en`, `fr`, etc.) with canonical validation and normalization (`isValidLocale`, `normalizeLocale`).
+- Production `OpenAITranslationAdapter` (`src/infrastructure/translation/openai/OpenAITranslationAdapter.ts`) supporting OpenAI's Responses API with structured JSON schema output, configurable model routing (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`), retry policy, and timeout controls.
+- Commercial Protected Token Strategy (`ProtectedTokenValidator.ts`) guaranteeing zero corruption or mutation of SKUs, MPNs, GTINs, quantities, currency values (`KD 1,250.500`, `USD 250`), percentages, technical specs (`4MP`, `8TB`, `220V`), URLs, and email addresses.
+- Factory routing update in `createTranslationPort.ts` for `VOKA_TRANSLATION_PROVIDER=openai` while retaining legacy Ollama, Gemini, and Google Cloud adapters.
+- Commercial test corpus (`testCorpus.ts`), third-language proof for French (`MultilingualFrenchProof.test.ts`), and opt-in model benchmark harness (`scripts/benchmark-openai-models.ts`).
+- Documentation checkpoint [ADR-012](architecture/ADR-012-MULTILINGUAL-LOCALIZATION-V2.md) defining the architecture, audit findings, protected token policy, and Phase B generic `LocalizedContent` persistence schema and migration strategy.
+
 ## Sprint 09A - Quotation API
 
 Status: Completed
@@ -167,21 +180,6 @@ Status: Closed and merged through PR #19 at `23c2d2f` on 2026-08-13.
 
 Status: Closed and merged through PR #31 at `6ff9762` on 2026-08-14.
 
-Merged delivery sequence:
-
-- PR #21 (`627d467`): active-language composer and localization visibility.
-- PR #22 (`40314bc`): draft-edit catalog/custom line parity.
-- PR #23 (`8a4cbdf`): quotation validity UX.
-- PR #24 (`44b7464`): authenticated proposal PDF preview.
-- PR #25 (`a878ca4`): quotation delivery foundation and audit trail.
-- PR #26 (`fe0a1d6`): provider-readiness boundaries and configuration state.
-- PR #27 (`0c6c3a4`): Resend email delivery.
-- PR #28 (`29cc4e1`): Meta WhatsApp Cloud API delivery code path.
-- PR #29 (`421b3d2`): combined Email + WhatsApp delivery and failed-channel retry.
-- PR #30 (`97577fb`): canonical quotation tax and totals integrity.
-- PR #31 (`6ff9762`): localized line descriptions, line reordering and final
-  Create/Edit composer parity.
-
 Delivered:
 
 - A single-active-language Create/Edit composer that preserves inactive
@@ -225,39 +223,17 @@ Delivered:
 - An APPROVED quotation can create exactly one tenant-owned Sales Order in
   DRAFT status with deterministic number `SO-{quotation.number}`.
 - Database uniqueness enforces the source one-to-one relationship and
-  company-scoped order number. Repeated and concurrent conversions return the
-  existing order without exposing a raw database conflict.
+  company-scoped order number.
 - Conversion and cancellation acquire the same tenant-scoped active quotation
-  row lock before checking Sales Order state, so whichever operation commits
-  first determines the other operation's stable lifecycle result.
+  row lock before checking Sales Order state.
 - Conversion copies the persisted approved quotation customer, localized
   content, ordered line, discount, historical tax and totals snapshots inside
-  one Prisma transaction. It does not reload or reprice from mutable customer,
-  catalog, Price List or TaxRate records and does not invoke localization/AI.
+  one Prisma transaction.
 - Creator identity and source approval identity/date are stored as historical
-  audit snapshots, with a nullable creator user reference for retention.
-- A quotation with a downstream Sales Order can no longer be cancelled, and
-  cancellation updates lifecycle fields without rewriting quotation lines or
-  commercial snapshots.
+  audit snapshots.
+- A quotation with a downstream Sales Order can no longer be cancelled.
 - Authenticated convert/list/detail APIs and localized, responsive Sales Order
-  list/detail UI are available. The Sales Order is read-only after conversion.
-
-Validated: 105 focused tests across 12 files, 501/501 full regression tests
-across 77 files, TypeScript, Prisma format/validate/generate and 17-migration
-status, lint, production build and diff checks.
-
-P0 conversion/cancellation serialization correction validation: 69 focused
-tests across 7 files and 518/518 full regression tests across 78 files, with
-TypeScript, Prisma, lint, production build and diff checks passing.
-
-Still deferred:
-
-- Sales Order editing, confirmation, cancellation, fulfillment, inventory,
-  warehouse, shipping and Sales Order PDF.
-- Contracts, invoices and payments.
-- Approval-time PDF binary/hash/manifest and cryptographic signatures.
-- Canonical catalog-localization schema and live Price List composer use.
-- Meta live configuration and provider changes; Meta was untouched.
+  list/detail UI are available.
 
 ## Phase 4.2 - Sales Order Confirmation & Cancellation
 
@@ -285,11 +261,7 @@ Delivered:
 - persisted-brand-first document behavior;
 - accurate creation/confirmation/cancellation audit history;
 - multi-page PDF pagination with repeated table headers;
-- tenant-safe internal operational activity notes;
-- lifecycle API request hardening;
-- tenant-safe read/write boundaries.
-
-Final Phase 4.3 validation reached 609/609 tests across 90 files.
+- tenant-safe internal operational activity notes.
 
 ## Phase 5 - Canonical Catalog Integration
 
@@ -319,273 +291,36 @@ Delivered:
   master-data changes;
 - seed hardening for shared system Units.
 
-Existing Customer snapshot reuse and server-owned tax/totals authority were
-preserved.
-
-Final Phase 5 validation:
-
-- Prisma format / validate / generate: PASS
-- TypeScript: PASS
-- focused tests: 27/27 PASS
-- full suite: 95 files / 635 tests PASS
-- lint: PASS
-- production build: PASS
-- git diff check: PASS
-- GitHub Quality CI: PASS
-
 ## Phase 6.1 — Text AI Sales Assistant / Structured Commercial Draft
 
 Status: **Merged through PR #42 / Quality CI passed**.
 
-Delivered:
-
-- Natural-language sales request extraction (Arabic & English) into structured commercial intent;
-- Infrastructure Ollama AI provider (`OllamaSalesAssistantAdapter`) with application-facing abstraction (`AISalesAssistantPort`);
-- Untrusted AI output validation (`validateExtractedSalesIntent`) with deterministic heuristic parser fallback (`AISalesAssistantExtractor`);
-- Candidate Customer matching against active tenant customers with strict ambiguity protection (`MATCHED`, `AMBIGUOUS`, `MISSING`);
-- Active tenant Catalog item resolution with strict ambiguity protection;
-- Canonical pricing via `PricingService` with zero PriceList price preservation and fallback rules;
-- Non-authoritative `requestedPrice` capture for intent tracking;
-- Server-owned tax rate and totals calculation reusing `QuotationCalculator`;
-- Human approval boundary: draft generation performs NO automatic persistence and NEVER creates Customer or Quotation records automatically;
-- "Apply to Quotation" populates the existing quotation Create composer via temporary client transfer for explicit human editing and normal Save;
-- Authenticated `POST /api/ai/sales-assistant/draft` route with tenant scoping and role authorization (`OWNER`, `ADMIN`, `SALES`);
-- Interactive bilingual UI workspace (`/dashboard/sales-assistant`) supporting Arabic RTL and English LTR;
-- Comprehensive unit, API route, and UI test coverage.
+Delivered natural-language sales request extraction (Arabic & English) into structured commercial intent, candidate customer/catalog matching, server-owned pricing/tax/totals authority, human approval boundary, and interactive bilingual UI workspace.
 
 ## Phase 6.2 — Voice Input Transport
 
 Status: **CLOSED / MERGED** through PR #44.
 
-Delivered:
-
-- Speech-recognition browser transport abstraction (`BrowserSpeechRecognizer`) and custom React hook (`useVoiceInput`) under `src/infrastructure/voice/browser/`;
-- Natural voice capture in Arabic (`ar-KW`) and English (`en-US`) directly into the existing Phase 6.1 Sales Assistant prompt field (`/dashboard/sales-assistant`);
-- Smart prompt appending/merging behavior preserving user-entered text;
-- Complete voice UX states: `IDLE`, `LISTENING`, `PROCESSING`, `READY`, `UNAVAILABLE`, `PERMISSION_DENIED`, `ERROR`;
-- Strict privacy invariants: ZERO audio persistence, no audio files, no backend audio uploads, no audio schema additions, no transcript logging;
-- Full accessibility: keyboard-accessible microphone controls, ARIA live regions for screen readers, bilingual labels, no color-only state indication;
-- Invariant enforcement: voice ONLY acts as an input transport for prompt text; speech completion NEVER triggers automatic proposal generation, customer creation, or quotation persistence;
-- Preserved Clean Architecture and Phase 6.1 pipeline authority: `POST /api/ai/sales-assistant/draft` and downstream quotation composer remain unchanged;
-- Full test suite: 103 test files / 665 tests PASS, TypeScript PASS, lint PASS, production build PASS, diff check PASS. Zero database schema or dependency changes.
-
+Delivered voice input transport for browser speech recognition in Arabic and English into the Sales Assistant prompt field with strict privacy invariants.
 
 ## Phase 6.3 — AI Model Routing
 
-Status: **CLOSED / MERGED** through PR #46 at `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
+Status: **CLOSED / MERGED** through PR #46.
 
-Delivered:
-
-- Cloud-primary plus local-fallback routing for AI Sales Assistant and Translation / Localization.
-- Primary interactive AI candidate: `minimax-m3:cloud`.
-- Local fallback candidate: `qwen3:1.7b`.
-- Sales AI and Translation model configuration are independently configurable.
-- Cloud requests omit `format: "json"`, forced `num_ctx`, and low `num_predict` ceilings.
-- Local Ollama models retain compatible structured JSON options.
-- Fallback covers network failure, timeout, HTTP failure, empty output, invalid JSON, `done_reason=length`, semantically invalid Sales output, and invalid Translation key sets.
-- `validateExtractedSalesIntent` remains authoritative.
-- AI remains non-canonical for tenant ownership, Customer/Catalog identity, pricing, tax, totals, approval, Sales Order, branding, history and persistence.
-- No Prisma schema, migration, dependency or paid-provider changes were introduced.
-
-Final validation:
-
-- focused tests: 42/42 PASS
-- full suite: 106 files / 708 tests PASS
-- TypeScript: PASS
-- lint: PASS
-- production build: PASS
-- diff check: PASS
-- GitHub Quality #83: PASS
-
-Core invariant:
-
-AI PROPOSES. SERVER VALIDATES. HUMAN SAVES.
-
-Phase 6.4 subsequently closed. The approved Phase 7 architecture is recorded in
-[ADR-010: Commercial Document Lifecycle](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md).
-Phase 7 implementation has not begun.
+Delivered cloud-primary plus local-fallback routing for AI Sales Assistant and Translation.
 
 ## Phase 6.4 — Product Integrity & Stabilization
 
-Status: **CLOSED / MERGED**
+Status: **CLOSED / MERGED** through PR #54.
 
-The stabilization sequence is closed on canonical `main` at
-`20c83d9c034189cbf40f907840fdaa81847c100b` through PR #54.
-
-### Phase 6.4A — Localization Integrity
-
-Status: **CLOSED / MERGED** through PR #48.
-
-Canonical merge commit:
-
-`32823da495d7564c810b1479bb0133b11741e905`
-
-Delivered:
-
-- false `COMPLETED` quotation localization prevention;
-- validation of required translated targets before localization completion;
-- genuine requested-locale serialization for completed localization;
-- no opposite/source-language line-item fallback masking broken completed localization;
-- bounded, tenant-safe repair for broken editable DRAFT quotations;
-- read-only quotation GET integrity detection without AI/provider side effects;
-- explicit `POST /api/quotations/[quotationId]/localize` mutation boundary for controlled re-localization;
-- APPROVED quotation immutability preserved;
-- Customer bilingual master-data intentionally deferred to Phase 6.4B;
-- Phase 6.3 MiniMax Cloud primary + Qwen local fallback routing preserved.
-
-Validation:
-
-- focused Phase 6.4A tests: 8/8 PASS;
-- Phase 6.3 routing tests: 22/22 PASS;
-- full regression: 107 files / 716 tests PASS;
-- TypeScript PASS;
-- lint PASS with only 4 pre-existing warnings;
-- production build PASS;
-- diff check PASS;
-- GitHub Quality PASS.
-
-No Prisma schema changes, migrations, or dependency changes.
-
-### Phase 6.4B — Customer Master Data
-
-Status: **CLOSED / MERGED** through PR #50, with bilingual Customer UX
-completion through PR #51 at
-`fceba986768d09a69cb1c74fd7c90d62f2c53feb`.
-
-Delivered boundary:
-
-- server-generated tenant-safe Customer code;
-- bilingual Customer naming architecture;
-- preserved Customer authority and historical quotation/SalesOrder snapshots;
-- no automatic Customer creation from AI.
-
-### Phase 6.4C — Delivery Configuration & UX
-
-Status: **CLOSED / MERGED** through PR #52 at
-`a95dd42d32fed7022f006d1f4489c8715261dea9`.
-
-Delivered configuration-readiness representation, provider visibility and
-delivery UX without falsely enabling unavailable channels.
-
-### Phase 6.4D — Dense Quotation Composer UX
-
-Status: **CLOSED / MERGED** through PR #54 at
-`20c83d9c034189cbf40f907840fdaa81847c100b`.
-
-Delivered the dense quotation composer UX with desktop-oriented continuous
-rows, keyboard-friendly entry and RTL/LTR parity.
-
-Phase 6.4 is formally closed. Phase 7A Commercial Document Foundation and Phase
-7B.1 Contract MVP have been implemented according to
-[ADR-010](ADR-010-COMMERCIAL-DOCUMENT-LIFECYCLE.md), but are not yet closed or
-merged. The current CTO review worktree contains uncommitted blocker fixes and
-focused verification; see [the resume point](context/08_RESUME_POINT.md).
-- Commercial document kinds & provenance foundation delivered;
-- Contract domain aggregate, persistence, use cases & APIs delivered (DRAFT-first, direct contract support).
-
-<!-- ADR-011-UCL-PROJECT-STATUS -->
-
-## Universal Commercial Library Architecture & UCL-5 Search Intelligence & Scale Validation
-
-Status: **UCL-5 IMPLEMENTED & VALIDATED LOCALLY / PENDING PR REVIEW & CTO MERGE ON FEATURE BRANCH.**
-
-ADR-011 establishes VOKA's shared Universal Commercial Library while
-preserving the existing Company Catalog as tenant-owned operational master data.
-
-UCL-1 Foundation delivered:
-- Global commercial identity model (`UniversalCatalogItem`);
-- Hierarchical commercial taxonomy model (`UniversalCategory`);
-- Source & provenance models (`UniversalSource`, `UniversalItemProvenance`);
-- Explicit tenant adoption boundary (`UniversalItemAdoption`, `AdoptUniversalItem`);
-- Server-side technology-independent bounded retrieval (`IUniversalLibraryRepository`, `PrismaUniversalLibraryRepository`, max page size limit 50, cursor pagination);
-- Authenticated API endpoints under `app/api/universal-library/`;
-- Database migration `20260821000000_ucl_1_foundation`.
-
-UCL-2 Commercial Identity Enrichment delivered:
-- Universal manufacturers (`UniversalManufacturer`), brands (`UniversalBrand`), and product families (`UniversalProductFamily`);
-- Model number and variant hierarchy (`parentId`, `modelNumber`, `variantName`, `variants`);
-- Multilingual aliases (`UniversalItemAlias`);
-- Exact typed external identifiers (`UniversalItemIdentifier`: GTIN, EAN, UPC, MPN, MODEL_NO) with normalized exact lookup (`LookupByUniversalIdentifier`);
-- Structured attribute definitions (`UniversalAttributeDefinition`) and typed attribute values (`UniversalItemAttributeValue`);
-- API endpoints for `/api/universal-library/manufacturers`, `/api/universal-library/brands`, and `/api/universal-library/identifiers/lookup`;
-- Database migration `20260821120000_ucl_2_identity_enrichment`.
-
-UCL-3 ingestion machinery delivered in PR #62:
-- raw source staging, deterministic hashing and source-scoped idempotency;
-- conservative normalization and identity resolution;
-- bounded atomic batch processing and transactional publication;
-- OWNER/ADMIN-only administrative APIs;
-- migration `20260821180000_ucl_3_ingestion_normalization`.
-
-UCL-4 Hybrid Commercial Retrieval delivered in PR #63:
-- Technology-independent hybrid retrieval domain contract (`CommercialCandidate`);
-- Deterministic lexical ranking engine (`CommercialRankingService`);
-- Collapse of already-adopted Universal items into tenant `CatalogItem` candidates, without creating adoptions;
-- Authenticated `GET /api/commercial-retrieval` API endpoint;
-- Compact AI candidate projection (`toAICandidateProjection`);
-- Bounded oversampling and hard limit enforcement (default 20, max 50).
-
-UCL-5 Search Intelligence & Scale Validation delivered:
-- Technology-independent search strategy abstraction (`lexical` | `hybrid`);
-- Optional semantic retrieval boundary with fallback to lexical when no real semantic adapter/provider is configured;
-- Provider-neutral embedding interface (`IEmbeddingProvider`) with zero-network `DeterministicFakeEmbeddingProvider`;
-- Derived embedding lifecycle service (`RebuildSemanticIndex`) operating strictly on canonical Universal Library fields;
-- Bounded tenant-safe opt-in memory cache (`BoundedMemoryRetrievalCache`) incorporating `companyId`, with production activation requiring an explicit commercial-data invalidation policy;
-- Hybrid deterministic ranking combining exact identity signals (exact code 10,000, exact barcode 9,000, exact model 8,000, exact name 7,000) with bounded semantic similarity scores (0..1,000);
-- Structured observability (`RetrievalObservability`);
-- Synthetic bounded-retrieval contract harness (`ScaleValidationHarness.test.ts`) exercising declared 10k, 50k, and 100k cardinalities without claiming a database benchmark;
-- Strict strategy validation parameter on `GET /api/commercial-retrieval`.
-
-NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION PERFORMED. SCALE DATA IS SYNTHETIC ONLY. LEXICAL FALLBACK REMAINS AVAILABLE. UCL-5 IS MERGED.
-
-### UCL-6 Controlled Data Acquisition & Real-Data Pilots
-
-Status: **MERGED TO MAIN (`42832749399ca9c9c22e2a8a908f4ea5c88b57c6`) / CONTROLLED PILOTS EVALUATED.**
-
-Delivered & Merged:
-- UCL-1 through UCL-6 are fully merged to `main` (PRs #60-#65).
-- Controlled real-data source evaluations completed post-UCL-6.
-- Wikidata product population evaluated: zero-result dry runs #1 and #2 confirmed Wikidata is inconclusive for primary catalog population. Preserved for taxonomy/knowledge enrichment.
-- Open Icecat technical access qualified (`ICECAT_PILOT_ACCESS_CONFIRMED`). Access proven on Building & Construction vertical 4776 with product APC LR1250I (ID 2975).
-- Open Icecat evaluation decision: `ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`. Excellent for brand/MPN/GTIN/spec enrichment, but NOT as sole global catalog or general construction source. Open-license interpretation requires legal clarification before production generative-AI use.
-- Interactive Pilot Review Console UI built locally on branch `review/ucl-icecat-pilot-ui-lighting` (`C:\Dev\VOKA-worktrees\ucl-icecat-pilot-ui-lighting`) at `http://localhost:3000/admin/ucl-pilot/icecat` operating on local JSON payloads with production 404 guards.
-- Security Invariants: Zero production database migrations deployed, zero canonical products published, zero tenant catalog mutations, zero credentials committed.
-- UCL-7 is NOT started.
-
-## Smart System Builder V1 Foundation & End-to-End Hardening
-
-Status: **IMPLEMENTED, HARDENED & VERIFIED LOCALLY / READY FOR CTO REVIEW**
-
-Delivered:
-- Core domain architecture (`SystemTemplateRegistry`, `ISystemTemplate`, `SystemComponent`, `SystemCalculationResult`, `ProvenanceType`);
-- Gypsum Board System Template (`GypsumBoardSystemTemplate`) with configurable defaults and explicit material formulas;
-- CCTV Security System Template (`CctvSystemTemplate`) with camera count, NVR channel dimensioning, HDD retention, PoE ports, cabling, and commissioning;
-- Smart System Builder service (`SmartSystemBuilderService`) integrated into `AISalesAssistantExtractor` and `AISalesAssistantResolver`;
-- Provenance transparency (`USER_PROVIDED`, `CALCULATED`, `SUGGESTED`) across DTOs and API responses (`POST /api/ai/sales-assistant/draft`);
-- End-to-End proof flows verified for CCTV Villa and Gypsum Board Facade 2000m²;
-- Conversational confirmation behavior (`NEEDS_CONFIRMATION`) for missing parameters without falling back to ordinary quotations;
-- Zero fabrication enforcement (server-owned engineering calculations bypass untrusted AI provider outputs);
-- Ordinary camera and gypsum requests regression-tested (no hijacking);
-- Interactive UI workspace updates in `/dashboard/sales-assistant` rendering Smart System badges and provenance labels;
-- Reusable transport-agnostic application contract supporting Web Text, Web Mic (`useVoiceInput`), and future Android Text/Mic;
-- Full unit, integration, adversarial, and UI test coverage.
+Delivered false-completion prevention, Customer master-data code allocator, delivery configuration readiness UX, and dense quotation composer UI.
 
 ## V1 Product Completion & Globalization
 
-Status: **IN PROGRESS / NOT RELEASE READY**
-
-The automated product-integrity regression suite provides a strong safety net across core quotation and Smart System journeys, but it does not constitute final product acceptance.
-
 Current mandatory completion gates:
 
-1. Multilingual Localization V2 / OpenAI.
+1. Multilingual Localization V2 / OpenAI (Phase A Foundation Completed; Phase B Pending).
 2. Manual UI Product Acceptance.
 3. Voice End-to-End Acceptance.
 4. Universal Commercial Library Population.
 5. Smart System Coverage Expansion.
-
-Release Hardening, Staging and Real-user Pilot occur only after these gates are closed.
-
-Regression checkpoint:
-
-`docs/checkpoints/2026-08-25-v1-product-integrity-regression-baseline.md`
