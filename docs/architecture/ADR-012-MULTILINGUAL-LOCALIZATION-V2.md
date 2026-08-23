@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — Phase A foundation complete; Phase B generic persistence pending.
+Accepted — Phase A foundation complete; Phase B generic persistence implemented and verified.
 
 ## Context
 
@@ -20,9 +20,25 @@ VOKA's persisted quotation localization remains bilingual Arabic/English. Global
 
 Chinese (`zh-CN`) and French (`fr-FR`) tests prove the generic Phase A boundary; they do not claim generic database persistence.
 
-## Phase B boundary
+## Phase B generic persistence design & decisions
 
-Phase B will design and migrate additive generic localized persistence, including compatibility with existing Arabic/English fields and immutable historical snapshots. Phase A does not add a schema, dual writes, generic locale rows, backfill, or a production migration. Phase B requires a separate design, migration, rollout and rollback review.
+1. **Additive Schema Model (`LocalizedContent`)**:
+   - Stores generic BCP-47 locale variants cleanly in PostgreSQL table `LocalizedContent`.
+   - Fields: `id`, `companyId` (nullable), `resourceType`, `resourceId`, `fieldKey`, `locale`, `sourceLocale`, `text`, `status` (`PENDING` | `VALID` | `STALE` | `FAILED`), `sourceHash`, `provider`, `model`, `translatedAt`, `createdAt`, `updatedAt`.
+   - Compound unique index: `[companyId, resourceType, resourceId, fieldKey, locale]`.
+2. **Tenant Isolation vs Global UCL Ownership**:
+   - Tenant-owned resources require `companyId` derived strictly from server-side context.
+   - Global Universal Commercial Library (UCL) resources store `companyId = null`, preventing tenant ownership contamination and ensuring clear boundary isolation.
+3. **Deterministic Source Hashing & Field-Level Invalidation**:
+   - Pure SHA-256 hash (`computeSourceHash`) tracks source freshness.
+   - Changing source content marks target variants as `STALE` only for the modified field, preserving valid translations for unchanged fields and unaffected locales.
+4. **Dual-Write & Read Fallback Strategy**:
+   - `QuotationLocalizationJobRunner` dual-writes translated variants to both legacy fields (`subjectAr`/`subjectEn`/etc.) and generic `LocalizedContent` rows (`ar`, `en`, `fr-FR`, `zh-CN`, etc.).
+   - Reads try `VALID` generic localized variant first, falling back to legacy AR/EN fields, and finally to source text. STALE translations are never served as VALID.
+5. **Historical Snapshot Immutability**:
+   - Approved Quotations, Sales Orders, Contracts, and generated document snapshots remain strictly immutable. Generic localization only affects master/editable content before approval snapshot creation.
+6. **No AI on Language Toggle Invariant**:
+   - UI language switches read persisted generic `LocalizedContent` rows without making network or AI model calls.
 
 ## Consequences
 

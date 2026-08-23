@@ -82,6 +82,7 @@ model Company {
   contracts               Contract[]
   contractNumberSequences ContractNumberSequence[]
   universalAdoptions      UniversalItemAdoption[]
+  localizedContents       LocalizedContent[]
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
 
@@ -220,6 +221,13 @@ enum CommercialDocumentOrigin {
 enum MilestoneAmountType {
   PERCENTAGE
   FIXED_AMOUNT
+}
+
+enum LocalizedContentStatus {
+  PENDING
+  VALID
+  STALE
+  FAILED
 }
 
 enum LocalizationStatus {
@@ -1383,4 +1391,30 @@ model UniversalItemAdoption {
   @@index([companyId])
   @@index([universalItemId])
   @@index([adoptedByUserId])
+}
+
+model LocalizedContent {
+  id           String                 @id @default(cuid())
+  companyId    String?
+  resourceType String
+  resourceId   String
+  fieldKey     String
+  locale       String
+  sourceLocale String
+  text         String
+  status       LocalizedContentStatus @default(VALID)
+  sourceHash   String?
+  provider     String?
+  model        String?
+  translatedAt DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, resourceType, resourceId, fieldKey, locale])
+  @@index([companyId, resourceType, resourceId])
+  @@index([resourceType, resourceId, locale])
+  @@index([status])
+  @@index([companyId, status])
 }
