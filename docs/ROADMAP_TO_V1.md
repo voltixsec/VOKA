@@ -637,9 +637,9 @@ Architecture source:
 
 ---
 
-# Smart System Builder V1 Foundation
+# Smart System Builder V1 Foundation & End-to-End Hardening
 
-Status: **IMPLEMENTED & VERIFIED LOCALLY**
+Status: **IMPLEMENTED, HARDENED & VERIFIED LOCALLY**
 
 Pipeline:
 Natural Language / Voice
@@ -647,14 +647,19 @@ Natural Language / Voice
 -> System Template Selection
 -> Deterministic Calculation Engine
 -> Product / Component Mapping with Provenance (`USER_PROVIDED`, `CALCULATED`, `SUGGESTED`)
+-> Review & Confirmation (`NEEDS_CONFIRMATION` / `INVALID_INPUT` safety gates)
 -> Editable Commercial Quotation Draft
+-> Existing Canonical Quotation Workflow
 
 Initial Proof Systems:
 1. **GYPSUM BOARD**: Board sheets, C-Studs, U-Tracks, Drywall Screws, Joint Tape, Joint Compound, Anchors, Insulation, Finishing Labor.
 2. **CCTV**: Camera units, NVR recorder channels, Surveillance HDDs, PoE switch ports, Rack cabinet, Cat6 rolls, RJ45 accessories, Commissioning services.
 
-Boundary Rules:
-- AI proposes inputs and system identity; AI NEVER invents engineering quantities.
-- Calculation logic is deterministic and rule-based.
-- Reusable application contract compatible with Web Text, Web Mic, and future Android transports.
-- Integrates seamlessly with existing quotation composer (`/dashboard/quotations/new`).
+Mandatory Invariants & Hardening:
+- AI proposes inputs and system identity; AI NEVER invents engineering quantities. Server deterministic templates remain authoritative.
+- Ambiguous or incomplete inputs return `NEEDS_CONFIRMATION` with explicit `missingInputs` rather than silently falling back or fabricating quantities.
+- Invalid or negative inputs return `INVALID_INPUT` and fail safely.
+- Ordinary product quotations (e.g., supply of cameras or gypsum sheets without system intent) are never hijacked.
+- Voice transport (`useVoiceInput`) serves as an input transport only; no backend audio persistence or audio schema additions.
+- Application contract is transport-agnostic and ready for future Android text/voice submission.
+- Integrates seamlessly with existing canonical quotation composer (`/dashboard/quotations/new`).
