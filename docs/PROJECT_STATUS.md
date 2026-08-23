@@ -535,6 +535,16 @@ UCL-5 Search Intelligence & Scale Validation delivered:
 
 NO EXTERNAL DATASETS OR PRODUCTION SEED DATA INGESTED. NO REAL GLOBAL CATALOG POPULATION PERFORMED. SCALE DATA IS SYNTHETIC ONLY. LEXICAL FALLBACK REMAINS AVAILABLE. UCL-5 IS MERGED.
 
-### UCL-6 Controlled Data Acquisition
+### UCL-6 Controlled Data Acquisition & Real-Data Pilots
 
-Status: **IMPLEMENTED ON FEATURE BRANCH / PENDING CTO REVIEW.** UCL-6 adds fail-closed source governance, bounded HTTP/SSRF controls, atomic quota reservation, dry-run, acquisition-run audit, data minimization, and provenance-linked UCL-3 staging. **REAL PILOT EXECUTED: NO.** No external data, canonical items, or tenant Catalog records were created. Migration is not deployed. UCL-7 is not started.
+Status: **MERGED TO MAIN (`42832749399ca9c9c22e2a8a908f4ea5c88b57c6`) / CONTROLLED PILOTS EVALUATED.**
+
+Delivered & Merged:
+- UCL-1 through UCL-6 are fully merged to `main` (PRs #60-#65).
+- Controlled real-data source evaluations completed post-UCL-6.
+- Wikidata product population evaluated: zero-result dry runs #1 and #2 confirmed Wikidata is inconclusive for primary catalog population. Preserved for taxonomy/knowledge enrichment.
+- Open Icecat technical access qualified (`ICECAT_PILOT_ACCESS_CONFIRMED`). Access proven on Building & Construction vertical 4776 with product APC LR1250I (ID 2975).
+- Open Icecat evaluation decision: `ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`. Excellent for brand/MPN/GTIN/spec enrichment, but NOT as sole global catalog or general construction source. Open-license interpretation requires legal clarification before production generative-AI use.
+- Interactive Pilot Review Console UI built locally on branch `review/ucl-icecat-pilot-ui-lighting` (`C:\Dev\VOKA-worktrees\ucl-icecat-pilot-ui-lighting`) at `http://localhost:3000/admin/ucl-pilot/icecat` operating on local JSON payloads with production 404 guards.
+- Security Invariants: Zero production database migrations deployed, zero canonical products published, zero tenant catalog mutations, zero credentials committed.
+- UCL-7 is NOT started.
