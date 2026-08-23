@@ -4,7 +4,7 @@ CREATE TYPE "LocalizedContentStatus" AS ENUM ('PENDING', 'VALID', 'STALE', 'FAIL
 -- CreateTable
 CREATE TABLE "LocalizedContent" (
     "id" TEXT NOT NULL,
-    "companyId" TEXT,
+    "companyId" TEXT NOT NULL,
     "resourceType" TEXT NOT NULL,
     "resourceId" TEXT NOT NULL,
     "fieldKey" TEXT NOT NULL,

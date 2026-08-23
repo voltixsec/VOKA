@@ -26,9 +26,9 @@ Chinese (`zh-CN`) and French (`fr-FR`) tests prove the generic Phase A boundary;
    - Stores generic BCP-47 locale variants cleanly in PostgreSQL table `LocalizedContent`.
    - Fields: `id`, `companyId` (nullable), `resourceType`, `resourceId`, `fieldKey`, `locale`, `sourceLocale`, `text`, `status` (`PENDING` | `VALID` | `STALE` | `FAILED`), `sourceHash`, `provider`, `model`, `translatedAt`, `createdAt`, `updatedAt`.
    - Compound unique index: `[companyId, resourceType, resourceId, fieldKey, locale]`.
-2. **Tenant Isolation vs Global UCL Ownership**:
-   - Tenant-owned resources require `companyId` derived strictly from server-side context.
-   - Global Universal Commercial Library (UCL) resources store `companyId = null`, preventing tenant ownership contamination and ensuring clear boundary isolation.
+2. **Tenant Isolation & Future UCL/Global Localization Boundary**:
+   - Phase B `LocalizedContent` persistence model strictly enforces tenant ownership via required `companyId: String`.
+   - Global Universal Commercial Library (UCL) localization is explicitly separated: global UCL items do not mix tenant ownership or write to tenant `LocalizedContent` rows. In Phase C, shared global UCL translations will be modeled cleanly under a separate global localization entity or bounded cache without weakening tenant isolation.
 3. **Deterministic Source Hashing & Field-Level Invalidation**:
    - Pure SHA-256 hash (`computeSourceHash`) tracks source freshness.
    - Changing source content marks target variants as `STALE` only for the modified field, preserving valid translations for unchanged fields and unaffected locales.

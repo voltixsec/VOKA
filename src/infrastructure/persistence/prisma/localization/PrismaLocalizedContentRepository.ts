@@ -1,6 +1,10 @@
 import { prisma } from "../../../../../lib/prisma";
 import { LocalizedContent } from "../../../../domain/localization/entities/LocalizedContent";
 import { LocalizedContentStatus } from "../../../../domain/localization/types/LocalizedContentStatus";
+import {
+  isValidLocale,
+  normalizeLocale,
+} from "../../../../application/translation/ports/TranslationPort";
 import type {
   ILocalizedContentRepository,
   UpsertLocalizedVariantParams,
@@ -9,7 +13,7 @@ import type {
 
 type LocalizedContentPrismaRecord = {
   id: string;
-  companyId: string | null;
+  companyId: string;
   resourceType: string;
   resourceId: string;
   fieldKey: string;
@@ -49,24 +53,33 @@ export class PrismaLocalizedContentRepository implements ILocalizedContentReposi
   }
 
   async upsertVariant(params: UpsertLocalizedVariantParams): Promise<LocalizedContent> {
-    const companyId = params.companyId ?? null;
+    if (!isValidLocale(params.locale)) {
+      throw new Error(`Invalid target locale: "${params.locale}"`);
+    }
+    if (!isValidLocale(params.sourceLocale)) {
+      throw new Error(`Invalid source locale: "${params.sourceLocale}"`);
+    }
+
+    const canonicalLocale = normalizeLocale(params.locale);
+    const canonicalSourceLocale = normalizeLocale(params.sourceLocale);
+
     const record = await this.db.localizedContent.upsert({
       where: {
         companyId_resourceType_resourceId_fieldKey_locale: {
-          companyId: companyId as any,
+          companyId: params.companyId,
           resourceType: params.resourceType,
           resourceId: params.resourceId,
           fieldKey: params.fieldKey,
-          locale: params.locale,
+          locale: canonicalLocale,
         },
       },
       create: {
-        companyId,
+        companyId: params.companyId,
         resourceType: params.resourceType,
         resourceId: params.resourceId,
         fieldKey: params.fieldKey,
-        locale: params.locale,
-        sourceLocale: params.sourceLocale,
+        locale: canonicalLocale,
+        sourceLocale: canonicalSourceLocale,
         text: params.text,
         status: params.status,
         sourceHash: params.sourceHash ?? null,
@@ -75,7 +88,7 @@ export class PrismaLocalizedContentRepository implements ILocalizedContentReposi
         translatedAt: params.translatedAt ?? new Date(),
       },
       update: {
-        sourceLocale: params.sourceLocale,
+        sourceLocale: canonicalSourceLocale,
         text: params.text,
         status: params.status,
         sourceHash: params.sourceHash ?? null,
@@ -97,18 +110,22 @@ export class PrismaLocalizedContentRepository implements ILocalizedContentReposi
   }
 
   async findByResourceAndLocale(params: {
-    companyId?: string | null;
+    companyId: string;
     resourceType: string;
     resourceId: string;
     locale: string;
   }): Promise<LocalizedContent[]> {
-    const companyId = params.companyId === undefined ? null : params.companyId;
+    if (!isValidLocale(params.locale)) {
+      throw new Error(`Invalid locale: "${params.locale}"`);
+    }
+    const canonicalLocale = normalizeLocale(params.locale);
+
     const records = await this.db.localizedContent.findMany({
       where: {
-        companyId,
+        companyId: params.companyId,
         resourceType: params.resourceType,
         resourceId: params.resourceId,
-        locale: params.locale,
+        locale: canonicalLocale,
       },
     });
 
@@ -116,20 +133,24 @@ export class PrismaLocalizedContentRepository implements ILocalizedContentReposi
   }
 
   async findByFieldAndLocale(params: {
-    companyId?: string | null;
+    companyId: string;
     resourceType: string;
     resourceId: string;
     fieldKey: string;
     locale: string;
   }): Promise<LocalizedContent | null> {
-    const companyId = params.companyId === undefined ? null : params.companyId;
+    if (!isValidLocale(params.locale)) {
+      throw new Error(`Invalid locale: "${params.locale}"`);
+    }
+    const canonicalLocale = normalizeLocale(params.locale);
+
     const record = await this.db.localizedContent.findFirst({
       where: {
-        companyId,
+        companyId: params.companyId,
         resourceType: params.resourceType,
         resourceId: params.resourceId,
         fieldKey: params.fieldKey,
-        locale: params.locale,
+        locale: canonicalLocale,
       },
     });
 
@@ -137,9 +158,8 @@ export class PrismaLocalizedContentRepository implements ILocalizedContentReposi
   }
 
   async invalidateFields(params: InvalidateLocalizedFieldsParams): Promise<number> {
-    const companyId = params.companyId === undefined ? null : params.companyId;
     const where: any = {
-      companyId,
+      companyId: params.companyId,
       resourceType: params.resourceType,
       resourceId: params.resourceId,
     };
@@ -149,7 +169,13 @@ export class PrismaLocalizedContentRepository implements ILocalizedContentReposi
     }
 
     if (params.locales && params.locales.length > 0) {
-      where.locale = { in: params.locales };
+      const canonicalLocales = params.locales.map((loc) => {
+        if (!isValidLocale(loc)) {
+          throw new Error(`Invalid locale for invalidation: "${loc}"`);
+        }
+        return normalizeLocale(loc);
+      });
+      where.locale = { in: canonicalLocales };
     }
 
     const res = await this.db.localizedContent.updateMany({

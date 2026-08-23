@@ -1395,7 +1395,7 @@ model UniversalItemAdoption {
 
 model LocalizedContent {
   id           String                 @id @default(cuid())
-  companyId    String?
+  companyId    String
   resourceType String
   resourceId   String
   fieldKey     String
@@ -1410,7 +1410,7 @@ model LocalizedContent {
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
 
-  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, resourceType, resourceId, fieldKey, locale])
   @@index([companyId, resourceType, resourceId])

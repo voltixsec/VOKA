@@ -1,9 +1,12 @@
 import type { ILocalizedContentRepository } from "../repositories/ILocalizedContentRepository";
 import { LocalizedContentStatus } from "../../../domain/localization/types/LocalizedContentStatus";
-import { computeSourceHash } from "../services/computeSourceHash";
+import {
+  isValidLocale,
+  normalizeLocale,
+} from "../../translation/ports/TranslationPort";
 
 export type GetLocalizedFieldParams = {
-  companyId?: string | null;
+  companyId: string;
   resourceType: string;
   resourceId: string;
   fieldKey: string;
@@ -17,21 +20,25 @@ export class GetLocalizedContentUseCase {
   constructor(private readonly repository: ILocalizedContentRepository) {}
 
   async getField(params: GetLocalizedFieldParams): Promise<string | null> {
-    const genericVariant = await this.repository.findByFieldAndLocale({
-      companyId: params.companyId,
-      resourceType: params.resourceType,
-      resourceId: params.resourceId,
-      fieldKey: params.fieldKey,
-      locale: params.requestedLocale,
-    });
+    if (isValidLocale(params.requestedLocale)) {
+      const canonicalLocale = normalizeLocale(params.requestedLocale);
 
-    if (genericVariant && genericVariant.status === LocalizedContentStatus.VALID) {
-      if (params.sourceHash && genericVariant.sourceHash) {
-        if (genericVariant.sourceHash === params.sourceHash) {
+      const genericVariant = await this.repository.findByFieldAndLocale({
+        companyId: params.companyId,
+        resourceType: params.resourceType,
+        resourceId: params.resourceId,
+        fieldKey: params.fieldKey,
+        locale: canonicalLocale,
+      });
+
+      if (genericVariant && genericVariant.status === LocalizedContentStatus.VALID) {
+        if (params.sourceHash && genericVariant.sourceHash) {
+          if (genericVariant.sourceHash === params.sourceHash) {
+            return genericVariant.text;
+          }
+        } else {
           return genericVariant.text;
         }
-      } else {
-        return genericVariant.text;
       }
     }
 

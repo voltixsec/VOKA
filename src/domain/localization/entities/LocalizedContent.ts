@@ -2,7 +2,7 @@ import { LocalizedContentStatus } from "../types/LocalizedContentStatus";
 
 export type LocalizedContentProps = {
   id: string;
-  companyId?: string | null;
+  companyId: string;
   resourceType: string;
   resourceId: string;
   fieldKey: string;
@@ -20,7 +20,7 @@ export type LocalizedContentProps = {
 
 export class LocalizedContent {
   readonly id: string;
-  readonly companyId: string | null;
+  readonly companyId: string;
   readonly resourceType: string;
   readonly resourceId: string;
   readonly fieldKey: string;
@@ -37,7 +37,7 @@ export class LocalizedContent {
 
   constructor(props: LocalizedContentProps) {
     this.id = props.id;
-    this.companyId = props.companyId ?? null;
+    this.companyId = props.companyId;
     this.resourceType = props.resourceType;
     this.resourceId = props.resourceId;
     this.fieldKey = props.fieldKey;

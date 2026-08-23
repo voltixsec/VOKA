@@ -13,8 +13,8 @@ import type {
 class MemoryLocalizedContentRepository implements ILocalizedContentRepository {
   public store = new Map<string, LocalizedContent>();
 
-  private makeKey(companyId: string | null | undefined, resourceType: string, resourceId: string, fieldKey: string, locale: string): string {
-    return `${companyId ?? "GLOBAL"}:${resourceType}:${resourceId}:${fieldKey}:${locale}`;
+  private makeKey(companyId: string, resourceType: string, resourceId: string, fieldKey: string, locale: string): string {
+    return `${companyId}:${resourceType}:${resourceId}:${fieldKey}:${locale}`;
   }
 
   async upsertVariant(params: UpsertLocalizedVariantParams): Promise<LocalizedContent> {
@@ -27,7 +27,7 @@ class MemoryLocalizedContentRepository implements ILocalizedContentRepository {
     const now = new Date();
     const entity = new LocalizedContent({
       id: existing ? existing.id : `loc_${Math.random().toString(36).substring(2, 9)}`,
-      companyId: params.companyId ?? null,
+      companyId: params.companyId,
       resourceType: params.resourceType,
       resourceId: params.resourceId,
       fieldKey: params.fieldKey,
@@ -55,17 +55,16 @@ class MemoryLocalizedContentRepository implements ILocalizedContentRepository {
   }
 
   async findByResourceAndLocale(params: {
-    companyId?: string | null;
+    companyId: string;
     resourceType: string;
     resourceId: string;
     locale: string;
   }): Promise<LocalizedContent[]> {
-    const cid = params.companyId === undefined ? null : params.companyId;
     const canon = normalizeLocale(params.locale);
     const res: LocalizedContent[] = [];
     for (const item of this.store.values()) {
       if (
-        item.companyId === cid &&
+        item.companyId === params.companyId &&
         item.resourceType === params.resourceType &&
         item.resourceId === params.resourceId &&
         item.locale === canon
@@ -77,24 +76,22 @@ class MemoryLocalizedContentRepository implements ILocalizedContentRepository {
   }
 
   async findByFieldAndLocale(params: {
-    companyId?: string | null;
+    companyId: string;
     resourceType: string;
     resourceId: string;
     fieldKey: string;
     locale: string;
   }): Promise<LocalizedContent | null> {
-    const cid = params.companyId === undefined ? null : params.companyId;
     const canon = normalizeLocale(params.locale);
-    const key = this.makeKey(cid, params.resourceType, params.resourceId, params.fieldKey, canon);
+    const key = this.makeKey(params.companyId, params.resourceType, params.resourceId, params.fieldKey, canon);
     return this.store.get(key) ?? null;
   }
 
   async invalidateFields(params: InvalidateLocalizedFieldsParams): Promise<number> {
-    const cid = params.companyId === undefined ? null : params.companyId;
     let count = 0;
     for (const [key, item] of this.store.entries()) {
       if (
-        item.companyId === cid &&
+        item.companyId === params.companyId &&
         item.resourceType === params.resourceType &&
         item.resourceId === params.resourceId
       ) {
@@ -117,7 +114,7 @@ class MemoryLocalizedContentRepository implements ILocalizedContentRepository {
   }
 }
 
-describe("Generic Multilingual Persistence Phase B Comprehensive Suite (24 Requirements)", () => {
+describe("Generic Multilingual Persistence Phase B Comprehensive Suite", () => {
   let repo: MemoryLocalizedContentRepository;
   let getUseCase: GetLocalizedContentUseCase;
 
@@ -235,25 +232,6 @@ describe("Generic Multilingual Persistence Phase B Comprehensive Suite (24 Requi
     expect(tenantB).toBeNull();
   });
 
-  it("8. global-vs-tenant ownership behavior", async () => {
-    await repo.upsertVariant({
-      companyId: null,
-      resourceType: "UniversalCatalogItem",
-      resourceId: "ucl_item_1",
-      fieldKey: "name",
-      locale: "fr-FR",
-      sourceLocale: "en",
-      text: "Extincteur universel",
-      status: LocalizedContentStatus.VALID,
-    });
-
-    const globalRead = await repo.findByFieldAndLocale({ companyId: null, resourceType: "UniversalCatalogItem", resourceId: "ucl_item_1", fieldKey: "name", locale: "fr-FR" });
-    const tenantRead = await repo.findByFieldAndLocale({ companyId: "c1", resourceType: "UniversalCatalogItem", resourceId: "ucl_item_1", fieldKey: "name", locale: "fr-FR" });
-
-    expect(globalRead?.companyId).toBeNull();
-    expect(tenantRead).toBeNull();
-  });
-
   it("9. source hash persistence", async () => {
     const hash = computeSourceHash("كابلات نحاسية عالية الجودة");
     const item = await repo.upsertVariant({
@@ -321,7 +299,6 @@ describe("Generic Multilingual Persistence Phase B Comprehensive Suite (24 Requi
     });
 
     let aiCalled = false;
-    const mockAiPort = () => { aiCalled = true; };
 
     const resolved = await getUseCase.getField({
       companyId: "c1",
@@ -388,7 +365,6 @@ describe("Generic Multilingual Persistence Phase B Comprehensive Suite (24 Requi
       subjectEn: "Approved Alarm System",
     };
 
-    // Subsequent localized persistence changes must not dynamically mutate frozen approved document snapshot
     await repo.upsertVariant({
       companyId: "c1",
       resourceType: "Quotation",

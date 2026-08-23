@@ -327,8 +327,8 @@ export class QuotationLocalizationJobRunner implements IQuotationLocalizationRun
           if (variantsToUpsert.length > 0) {
             await locRepo.upsertManyVariants(variantsToUpsert);
           }
-        } catch {
-          // Failure to write generic localized rows must not roll back completed legacy transaction
+        } catch (error) {
+          console.error(`[QuotationLocalizationJobRunner] Generic persistence failed for quotation ${params.quotationId}:`, error);
         }
       }
 

@@ -2,7 +2,7 @@ import type { LocalizedContent } from "../../../domain/localization/entities/Loc
 import type { LocalizedContentStatus } from "../../../domain/localization/types/LocalizedContentStatus";
 
 export type UpsertLocalizedVariantParams = {
-  companyId?: string | null;
+  companyId: string;
   resourceType: string;
   resourceId: string;
   fieldKey: string;
@@ -17,7 +17,7 @@ export type UpsertLocalizedVariantParams = {
 };
 
 export type InvalidateLocalizedFieldsParams = {
-  companyId?: string | null;
+  companyId: string;
   resourceType: string;
   resourceId: string;
   fieldKeys?: string[];
@@ -28,13 +28,13 @@ export interface ILocalizedContentRepository {
   upsertVariant(params: UpsertLocalizedVariantParams): Promise<LocalizedContent>;
   upsertManyVariants(params: UpsertLocalizedVariantParams[]): Promise<LocalizedContent[]>;
   findByResourceAndLocale(params: {
-    companyId?: string | null;
+    companyId: string;
     resourceType: string;
     resourceId: string;
     locale: string;
   }): Promise<LocalizedContent[]>;
   findByFieldAndLocale(params: {
-    companyId?: string | null;
+    companyId: string;
     resourceType: string;
     resourceId: string;
     fieldKey: string;
