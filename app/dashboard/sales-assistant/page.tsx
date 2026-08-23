@@ -367,8 +367,13 @@ export default function SalesAssistantPage(props: any) {
 
           {/* Lines Table */}
           <div className="rounded-2xl border border-white/10 bg-slate-950 overflow-hidden">
-            <div className="p-4 border-b border-white/10 text-xs font-semibold text-slate-400 uppercase">
-              {isArabic ? "بنود عرض السعر والمطابقة بالكتالوج" : "BOQ Line Items & Catalog Resolution"}
+            <div className="p-4 border-b border-white/10 flex items-center justify-between text-xs font-semibold text-slate-400 uppercase">
+              <span>{isArabic ? "بنود عرض السعر والمطابقة بالكتالوج" : "BOQ Line Items & Catalog Resolution"}</span>
+              {proposal.smartSystem && (
+                <span className="rounded-full bg-sky-400/10 border border-sky-400/30 px-3 py-1 text-sky-300 font-medium normal-case">
+                  {isArabic ? `محرّك النظام: ${proposal.smartSystem.systemNameAr}` : `Smart System: ${proposal.smartSystem.systemNameEn}`}
+                </span>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -377,6 +382,7 @@ export default function SalesAssistantPage(props: any) {
                   <tr>
                     <th className="p-4 text-start">#</th>
                     <th className="p-4 text-start">{isArabic ? "البند" : "Item"}</th>
+                    <th className="p-4 text-start">{isArabic ? "مصدر الكمية" : "Provenance"}</th>
                     <th className="p-4 text-start">{isArabic ? "الكتالوج" : "Catalog Match"}</th>
                     <th className="p-4 text-center">{isArabic ? "الكمية" : "Qty"}</th>
                     <th className="p-4 text-end">{isArabic ? "السعر المطلوبة" : "Req. Price"}</th>
@@ -392,6 +398,23 @@ export default function SalesAssistantPage(props: any) {
                         <p className="font-semibold text-white">{line.itemName}</p>
                         {line.description && (
                           <p className="text-xs text-slate-400 mt-0.5">{line.description}</p>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {line.provenance === "CALCULATED" ? (
+                          <span className="inline-block rounded-lg bg-sky-400/10 text-sky-300 text-[11px] px-2 py-0.5 border border-sky-400/20 font-mono">
+                            CALCULATED
+                          </span>
+                        ) : line.provenance === "USER_PROVIDED" ? (
+                          <span className="inline-block rounded-lg bg-emerald-400/10 text-emerald-300 text-[11px] px-2 py-0.5 border border-emerald-400/20 font-mono">
+                            USER_PROVIDED
+                          </span>
+                        ) : line.provenance === "SUGGESTED" ? (
+                          <span className="inline-block rounded-lg bg-amber-400/10 text-amber-300 text-[11px] px-2 py-0.5 border border-amber-400/20 font-mono">
+                            SUGGESTED
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">—</span>
                         )}
                       </td>
                       <td className="p-4">

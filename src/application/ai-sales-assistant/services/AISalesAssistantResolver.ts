@@ -179,6 +179,18 @@ export class AISalesAssistantResolver {
       canonicalLines.length === 0 ||
       canonicalLines.some((line) => line.reviewRequired);
 
+    // Extract smart system summary if present
+    const smartSystem = canonicalLines.some((l) => l.provenance)
+      ? {
+          systemType: intent.notes?.includes("نظام") || intent.notes?.includes("System") ? "GYPSUM_BOARD" : "CCTV",
+          systemNameAr: intent.notes ?? "نظام متخصص",
+          systemNameEn: intent.notes ?? "Specialized System",
+          status: "COMPLETE" as const,
+          inputs: [],
+          missingInputs: [],
+        }
+      : null;
+
     return {
       customer,
       proposal: {
@@ -203,6 +215,7 @@ export class AISalesAssistantResolver {
       termsAndConditionsAr: sourceLocale === "ar" ? terms : null,
       termsAndConditionsEn: sourceLocale === "en" ? terms : null,
       reviewRequired,
+      smartSystem,
       metadata: {
         sourceLocale,
         extractionMode,
@@ -411,6 +424,9 @@ export class AISalesAssistantResolver {
       taxRateId: item.taxRateId,
       taxPercentage: 0,
       reviewRequired: extracted.quantity == null,
+      provenance: extracted.provenance,
+      formulaExplanation: extracted.formulaExplanation,
+      componentKey: extracted.componentKey,
     };
   }
 
@@ -455,6 +471,9 @@ export class AISalesAssistantResolver {
       taxRateId: null,
       taxPercentage: 0,
       reviewRequired: true,
+      provenance: extracted.provenance,
+      formulaExplanation: extracted.formulaExplanation,
+      componentKey: extracted.componentKey,
     };
   }
 

@@ -26,6 +26,9 @@ export interface ExtractedLineItem {
   typeIntent?: SalesItemIntent;
   uncertainty?: string | null;
   warnings?: string[];
+  provenance?: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
+  formulaExplanation?: string;
+  componentKey?: string;
 }
 
 export interface ExtractedSalesIntent {
@@ -106,6 +109,9 @@ export interface ResolvedLineItem {
   taxRateId: string | null;
   taxPercentage: number;
   reviewRequired: boolean;
+  provenance?: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
+  formulaExplanation?: string;
+  componentKey?: string;
 }
 
 export interface DraftProposalFinancials {
@@ -139,6 +145,22 @@ export interface SalesAssistantDraftProposal {
   termsAndConditionsAr: string | null;
   termsAndConditionsEn: string | null;
   reviewRequired: boolean;
+  smartSystem?: {
+    systemType: string;
+    systemNameAr: string;
+    systemNameEn: string;
+    status: "COMPLETE" | "NEEDS_CONFIRMATION" | "INVALID_INPUT";
+    inputs: Array<{
+      name: string;
+      labelAr: string;
+      labelEn: string;
+      value: number | string | boolean | null;
+      unit?: string | null;
+      provenance: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
+      isDefault?: boolean;
+    }>;
+    missingInputs: string[];
+  } | null;
   metadata: {
     sourceLocale: SalesAssistantSourceLocale;
     extractionMode: "provider" | "heuristic";
