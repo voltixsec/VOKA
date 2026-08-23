@@ -1,8 +1,8 @@
 # Project Status
 
-Current Product Frontier: **Smart System Builder V1 Foundation**
+Current Product Frontier: **V1 Smart Sales Assistant End-to-End Hardening**
 
-Status: Smart System Builder V1 Foundation & Gypsum/CCTV proof system templates implemented and verified on local feature branch; pending CTO review.
+Status: V1 Smart Sales Assistant End-to-End Hardening completed and verified; complete proof flows for CCTV, Gypsum Board, conversational confirmation, zero fabrication, and voice transport boundary validated with 1000/1000 passing tests across 148 test files.
 Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch.
 Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
@@ -550,9 +550,9 @@ Delivered & Merged:
 - Security Invariants: Zero production database migrations deployed, zero canonical products published, zero tenant catalog mutations, zero credentials committed.
 - UCL-7 is NOT started.
 
-## Smart System Builder V1 Foundation
+## Smart System Builder V1 Foundation & End-to-End Hardening
 
-Status: **IMPLEMENTED & VERIFIED LOCALLY / PENDING PR REVIEW**
+Status: **IMPLEMENTED, HARDENED & VERIFIED LOCALLY / READY FOR CTO REVIEW**
 
 Delivered:
 - Core domain architecture (`SystemTemplateRegistry`, `ISystemTemplate`, `SystemComponent`, `SystemCalculationResult`, `ProvenanceType`);
@@ -560,6 +560,10 @@ Delivered:
 - CCTV Security System Template (`CctvSystemTemplate`) with camera count, NVR channel dimensioning, HDD retention, PoE ports, cabling, and commissioning;
 - Smart System Builder service (`SmartSystemBuilderService`) integrated into `AISalesAssistantExtractor` and `AISalesAssistantResolver`;
 - Provenance transparency (`USER_PROVIDED`, `CALCULATED`, `SUGGESTED`) across DTOs and API responses (`POST /api/ai/sales-assistant/draft`);
+- End-to-End proof flows verified for CCTV Villa and Gypsum Board Facade 2000m²;
+- Conversational confirmation behavior (`NEEDS_CONFIRMATION`) for missing parameters without falling back to ordinary quotations;
+- Zero fabrication enforcement (server-owned engineering calculations bypass untrusted AI provider outputs);
+- Ordinary camera and gypsum requests regression-tested (no hijacking);
 - Interactive UI workspace updates in `/dashboard/sales-assistant` rendering Smart System badges and provenance labels;
 - Reusable transport-agnostic application contract supporting Web Text, Web Mic (`useVoiceInput`), and future Android Text/Mic;
-- Full unit, integration, and UI test coverage.
+- Full unit, integration, adversarial, and UI test coverage.
