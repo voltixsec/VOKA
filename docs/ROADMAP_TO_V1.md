@@ -673,12 +673,8 @@ Status: **ACTIVE**
 Current execution order:
 
 1. **Multilingual Localization V2 / OpenAI**
-   - provider-independent multilingual core
-   - OpenAI production adapter
-   - configurable locales
-   - protected commercial identifiers
-   - persisted localized variants
-   - third-language architectural proof
+   - Phase A foundation complete: provider-independent BCP-47 boundary, OpenAI Responses API adapter, exact protected-token enforcement, and French/Chinese architectural proofs
+   - Phase B pending: generic persisted localized variants, migration and compatibility rollout
 
 2. **Manual UI Product Acceptance**
    - quotations

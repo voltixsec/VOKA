@@ -589,3 +589,13 @@ Release Hardening, Staging and Real-user Pilot occur only after these gates are 
 Regression checkpoint:
 
 `docs/checkpoints/2026-08-25-v1-product-integrity-regression-baseline.md`
+
+## Multilingual Localization V2 / OpenAI — Phase A
+
+Status: **FOUNDATION COMPLETE / PHASE B GENERIC PERSISTENCE PENDING**
+
+The provider-neutral BCP-47 translation boundary, OpenAI Responses API adapter,
+strict protected-token validation, and French/Chinese architectural proofs are
+implemented. Existing Arabic/English persistence is unchanged. Generic locale
+persistence, schema migration, rollout and backfill remain Phase B work; this
+does not close the V1 globalization gate or authorize release/pilot.
