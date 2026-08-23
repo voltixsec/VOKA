@@ -1,6 +1,6 @@
 export type CorpusItem = {
   readonly id: string;
-  readonly category: "arabic_cctv" | "english_ups" | "mixed_technical" | "commercial_terms" | "warranty" | "contact_urls";
+  readonly category: "arabic_cctv" | "english_ups" | "mixed_technical" | "commercial_terms" | "warranty" | "contact_urls" | "french_commercial" | "chinese_commercial";
   readonly text: string;
   readonly sourceLocale: string;
   readonly protectedTokens: readonly string[];
@@ -41,6 +41,20 @@ export const COMMERCIAL_TEST_CORPUS: readonly CorpusItem[] = [
     text: "Warranty: 24 months from delivery date",
     sourceLocale: "en",
     protectedTokens: ["24"],
+  },
+  {
+    id: "french_commercial",
+    category: "french_commercial",
+    text: "Fourniture de APC LR1250I, quantité 10, prix KD 125.500, remise 5%",
+    sourceLocale: "fr-FR",
+    protectedTokens: ["APC LR1250I", "10", "KD 125.500", "5%"],
+  },
+  {
+    id: "chinese_commercial",
+    category: "chinese_commercial",
+    text: "供应 APC LR1250I，数量 10，价格 KD 125.500，折扣 5%",
+    sourceLocale: "zh-CN",
+    protectedTokens: ["APC LR1250I", "10", "KD 125.500", "5%"],
   },
   {
     id: "contact_urls",

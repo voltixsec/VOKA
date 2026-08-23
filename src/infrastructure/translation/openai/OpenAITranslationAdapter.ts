@@ -18,20 +18,22 @@ export interface OpenAITranslationAdapterOptions {
   readonly enforceProtectedTokens?: boolean;
 }
 
-type OpenAIResponse = {
-  readonly id?: string;
-  readonly choices?: Array<{
-    readonly message?: {
-      readonly content?: string;
-    };
-    readonly finish_reason?: string;
-  }>;
-  readonly error?: {
-    readonly message?: string;
+type ResponsesPayload = {
+  readonly status?: "completed" | "incomplete" | "failed" | "cancelled" | "queued" | "in_progress";
+  readonly incomplete_details?: { readonly reason?: string } | null;
+  readonly output?: ReadonlyArray<{
     readonly type?: string;
-    readonly code?: string | number;
-  };
+    readonly content?: ReadonlyArray<
+      | { readonly type: "output_text"; readonly text?: string }
+      | { readonly type: "refusal"; readonly refusal?: string }
+      | { readonly type?: string }
+    >;
+  }>;
+  readonly error?: { readonly code?: string; readonly message?: string } | null;
 };
+
+class NonRetryableTranslationError extends Error {}
+class RetryableTranslationError extends Error {}
 
 export class OpenAITranslationAdapter implements TranslationPort {
   private readonly apiKey: string;
@@ -42,194 +44,168 @@ export class OpenAITranslationAdapter implements TranslationPort {
   private readonly enforceProtectedTokens: boolean;
 
   constructor(options: OpenAITranslationAdapterOptions) {
-    if (!options.apiKey || !options.apiKey.trim()) {
+    if (!options.apiKey?.trim()) {
       throw new Error("OpenAITranslationAdapter requires a valid API key.");
     }
     this.apiKey = options.apiKey.trim();
-    this.model =
-      options.model?.trim() ||
-      process.env.VOKA_TRANSLATION_OPENAI_MODEL?.trim() ||
-      "gpt-5.6-sol";
-    this.baseUrl = (
-      options.baseUrl?.trim() ||
-      process.env.OPENAI_BASE_URL?.trim() ||
-      "https://api.openai.com/v1"
-    ).replace(/\/+$/, "");
+    this.model = options.model?.trim() ||
+      process.env.VOKA_TRANSLATION_OPENAI_MODEL?.trim() || "gpt-5.6-sol";
+    this.baseUrl = (options.baseUrl?.trim() ||
+      process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? 45_000;
     this.maxRetries = options.maxRetries ?? 2;
     this.enforceProtectedTokens = options.enforceProtectedTokens ?? true;
   }
 
-  async translateMany(
-    request: TranslationRequest,
-  ): Promise<TranslationResult> {
-    if (request.items.length === 0) {
-      return {};
-    }
+  async translateMany(request: TranslationRequest): Promise<TranslationResult> {
+    if (request.items.length === 0) return {};
 
     const sourceLocale = normalizeLocale(request.sourceLocale);
     const targetLocale = normalizeLocale(request.targetLocale);
+    const requiredKeys = request.items.map((item) => item.key);
+    if (requiredKeys.some((key) => !key.trim()) || new Set(requiredKeys).size !== requiredKeys.length) {
+      throw new NonRetryableTranslationError("Translation item keys must be non-empty and unique.");
+    }
 
     const sourceLanguage = getLocaleDisplayName(sourceLocale);
     const targetLanguage = getLocaleDisplayName(targetLocale);
+    const sourceValues = Object.fromEntries(request.items.map((item) => [item.key, item.text]));
+    const schema = {
+      type: "object",
+      properties: Object.fromEntries(requiredKeys.map((key) => [key, { type: "string" }])),
+      required: requiredKeys,
+      additionalProperties: false,
+    } as const;
 
-    const sourceValues = Object.fromEntries(
-      request.items.map((item) => [item.key, item.text]),
-    );
-
-    const properties = Object.fromEntries(
-      request.items.map((item) => [
-        item.key,
-        {
-          type: "string",
-          description: `Faithful translation of "${item.key}" from ${sourceLanguage} to ${targetLanguage}`,
-        },
-      ]),
-    );
-
-    const requiredKeys = request.items.map((item) => item.key);
-
-    const jsonSchema = {
-      name: "translation_result",
-      strict: true,
-      schema: {
-        type: "object",
-        properties,
-        required: requiredKeys,
-        additionalProperties: false,
-      },
-    };
-
-    const systemPrompt = [
-      "You are the professional commercial localization engine for VOKA AI Sales OS.",
-      "Translate business, sales, quotation, contract, catalog, company and technical content faithfully.",
-      "Never change commercial meaning or financial numbers.",
-      `Source language: ${sourceLanguage} (${sourceLocale}). Target language: ${targetLanguage} (${targetLocale}).`,
-      "Person names, company names, project names and place names must be transliterated into the target writing system when scripts differ. Do not translate the semantic meaning of personal names.",
-      "Preserve exact SKUs, MPNs, GTINs, model numbers, serial numbers, brand names, product codes, URLs, and email addresses.",
-      "Preserve quantities, currency codes/symbols, decimal values, percentages, and technical units (e.g. 4MP, 8TB, 220V, IP67, CAT6) unchanged.",
-      "Return valid JSON adhering strictly to the required schema.",
+    const instructions = [
+      "You are VOKA's professional commercial localization engine.",
+      `Translate from ${sourceLanguage} (${sourceLocale}) to ${targetLanguage} (${targetLocale}).`,
+      "Translate linguistic text faithfully without changing commercial meaning.",
+      "Preserve exact identifiers, product/model codes, brands, URLs, emails, quantities, decimal formatting, currency codes, percentages, and technical specifications.",
+      "Never change pricing, tax, totals, ownership, approval state, engineering quantities, or historical meaning.",
+      "Transliterate proper names only when needed for the target script; do not semantically translate them.",
     ].join("\n");
 
-    const userPrompt = [
-      `Translate every JSON value from ${sourceLanguage} (${sourceLocale}) to professional ${targetLanguage} (${targetLocale}).`,
-      JSON.stringify(sourceValues),
-    ].join("\n");
-
-    const requestBody = {
+    const body = {
       model: this.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: jsonSchema,
+      instructions,
+      input: [{
+        role: "user",
+        content: [{
+          type: "input_text",
+          text: `Translate every JSON value. Return the exact same keys.\n${JSON.stringify(sourceValues)}`,
+        }],
+      }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "translation_result",
+          strict: true,
+          schema,
+        },
       },
-      temperature: 0.1,
     };
 
     let lastError: Error | null = null;
-
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        const response = await fetch(`${this.baseUrl}/responses`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify(body),
           signal: AbortSignal.timeout(this.timeoutMs),
         });
 
-        const payload = (await response.json()) as OpenAIResponse;
+        let payload: ResponsesPayload;
+        try {
+          payload = await response.json() as ResponsesPayload;
+        } catch {
+          throw response.ok
+            ? new NonRetryableTranslationError("OpenAI Responses API returned malformed JSON.")
+            : response.status === 429 || response.status >= 500
+              ? new RetryableTranslationError(`OpenAI Responses API HTTP ${response.status}.`)
+              : new NonRetryableTranslationError(`OpenAI Responses API HTTP ${response.status}.`);
+        }
 
         if (!response.ok) {
-          throw new Error(
-            `OpenAI translation failed (${response.status}): ${
-              payload.error?.message || response.statusText
-            }`,
+          const error = `OpenAI Responses API HTTP ${response.status}.`;
+          if (response.status === 429 || response.status >= 500) throw new RetryableTranslationError(error);
+          throw new NonRetryableTranslationError(error);
+        }
+        if (payload.status === "incomplete") {
+          throw new NonRetryableTranslationError(
+            `OpenAI Responses API returned incomplete output (${payload.incomplete_details?.reason ?? "unknown"}).`,
           );
         }
-
-        const choice = payload.choices?.[0];
-
-        if (choice?.finish_reason === "length") {
-          throw new Error("OpenAI translation output was truncated due to max tokens.");
+        if (payload.status && payload.status !== "completed") {
+          throw new NonRetryableTranslationError(`OpenAI Responses API returned status ${payload.status}.`);
         }
 
-        const rawContent = choice?.message?.content?.trim();
-
-        if (!rawContent) {
-          throw new Error("OpenAI translation returned empty response content.");
+        if (payload.output !== undefined && !Array.isArray(payload.output)) {
+          throw new NonRetryableTranslationError("OpenAI Responses API returned malformed output.");
         }
+        if (payload.output?.some((item) => item.type === "message" && !Array.isArray(item.content))) {
+          throw new NonRetryableTranslationError("OpenAI Responses API returned malformed message content.");
+        }
+
+        const content = payload.output?.flatMap((item) => item.type === "message" ? item.content ?? [] : []) ?? [];
+        const refusal = content.find((item) => item.type === "refusal");
+        if (refusal?.type === "refusal") {
+          throw new NonRetryableTranslationError("OpenAI Responses API refused the translation request.");
+        }
+        const rawText = content
+          .filter((item): item is { type: "output_text"; text?: string } => item.type === "output_text")
+          .map((item) => item.text ?? "")
+          .join("")
+          .trim();
+        if (!rawText) throw new NonRetryableTranslationError("OpenAI Responses API returned no output text.");
 
         let parsed: unknown;
         try {
-          parsed = JSON.parse(rawContent);
+          parsed = JSON.parse(rawText);
         } catch {
-          throw new Error("OpenAI translation returned malformed JSON.");
+          throw new NonRetryableTranslationError("OpenAI Responses API returned malformed structured output.");
         }
-
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          throw new Error("OpenAI translation returned non-object JSON.");
+          throw new NonRetryableTranslationError("OpenAI structured output must be an object.");
         }
-
         const record = parsed as Record<string, unknown>;
-
-        // Strict key cardinality verification
         const returnedKeys = Object.keys(record);
-        if (returnedKeys.length !== requiredKeys.length) {
-          throw new Error(
-            `OpenAI translation key count mismatch. Expected ${requiredKeys.length}, got ${returnedKeys.length}.`,
-          );
+        if (returnedKeys.length !== requiredKeys.length || returnedKeys.some((key) => !requiredKeys.includes(key))) {
+          throw new NonRetryableTranslationError("OpenAI translation schema key mismatch.");
         }
 
         const result: TranslationResult = {};
-
         for (const item of request.items) {
-          const val = record[item.key];
-          if (typeof val !== "string" || !val.trim()) {
-            throw new Error(
-              `OpenAI translation missing or non-string value for key "${item.key}".`,
-            );
+          const value = record[item.key];
+          if (typeof value !== "string" || !value.trim()) {
+            throw new NonRetryableTranslationError(`OpenAI translation missing string value for key "${item.key}".`);
           }
-          const translatedText = val.trim();
-
-          // Commercial Protected Token Verification
+          const translated = value.trim();
           if (this.enforceProtectedTokens) {
-            const tokenValidation = ProtectedTokenValidator.validateTokens(
-              item.text,
-              translatedText,
-            );
-            if (!tokenValidation.valid) {
-              throw new Error(
-                `OpenAI translation corrupted protected tokens for key "${item.key}": missing [${tokenValidation.missingTokens.join(
-                  ", ",
-                )}].`,
+            const validation = ProtectedTokenValidator.validateTokens(item.text, translated);
+            if (!validation.valid) {
+              throw new NonRetryableTranslationError(
+                `OpenAI translation corrupted protected tokens for key "${item.key}": missing [${validation.missingTokens.join(", ")}].`,
               );
             }
           }
-
-          result[item.key] = translatedText;
+          result[item.key] = translated;
         }
-
         return result;
-      } catch (err: unknown) {
-        lastError =
-          err instanceof Error ? err : new Error(String(err));
-        if (attempt < this.maxRetries) {
-          // Short exponential delay before retry
-          await new Promise((res) => setTimeout(res, 200 * (attempt + 1)));
-        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (error instanceof NonRetryableTranslationError) throw error;
+        if (attempt >= this.maxRetries) break;
+        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
       }
     }
 
     throw new Error(
-      `OpenAI translation failed after ${this.maxRetries + 1} attempts: ${
-        lastError?.message || "Unknown error"
-      }`,
+      `OpenAI translation failed after ${this.maxRetries + 1} attempts: ${lastError?.message ?? "transient failure"}`,
     );
   }
 }

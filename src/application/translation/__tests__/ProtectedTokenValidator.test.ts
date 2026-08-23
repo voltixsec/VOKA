@@ -1,52 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { ProtectedTokenValidator } from "../services/ProtectedTokenValidator";
 
-describe("ProtectedTokenValidator", () => {
-  it("extracts SKUs, MPNs, and model numbers", () => {
-    const text = "Supply Hikvision DS-2CD2143G2-I 4MP camera and APC LR1250I UPS";
-    const tokens = ProtectedTokenValidator.extractProtectedTokens(text);
-    expect(tokens).toContain("DS-2CD2143G2-I");
-    expect(tokens).toContain("LR1250I");
+describe("ProtectedTokenValidator exact commercial preservation", () => {
+  const validCases = [
+    "DS-2CD2143G2-I", "APC LR1250I", "CAT6", "IP67", "KWD", "USD",
+    "GTIN 1234567890123", "EAN 1234567890123", "UPC 123456789012",
+    "MPN DS-2CD2143G2-I", "Qty 10", "Quantity 8", "10 pcs", "8 cameras",
+    "2.5 m", "2000 m²", "KD 125.500", "USD 250", "50%", "24 months",
+    "8TB", "4MP", "220V", "support@example.com",
+    "https://example.com/product/APC-LR1250I",
+  ];
+  it.each(validCases)("preserves %s exactly", (token) => {
+    expect(ProtectedTokenValidator.validateTokens(`Source ${token}`, `مترجم Source ${token}`).valid).toBe(true);
   });
-
-  it("extracts prices, currencies, and percentages", () => {
-    const text = "Unit Price KD 1,250.500 with Discount 50% and total USD 250";
-    const tokens = ProtectedTokenValidator.extractProtectedTokens(text);
-    expect(tokens).toContain("KD 1,250.500");
-    expect(tokens).toContain("50%");
-    expect(tokens).toContain("USD 250");
+  it.each([
+    ["DS-2CD2143G2-I", "ds-2cd2143g2-i"],
+    ["Qty 10", "Qty 11"],
+    ["2000 m²", "2,000 m²"],
+    ["KD 125.500", "KD 125.5"],
+    ["50%", "٥٠٪"],
+    ["8TB", "8 تيرابايت"],
+    ["220V", "220 فولت"],
+    ["APC LR1250I", "APC lr1250i"],
+  ])("rejects mutation %s -> %s", (source, target) => {
+    expect(ProtectedTokenValidator.validateTokens(source, target).valid).toBe(false);
   });
-
-  it("extracts technical units, voltages, capacities, and IP ratings", () => {
-    const text = "16ch NVR, 8TB HDD, 220V power supply, CAT6 cable, IP67 housing";
-    const tokens = ProtectedTokenValidator.extractProtectedTokens(text);
-    expect(tokens).toContain("8TB");
-    expect(tokens).toContain("220V");
-    expect(tokens).toContain("CAT6");
-    expect(tokens).toContain("IP67");
+  it("detects deletion and duplicate-count loss", () => {
+    expect(ProtectedTokenValidator.validateTokens("50% advance and 50% delivery", "50% advance").valid).toBe(false);
+    expect(ProtectedTokenValidator.validateTokens("CAT6 IP67", "CAT6").missingTokens).toContain("IP67");
   });
-
-  it("extracts URLs and email addresses", () => {
-    const text = "Contact support@example.com or visit https://example.com/product/APC-LR1250I";
-    const tokens = ProtectedTokenValidator.extractProtectedTokens(text);
-    expect(tokens).toContain("support@example.com");
-    expect(tokens).toContain("https://example.com/product/APC-LR1250I");
-  });
-
-  it("validates when all protected tokens are preserved in translation", () => {
-    const source = "Supply APC LR1250I UPS, Qty 10, KD 125.500";
-    const target = "توريد مزود الطاقة APC LR1250I UPS, الكمية 10, KD 125.500";
-    const result = ProtectedTokenValidator.validateTokens(source, target);
-    expect(result.valid).toBe(true);
-    expect(result.missingTokens).toHaveLength(0);
-  });
-
-  it("fails validation when a protected token is mutated or lost", () => {
-    const source = "Camera DS-2CD2143G2-I with 8TB HDD";
-    const target = "كاميرا مراقبة مع قرص صلب 8 ترابايت"; // lost DS-2CD2143G2-I and 8TB
-    const result = ProtectedTokenValidator.validateTokens(source, target);
-    expect(result.valid).toBe(false);
-    expect(result.missingTokens).toContain("DS-2CD2143G2-I");
-    expect(result.missingTokens).toContain("8TB");
+  it("preserves a mixed Arabic/English technical corpus", () => {
+    const source = "توريد عدد 8 كاميرات 4MP موديل DS-2CD2143G2-I، CAT6، IP67، 220V، وهارد 8TB";
+    const target = "Supply عدد 8 كاميرات 4MP model DS-2CD2143G2-I, CAT6, IP67, 220V, storage 8TB";
+    expect(ProtectedTokenValidator.validateTokens(source, target).valid).toBe(true);
   });
 });

@@ -1,74 +1,32 @@
-# ADR-012: Multilingual Localization V2 / OpenAI Production Architecture (Phase A)
+# ADR-012: Multilingual Localization V2 / OpenAI
 
 ## Status
-Accepted / Phase A Foundation Delivered (Phase B Generic Persistence Migration Pending)
+
+Accepted — Phase A foundation complete; Phase B generic persistence pending.
 
 ## Context
-VOKA V1 localization logic was historically coupled to bilingual Arabic-English (`"ar" | "en"`) switching and legacy local/cloud models (Ollama, Gemini, Google). Fields such as `subjectAr`/`subjectEn`, `briefAr`/`briefEn`, `notesAr`/`notesEn`, and `itemNameAr`/`itemNameEn` were hardcoded in Prisma entities and application translation services.
 
-To expand VOKA into global commercial markets supporting arbitrary BCP-47 locales (`ar`, `en`, `fr`, `de`, `hi`, `es`, etc.) without altering commercial domain logic each time, a clean provider-neutral translation boundary and model strategy were required.
+VOKA's persisted quotation localization remains bilingual Arabic/English. Global localization needs a provider-neutral boundary that accepts standards-based BCP-47 language tags without adding a closed locale list or weakening commercial integrity.
 
-## Decisions
+## Phase A decisions
 
-### 1. Provider-Neutral Translation Boundary
-Domain and application layers depend exclusively on `TranslationPort`.
-`OpenAITranslationAdapter` was implemented under `src/infrastructure/translation/openai/OpenAITranslationAdapter.ts`.
-Legacy providers (`OllamaTranslationAdapter`, `GeminiTranslationAdapter`, `GoogleCloudTranslationAdapter`) are retained for complete backward compatibility.
+1. Application and domain code depend on `TranslationPort`; OpenAI, Ollama, Gemini and Google Cloud remain infrastructure choices.
+2. Locale values are strings validated and canonicalized with the runtime's `Intl.getCanonicalLocales`. Examples include `ar`, `en-US`, `fr-FR`, `zh-CN`, `zh-TW` and `hi-IN`; no application-owned allowlist defines the supported languages.
+3. OpenAI translation uses `POST /v1/responses`. The request uses `instructions`, typed `input_text` content and strict JSON Schema at `text.format`. Responses are read from message `output_text`; refusals, incomplete responses, malformed payloads and schema mismatches fail safely.
+4. Commercial identifiers, quantities, currency values, percentages, technical specifications, URLs and email addresses must survive exactly and case-sensitively. Validation failure rejects the translation and is not retried.
+5. Only transient network/timeout failures, HTTP 429 and server errors are retried. Authentication, validation and other client failures are not.
+6. `VOKA_TRANSLATION_PROVIDER` selects the translation provider independently of the legacy `VOKA_AI_PROVIDER`. OpenAI requires `OPENAI_API_KEY`; `VOKA_TRANSLATION_OPENAI_MODEL` selects its model.
+7. UI language toggling reads persisted localization and does not make live model calls.
 
-### 2. Extensible BCP-47 Locale Architecture
-`TranslationLocale` in `src/application/translation/ports/TranslationPort.ts` was evolved from `"ar" | "en"` to standard BCP-47 string representation with validation (`isValidLocale`) and canonical normalization (`normalizeLocale`).
+Chinese (`zh-CN`) and French (`fr-FR`) tests prove the generic Phase A boundary; they do not claim generic database persistence.
 
-### 3. OpenAI Responses API & Model Configuration
-The native fetch API is utilized with structured JSON Schema output (`response_format: { type: "json_schema", ... }`).
-Supported model family: `gpt-5.6-sol` (primary recommendation for high-value commercial documents), `gpt-5.6-terra`, and `gpt-5.6-luna` (recommendation for high-volume UCL translation).
+## Phase B boundary
 
-Configuration via environment variables:
-- `OPENAI_API_KEY`
-- `VOKA_TRANSLATION_PROVIDER=openai`
-- `VOKA_TRANSLATION_OPENAI_MODEL=gpt-5.6-sol`
+Phase B will design and migrate additive generic localized persistence, including compatibility with existing Arabic/English fields and immutable historical snapshots. Phase A does not add a schema, dual writes, generic locale rows, backfill, or a production migration. Phase B requires a separate design, migration, rollout and rollback review.
 
-### 4. Commercial Protected Token Strategy
-Commercial & technical tokens must not be corrupted by translation.
-`ProtectedTokenValidator` extracts and verifies SKUs, MPNs, GTINs, quantities, currency values (`KD 1,250.500`, `USD 250`), percentages, technical units (`4MP`, `8TB`, `220V`, `IP67`), URLs, and emails.
-If protected tokens are mutated or lost in model output, the adapter safely rejects the translation.
+## Consequences
 
-### 5. Asynchronous Localization Invariant (No AI on Language Toggle)
-Changing UI display language reads persisted translations from database snapshots.
-UI language toggling MUST NOT initiate live OpenAI API requests. live translation runs strictly via background localization jobs or draft creation events.
-
-## Phase B Generic Persistence Migration Proposal
-
-### Proposed Additive Entity Model (`LocalizedContent`)
-To transition from hardcoded bilingual fields (`...Ar` / `...En`) to generic multi-locale persistence without breaking historical snapshots or existing document approvals:
-
-```prisma
-model LocalizedContent {
-  id              String   @id @default(cuid())
-  entityType      String   // e.g. "QuotationHeader", "QuotationLine", "CatalogItem"
-  entityId        String   // ID of target entity
-  fieldKey        String   // e.g. "subject", "brief", "notes", "itemName"
-  locale          String   // e.g. "ar", "en", "fr", "de"
-  sourceLocale    String   // e.g. "ar"
-  text            String
-  status          String   // "VALID" | "STALE" | "FAILED"
-  sourceHash      String
-  provider        String?  // "openai" | "ollama" | "gemini"
-  model           String?  // "gpt-5.6-sol"
-  translatedAt    DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([entityType, entityId, fieldKey, locale])
-  @@index([entityType, entityId])
-}
-```
-
-### Migration & Backward Compatibility Strategy
-1. **Additive Schema Creation:** Deploy `LocalizedContent` in Phase B without deleting existing `...Ar` / `...En` columns.
-2. **Dual-Write Phase:** Background localization job writes both `...Ar`/`...En` legacy fields and new `LocalizedContent` records.
-3. **Read Fallback:** Domain repositories attempt to read from `LocalizedContent` for requested locale; fallback to legacy `...Ar`/`...En` fields if generic record is missing.
-4. **Historical Snapshot Preservation:** Approved document snapshots (Contracts, Sales Orders, Quotation Deliveries) retain their immutable JSON payloads.
-
-## Model Recommendations
-
-- **High-Value Commercial Documents (Quotations, Contracts, Customer Deliveries):** `gpt-5.6-sol` due to highest fidelity, strict protected-token retention, and precise terminology.
-- **High-Volume Catalog / UCL Normalization & Translation:** `gpt-5.6-terra` or `gpt-5.6-luna` due to lower latency, high throughput, and cost efficiency.
+- Existing bilingual persistence and document-integrity behavior remain unchanged.
+- New language tags can pass through the provider-neutral translation boundary without source-code locale unions.
+- A locale is not production-persistable merely because the Phase A adapter can translate it.
+- Model recommendations require measured, explicitly authorized benchmarks; the repository must not fabricate benchmark results when credentials or live authorization are absent.

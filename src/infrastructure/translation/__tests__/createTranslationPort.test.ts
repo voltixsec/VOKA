@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTranslationPort } from "../createTranslationPort";
 import { OpenAITranslationAdapter } from "../openai/OpenAITranslationAdapter";
 import { OllamaTranslationAdapter } from "../ollama/OllamaTranslationAdapter";
@@ -35,6 +35,32 @@ describe("createTranslationPort factory", () => {
 
     const port = createTranslationPort();
     expect(port).toBeInstanceOf(OpenAITranslationAdapter);
+  });
+
+  it("gives the dedicated translation provider precedence over the legacy AI provider", () => {
+    process.env.VOKA_TRANSLATION_PROVIDER = "openai";
+    process.env.VOKA_AI_PROVIDER = "ollama";
+    process.env.OPENAI_API_KEY = "sk-test-key";
+    expect(createTranslationPort()).toBeInstanceOf(OpenAITranslationAdapter);
+  });
+
+  it("passes the dedicated OpenAI model override to the Responses API", async () => {
+    process.env.VOKA_TRANSLATION_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "sk-test-key";
+    process.env.VOKA_TRANSLATION_OPENAI_MODEL = "gpt-test-override";
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: '{"item":"Bonjour"}' }] }] }),
+    });
+    try {
+      await createTranslationPort()!.translateMany({ sourceLocale: "en", targetLocale: "fr", items: [{ key: "item", text: "Hello" }] });
+      const body = JSON.parse(String(vi.mocked(global.fetch).mock.calls[0][1]?.body));
+      expect(body.model).toBe("gpt-test-override");
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   it("returns null when OpenAI provider is requested but OPENAI_API_KEY is missing", () => {

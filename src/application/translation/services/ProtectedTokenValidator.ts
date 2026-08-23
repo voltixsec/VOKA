@@ -1,95 +1,86 @@
-/**
- * Commercial Protected Token Strategy
- *
- * Commercial & technical translations in VOKA MUST NOT mutate authoritative tokens.
- *
- * Examples of tokens that must be preserved exactly:
- * - SKUs, MPNs, Model Numbers (e.g., DS-2CD2143G2-I, APC LR1250I, CAT6)
- * - Numeric quantities, percentages, prices, currencies (e.g., KD 1,250.500, USD 250, 50%, 10)
- * - Technical specifications & units (e.g., 4MP, 8TB, 16-channel, 220V, IP67)
- * - Network addresses, URLs, Email addresses (e.g., 192.168.1.10, https://..., support@example.com)
- */
+export type ProtectedTokenCategory =
+  | "EXACT_IDENTIFIER"
+  | "COMMERCIAL_NUMERIC"
+  | "TECHNICAL_SPEC"
+  | "URL_EMAIL"
+  | "CURRENCY_CODE";
 
 export interface ProtectedTokenValidationResult {
   readonly valid: boolean;
   readonly missingTokens: readonly string[];
 }
 
+type TokenRule = {
+  category: ProtectedTokenCategory;
+  pattern: RegExp;
+  capture?: number;
+};
+
+/** Exact, case-sensitive preservation rules for authoritative commercial text. */
+const TOKEN_RULES: readonly TokenRule[] = [
+  { category: "URL_EMAIL", pattern: /https?:\/\/[^\s<>"'{}|\\^`]+/g },
+  { category: "URL_EMAIL", pattern: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
+  { category: "EXACT_IDENTIFIER", pattern: /\b(?:GTIN|EAN|UPC|MPN)\s*[:#-]?\s*([A-Za-z0-9-]+)\b/g, capture: 1 },
+  { category: "EXACT_IDENTIFIER", pattern: /\b[A-Z0-9]+(?:-[A-Z0-9]+)+\b/g },
+  { category: "EXACT_IDENTIFIER", pattern: /\b[A-Z]{2,}\d+[A-Z0-9]*\b/g },
+  { category: "EXACT_IDENTIFIER", pattern: /\b[A-Z]{2,}\b/g },
+  { category: "CURRENCY_CODE", pattern: /\b(?:KWD|USD|EUR|GBP|SAR|AED|KD)\b/g },
+  { category: "COMMERCIAL_NUMERIC", pattern: /(?:KD|KWD|USD|EUR|GBP|SAR|AED|\$|€|£)\s*\d+(?:,\d{3})*(?:\.\d+)?/g },
+  { category: "COMMERCIAL_NUMERIC", pattern: /\b\d+(?:,\d{3})*(?:\.\d+)?\s*%/g },
+  { category: "COMMERCIAL_NUMERIC", pattern: /\b(?:Qty|Quantity)\s*[:.]?\s*(\d+(?:\.\d+)?)\b/gi, capture: 1 },
+  { category: "COMMERCIAL_NUMERIC", pattern: /(?:عدد|الكمية)\s*[:.]?\s*(\d+(?:\.\d+)?)/g, capture: 1 },
+  { category: "COMMERCIAL_NUMERIC", pattern: /\b\d+(?:\.\d+)?\s*(?:pcs|cameras?|months?|m²|m)\b/gi },
+  { category: "COMMERCIAL_NUMERIC", pattern: /(?<![\p{L}\p{N}])\d+(?:,\d{3})*(?:\.\d+)?(?![\p{L}\p{N}])/gu },
+  { category: "TECHNICAL_SPEC", pattern: /\b(?:IP\d{2}|CAT\d+[A-Za-z]?|\d+(?:\.\d+)?(?:TB|GB|MB|MP|V|W|Hz|CH))\b/g },
+  { category: "TECHNICAL_SPEC", pattern: /\b\d{1,3}(?:\.\d{1,3}){3}\b/g },
+];
+
 export class ProtectedTokenValidator {
-  /**
-   * Token extraction regex rules for commercial/technical tokens.
-   */
-  private static readonly TOKEN_PATTERNS: readonly RegExp[] = [
-    // URLs (e.g., https://example.com/path)
-    /https?:\/\/[^\s<>"'{}|\\^`]+/gi,
-    // Email addresses (e.g., support@example.com)
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-    // IP addresses (e.g., 192.168.1.10)
-    /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
-    // Currencies with formatted amounts (e.g., KD 1,250.500, KWD 125.500, USD 250, $250)
-    /(?:KD|KWD|USD|EUR|GBP|\$|€|£)\s*\d+(?:,\d{3})*(?:\.\d+)?/gi,
-    /\b\d+(?:,\d{3})*(?:\.\d+)?\s*(?:KD|KWD|USD|EUR|GBP|د\.ك|دينار)\b/gi,
-    // Percentages (e.g., 50%, 5%)
-    /\b\d+(?:\.\d+)?\s*%/g,
-    // Technical units / specs (e.g., 4MP, 8TB, 16TB, 220V, 12V, 24V, IP67, IP66, 16ch, PoE)
-    /\b\d+\s*(?:MP|TB|GB|MB|V|W|Hz|ch|CH|PoE|CAT\d+e?|IP\d{2})\b/gi,
-    // Alphanumeric Model / SKU / MPN strings containing hyphen or numbers + letters (e.g., DS-2CD2143G2-I, LR1250I)
-    /\b[A-Z0-9]+(?:-[A-Z0-9]+)+\b/gi,
-    /\b[A-Z]{2,}\d+[A-Z0-9]*\b/g,
-  ];
-
-  /**
-   * Extracts all protected tokens present in a given source string.
-   */
   public static extractProtectedTokens(text: string): string[] {
-    if (!text || typeof text !== "string") {
-      return [];
-    }
+    if (typeof text !== "string" || !text) return [];
 
-    const tokens = new Set<string>();
-
-    for (const pattern of this.TOKEN_PATTERNS) {
-      // Reset regex state if global flag is set
-      pattern.lastIndex = 0;
-      const matches = text.match(pattern);
-      if (matches) {
-        for (const match of matches) {
-          const trimmed = match.trim();
-          if (trimmed.length > 0) {
-            tokens.add(trimmed);
-          }
-        }
+    const tokens: string[] = [];
+    for (const rule of TOKEN_RULES) {
+      rule.pattern.lastIndex = 0;
+      for (const match of text.matchAll(rule.pattern)) {
+        const token = (rule.capture ? match[rule.capture] : match[0])?.trim();
+        if (token) tokens.push(token);
       }
     }
-
-    return Array.from(tokens);
+    return [...new Set(tokens)];
   }
 
-  /**
-   * Verifies that all protected tokens present in the source text exist in the target translated text.
-   */
   public static validateTokens(
     sourceText: string,
     targetText: string,
   ): ProtectedTokenValidationResult {
     const sourceTokens = this.extractProtectedTokens(sourceText);
-    if (sourceTokens.length === 0) {
-      return { valid: true, missingTokens: [] };
-    }
-
     const missingTokens: string[] = [];
-    const normalizedTarget = targetText.toLowerCase();
-
+    const requiredCounts = new Map<string, number>();
     for (const token of sourceTokens) {
-      const normalizedToken = token.toLowerCase();
-      if (!normalizedTarget.includes(normalizedToken)) {
-        missingTokens.push(token);
+      let count = 0;
+      let cursor = 0;
+      while (cursor <= sourceText.length - token.length) {
+        const index = sourceText.indexOf(token, cursor);
+        if (index < 0) break;
+        count++;
+        cursor = index + token.length;
       }
+      requiredCounts.set(token, count);
     }
 
-    return {
-      valid: missingTokens.length === 0,
-      missingTokens,
-    };
+    for (const [token, required] of requiredCounts) {
+      let found = 0;
+      let cursor = 0;
+      while (cursor <= targetText.length - token.length) {
+        const index = targetText.indexOf(token, cursor);
+        if (index < 0) break;
+        found++;
+        cursor = index + token.length;
+      }
+      for (let count = found; count < required; count++) missingTokens.push(token);
+    }
+
+    return { valid: missingTokens.length === 0, missingTokens };
   }
 }

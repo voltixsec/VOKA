@@ -1,158 +1,104 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { OpenAITranslationAdapter } from "../OpenAITranslationAdapter";
 
-describe("OpenAITranslationAdapter", () => {
-  const originalFetch = global.fetch;
+const originalFetch = global.fetch;
+afterEach(() => { global.fetch = originalFetch; vi.restoreAllMocks(); });
 
-  beforeEach(() => {
-    vi.restoreAllMocks();
+function responseOutput(value: unknown) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      status: "completed",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] }],
+    }),
+  };
+}
+
+describe("OpenAITranslationAdapter Responses API", () => {
+  it("requires an API key", () => {
+    expect(() => new OpenAITranslationAdapter({ apiKey: "" })).toThrow("valid API key");
   });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
+  it("short-circuits empty input without fetch", async () => {
+    global.fetch = vi.fn();
+    await expect(new OpenAITranslationAdapter({ apiKey: "x" }).translateMany({ sourceLocale: "en", targetLocale: "ar", items: [] })).resolves.toEqual({});
+    expect(global.fetch).not.toHaveBeenCalled();
   });
-
-  it("throws an error if instantiated without an API key", () => {
-    expect(() => new OpenAITranslationAdapter({ apiKey: "" })).toThrow(
-      "OpenAITranslationAdapter requires a valid API key.",
-    );
+  it("uses /v1/responses with strict structured output", async () => {
+    global.fetch = vi.fn().mockResolvedValue(responseOutput({ item: "مرحبا" }));
+    const result = await new OpenAITranslationAdapter({ apiKey: "test", model: "gpt-test" }).translateMany({
+      sourceLocale: "en", targetLocale: "ar", items: [{ key: "item", text: "Hello" }],
+    });
+    expect(result).toEqual({ item: "مرحبا" });
+    const [url, init] = vi.mocked(global.fetch).mock.calls[0];
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    const body = JSON.parse(String(init?.body));
+    expect(body).toMatchObject({ model: "gpt-test", text: { format: { type: "json_schema", name: "translation_result", strict: true } } });
+    expect(body.messages).toBeUndefined();
+    expect(body.response_format).toBeUndefined();
+    expect(body.input[0].content[0].type).toBe("input_text");
   });
-
-  it("returns empty result immediately for empty items array", async () => {
-    const adapter = new OpenAITranslationAdapter({ apiKey: "test-key" });
-    const result = await adapter.translateMany({
-      sourceLocale: "en",
-      targetLocale: "ar",
-      items: [],
-    });
-    expect(result).toEqual({});
+  it.each([
+    ["ar", "en", "توريد CAT6", "Supply CAT6"],
+    ["en", "ar", "Supply CAT6", "توريد CAT6"],
+  ])("supports %s -> %s", async (sourceLocale, targetLocale, source, target) => {
+    global.fetch = vi.fn().mockResolvedValue(responseOutput({ item: target }));
+    await expect(new OpenAITranslationAdapter({ apiKey: "x" }).translateMany({ sourceLocale, targetLocale, items: [{ key: "item", text: source }] })).resolves.toEqual({ item: target });
   });
-
-  it("translates items successfully with strict JSON schema response", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                item_1: "توريد مزود الطاقة APC LR1250I UPS, الكمية 10",
-              }),
-            },
-            finish_reason: "stop",
-          },
-        ],
-      }),
-    });
-
-    const adapter = new OpenAITranslationAdapter({
-      apiKey: "test-key",
-      model: "gpt-5.6-sol",
-    });
-
-    const result = await adapter.translateMany({
-      sourceLocale: "en",
-      targetLocale: "ar",
-      items: [
-        {
-          key: "item_1",
-          text: "Supply APC LR1250I UPS, Qty 10",
-        },
-      ],
-    });
-
-    expect(result).toEqual({
-      item_1: "توريد مزود الطاقة APC LR1250I UPS, الكمية 10",
-    });
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://api.openai.com/v1/chat/completions",
-      expect.objectContaining({
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer test-key",
-        },
-      }),
-    );
+  it("rejects unexpected and missing keys", async () => {
+    const adapter = new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 0 });
+    global.fetch = vi.fn().mockResolvedValue(responseOutput({ a: "A", extra: "X" }));
+    await expect(adapter.translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "a" }] })).rejects.toThrow("key mismatch");
+    global.fetch = vi.fn().mockResolvedValue(responseOutput({ a: "A" }));
+    await expect(adapter.translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "a" }, { key: "b", text: "b" }] })).rejects.toThrow("key mismatch");
   });
-
-  it("fails safely when protected commercial tokens are mutated or lost in output", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                item_1: "كاميرا مراقبة بدقة عالية", // lost DS-2CD2143G2-I and 8TB
-              }),
-            },
-            finish_reason: "stop",
-          },
-        ],
-      }),
-    });
-
-    const adapter = new OpenAITranslationAdapter({
-      apiKey: "test-key",
-      maxRetries: 0,
-    });
-
-    await expect(
-      adapter.translateMany({
-        sourceLocale: "en",
-        targetLocale: "ar",
-        items: [
-          {
-            key: "item_1",
-            text: "Hikvision DS-2CD2143G2-I 4MP camera with 8TB HDD",
-          },
-        ],
-      }),
-    ).rejects.toThrow("corrupted protected tokens");
+  it("rejects malformed, missing, incomplete, and refused output without retry", async () => {
+    const adapter = new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 2 });
+    for (const payload of [
+      { status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "{" }] }] },
+      { status: "completed", output: [] },
+      { status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: [] },
+      { status: "completed", output: [{ type: "message", content: [{ type: "refusal", refusal: "no" }] }] },
+    ]) {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => payload });
+      await expect(adapter.translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "Hello" }] })).rejects.toThrow();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    }
   });
-
-  it("retries on temporary failure up to maxRetries", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
-        json: async () => ({ error: { message: "Server busy" } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  item_1: "Bonjour",
-                }),
-              },
-              finish_reason: "stop",
-            },
-          ],
-        }),
-      });
-
-    global.fetch = fetchMock;
-
-    const adapter = new OpenAITranslationAdapter({
-      apiKey: "test-key",
-      maxRetries: 1,
-      enforceProtectedTokens: false,
-    });
-
-    const result = await adapter.translateMany({
-      sourceLocale: "en",
-      targetLocale: "fr",
-      items: [{ key: "item_1", text: "Hello" }],
-    });
-
-    expect(result).toEqual({ item_1: "Bonjour" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+  it.each([400, 401])("does not retry HTTP %s", async (status) => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status, json: async () => ({ error: { message: "hidden" } }) });
+    await expect(new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 2 }).translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "Hello" }] })).rejects.toThrow(`HTTP ${status}`);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("does not retry malformed client-error JSON", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => { throw new SyntaxError("bad json"); } });
+    await expect(new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 2 }).translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "Hello" }] })).rejects.toThrow("HTTP 400");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("rejects malformed response envelopes without retry", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: "completed", output: {} }) });
+    await expect(new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 2 }).translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "Hello" }] })).rejects.toThrow("malformed output");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each([429, 500])("retries transient HTTP %s", async (status) => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status, json: async () => ({}) })
+      .mockResolvedValueOnce(responseOutput({ a: "مرحبا" }));
+    await expect(new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 1 }).translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "Hello" }] })).resolves.toEqual({ a: "مرحبا" });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+  it("retries timeout/network failure", async () => {
+    global.fetch = vi.fn().mockRejectedValueOnce(new DOMException("timeout", "AbortError")).mockResolvedValueOnce(responseOutput({ a: "Bonjour" }));
+    await expect(new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 1 }).translateMany({ sourceLocale: "en", targetLocale: "fr", items: [{ key: "a", text: "Hello" }] })).resolves.toEqual({ a: "Bonjour" });
+  });
+  it("does not retry protected-token corruption", async () => {
+    global.fetch = vi.fn().mockResolvedValue(responseOutput({ a: "camera ds-2cd2143g2-i" }));
+    await expect(new OpenAITranslationAdapter({ apiKey: "x", maxRetries: 2 }).translateMany({ sourceLocale: "en", targetLocale: "ar", items: [{ key: "a", text: "Camera DS-2CD2143G2-I" }] })).rejects.toThrow("corrupted protected tokens");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("rejects invalid locale before fetch", async () => {
+    global.fetch = vi.fn();
+    await expect(new OpenAITranslationAdapter({ apiKey: "x" }).translateMany({ sourceLocale: "invalid_locale", targetLocale: "ar", items: [{ key: "a", text: "Hello" }] })).rejects.toThrow("Invalid translation locale");
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

@@ -4,63 +4,40 @@
  */
 export type TranslationLocale = string;
 
-export type SupportedLocale = "ar" | "en" | "fr";
-
-const SUPPORTED_LOCALES: ReadonlySet<string> = new Set([
-  "ar",
-  "en",
-  "fr",
-  "de",
-  "hi",
-  "es",
-]);
-
 /**
  * Validates whether a locale string is a non-empty, syntactically valid BCP-47 language tag.
  */
 export function isValidLocale(locale: string): boolean {
-  if (!locale || typeof locale !== "string") {
+  if (typeof locale !== "string" || !locale.trim()) {
     return false;
   }
-  const trimmed = locale.trim();
-  if (!trimmed) {
+  try {
+    return Intl.getCanonicalLocales(locale.trim()).length === 1;
+  } catch {
     return false;
   }
-  // Standard BCP-47 language tag syntax validation regex (e.g. ar, en-US, fr-FR)
-  return /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(trimmed);
 }
 
 /**
- * Normalizes a locale tag to lowercase canonical form (e.g. "EN-us" -> "en-us", "  ar  " -> "ar").
+ * Canonicalizes a BCP-47 locale using the platform standards implementation.
  */
 export function normalizeLocale(locale: string): TranslationLocale {
   if (!isValidLocale(locale)) {
     throw new Error(`Invalid translation locale format: "${locale}"`);
   }
-  return locale.trim().toLowerCase();
+  return Intl.getCanonicalLocales(locale.trim())[0];
 }
 
 /**
- * Returns human-friendly display name for common supported locales.
+ * Returns a standards-based English display name, with the canonical locale as
+ * a deterministic fallback when DisplayNames is unavailable.
  */
 export function getLocaleDisplayName(locale: TranslationLocale): string {
-  const norm = normalizeLocale(locale);
-  const primary = norm.split("-")[0];
-  switch (primary) {
-    case "ar":
-      return "Arabic";
-    case "en":
-      return "English";
-    case "fr":
-      return "French";
-    case "de":
-      return "German";
-    case "hi":
-      return "Hindi";
-    case "es":
-      return "Spanish";
-    default:
-      return norm;
+  const canonical = normalizeLocale(locale);
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(canonical) ?? canonical;
+  } catch {
+    return canonical;
   }
 }
 

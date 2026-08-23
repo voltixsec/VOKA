@@ -22,36 +22,10 @@ export async function runBenchmark(): Promise<Record<string, BenchmarkModelResul
   const results: Record<string, BenchmarkModelResult> = {};
 
   if (!apiKey) {
-    console.log("------------------------------------------------------------");
-    console.log("OPENAI_API_KEY environment variable is not set.");
-    console.log("Running in DETERMINISTIC MOCK BENCHMARK MODE.");
-    console.log("------------------------------------------------------------");
-
-    for (const model of CANDIDATE_MODELS) {
-      const isSol = model === "gpt-5.6-sol";
-      const isTerra = model === "gpt-5.6-terra";
-
-      const totalItems = COMMERCIAL_TEST_CORPUS.length;
-      const totalTokens = COMMERCIAL_TEST_CORPUS.reduce(
-        (sum, item) => sum + item.protectedTokens.length,
-        0,
-      );
-
-      results[model] = {
-        model,
-        totalItems,
-        successCount: totalItems,
-        failedCount: 0,
-        totalLatencyMs: isSol ? 450 : isTerra ? 320 : 210,
-        avgLatencyMs: (isSol ? 450 : isTerra ? 320 : 210) / totalItems,
-        protectedTokensTotal: totalTokens,
-        protectedTokensPreserved: totalTokens,
-        tokenPreservationRatio: 1.0,
-        errors: [],
-      };
-    }
-
-    return results;
+    throw new Error("OPENAI_API_KEY is required; no benchmark was executed and no results were produced.");
+  }
+  if (process.env.VOKA_RUN_LIVE_OPENAI_BENCHMARK !== "true") {
+    throw new Error("Set VOKA_RUN_LIVE_OPENAI_BENCHMARK=true to explicitly authorize live benchmark requests.");
   }
 
   console.log("------------------------------------------------------------");
