@@ -25,14 +25,15 @@ const TOKEN_RULES: readonly TokenRule[] = [
   { category: "EXACT_IDENTIFIER", pattern: /\b[A-Z]{2,}\d+[A-Z0-9]*\b/g },
   { category: "EXACT_IDENTIFIER", pattern: /\b[A-Z]{2,}\b/g },
   { category: "CURRENCY_CODE", pattern: /\b(?:KWD|USD|EUR|GBP|SAR|AED|KD)\b/g },
-  { category: "COMMERCIAL_NUMERIC", pattern: /(?:KD|KWD|USD|EUR|GBP|SAR|AED|\$|€|£)\s*\d+(?:,\d{3})*(?:\.\d+)?/g },
+  { category: "COMMERCIAL_NUMERIC", pattern: /(?:KD|KWD|USD|EUR|GBP|SAR|AED|\$|€|£)\s*\d+(?:,\d{3})*(?:\.\d+)?(?![,\.\p{L}\p{N}])/gu },
   { category: "COMMERCIAL_NUMERIC", pattern: /\b\d+(?:,\d{3})*(?:\.\d+)?\s*%/g },
   { category: "COMMERCIAL_NUMERIC", pattern: /\b(?:Qty|Quantity)\s*[:.]?\s*(\d+(?:\.\d+)?)\b/gi, capture: 1 },
   { category: "COMMERCIAL_NUMERIC", pattern: /(?:عدد|الكمية)\s*[:.]?\s*(\d+(?:\.\d+)?)/g, capture: 1 },
-  { category: "COMMERCIAL_NUMERIC", pattern: /\b\d+(?:\.\d+)?\s*(?:pcs|cameras?|months?|m²|m)\b/gi },
-  { category: "COMMERCIAL_NUMERIC", pattern: /(?<![\p{L}\p{N}])\d+(?:,\d{3})*(?:\.\d+)?(?![\p{L}\p{N}])/gu },
+  { category: "COMMERCIAL_NUMERIC", pattern: /\b(\d+(?:\.\d+)?)\s*(?:pcs|cameras?|months?)\b/gi, capture: 1 },
+  { category: "COMMERCIAL_NUMERIC", pattern: /\b\d+(?:\.\d+)?\s*(?:m²|m)\b/gi },
+  { category: "COMMERCIAL_NUMERIC", pattern: /(?<![,\.\p{L}\p{N}])\d+(?:,\d{3})*(?:\.\d+)?(?![,\.\p{L}\p{N}])/gu },
   { category: "TECHNICAL_SPEC", pattern: /\b(?:IP\d{2}|CAT\d+[A-Za-z]?|\d+(?:\.\d+)?(?:TB|GB|MB|MP|V|W|Hz|CH))\b/g },
-  { category: "TECHNICAL_SPEC", pattern: /\b\d{1,3}(?:\.\d{1,3}){3}\b/g },
+  { category: "TECHNICAL_SPEC", pattern: /(?<!\.)\b\d{1,3}(?:\.\d{1,3}){3}\b(?!\.)/g },
 ];
 
 export class ProtectedTokenValidator {
