@@ -4,22 +4,6 @@ This document is the continuation plan after Sprint 10B.
 
 ---
 
-# V1 Release Hardening & Full User Journey Audit
-
-Status: **COMPLETED & VERIFIED / RECOMMENDED FOR REAL-USER PILOT**
-
-Audited baseline: `2bd203198a043a44dd4278b96739df3c0f7d1622`
-
-Delivered & Verified:
-- Full end-to-end user journey audit from authenticated login through quotation draft, edit, pricing, tax, localization, and PDF export;
-- 10/10 mandatory proof flows verified with zero defects;
-- Smart System safety invariants verified (server-authoritative deterministic calculations, zero AI quantity fabrication, provenance tracking `USER_PROVIDED` / `CALCULATED` / `SUGGESTED`);
-- Multi-tenant security boundaries verified (`withCompanyAuth` enforces `companyId` context);
-- Dedicated end-to-end integration test suite (`src/__tests__/V1FullUserJourneyAudit.test.ts`);
-- Formal release checkpoint recorded at `docs/checkpoints/2026-08-25-v1-release-hardening-user-journey-audit.md`.
-
----
-
 # Phase 1 — Finish localization lifecycle
 
 Status: **Delivered through Phase 1.4 / PR #18 (`d5599b2`)**
@@ -375,7 +359,7 @@ through PR #51 at `fceba986768d09a69cb1c74fd7c90d62f2c53feb`.**
 Delivered boundary:
 
 - automatic tenant-safe Customer code generation;
-- bilingual Customer naming architecture;
+- bilingual Customer master-data naming;
 - preservation of existing Customer authority and downstream historical snapshots.
 
 ### 6.4C — Delivery Configuration & UX
@@ -383,8 +367,8 @@ Delivered boundary:
 Status: **CLOSED / MERGED through PR #52 at
 `a95dd42d32fed7022f006d1f4489c8715261dea9`.**
 
-Delivered configuration-readiness representation, provider visibility and
-delivery UX without falsely enabling unavailable channels.
+Delivered provider/configuration readiness visibility and delivery UX without
+falsely enabling unavailable channels.
 
 ### 6.4D — Dense Quotation Composer UX
 
@@ -635,7 +619,7 @@ Status: **PILOT EVALUATIONS COMPLETED / DOCUMENTED.**
 
 Decisions & Outcomes:
 - Wikidata: Product population dry runs returned 0 results. Wikidata is not the preferred primary catalog population source. Preserved for taxonomy, knowledge, and manufacturer relationships.
-- Open Icecat: Technical API access confirmed (`APC LR1250I` / ID `2975`). Building & Construction (4776) and Lighting (2332) quality pilots evaluated. Recommended as supplementary identity/spec enrichment source only (`ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`). Open-license interpretation requires legal clarification before production generative-AI use.
+- Open Icecat: Technical API access confirmed (`APC LR1250I` / ID `2975`). Building & Construction (4776) and Lighting (2332) quality pilots evaluated. Recommended as supplementary identity/spec enrichment source only (`ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`). Open-license interpretation requires legal clarification before production AI use.
 - Pilot Review Console UI preserved locally on branch `review/ucl-icecat-pilot-ui-lighting`.
 - UCL-7 is NOT started.
 
@@ -679,3 +663,51 @@ Mandatory Invariants & Hardening:
 - Voice transport (`useVoiceInput`) serves as an input transport only; no backend audio persistence or audio schema additions.
 - Application contract is transport-agnostic and ready for future Android text/voice submission.
 - Integrates seamlessly with existing canonical quotation composer (`/dashboard/quotations/new`).
+
+---
+
+# V1 Product Completion & Globalization
+
+Status: **ACTIVE**
+
+Current execution order:
+
+1. **Multilingual Localization V2 / OpenAI**
+   - provider-independent multilingual core
+   - OpenAI production adapter
+   - configurable locales
+   - protected commercial identifiers
+   - persisted localized variants
+   - third-language architectural proof
+
+2. **Manual UI Product Acceptance**
+   - quotations
+   - Sales Assistant
+   - customers/products
+   - Sales Orders
+   - Contracts
+   - PDFs
+   - language switching
+
+3. **Voice End-to-End Acceptance**
+   - real browser microphone validation
+   - same text/application pipeline
+   - no audio persistence
+
+4. **Universal Commercial Library Population**
+   - governed multi-source population
+   - normalization
+   - deduplication
+   - classification
+   - localization
+   - publication
+
+5. **Smart System Coverage Expansion**
+   - extend the existing deterministic versioned engine
+   - no duplicate system architecture
+
+After completion:
+
+**Release Hardening → Staging → Real-user Pilot → V1 Release**
+
+The Product Integrity regression suite is a safety net and does not by itself mark VOKA as pilot-ready.

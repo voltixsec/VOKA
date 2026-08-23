@@ -1,20 +1,25 @@
 # Project Status
 
-Current Product Frontier: **V1 Release Hardening / Full User Journey Audit**
+Current Product Frontier: **V1 Product Completion & Globalization**
 
-Status: **COMPLETED & VERIFIED / RECOMMEND GO FOR REAL-USER PILOT.**
-Complete end-to-end user journey audited and hardened across multi-tenant security, Smart System safety, canonical pricing/tax authority, proposal composer & persistence continuity, localization, and bilingual PDF export.
-All 10 mandatory proof flows validated with 1019 passing tests across 149 test files, zero TypeScript errors, valid Prisma schema, and successful Next.js production build.
-
+Status: **IN PROGRESS / NOT RELEASE READY.** The Product Integrity regression
+suite is an automated safety net only; it is not manual product acceptance and
+does not establish release or real-user-pilot readiness.
 Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch.
 Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at merge commit `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
 
-Official starting baseline for V1 Release Hardening:
+Official pre-Phase-6.2 baseline:
+
+`d19d2bd2e306a7db066532ff873e9af5ed3a8349`
+
+Current authoritative main baseline:
 
 `2bd203198a043a44dd4278b96739df3c0f7d1622`
 
+Phase 5 was merged through PR #40 after independent CTO review and green
+GitHub Quality CI.
 ## Sprint 09A - Quotation API
 
 Status: Completed
@@ -565,14 +570,22 @@ Delivered:
 - Reusable transport-agnostic application contract supporting Web Text, Web Mic (`useVoiceInput`), and future Android Text/Mic;
 - Full unit, integration, adversarial, and UI test coverage.
 
-## V1 Release Hardening & Full User Journey Audit
+## V1 Product Completion & Globalization
 
-Status: **COMPLETED & VERIFIED / RECOMMENDED FOR REAL-USER PILOT**
+Status: **IN PROGRESS / NOT RELEASE READY**
 
-Audited & Verified:
-- Complete V1 user journey: Login → Dashboard → Customers/Products → AI Sales Assistant / Smart System Builder → Draft Composer → Quotation Persistence → Editing → Localization → PDF Export;
-- All 10 mandatory proof flows (CCTV Villa, Gypsum Board 2000m², incomplete inputs, invalid negative inputs, non-system requests, supply-only requests, draft edit continuity, PDF generation, bilingual localization, zero-persistence voice transport);
-- Strict multi-tenant security boundary enforcement;
-- Server-authoritative tax/pricing authority via `QuotationCalculator`;
-- Dedicated end-to-end audit test suite (`src/__tests__/V1FullUserJourneyAudit.test.ts`);
-- Formal release checkpoint created at `docs/checkpoints/2026-08-25-v1-release-hardening-user-journey-audit.md`.
+The automated product-integrity regression suite provides a strong safety net across core quotation and Smart System journeys, but it does not constitute final product acceptance.
+
+Current mandatory completion gates:
+
+1. Multilingual Localization V2 / OpenAI.
+2. Manual UI Product Acceptance.
+3. Voice End-to-End Acceptance.
+4. Universal Commercial Library Population.
+5. Smart System Coverage Expansion.
+
+Release Hardening, Staging and Real-user Pilot occur only after these gates are closed.
+
+Regression checkpoint:
+
+`docs/checkpoints/2026-08-25-v1-product-integrity-regression-baseline.md`
