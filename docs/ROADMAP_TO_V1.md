@@ -676,34 +676,18 @@ Current execution order:
    - Phase A foundation complete: provider-independent BCP-47 boundary, OpenAI Responses API adapter, exact protected-token enforcement, and French/Chinese architectural proofs
    - Phase B pending: generic persisted localized variants, migration and compatibility rollout
 
-2. **Manual UI Product Acceptance**
-   - quotations
-   - Sales Assistant
-   - customers/products
-   - Sales Orders
-   - Contracts
-   - PDFs
-   - language switching
-
-3. **Voice End-to-End Acceptance**
-   - real browser microphone validation
-   - same text/application pipeline
-   - no audio persistence
-
-4. **Universal Commercial Library Population**
-   - governed multi-source population
-   - normalization
-   - deduplication
-   - classification
-   - localization
-   - publication
-
-5. **Smart System Coverage Expansion**
-   - extend the existing deterministic versioned engine
-   - no duplicate system architecture
-
-After completion:
-
-**Release Hardening → Staging → Real-user Pilot → V1 Release**
+2. **Authoritative V1 Product Closure Execution Sequence:**
+   *(Detailed in [V1 Product Experience, Branding & Product Closure Requirements](product/V1_PRODUCT_EXPERIENCE_AND_BRANDING.md))*
+   1. OpenAI Production Connection & Translation Acceptance
+   2. Email + WhatsApp Commercial Delivery Closure
+   3. Manual Core Product Acceptance
+   4. Product Performance Pass
+   5. Brand System / Themes / Logo / Signature
+   6. Landing Page Rebuild & Dashboard Alignment
+   7. Full Product Acceptance
+   8. Release Hardening
+   9. Staging
+   10. Real-user Pilot
+   11. V1 Release
 
 The Product Integrity regression suite is a safety net and does not by itself mark VOKA as pilot-ready.

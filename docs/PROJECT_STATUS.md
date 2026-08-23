@@ -576,13 +576,22 @@ Status: **IN PROGRESS / NOT RELEASE READY**
 
 The automated product-integrity regression suite provides a strong safety net across core quotation and Smart System journeys, but it does not constitute final product acceptance.
 
-Current mandatory completion gates:
+Current mandatory completion gates & execution order:
 
-1. Multilingual Localization V2 / OpenAI.
-2. Manual UI Product Acceptance.
-3. Voice End-to-End Acceptance.
-4. Universal Commercial Library Population.
-5. Smart System Coverage Expansion.
+See [V1 Product Experience, Branding & Product Closure Requirements](product/V1_PRODUCT_EXPERIENCE_AND_BRANDING.md) for the authoritative requirements across all 10 workstreams.
+
+Authoritative execution sequence following Multilingual Phase B persistence:
+1. OpenAI Production Connection & Translation Acceptance
+2. Email + WhatsApp Commercial Delivery Closure
+3. Manual Core Product Acceptance
+4. Product Performance Pass
+5. Brand System / Themes / Logo / Signature
+6. Landing Page Rebuild & Dashboard Alignment
+7. Full Product Acceptance
+8. Release Hardening
+9. Staging
+10. Real-user Pilot
+11. V1 Release
 
 Release Hardening, Staging and Real-user Pilot occur only after these gates are closed.
 
