@@ -1,23 +1,20 @@
 # Project Status
 
-Current Product Frontier: **V1 Smart Sales Assistant End-to-End Hardening**
+Current Product Frontier: **V1 Release Hardening / Full User Journey Audit**
 
-Status: V1 Smart Sales Assistant End-to-End Hardening completed and verified; complete proof flows for CCTV, Gypsum Board, conversational confirmation, zero fabrication, and voice transport boundary validated with 1000/1000 passing tests across 148 test files.
+Status: **COMPLETED & VERIFIED / RECOMMEND GO FOR REAL-USER PILOT.**
+Complete end-to-end user journey audited and hardened across multi-tenant security, Smart System safety, canonical pricing/tax authority, proposal composer & persistence continuity, localization, and bilingual PDF export.
+All 10 mandatory proof flows validated with 1019 passing tests across 149 test files, zero TypeScript errors, valid Prisma schema, and successful Next.js production build.
+
 Phase 7A Commercial Document Foundation & Phase 7B.1 Contract MVP implemented on the handoff branch.
 Phase 6.1 Text AI Sales Assistant / Structured Draft is closed and merged through PR #42.
 Phase 6.2 Voice Input Transport is **CLOSED / MERGED** through PR #44 at merge commit `0c94f521d07d4a2f78f4eb5d67c60e27ce686772` after green Quality #79.
 Phase 6.3 AI Model Routing is **CLOSED / MERGED** through PR #46 at merge commit `8ad47179408e2753f1ece92aedb8d0e5ab0641d8` after green Quality #83.
 
-Official pre-Phase-6.2 baseline:
+Official starting baseline for V1 Release Hardening:
 
-`d19d2bd2e306a7db066532ff873e9af5ed3a8349`
+`2bd203198a043a44dd4278b96739df3c0f7d1622`
 
-Current canonical main baseline after Phase 6.4D merge:
-
-`20c83d9c034189cbf40f907840fdaa81847c100b`
-
-Phase 5 was merged through PR #40 after independent CTO review and green
-GitHub Quality CI.
 ## Sprint 09A - Quotation API
 
 Status: Completed
@@ -567,3 +564,15 @@ Delivered:
 - Interactive UI workspace updates in `/dashboard/sales-assistant` rendering Smart System badges and provenance labels;
 - Reusable transport-agnostic application contract supporting Web Text, Web Mic (`useVoiceInput`), and future Android Text/Mic;
 - Full unit, integration, adversarial, and UI test coverage.
+
+## V1 Release Hardening & Full User Journey Audit
+
+Status: **COMPLETED & VERIFIED / RECOMMENDED FOR REAL-USER PILOT**
+
+Audited & Verified:
+- Complete V1 user journey: Login → Dashboard → Customers/Products → AI Sales Assistant / Smart System Builder → Draft Composer → Quotation Persistence → Editing → Localization → PDF Export;
+- All 10 mandatory proof flows (CCTV Villa, Gypsum Board 2000m², incomplete inputs, invalid negative inputs, non-system requests, supply-only requests, draft edit continuity, PDF generation, bilingual localization, zero-persistence voice transport);
+- Strict multi-tenant security boundary enforcement;
+- Server-authoritative tax/pricing authority via `QuotationCalculator`;
+- Dedicated end-to-end audit test suite (`src/__tests__/V1FullUserJourneyAudit.test.ts`);
+- Formal release checkpoint created at `docs/checkpoints/2026-08-25-v1-release-hardening-user-journey-audit.md`.
