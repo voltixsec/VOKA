@@ -1,14 +1,10 @@
 import type { ISystemTemplate } from "./types";
 
 export class SystemTemplateRegistry {
-  private static instance: SystemTemplateRegistry | null = null;
   private readonly templates = new Map<string, ISystemTemplate>();
 
-  public static getInstance(): SystemTemplateRegistry {
-    if (!SystemTemplateRegistry.instance) {
-      SystemTemplateRegistry.instance = new SystemTemplateRegistry();
-    }
-    return SystemTemplateRegistry.instance;
+  public constructor(templates: readonly ISystemTemplate[] = []) {
+    for (const template of templates) this.register(template);
   }
 
   public register(template: ISystemTemplate): void {
@@ -31,9 +27,4 @@ export class SystemTemplateRegistry {
     return Array.from(this.templates.values());
   }
 
-  public clear(): void {
-    this.templates.clear();
-  }
 }
-
-export const globalSystemTemplateRegistry = SystemTemplateRegistry.getInstance();

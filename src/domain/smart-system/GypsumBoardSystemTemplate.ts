@@ -14,10 +14,12 @@ export interface GypsumBoardInputs {
   studSpacingCm?: number | null;
   wastePercentage?: number | null;
   includeInsulation?: boolean | null;
+  includeInstallation?: boolean | null;
 }
 
 export class GypsumBoardSystemTemplate implements ISystemTemplate {
   public readonly systemType = "GYPSUM_BOARD";
+  public readonly templateVersion = "1.1.0";
   public readonly displayNameAr = "نظام أسقف وواجهات الجبس بورد";
   public readonly displayNameEn = "Gypsum Board Ceiling & Facade System";
 
@@ -33,18 +35,24 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
     const missingInputs: string[] = [];
 
     const areaInput = rawInputs.areaM2 ?? rawInputs.area ?? null;
-    const area = typeof areaInput === "number" && !isNaN(areaInput) ? areaInput : null;
+    const area = typeof areaInput === "number" && Number.isFinite(areaInput) ? areaInput : null;
+    const invalidInputs: string[] = [];
 
-    if (area === null || area <= 0) {
+    if (areaInput === null) {
       missingInputs.push("areaM2");
-      if (area !== null && area <= 0) {
-        warnings.push("Area must be greater than 0 m².");
-      }
+    } else if (area === null || area <= 0 || area > 1_000_000) {
+      invalidInputs.push("areaM2");
+      warnings.push("Area must be a finite number greater than 0 and no more than 1,000,000 m².");
     }
 
     const layersCountProvided = rawInputs.layersCount ?? rawInputs.layers;
+    if (layersCountProvided !== undefined && layersCountProvided !== null &&
+        (typeof layersCountProvided !== "number" || !Number.isInteger(layersCountProvided) || layersCountProvided < 1 || layersCountProvided > 10)) {
+      invalidInputs.push("layersCount");
+      warnings.push("Layers count must be an integer from 1 to 10.");
+    }
     const layersCount =
-      typeof layersCountProvided === "number" && layersCountProvided > 0
+      typeof layersCountProvided === "number" && Number.isInteger(layersCountProvided) && layersCountProvided > 0
         ? layersCountProvided
         : GypsumBoardSystemTemplate.DEFAULT_LAYERS_COUNT;
     const layersProvenance: ProvenanceType =
@@ -53,8 +61,13 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
         : "SUGGESTED";
 
     const wasteProvided = rawInputs.wastePercentage ?? rawInputs.wastage;
+    if (wasteProvided !== undefined && wasteProvided !== null &&
+        (typeof wasteProvided !== "number" || !Number.isFinite(wasteProvided) || wasteProvided < 0 || wasteProvided > 100)) {
+      invalidInputs.push("wastePercentage");
+      warnings.push("Wastage percentage must be between 0 and 100.");
+    }
     const wastePercentage =
-      typeof wasteProvided === "number" && wasteProvided >= 0
+      typeof wasteProvided === "number" && Number.isFinite(wasteProvided) && wasteProvided >= 0 && wasteProvided <= 100
         ? wasteProvided
         : GypsumBoardSystemTemplate.DEFAULT_WASTE_PERCENTAGE;
     const wasteProvenance: ProvenanceType =
@@ -62,6 +75,13 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
         ? "USER_PROVIDED"
         : "SUGGESTED";
 
+    for (const [name, value] of [["boardWidthM", rawInputs.boardWidthM], ["boardLengthM", rawInputs.boardLengthM], ["studSpacingCm", rawInputs.studSpacingCm]] as const) {
+      if (value !== undefined && value !== null &&
+          (typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
+        invalidInputs.push(name);
+        warnings.push(`${name} must be a finite number greater than 0.`);
+      }
+    }
     const boardWidth =
       typeof rawInputs.boardWidthM === "number" && rawInputs.boardWidthM > 0
         ? rawInputs.boardWidthM
@@ -77,7 +97,12 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
         ? rawInputs.studSpacingCm
         : GypsumBoardSystemTemplate.DEFAULT_STUD_SPACING_CM;
 
-    const includeInsulation = Boolean(rawInputs.includeInsulation);
+    const includeInsulation = rawInputs.includeInsulation === true;
+    const includeInstallation = rawInputs.includeInstallation === true;
+    if (layersCountProvided == null) warnings.push("Default assumption: 1 gypsum-board layer.");
+    if (wasteProvided == null) warnings.push("Default assumption: 5% material wastage.");
+    if (rawInputs.boardWidthM == null || rawInputs.boardLengthM == null) warnings.push("Default assumption: 1.2m x 2.4m board dimensions.");
+    if (rawInputs.studSpacingCm == null) warnings.push("Default assumption: 60cm stud spacing.");
 
     const inputs: SystemInputParameter[] = [
       {
@@ -86,7 +111,7 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
         labelEn: "Area (m²)",
         value: area,
         unit: "m²",
-        provenance: area !== null ? "USER_PROVIDED" : "SUGGESTED",
+        provenance: areaInput !== null ? "USER_PROVIDED" : "SUGGESTED",
       },
       {
         name: "layersCount",
@@ -106,12 +131,22 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
         isDefault: wasteProvenance === "SUGGESTED",
       },
       {
-        name: "boardDimensions",
-        labelAr: "أبعاد الألواح (متر)",
-        labelEn: "Board Dimensions (m)",
-        value: `${boardWidth} x ${boardLength} m`,
-        provenance: "SUGGESTED",
-        isDefault: true,
+        name: "boardWidthM",
+        labelAr: "عرض اللوح (متر)",
+        labelEn: "Board Width (m)",
+        value: boardWidth,
+        unit: "m",
+        provenance: rawInputs.boardWidthM == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: rawInputs.boardWidthM == null,
+      },
+      {
+        name: "boardLengthM",
+        labelAr: "طول اللوح (متر)",
+        labelEn: "Board Length (m)",
+        value: boardLength,
+        unit: "m",
+        provenance: rawInputs.boardLengthM == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: rawInputs.boardLengthM == null,
       },
       {
         name: "studSpacingCm",
@@ -119,19 +154,36 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
         labelEn: "Stud Spacing (cm)",
         value: studSpacingCm,
         unit: "cm",
-        provenance: "SUGGESTED",
-        isDefault: true,
+        provenance: rawInputs.studSpacingCm == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: rawInputs.studSpacingCm == null,
+      },
+      {
+        name: "includeInsulation",
+        labelAr: "يشمل العزل",
+        labelEn: "Include Insulation",
+        value: includeInsulation,
+        provenance: rawInputs.includeInsulation == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: rawInputs.includeInsulation == null,
+      },
+      {
+        name: "includeInstallation",
+        labelAr: "يشمل التركيب",
+        labelEn: "Include Installation",
+        value: includeInstallation,
+        provenance: rawInputs.includeInstallation == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: rawInputs.includeInstallation == null,
       },
     ];
 
-    if (missingInputs.length > 0) {
+    if (invalidInputs.length > 0 || missingInputs.length > 0) {
       return {
         systemType: this.systemType,
         systemNameAr: this.displayNameAr,
         systemNameEn: this.displayNameEn,
-        status: "NEEDS_CONFIRMATION",
+        templateVersion: this.templateVersion,
+        status: invalidInputs.length > 0 ? "INVALID_INPUT" : "NEEDS_CONFIRMATION",
         inputs,
-        missingInputs,
+        missingInputs: [...missingInputs, ...invalidInputs],
         warnings: [
           ...warnings,
           "Area in m² is required to derive gypsum board components accurately.",
@@ -272,7 +324,7 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
     }
 
     // Labor / Finishing Line Item
-    components.push({
+    if (includeInstallation) components.push({
       componentKey: "GYPSUM_LABOR",
       name: "مصاريف مصنعية توريد وتركيب وتجهيز الجبس بورد",
       nameAr: "مصاريف مصنعية توريد وتركيب وتجهيز الجبس بورد",
@@ -287,6 +339,7 @@ export class GypsumBoardSystemTemplate implements ISystemTemplate {
 
     return {
       systemType: this.systemType,
+      templateVersion: this.templateVersion,
       systemNameAr: this.displayNameAr,
       systemNameEn: this.displayNameEn,
       status: "COMPLETE",

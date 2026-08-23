@@ -9,14 +9,9 @@ describe("Smart System Templates V1 Foundation", () => {
   let cctvTemplate: CctvSystemTemplate;
 
   beforeEach(() => {
-    registry = SystemTemplateRegistry.getInstance();
-    registry.clear();
-
     gypsumTemplate = new GypsumBoardSystemTemplate();
     cctvTemplate = new CctvSystemTemplate();
-
-    registry.register(gypsumTemplate);
-    registry.register(cctvTemplate);
+    registry = new SystemTemplateRegistry([gypsumTemplate, cctvTemplate]);
   });
 
   describe("GypsumBoardSystemTemplate", () => {
@@ -25,6 +20,7 @@ describe("Smart System Templates V1 Foundation", () => {
         areaM2: 2000,
         layersCount: 1,
         wastePercentage: 5,
+        includeInstallation: true,
       });
 
       expect(result.status).toBe("COMPLETE");
@@ -82,10 +78,23 @@ describe("Smart System Templates V1 Foundation", () => {
       expect(result.warnings.length).toBeGreaterThan(0);
     });
 
+    it("rejects fractional layers and invalid wastage instead of silently defaulting", () => {
+      expect(gypsumTemplate.calculate({ areaM2: 20, layersCount: 1.5 }).status).toBe("INVALID_INPUT");
+      expect(gypsumTemplate.calculate({ areaM2: 20, wastePercentage: -1 }).status).toBe("INVALID_INPUT");
+      expect(gypsumTemplate.calculate({ areaM2: 20, wastePercentage: 101 }).status).toBe("INVALID_INPUT");
+    });
+
+    it("does not add installation labor unless installation was requested", () => {
+      const supply = gypsumTemplate.calculate({ areaM2: 20 });
+      const installed = gypsumTemplate.calculate({ areaM2: 20, includeInstallation: true });
+      expect(supply.components.some((c) => c.componentKey === "GYPSUM_LABOR")).toBe(false);
+      expect(installed.components.some((c) => c.componentKey === "GYPSUM_LABOR")).toBe(true);
+    });
+
     it("rejects invalid negative area input safely", () => {
       const result = gypsumTemplate.calculate({ areaM2: -100 });
 
-      expect(result.status).toBe("NEEDS_CONFIRMATION");
+      expect(result.status).toBe("INVALID_INPUT");
       expect(result.missingInputs).toContain("areaM2");
       expect(result.components).toHaveLength(0);
     });
@@ -137,6 +146,32 @@ describe("Smart System Templates V1 Foundation", () => {
       expect(result.status).toBe("NEEDS_CONFIRMATION");
       expect(result.missingInputs).toContain("cameraCount");
       expect(result.components).toHaveLength(0);
+    });
+
+    it("rejects fractional, negative, and unsupported camera counts", () => {
+      for (const cameraCount of [-1, 1.5, 65]) {
+        const result = cctvTemplate.calculate({ cameraCount });
+        expect(result.status).toBe("INVALID_INPUT");
+        expect(result.components).toHaveLength(0);
+      }
+    });
+
+    it("marks defaults explicitly and does not invent 4K or installation", () => {
+      const result = cctvTemplate.calculate({ cameraCount: 8 });
+      expect(result.inputs.find((i) => i.name === "projectContext")).toMatchObject({
+        provenance: "SUGGESTED",
+        isDefault: true,
+      });
+      expect(result.components.find((c) => c.componentKey === "CCTV_CAMERAS")?.nameEn).not.toContain("4K");
+      expect(result.components.some((c) => c.componentKey === "INSTALLATION_COMMISSIONING")).toBe(false);
+    });
+
+    it("keeps independent registries isolated", () => {
+      const first = new SystemTemplateRegistry([gypsumTemplate]);
+      const second = new SystemTemplateRegistry([cctvTemplate]);
+      expect(first.has("CCTV")).toBe(false);
+      expect(second.has("GYPSUM_BOARD")).toBe(false);
+      expect(registry.getAll()).toHaveLength(2);
     });
   });
 });

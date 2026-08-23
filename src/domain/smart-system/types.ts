@@ -30,6 +30,7 @@ export interface SystemComponent {
 
 export interface SystemCalculationResult {
   systemType: string;
+  templateVersion: string;
   systemNameAr: string;
   systemNameEn: string;
   status: SystemCalculationStatus;
@@ -41,6 +42,7 @@ export interface SystemCalculationResult {
 
 export interface ISystemTemplate {
   readonly systemType: string;
+  readonly templateVersion: string;
   readonly displayNameAr: string;
   readonly displayNameEn: string;
   calculate(inputs: Record<string, any>): SystemCalculationResult;

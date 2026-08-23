@@ -92,6 +92,10 @@ export default function SalesAssistantPage(props: any) {
 
   const handleApplyToComposer = () => {
     if (!proposal) return;
+    if (proposal.smartSystem && proposal.smartSystem.status !== "COMPLETE") {
+      setError(isArabic ? "يجب استكمال مدخلات النظام الحرجة أولاً." : "Complete the critical system inputs before applying the draft.");
+      return;
+    }
     try {
       sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(proposal));
       router.push("/dashboard/quotations/new");
@@ -302,7 +306,8 @@ export default function SalesAssistantPage(props: any) {
             <button
               type="button"
               onClick={handleApplyToComposer}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300 transition"
+              disabled={Boolean(proposal.smartSystem && proposal.smartSystem.status !== "COMPLETE")}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 transition"
             >
               {isArabic ? "تطبيق على نموذج عرض السعر" : "Apply to Quotation Composer"}
             </button>
@@ -364,6 +369,40 @@ export default function SalesAssistantPage(props: any) {
               </div>
             )}
           </div>
+
+          {proposal.smartSystem && (
+            <div className={`rounded-2xl border p-5 ${proposal.smartSystem.status === "COMPLETE" ? "border-sky-400/20 bg-sky-400/5" : "border-amber-400/30 bg-amber-400/10"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-white">
+                  {isArabic ? proposal.smartSystem.systemNameAr : proposal.smartSystem.systemNameEn}
+                </p>
+                <span className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1 text-[11px] font-semibold text-slate-200">
+                  {proposal.smartSystem.status}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {proposal.smartSystem.inputs.map((input) => (
+                  <div key={input.name} className="rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs">
+                    <p className="text-slate-400">{isArabic ? input.labelAr : input.labelEn}</p>
+                    <p className="mt-1 font-semibold text-white">{input.value == null ? "—" : String(input.value)} {input.unit ?? ""}</p>
+                    <span className={input.provenance === "USER_PROVIDED" ? "text-emerald-300" : "text-amber-300"}>
+                      {input.provenance}{input.isDefault ? (isArabic ? " — قيمة افتراضية" : " — default") : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {proposal.smartSystem.missingInputs.length > 0 && (
+                <p className="mt-3 text-xs font-semibold text-amber-200">
+                  {isArabic ? "مدخلات مطلوبة: " : "Required inputs: "}{proposal.smartSystem.missingInputs.join(", ")}
+                </p>
+              )}
+              {proposal.smartSystem.warnings.length > 0 && (
+                <ul className="mt-3 space-y-1 text-xs text-amber-100">
+                  {proposal.smartSystem.warnings.map((warning) => <li key={warning}>• {warning}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Lines Table */}
           <div className="rounded-2xl border border-white/10 bg-slate-950 overflow-hidden">

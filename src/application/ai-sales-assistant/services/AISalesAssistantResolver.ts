@@ -179,15 +179,16 @@ export class AISalesAssistantResolver {
       canonicalLines.length === 0 ||
       canonicalLines.some((line) => line.reviewRequired);
 
-    // Extract smart system summary if present
-    const smartSystem = canonicalLines.some((l) => l.provenance)
+    const smartSystem = intent.smartSystem
       ? {
-          systemType: intent.notes?.includes("نظام") || intent.notes?.includes("System") ? "GYPSUM_BOARD" : "CCTV",
-          systemNameAr: intent.notes ?? "نظام متخصص",
-          systemNameEn: intent.notes ?? "Specialized System",
-          status: "COMPLETE" as const,
-          inputs: [],
-          missingInputs: [],
+          systemType: intent.smartSystem.systemType,
+          templateVersion: intent.smartSystem.templateVersion,
+          systemNameAr: intent.smartSystem.systemNameAr,
+          systemNameEn: intent.smartSystem.systemNameEn,
+          status: intent.smartSystem.status,
+          inputs: intent.smartSystem.inputs,
+          missingInputs: intent.smartSystem.missingInputs,
+          warnings: intent.smartSystem.warnings,
         }
       : null;
 
@@ -214,7 +215,7 @@ export class AISalesAssistantResolver {
       termsAndConditions: terms,
       termsAndConditionsAr: sourceLocale === "ar" ? terms : null,
       termsAndConditionsEn: sourceLocale === "en" ? terms : null,
-      reviewRequired,
+      reviewRequired: reviewRequired || Boolean(smartSystem && smartSystem.status !== "COMPLETE"),
       smartSystem,
       metadata: {
         sourceLocale,

@@ -1,6 +1,6 @@
 import type { SystemCalculationResult } from "../../../domain/smart-system";
 import {
-  globalSystemTemplateRegistry,
+  SystemTemplateRegistry,
   GypsumBoardSystemTemplate,
   CctvSystemTemplate,
 } from "../../../domain/smart-system";
@@ -12,32 +12,31 @@ export interface SystemDetectionMatch {
 }
 
 export class SmartSystemBuilderService {
+  private readonly registry: SystemTemplateRegistry;
+
   constructor() {
-    // Ensure default templates are registered
-    const registry = globalSystemTemplateRegistry;
-    if (!registry.has("GYPSUM_BOARD")) {
-      registry.register(new GypsumBoardSystemTemplate());
-    }
-    if (!registry.has("CCTV")) {
-      registry.register(new CctvSystemTemplate());
-    }
+    this.registry = new SystemTemplateRegistry([
+      new GypsumBoardSystemTemplate(),
+      new CctvSystemTemplate(),
+    ]);
   }
 
   public detectSystemIntent(prompt: string): SystemDetectionMatch | null {
     const lower = prompt.toLowerCase();
 
     // 1. Gypsum Board detection
-    if (
-      lower.includes("gypsum") ||
+    const hasGypsumKeyword = lower.includes("gypsum") ||
       lower.includes("drywall") ||
       prompt.includes("جبس") ||
       prompt.includes("جبسوم") ||
       prompt.includes("جبسين") ||
-      prompt.includes("جبسبورد")
-    ) {
-      const areaMatch =
-        prompt.match(/(\d+(?:\.\d+)?)\s*(?:m²|m2|sqm|meter|meters|متر|م²|م٢)/i) ||
-        prompt.match(/(?:مساحة|area)\s*[:=-]?\s*(\d+(?:\.\d+)?)/i);
+      prompt.includes("جبسبورد");
+    const areaMatch =
+      prompt.match(/(-?\d+(?:\.\d+)?)\s*(?:m²|m2|sqm|meter|meters|متر|م²|م٢)/i) ||
+      prompt.match(/(?:مساحة|area)\s*[:=]?\s*(-?\d+(?:\.\d+)?)/i);
+    const explicitGypsumSystem = /\b(?:gypsum|drywall)\s+system\b/i.test(prompt) ||
+      /(?:سيستم|نظام)\s+(?:جبس|جبسوم|جبسين|جبسبورد)/.test(prompt);
+    if (hasGypsumKeyword && (areaMatch || explicitGypsumSystem)) {
 
       const layersMatch = prompt.match(/(\d+)\s*(?:layers?|طبقات?|طبقة)/i);
       const wasteMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:%|percent|هالك|هدر)/i);
@@ -53,26 +52,24 @@ export class SmartSystemBuilderService {
             lower.includes("insulation") ||
             prompt.includes("عازل") ||
             prompt.includes("صوف صخري"),
+          includeInstallation: this.requestsInstallation(prompt),
         },
       };
     }
 
-    // 2. CCTV System detection
-    if (
-      lower.includes("cctv") ||
-      lower.includes("camera") ||
-      lower.includes("cameras") ||
-      prompt.includes("كاميرا") ||
-      prompt.includes("كاميرات") ||
-      prompt.includes("سيستم 8 كاميرات") ||
-      prompt.includes("سيستم كاميرات")
-    ) {
-      const cameraMatch =
-        prompt.match(/(\d+)\s*(?:cameras?|cctv|كاميرات?|كاميرا)/i) ||
-        prompt.match(/(?:سيستم|system)\s*(\d+)\s*كاميرا/i) ||
-        prompt.match(/(\d+)-(?:camera|كاميرا)/i);
+    // 2. CCTV System detection. A generic product mention such as "4K Camera"
+    // remains on the normal quotation path unless it carries a count or explicit
+    // system intent.
+    const cameraMatch =
+      prompt.match(/(\d+)\s*(?:cameras?|cctv|كاميرات?|كاميرا)/i) ||
+      prompt.match(/(?:سيستم|system)\s*(\d+)\s*كاميرا/i) ||
+      prompt.match(/(\d+)-(?:camera|كاميرا)/i);
+    const explicitCctvSystem = lower.includes("cctv") ||
+      /\b(?:camera|surveillance)\s+system\b/i.test(prompt) ||
+      /(?:سيستم|نظام)\s+(?:مراقبة|كاميرات?)/.test(prompt);
+    if (explicitCctvSystem || (cameraMatch && this.requestsInstallation(prompt))) {
 
-      let projectContext = "villa";
+      let projectContext: string | null = null;
       if (
         lower.includes("commercial") ||
         lower.includes("office") ||
@@ -101,6 +98,7 @@ export class SmartSystemBuilderService {
         extractedParameters: {
           cameraCount: cameraMatch ? Number(cameraMatch[1]) : null,
           projectContext,
+          includeInstallation: this.requestsInstallation(prompt),
         },
       };
     }
@@ -112,8 +110,13 @@ export class SmartSystemBuilderService {
     systemType: string,
     inputs: Record<string, any>,
   ): SystemCalculationResult | null {
-    const template = globalSystemTemplateRegistry.get(systemType);
+    const template = this.registry.get(systemType);
     if (!template) return null;
     return template.calculate(inputs);
+  }
+
+  private requestsInstallation(prompt: string): boolean {
+    const lower = prompt.toLowerCase();
+    return lower.includes("installation") || lower.includes("install") || prompt.includes("تركيب");
   }
 }

@@ -1,4 +1,5 @@
 import type { QuotationScopeType } from "../../../domain/quotation/types/QuotationScopeType";
+import type { SystemCalculationResult } from "../../../domain/smart-system";
 
 export const SALES_ASSISTANT_PROMPT_MAX_LENGTH = 4_000;
 export const SALES_ASSISTANT_MAX_LINES = 20;
@@ -49,6 +50,8 @@ export interface ExtractedSalesIntent {
   notes?: string | null;
   uncertainty?: string | null;
   warnings?: string[];
+  /** Server-owned deterministic context. Provider output is never allowed to set this. */
+  smartSystem?: SystemCalculationResult | null;
 }
 
 export interface ExtractedIntentResult {
@@ -147,6 +150,7 @@ export interface SalesAssistantDraftProposal {
   reviewRequired: boolean;
   smartSystem?: {
     systemType: string;
+    templateVersion: string;
     systemNameAr: string;
     systemNameEn: string;
     status: "COMPLETE" | "NEEDS_CONFIRMATION" | "INVALID_INPUT";
@@ -160,6 +164,7 @@ export interface SalesAssistantDraftProposal {
       isDefault?: boolean;
     }>;
     missingInputs: string[];
+    warnings: string[];
   } | null;
   metadata: {
     sourceLocale: SalesAssistantSourceLocale;

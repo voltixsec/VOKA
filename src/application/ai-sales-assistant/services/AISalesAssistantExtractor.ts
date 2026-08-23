@@ -13,6 +13,8 @@ import { SmartSystemBuilderService } from "../../smart-system/services/SmartSyst
 
 const FALLBACK_WARNING =
   "Structured AI extraction was unavailable or invalid; conservative heuristic extraction was used.";
+const DETERMINISTIC_SYSTEM_WARNING =
+  "Smart System quantities were derived exclusively by the server-owned deterministic template; AI output was not used for engineering quantities.";
 
 export class AISalesAssistantExtractor {
   private readonly smartSystemBuilder = new SmartSystemBuilderService();
@@ -26,6 +28,17 @@ export class AISalesAssistantExtractor {
     sourceLocale: SalesAssistantSourceLocale,
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
+
+    // Engineering-system intent is always resolved by server-owned rules. The
+    // untrusted AI provider must never get authority over component quantities.
+    if (this.smartSystemBuilder.detectSystemIntent(trimmed)) {
+      const intent = this.heuristicExtract(trimmed, sourceLocale);
+      return {
+        intent,
+        extractionMode: "heuristic",
+        warnings: [DETERMINISTIC_SYSTEM_WARNING, ...(intent.warnings ?? [])],
+      };
+    }
 
     if (this.provider) {
       try {
@@ -70,7 +83,7 @@ export class AISalesAssistantExtractor {
         systemMatch.extractedParameters,
       );
 
-      if (calcResult && calcResult.status === "COMPLETE") {
+      if (calcResult) {
         const customerMention = this.extractCustomerMention(
           prompt,
           sourceLocale,
@@ -81,7 +94,9 @@ export class AISalesAssistantExtractor {
 
         const lines: ExtractedLineItem[] = calcResult.components.map((c) => ({
           text: sourceLocale === "ar" ? c.nameAr : c.nameEn,
-          description: c.formulaExplanation ?? null,
+          // Engineering audit detail remains separate from the commercial line
+          // description and is not copied into the quotation composer.
+          description: null,
           quantity: c.quantity,
           requestedUnitText: c.unit,
           requestedPrice: null, // AI & System templates do not invent prices
@@ -125,6 +140,7 @@ export class AISalesAssistantExtractor {
           lines,
           notes: sourceLocale === "ar" ? calcResult.systemNameAr : calcResult.systemNameEn,
           warnings: systemWarnings,
+          smartSystem: calcResult,
         };
       }
     }

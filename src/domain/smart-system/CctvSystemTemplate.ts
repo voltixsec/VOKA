@@ -11,15 +11,20 @@ export interface CctvInputs {
   projectContext?: string | null; // e.g., "villa", "commercial", "warehouse"
   storageDays?: number | null;
   includeCableAllowance?: boolean | null;
+  includeInstallation?: boolean | null;
+  bitrateMbps?: number | null;
+  cableMetersPerCamera?: number | null;
 }
 
 export class CctvSystemTemplate implements ISystemTemplate {
   public readonly systemType = "CCTV";
+  public readonly templateVersion = "1.1.0";
   public readonly displayNameAr = "نظام المراقبة والأمن الكاميرات (CCTV)";
   public readonly displayNameEn = "CCTV Security & Surveillance System";
 
   public static readonly DEFAULT_STORAGE_DAYS = 30;
   public static readonly DEFAULT_CABLE_METERS_PER_CAMERA = 30;
+  public static readonly DEFAULT_BITRATE_MBPS = 8;
 
   public calculate(rawInputs: Record<string, any>): SystemCalculationResult {
     const warnings: string[] = [];
@@ -28,13 +33,13 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const cameraCountProvided =
       rawInputs.cameraCount ?? rawInputs.cameras ?? rawInputs.count ?? null;
     const cameraCount =
-      typeof cameraCountProvided === "number" && cameraCountProvided > 0
-        ? Math.round(cameraCountProvided)
+      typeof cameraCountProvided === "number" && Number.isInteger(cameraCountProvided) && cameraCountProvided > 0 && cameraCountProvided <= 64
+        ? cameraCountProvided
         : null;
 
     if (cameraCount === null) {
-      if (cameraCountProvided !== null && Number(cameraCountProvided) <= 0) {
-        warnings.push("Camera count must be greater than 0.");
+      if (cameraCountProvided !== null) {
+        warnings.push("Camera count must be an integer from 1 to 64.");
       } else {
         missingInputs.push("cameraCount");
       }
@@ -43,7 +48,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const projectContext =
       typeof rawInputs.projectContext === "string" && rawInputs.projectContext.trim()
         ? rawInputs.projectContext.trim()
-        : "villa";
+        : "unspecified";
+    const projectContextProvided = typeof rawInputs.projectContext === "string" && Boolean(rawInputs.projectContext.trim());
 
     const storageDaysProvided = rawInputs.storageDays ?? rawInputs.days;
     const storageDays =
@@ -54,6 +60,28 @@ export class CctvSystemTemplate implements ISystemTemplate {
       typeof storageDaysProvided === "number" && storageDaysProvided > 0
         ? "USER_PROVIDED"
         : "SUGGESTED";
+    const bitrateProvided = rawInputs.bitrateMbps;
+    const bitrateMbps = typeof bitrateProvided === "number" && Number.isFinite(bitrateProvided) && bitrateProvided > 0 && bitrateProvided <= 100
+      ? bitrateProvided
+      : CctvSystemTemplate.DEFAULT_BITRATE_MBPS;
+    const invalidStorage = storageDaysProvided != null &&
+      (typeof storageDaysProvided !== "number" || !Number.isInteger(storageDaysProvided) || storageDaysProvided < 1 || storageDaysProvided > 365);
+    const invalidBitrate = bitrateProvided != null &&
+      (typeof bitrateProvided !== "number" || !Number.isFinite(bitrateProvided) || bitrateProvided <= 0 || bitrateProvided > 100);
+    if (invalidStorage) warnings.push("Storage duration must be an integer from 1 to 365 days.");
+    if (invalidBitrate) warnings.push("Per-camera bitrate must be greater than 0 and no more than 100 Mbps.");
+    const includeInstallation = rawInputs.includeInstallation === true;
+    const cableProvided = rawInputs.cableMetersPerCamera;
+    const cableMetersPerCamera = typeof cableProvided === "number" && Number.isFinite(cableProvided) && cableProvided > 0 && cableProvided <= 500
+      ? cableProvided
+      : CctvSystemTemplate.DEFAULT_CABLE_METERS_PER_CAMERA;
+    const invalidCable = cableProvided != null &&
+      (typeof cableProvided !== "number" || !Number.isFinite(cableProvided) || cableProvided <= 0 || cableProvided > 500);
+    if (invalidCable) warnings.push("Cable allowance per camera must be greater than 0 and no more than 500 meters.");
+    if (!projectContextProvided) warnings.push("Default assumption: project context is unspecified.");
+    if (storageDaysProvided == null) warnings.push("Default assumption: 30 days recording retention.");
+    if (bitrateProvided == null) warnings.push("Default assumption: 8 Mbps bitrate per camera for capacity planning.");
+    if (cableProvided == null) warnings.push("Default assumption: 30 meters of cable per camera.");
 
     const inputs: SystemInputParameter[] = [
       {
@@ -69,7 +97,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
         labelAr: "سياق المشروع",
         labelEn: "Project Context",
         value: projectContext,
-        provenance: "USER_PROVIDED",
+        provenance: projectContextProvided ? "USER_PROVIDED" : "SUGGESTED",
+        isDefault: !projectContextProvided,
       },
       {
         name: "storageDays",
@@ -80,16 +109,49 @@ export class CctvSystemTemplate implements ISystemTemplate {
         provenance: storageProvenance,
         isDefault: storageProvenance === "SUGGESTED",
       },
+      {
+        name: "cableMetersPerCamera",
+        labelAr: "بدل الكابل لكل كاميرا",
+        labelEn: "Cable Allowance per Camera",
+        value: cableMetersPerCamera,
+        unit: "m",
+        provenance: cableProvided == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: cableProvided == null,
+      },
+      {
+        name: "bitrateMbps",
+        labelAr: "معدل البث لكل كاميرا",
+        labelEn: "Per-camera Bitrate",
+        value: bitrateMbps,
+        unit: "Mbps",
+        provenance: bitrateProvided == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: bitrateProvided == null,
+      },
+      {
+        name: "includeInstallation",
+        labelAr: "يشمل التركيب",
+        labelEn: "Include Installation",
+        value: includeInstallation,
+        provenance: rawInputs.includeInstallation == null ? "SUGGESTED" : "USER_PROVIDED",
+        isDefault: rawInputs.includeInstallation == null,
+      },
     ];
 
-    if (missingInputs.length > 0) {
+    const invalidInputs = [
+      ...(cameraCountProvided !== null && cameraCount === null ? ["cameraCount"] : []),
+      ...(invalidStorage ? ["storageDays"] : []),
+      ...(invalidBitrate ? ["bitrateMbps"] : []),
+      ...(invalidCable ? ["cableMetersPerCamera"] : []),
+    ];
+    if (missingInputs.length > 0 || invalidInputs.length > 0) {
       return {
         systemType: this.systemType,
         systemNameAr: this.displayNameAr,
         systemNameEn: this.displayNameEn,
-        status: "NEEDS_CONFIRMATION",
+        templateVersion: this.templateVersion,
+        status: invalidInputs.length > 0 ? "INVALID_INPUT" : "NEEDS_CONFIRMATION",
         inputs,
-        missingInputs,
+        missingInputs: [...missingInputs, ...invalidInputs],
         warnings: [
           ...warnings,
           "Camera count is required to dimension the NVR, storage, PoE ports, and accessories.",
@@ -107,9 +169,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
     else if (count > 8) nvrChannels = 16;
     else if (count > 4) nvrChannels = 8;
 
-    // Storage calculation (~ 1TB per 10 days per 4K camera)
-    const estimatedTbRequired = Math.ceil((count * storageDays * 0.1) / 4) * 2;
-    const hddCount = Math.max(1, Math.ceil(estimatedTbRequired / 6)); // 6TB surveillance drives
+    // Decimal TB = cameras * Mbps * seconds/day * days / 8 bits/byte / 1e6 MB/TB.
+    const estimatedTbRequired = Math.ceil(count * bitrateMbps * 86_400 * storageDays / 8 / 1_000_000);
 
     // PoE Switch sizing (8, 16, 24, 48 ports)
     let poePorts = 8;
@@ -120,15 +181,15 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const poeSwitchCount = Math.ceil(count / (poePorts - 2)); // keep uplink ports free
 
     // Cabling allowance
-    const totalCableMeters = count * CctvSystemTemplate.DEFAULT_CABLE_METERS_PER_CAMERA;
+    const totalCableMeters = count * cableMetersPerCamera;
     const cableBoxes = Math.max(1, Math.ceil(totalCableMeters / 305)); // 305m per Cat6 box
 
     const components: SystemComponent[] = [
       {
         componentKey: "CCTV_CAMERAS",
-        name: `كاميرات مراقبة شبكية 4K IP (${projectContext})`,
-        nameAr: `كاميرات مراقبة شبكية 4K IP (${projectContext})`,
-        nameEn: `4K IP CCTV Surveillance Cameras (${projectContext})`,
+        name: `كاميرات مراقبة شبكية IP (${projectContext})`,
+        nameAr: `كاميرات مراقبة شبكية IP (${projectContext})`,
+        nameEn: `IP CCTV Surveillance Cameras (${projectContext})`,
         itemType: "PRODUCT",
         quantity: count,
         unit: "Unit",
@@ -149,15 +210,15 @@ export class CctvSystemTemplate implements ISystemTemplate {
         category: "HARDWARE",
       },
       {
-        componentKey: "SURVEILLANCE_HDD",
-        name: `أقراص تخزين مخصصة للمراقبة Surveillance HDD (${storageDays} يوم)`,
-        nameAr: `أقراص تخزين مخصصة للمراقبة Surveillance HDD (${storageDays} يوم)`,
-        nameEn: `Surveillance-grade Hard Drives HDD (${storageDays} days retention)`,
+        componentKey: "SURVEILLANCE_STORAGE_CAPACITY",
+        name: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
+        nameAr: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
+        nameEn: `Required Surveillance Storage Capacity (${storageDays} days retention)`,
         itemType: "PRODUCT",
-        quantity: hddCount,
-        unit: "Unit",
+        quantity: estimatedTbRequired,
+        unit: "TB",
         provenance: "CALCULATED",
-        formulaExplanation: `Calculated for ${count} cameras over ${storageDays} days retention (~${estimatedTbRequired} TB total)`,
+        formulaExplanation: `Required capacity only; Math.ceil(${count} cameras * ${bitrateMbps} Mbps * 86400 seconds/day * ${storageDays} days / 8 / 1000000) = ${estimatedTbRequired} TB. Drive count/model requires human design confirmation.`,
         category: "HARDWARE",
       },
       {
@@ -193,7 +254,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
         quantity: cableBoxes,
         unit: "Roll",
         provenance: "CALCULATED",
-        formulaExplanation: `Math.ceil(${count} cameras * 30m / 305m roll) = ${cableBoxes} roll(s)`,
+        formulaExplanation: `Math.ceil(${count} cameras * ${cableMetersPerCamera}m / 305m roll) = ${cableBoxes} roll(s)`,
         category: "INFRASTRUCTURE",
       },
       {
@@ -208,7 +269,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
         formulaExplanation: `1 connector & junction box set per camera (${count} sets)`,
         category: "ACCESSORIES",
       },
-      {
+      ...(includeInstallation ? [{
         componentKey: "INSTALLATION_COMMISSIONING",
         name: "خدمات التوريد والتركيب والبرمجة والتمديد واختبار النظام",
         nameAr: "خدمات التوريد والتركيب والبرمجة والتمديد واختبار النظام",
@@ -219,11 +280,12 @@ export class CctvSystemTemplate implements ISystemTemplate {
         provenance: "CALCULATED",
         formulaExplanation: `Turnkey installation & testing service for ${count} camera point(s)`,
         category: "SERVICES",
-      },
+      } as SystemComponent] : []),
     ];
 
     return {
       systemType: this.systemType,
+      templateVersion: this.templateVersion,
       systemNameAr: this.displayNameAr,
       systemNameEn: this.displayNameEn,
       status: "COMPLETE",
