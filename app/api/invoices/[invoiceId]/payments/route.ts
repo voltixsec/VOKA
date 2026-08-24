@@ -11,9 +11,13 @@ function id(request: Request) { const p = new URL(request.url).pathname.split("/
 const serializePayment = (payment: any) => ({ ...payment, receivedAt: payment.receivedAt.toISOString(), createdAt: payment.createdAt.toISOString() });
 
 export const GET = withCompanyAuth(["OWNER", "ADMIN", "SALES", "VIEWER"], async (request, _auth, company) => {
-  const payments = await repository.listPayments(company.companyId, id(request));
-  if (!payments) throw ApiError.notFound("INVOICE_NOT_FOUND", "Invoice not found.");
-  return apiSuccess(payments.map(serializePayment), { headers: { "Cache-Control": "no-store" } });
+  const query = new URL(request.url).searchParams;
+  const page = Number(query.get("page") ?? 1);
+  const pageSize = Number(query.get("pageSize") ?? 50);
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) throw ApiError.badRequest("INVALID_PAGINATION", "Pagination must use positive integers and pageSize cannot exceed 100.");
+  const result = await repository.listPayments(company.companyId, id(request), (page - 1) * pageSize, pageSize);
+  if (!result) throw ApiError.notFound("INVOICE_NOT_FOUND", "Invoice not found.");
+  return apiSuccess({ payments: result.payments.map(serializePayment), pagination: { total: result.total, page, pageSize, totalPages: Math.ceil(result.total / pageSize) } }, { headers: { "Cache-Control": "no-store" } });
 });
 
 export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request, auth, company) => {

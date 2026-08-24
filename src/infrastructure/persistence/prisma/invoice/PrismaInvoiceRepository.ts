@@ -305,10 +305,14 @@ export class PrismaInvoiceRepository implements IInvoiceRepository {
     return { id: record.id, invoiceId: record.invoiceId, amount: Number(record.amount), currencyCode: record.currencyCode, method: record.method, receivedAt: record.receivedAt, reference: record.reference, notes: record.notes, recordedByName: record.recordedByName, recordedByRole: record.recordedByRole, createdAt: record.createdAt };
   }
 
-  async listPayments(companyId: string, invoiceId: string) {
+  async listPayments(companyId: string, invoiceId: string, skip: number, take: number) {
     const invoice = await this.db.invoice.findFirst({ where: { id: invoiceId, companyId }, select: { id: true } });
     if (!invoice) return null;
-    const records = await this.db.payment.findMany({ where: { companyId, invoiceId }, orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }] });
-    return records.map((record) => this.payment(record));
+    const where = { companyId, invoiceId };
+    const [records, total] = await Promise.all([
+      this.db.payment.findMany({ where, orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }], skip, take }),
+      this.db.payment.count({ where }),
+    ]);
+    return { payments: records.map((record) => this.payment(record)), total };
   }
 }
