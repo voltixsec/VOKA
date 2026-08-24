@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Button,
@@ -8,32 +8,78 @@ import {
 } from "../ui";
 import { useLanguage } from "../i18n/LanguageProvider";
 
+type UserProfile = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 export function DashboardHeader() {
-  const [searchOpen, setSearchOpen] =
-    useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const [aiModalOpen, setAiModalOpen] =
-    useState(false);
+  const { isArabic, toggleLanguage } = useLanguage();
 
-  const {
-    isArabic,
-    toggleLanguage,
-  } = useLanguage();
+  useEffect(() => {
+    let active = true;
+
+    async function loadUser() {
+      try {
+        const response = await fetch("/api/auth/me");
+        if (!response.ok) return;
+        const json = await response.json();
+        if (active && json.data?.user) {
+          setUser({
+            id: json.data.user.id,
+            name: json.data.user.name,
+            email: json.data.user.email,
+          });
+        }
+      } catch {
+        // Safe fallback if user cannot be fetched
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleLogout() {
+    try {
+      setLoggingOut(true);
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Proceed with redirect regardless of network state
+    } finally {
+      window.location.href = "/login";
+    }
+  }
+
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "VO";
 
   return (
     <>
       <header className="sticky top-0 z-30 flex min-h-[88px] items-center justify-between border-b border-white/10 bg-slate-950/90 px-8 backdrop-blur-xl">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-            {isArabic
-              ? "مساحة عمل VOKA"
-              : "VOKA Workspace"}
+            {isArabic ? "مساحة عمل VOKA" : "VOKA Workspace"}
           </p>
 
           <h1 className="mt-2 text-xl font-semibold text-white">
-            {isArabic
-              ? "عمليات المبيعات"
-              : "Sales Operations"}
+            {isArabic ? "عمليات المبيعات" : "Sales Operations"}
           </h1>
         </div>
 
@@ -64,36 +110,26 @@ export function DashboardHeader() {
               <path d="m19 3 .4 1.4a2 2 0 0 0 1.2 1.2L22 6l-1.4.4a2 2 0 0 0-1.2 1.2L19 9l-.4-1.4a2 2 0 0 0-1.2-1.2L16 6l1.4-.4a2 2 0 0 0 1.2-1.2L19 3Z" />
             </svg>
 
-            {isArabic
-              ? "المساعد الذكي"
-              : "AI Assistant"}
+            {isArabic ? "المساعد الذكي" : "AI Assistant"}
           </Button>
 
           <div
             className={[
               "overflow-hidden transition-all duration-300",
-              searchOpen
-                ? "w-72 opacity-100"
-                : "w-0 opacity-0",
+              searchOpen ? "w-72 opacity-100" : "w-0 opacity-0",
             ].join(" ")}
           >
             <input
               type="search"
               dir={isArabic ? "rtl" : "ltr"}
-              placeholder={
-                isArabic
-                  ? "ابحث في VOKA..."
-                  : "Search VOKA..."
-              }
+              placeholder={isArabic ? "ابحث في VOKA..." : "Search VOKA..."}
               className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-400/40 focus:ring-4 focus:ring-sky-400/10"
             />
           </div>
 
           <button
             type="button"
-            onClick={() =>
-              setSearchOpen((value) => !value)
-            }
+            onClick={() => setSearchOpen((value) => !value)}
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white"
             aria-label="Search"
           >
@@ -123,37 +159,83 @@ export function DashboardHeader() {
             onClick={toggleLanguage}
             className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
           >
-            <span>
-              {isArabic
-                ? "English"
-                : "العربية"}
-            </span>
-
+            <span>{isArabic ? "English" : "العربية"}</span>
             <span aria-hidden="true">🌐</span>
           </button>
 
-          <button
-            type="button"
-            className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-1.5 pe-4"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-400/15 text-sm font-bold text-sky-300">
-              VO
-            </span>
-
-            <span className="hidden text-start md:block">
-              <span className="block text-sm font-semibold text-white">
-                {isArabic
-                  ? "مدير VOKA"
-                  : "VOKA Admin"}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((prev) => !prev)}
+              aria-label="Account Menu"
+              aria-expanded={accountMenuOpen}
+              className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-1.5 pe-4 transition hover:bg-white/10"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-400/15 text-sm font-bold text-sky-300">
+                {initials}
               </span>
 
-              <span className="block text-xs text-slate-500">
-                {isArabic
-                  ? "مالك مساحة العمل"
-                  : "Workspace Owner"}
+              <span className="hidden text-start md:block">
+                <span className="block text-sm font-semibold text-white">
+                  {user?.name || (isArabic ? "مدير VOKA" : "VOKA Admin")}
+                </span>
+
+                <span className="block text-xs text-slate-500 truncate max-w-[140px]">
+                  {user?.email || (isArabic ? "مالك مساحة العمل" : "Workspace Owner")}
+                </span>
               </span>
-            </span>
-          </button>
+            </button>
+
+            {accountMenuOpen && (
+              <div
+                className={`absolute ${
+                  isArabic ? "left-0" : "right-0"
+                } mt-2 w-56 rounded-2xl border border-white/10 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl z-50`}
+              >
+                <div className="border-b border-white/10 px-3 py-2">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {user?.name || "VOKA User"}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {user?.email || ""}
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    disabled={loggingOut}
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4"
+                    >
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+
+                    <span>
+                      {loggingOut
+                        ? isArabic
+                          ? "جارٍ الخروج..."
+                          : "Logging out..."
+                        : isArabic
+                        ? "تسجيل الخروج"
+                        : "Logout"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -171,11 +253,7 @@ export function DashboardHeader() {
         }
         onClose={() => setAiModalOpen(false)}
         footer={
-          <Button
-            onClick={() =>
-              setAiModalOpen(false)
-            }
-          >
+          <Button onClick={() => setAiModalOpen(false)}>
             {isArabic ? "حسنًا" : "Got it"}
           </Button>
         }
@@ -199,4 +277,3 @@ export function DashboardHeader() {
     </>
   );
 }
-

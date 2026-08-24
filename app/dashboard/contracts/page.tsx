@@ -37,23 +37,18 @@ export default function ContractsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [unauthorized, setUnauthorized] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [signingIn, setSigningIn] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      setUnauthorized(false);
       const params = new URLSearchParams({ page: String(page), pageSize: "20" });
       if (search.trim()) params.set("search", search.trim());
       if (status) params.set("status", status);
 
       const response = await fetch("/api/contracts?" + params.toString());
       if (response.status === 401) {
-        setUnauthorized(true);
+        window.location.href = "/login?returnTo=" + encodeURIComponent("/dashboard/contracts");
         return;
       }
       if (!response.ok) throw new Error(isArabic ? "تعذر تحميل العقود" : "Unable to load contracts");
@@ -71,26 +66,6 @@ export default function ContractsPage() {
     const timer = setTimeout(load, 250);
     return () => clearTimeout(timer);
   }, [load]);
-
-  async function signIn(event: React.FormEvent) {
-    event.preventDefault();
-    try {
-      setSigningIn(true);
-      setError("");
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!response.ok) throw new Error(isArabic ? "بيانات الدخول غير صحيحة" : "Invalid email or password");
-      setPassword("");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sign in failed");
-    } finally {
-      setSigningIn(false);
-    }
-  }
 
   const money = (contract: ContractItem) =>
     new Intl.NumberFormat(isArabic ? "ar-KW" : "en-US", {
@@ -123,18 +98,18 @@ export default function ContractsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card padding="sm">
           <p className="text-sm text-slate-500">{isArabic ? "إجمالي العقود" : "Total contracts"}</p>
-          <p className="mt-3 text-3xl font-semibold">{unauthorized ? "—" : pagination.total}</p>
+          <p className="mt-3 text-3xl font-semibold">{pagination.total}</p>
         </Card>
         <Card padding="sm" className="border-sky-400/20">
           <p className="text-sm text-slate-500">{isArabic ? "الصفحة الحالية" : "Current page"}</p>
           <p className="mt-3 text-3xl font-semibold text-sky-300">
-            {unauthorized ? "—" : pagination.page}
+            {pagination.page}
           </p>
         </Card>
         <Card padding="sm" className="border-emerald-400/20">
           <p className="text-sm text-slate-500">{isArabic ? "عدد الصفحات" : "Total pages"}</p>
           <p className="mt-3 text-3xl font-semibold text-emerald-300">
-            {unauthorized ? "—" : pagination.totalPages}
+            {pagination.totalPages}
           </p>
         </Card>
       </div>
@@ -179,53 +154,14 @@ export default function ContractsPage() {
         </Card>
       )}
 
-      {!loading && unauthorized && (
-        <Card className="border-amber-400/20 bg-amber-400/5">
-          <h3 className="text-lg font-semibold text-amber-200">
-            {isArabic ? "سجّل الدخول لعرض العقود" : "Sign in to view contracts"}
-          </h3>
-          <p className="mt-2 text-sm text-slate-400">
-            {isArabic
-              ? "الجلسة غير موجودة أو انتهت. أدخل بيانات حساب VOKA."
-              : "Your session is missing or expired. Enter your VOKA account."}
-          </p>
-          <form onSubmit={signIn} className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <Input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={isArabic ? "البريد الإلكتروني" : "Email"}
-            />
-            <Input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={isArabic ? "كلمة المرور" : "Password"}
-            />
-            <Button type="submit" disabled={signingIn}>
-              {signingIn
-                ? isArabic
-                  ? "جارٍ الدخول..."
-                  : "Signing in..."
-                : isArabic
-                ? "تسجيل الدخول"
-                : "Sign in"}
-            </Button>
-          </form>
-          {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
-        </Card>
-      )}
-
-      {!loading && !unauthorized && error && (
+      {!loading && error && (
         <Card className="border-red-400/20 bg-red-400/5">
           <p className="text-red-300">{isArabic ? "تعذر تحميل العقود" : "Could not load contracts"}</p>
           <p className="mt-2 text-sm text-red-200/70">{error}</p>
         </Card>
       )}
 
-      {!loading && !unauthorized && !error && contracts.length === 0 && (
+      {!loading && !error && contracts.length === 0 && (
         <Card className="py-14 text-center">
           <div className="text-4xl">◇</div>
           <h3 className="mt-4 text-lg font-semibold">
@@ -240,7 +176,6 @@ export default function ContractsPage() {
       )}
 
       {!loading &&
-        !unauthorized &&
         !error &&
         contracts.map((c) => {
           const customerName = isArabic
@@ -289,7 +224,7 @@ export default function ContractsPage() {
           );
         })}
 
-      {!loading && !unauthorized && !error && pagination.totalPages > 1 && (
+      {!loading && !error && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
           <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((v) => v - 1)}>
             {isArabic ? "السابق" : "Previous"}

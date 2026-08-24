@@ -16,6 +16,7 @@ export default defineConfig({
       "app/**/__tests__/**/*.test.{ts,tsx}",
       "features/**/__tests__/**/*.test.{ts,tsx}",
       "components/**/__tests__/**/*.test.{ts,tsx}",
+      "lib/**/__tests__/**/*.test.{ts,tsx}",
     ],
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
