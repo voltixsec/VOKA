@@ -50,6 +50,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     const supported = recognizer.isSupported();
     setIsSupported(supported);
     setState(supported ? recognizer.getState() : "UNAVAILABLE");
+    return () => {
+      recognizer.reset();
+    };
   }, [recognizer]);
 
   const startListening = useCallback(
