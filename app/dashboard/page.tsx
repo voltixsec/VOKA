@@ -1,36 +1,51 @@
-﻿const dashboardCards = [
+"use client";
+
+import { useLanguage } from "@/components/i18n/LanguageProvider";
+
+const dashboardCards = [
   {
     title: 'Customers',
+    titleAr: 'العملاء',
     value: '—',
     description: 'Total customer records',
+    descriptionAr: 'إجمالي سجلات العملاء',
   },
   {
     title: 'Open Quotations',
+    titleAr: 'عروض الأسعار المفتوحة',
     value: '—',
     description: 'Waiting for customer action',
+    descriptionAr: 'بانتظار إجراء العميل',
   },
   {
     title: 'Approved Deals',
+    titleAr: 'الصفقات المعتمدة',
     value: '—',
     description: 'Ready for contract or invoice',
+    descriptionAr: 'جاهزة للعقد أو الفاتورة',
   },
 ];
 
 export default function DashboardPage() {
+  const { isArabic } = useLanguage();
+  const t = (ar: string, en: string) => isArabic ? ar : en;
+
   return (
-    <section className="space-y-8">
+    <section className="space-y-8" dir={isArabic ? "rtl" : "ltr"}>
       <div>
         <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-300">
-          Overview
+          {t("نظرة عامة", "Overview")}
         </p>
 
         <h2 className="mt-3 text-3xl font-semibold text-white">
-          Dashboard
+          {t("لوحة التحكم", "Dashboard")}
         </h2>
 
         <p className="mt-2 max-w-2xl text-slate-400">
-          Manage customers, products, quotations, contracts,
-          and invoices from one workspace.
+          {t(
+            "أدر العملاء والمنتجات وعروض الأسعار والعقود والفواتير من مساحة عمل واحدة.",
+            "Manage customers, products, quotations, contracts, and invoices from one workspace.",
+          )}
         </p>
       </div>
 
@@ -41,7 +56,7 @@ export default function DashboardPage() {
             className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-soft"
           >
             <p className="text-sm text-slate-400">
-              {card.title}
+              {isArabic ? card.titleAr : card.title}
             </p>
 
             <p className="mt-4 text-4xl font-semibold text-white">
@@ -49,7 +64,7 @@ export default function DashboardPage() {
             </p>
 
             <p className="mt-3 text-sm text-slate-500">
-              {card.description}
+              {isArabic ? card.descriptionAr : card.description}
             </p>
           </article>
         ))}
@@ -57,30 +72,30 @@ export default function DashboardPage() {
 
       <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-8">
         <p className="text-sm font-medium text-sky-300">
-          VOKA Sales Flow
+          {t("مسار مبيعات VOKA", "VOKA Sales Flow")}
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
           <span className="rounded-xl bg-white/5 px-4 py-3">
-            Customer
+            {t("عميل", "Customer")}
           </span>
 
           <span className="text-slate-600">→</span>
 
           <span className="rounded-xl bg-white/5 px-4 py-3">
-            Quotation
+            {t("عرض سعر", "Quotation")}
           </span>
 
           <span className="text-slate-600">→</span>
 
           <span className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-emerald-200">
-            Contract
+            {t("عقد", "Contract")}
           </span>
 
-          <span className="text-slate-500">or</span>
+          <span className="text-slate-500">{t("أو", "or")}</span>
 
           <span className="rounded-xl border border-sky-400/20 bg-sky-400/5 px-4 py-3 text-sky-200">
-            Invoice
+            {t("فاتورة", "Invoice")}
           </span>
         </div>
       </div>
