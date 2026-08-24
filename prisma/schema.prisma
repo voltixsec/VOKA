@@ -1223,24 +1223,31 @@ enum UniversalAcquisitionRunStatus {
 }
 
 model UniversalCategory {
-  id          String   @id @default(cuid())
-  parentId    String?
-  code        String?
-  name        String
-  nameAr      String?
-  nameEn      String?
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  parentId         String?
+  sourceId         String?
+  sourceExternalId String?
+  sourceVersion    String?
+  sourceUrl        String?
+  code             String?
+  name             String
+  nameAr           String?
+  nameEn           String?
+  description      String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   parent               UniversalCategory?             @relation("UniversalCategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children             UniversalCategory[]            @relation("UniversalCategoryHierarchy")
+  source               UniversalSource?               @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   items                UniversalCatalogItem[]
   attributeDefinitions UniversalAttributeDefinition[]
 
   @@unique([code])
+  @@unique([sourceId, sourceExternalId])
   @@index([parentId])
+  @@index([sourceId])
   @@index([isActive])
   @@index([name])
 }
@@ -1343,6 +1350,7 @@ model UniversalSource {
   itemProvenances  UniversalItemProvenance[]
   ingestionRecords UniversalIngestionRecord[]
   acquisitionRuns  UniversalAcquisitionRun[]
+  categories       UniversalCategory[]
 
   @@unique([type, externalRef])
   @@index([type])
