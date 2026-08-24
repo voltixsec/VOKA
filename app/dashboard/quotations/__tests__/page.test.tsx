@@ -57,7 +57,10 @@ describe("QuotationsPage", () => {
     });
   });
 
-  it("shows the sign-in state when the API returns unauthorized", async () => {
+  it("redirects to /login when the API returns 401 unauthorized", async () => {
+    delete (window as unknown as Record<string, unknown>).location;
+    window.location = { href: "" } as unknown as Location;
+
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: false, status: 401 }),
@@ -65,8 +68,10 @@ describe("QuotationsPage", () => {
 
     render(createElement(QuotationsPage));
 
-    expect(await screen.findByText("Sign in to view quotations")).toBeTruthy();
-    expect(screen.getByPlaceholderText("Email")).toBeTruthy();
-    expect(screen.getByPlaceholderText("Password")).toBeTruthy();
+    await waitFor(() => {
+      expect(window.location.href).toBe(
+        "/login?returnTo=%2Fdashboard%2Fquotations",
+      );
+    });
   });
 });
