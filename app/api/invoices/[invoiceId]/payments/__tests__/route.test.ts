@@ -1,0 +1,12 @@
+import { beforeEach,describe,expect,it,vi } from "vitest";
+import { Invoice } from "@/src/domain/invoice";
+const mocks=vi.hoisted(()=>({recordPayment:vi.fn(),listPayments:vi.fn()}));
+vi.mock("@/lib/prisma",()=>({prisma:{}}));
+vi.mock("@/src/infrastructure/persistence/prisma/invoice/PrismaInvoiceRepository",()=>({PrismaInvoiceRepository:class{recordPayment=mocks.recordPayment;listPayments=mocks.listPayments}}));
+vi.mock("@/lib/api",async()=>{const e=await vi.importActual<typeof import("@/lib/api/ApiError")>("@/lib/api/ApiError");const r=await vi.importActual<typeof import("@/lib/api/ApiResponse")>("@/lib/api/ApiResponse");return{ApiError:e.ApiError,apiSuccess:r.apiSuccess,withCompanyAuth:(_roles:unknown,h:Function)=>async(req:Request)=>{try{return await h(req,{user:{id:"user-1",name:"User"}},{companyId:"company-trusted",role:"SALES"})}catch(x){return r.handleApiError(x)}}}});
+import { POST } from "../route";
+const invoice=()=>new Invoice({id:"invoice-1",companyId:"company-trusted",number:"INV-1",status:"ISSUED",paidAmount:5,customerId:"customer-1",customer:{name:"Acme"},lines:[{position:1,type:"CUSTOM",itemName:"Work",quantity:1,unitPrice:10}],createdBy:{name:"User",role:"SALES"}});
+describe("invoice payments API",()=>{beforeEach(()=>mocks.recordPayment.mockReset());
+ it("requires a bounded idempotency key",async()=>{const res=await POST(new Request("http://localhost/api/invoices/invoice-1/payments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:5,method:"CASH"})}));expect(res.status).toBe(400);expect(mocks.recordPayment).not.toHaveBeenCalled()});
+ it("records through trusted tenant with server-owned currency",async()=>{mocks.recordPayment.mockResolvedValue({invoice:invoice(),payment:{id:"p-1",invoiceId:"invoice-1",amount:5,currencyCode:"KWD",method:"CASH",receivedAt:new Date("2026-08-25"),reference:null,notes:null,recordedByName:"User",recordedByRole:"SALES",createdAt:new Date("2026-08-25")},created:true});const res=await POST(new Request("http://localhost/api/invoices/invoice-1/payments",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":"payment:req:1"},body:JSON.stringify({companyId:"attacker",amount:5,method:"CASH",currencyCode:"USD"})}));expect(res.status).toBe(201);expect(mocks.recordPayment).toHaveBeenCalledWith(expect.objectContaining({companyId:"company-trusted",invoiceId:"invoice-1",amount:5,requestKey:"payment:req:1"}))});
+});

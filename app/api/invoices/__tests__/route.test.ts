@@ -1,0 +1,13 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Invoice } from "@/src/domain/invoice";
+const mocks=vi.hoisted(()=>({create:vi.fn(),list:vi.fn()}));
+vi.mock("@/lib/prisma",()=>({prisma:{}}));
+vi.mock("@/src/infrastructure/persistence/prisma/invoice/PrismaInvoiceRepository",()=>({PrismaInvoiceRepository:class{create=mocks.create;list=mocks.list}}));
+vi.mock("@/lib/api",async()=>{const e=await vi.importActual<typeof import("@/lib/api/ApiError")>("@/lib/api/ApiError");const r=await vi.importActual<typeof import("@/lib/api/ApiResponse")>("@/lib/api/ApiResponse");return{ApiError:e.ApiError,apiSuccess:r.apiSuccess,withCompanyAuth:(_roles:unknown,h:Function)=>async(req:Request)=>{try{return await h(req,{user:{id:"user-1",name:"User"}},{companyId:"company-trusted",role:"SALES"})}catch(x){return r.handleApiError(x)}}}});
+import { GET,POST } from "../route";
+const value=()=>new Invoice({id:"invoice-1",companyId:"company-trusted",number:"INV-1",customerId:"customer-1",customer:{name:"Acme"},lines:[{position:1,type:"CUSTOM",itemName:"Work",quantity:1,unitPrice:10}],createdBy:{name:"User",role:"SALES"}});
+describe("/api/invoices",()=>{beforeEach(()=>{mocks.create.mockReset();mocks.list.mockReset()});
+ it("requires an idempotency identity before consequential creation",async()=>{const res=await POST(new Request("http://localhost/api/invoices",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({customerId:"c",lines:[{}]})}));expect(res.status).toBe(400);expect(await res.json()).toMatchObject({error:{code:"INVOICE_IDEMPOTENCY_KEY_REQUIRED"}});expect(mocks.create).not.toHaveBeenCalled()});
+ it("uses trusted tenant identity and never client companyId",async()=>{mocks.create.mockResolvedValue(value());const res=await POST(new Request("http://localhost/api/invoices",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":"invoice:req:1"},body:JSON.stringify({companyId:"attacker",customerId:"customer-1",lines:[{position:1,type:"CUSTOM",itemName:"Work",quantity:1,unitPrice:10}]})}));expect(res.status).toBe(201);expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({companyId:"company-trusted",requestKey:"invoice:req:1"}))});
+ it("lists only through the trusted tenant",async()=>{mocks.list.mockResolvedValue({invoices:[value()],total:1});const res=await GET(new Request("http://localhost/api/invoices"));expect(res.status).toBe(200);expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({companyId:"company-trusted"}))});
+});
