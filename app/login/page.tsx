@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input } from "../../components/ui";
 import { sanitizeReturnTo } from "../../lib/auth/return-to";
 
-export default function LoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams();
   const rawReturnTo = searchParams ? searchParams.get("returnTo") : null;
   const returnTo = sanitizeReturnTo(rawReturnTo);
@@ -138,5 +138,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
