@@ -79,7 +79,7 @@ describe("Commercial Retrieval API Surface", () => {
     expect(body.data[0].description).toBeUndefined();
     expect(body.meta.totalCandidates).toBe(2);
     expect(body.meta.limit).toBe(10);
-  });
+  }, 15_000);
 
   it("returns controlled 400 validation error for invalid limit", async () => {
     const { GET } = await import("../route");

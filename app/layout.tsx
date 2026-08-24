@@ -10,7 +10,7 @@ const vokaFont = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "VOKA � Your AI Sales Employee",
+  title: "VOKA — Your AI Sales Employee",
   description:
     "Turn conversations into professional quotations in seconds using AI with VOKA.",
 };
