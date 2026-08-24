@@ -220,6 +220,9 @@ export class GenerateQuotationDocumentUseCase {
         number:
           quotation.number.toString(),
 
+        revisionNumber:
+          quotation.revisionNumber,
+
         status:
           quotation.status,
 

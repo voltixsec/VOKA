@@ -24,6 +24,7 @@ export type QuotationDocumentSnapshot = {
 
   quotation: {
     number: string;
+    revisionNumber?: number;
     status: string;
 
     issueDate: Date;

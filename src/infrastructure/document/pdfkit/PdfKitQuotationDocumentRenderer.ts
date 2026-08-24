@@ -79,7 +79,7 @@ function drawSafeFooter(
     .text(
       snapshot.company.name +
         " — " +
-        snapshot.quotation.number,
+        `${snapshot.quotation.number} · Rev ${snapshot.quotation.revisionNumber ?? 0}`,
       left,
       textY,
       {
@@ -142,7 +142,7 @@ export function decorateExistingPages(
         .fillColor(PROPOSAL_COLOR.muted)
         .fontSize(5.8)
         .text(
-          snapshot.quotation.number + " · " + String(index + 1) + " / " + String(range.count),
+          snapshot.quotation.number + " · Rev " + String(snapshot.quotation.revisionNumber ?? 0) + " · " + String(index + 1) + " / " + String(range.count),
           38,
           doc.page.height - LETTERHEAD_SAFE_AREA.bottom - LETTERHEAD_SAFE_AREA.traceOffset,
           { width: doc.page.width - 76, align: "center", lineBreak: false },
@@ -232,7 +232,7 @@ export class PdfKitQuotationDocumentRenderer
                 ? "عرض سعر "
                 : "Quotation "
             ) +
-            snapshot.quotation.number,
+            `${snapshot.quotation.number} · Rev ${snapshot.quotation.revisionNumber ?? 0}`,
 
           Author:
             snapshot.company.name,

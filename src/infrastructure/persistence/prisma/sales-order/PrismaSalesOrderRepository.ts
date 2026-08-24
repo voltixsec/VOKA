@@ -117,6 +117,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
               : {}),
             createdByUser: { connect: { id: params.createdByUserId } },
             sourceQuotationNumber: quotation.number,
+            sourceQuotationFamilyId: quotation.familyId,
+            sourceQuotationRevisionNumber: quotation.revisionNumber,
             number: salesOrder.number,
             status: salesOrder.status,
             currencyCode: quotation.currencyCode,

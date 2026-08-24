@@ -491,6 +491,37 @@ describe("approved quotation Sales Order draft builder", () => {
     },
   );
 
+  it("preserves the exact quotation family and revision downstream", () => {
+    const result = buildApprovedQuotationSalesOrderDraft(
+      {
+        ...approvedSnapshot(),
+        id: "quotation-rev-2",
+        familyId: "quotation-original",
+        revisionNumber: 2,
+        isCurrentRevision: true,
+      },
+      { userId: "user-1", name: "Creator", role: "SALES" },
+      new Date("2026-08-14T12:00:00.000Z"),
+    );
+    expect(result.kind).toBe("READY");
+    if (result.kind !== "READY") return;
+    expect(result.salesOrder).toMatchObject({
+      sourceQuotationId: "quotation-rev-2",
+      sourceQuotationFamilyId: "quotation-original",
+      sourceQuotationRevisionNumber: 2,
+      number: "SO-QT-1001-R2",
+    });
+  });
+
+  it("does not convert a superseded approved revision", () => {
+    const result = buildApprovedQuotationSalesOrderDraft(
+      { ...approvedSnapshot(), isCurrentRevision: false },
+      { userId: "user-1", name: "Creator", role: "SALES" },
+      new Date(),
+    );
+    expect(result).toMatchObject({ kind: "INVALID_SOURCE_SNAPSHOT" });
+  });
+
   it("requires approval audit and valid source lines", () => {
     const actor = { userId: "user-1", name: "Creator", role: "SALES" };
     expect(buildApprovedQuotationSalesOrderDraft(

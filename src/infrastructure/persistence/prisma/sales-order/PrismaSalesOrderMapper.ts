@@ -48,6 +48,8 @@ export class PrismaSalesOrderMapper {
       companyId: record.companyId,
       sourceQuotationId: record.sourceQuotationId,
       sourceQuotationNumber: record.sourceQuotationNumber,
+      sourceQuotationFamilyId: record.sourceQuotationFamilyId,
+      sourceQuotationRevisionNumber: record.sourceQuotationRevisionNumber,
       number: record.number,
       status: record.status,
       customerId: record.customerId,

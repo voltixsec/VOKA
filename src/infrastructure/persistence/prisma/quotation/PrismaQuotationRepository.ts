@@ -90,6 +90,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
     const where = {
       companyId: filters.companyId,
       isDeleted: false,
+      isCurrentRevision: true,
       status: filters.status,
       customerId: filters.customerId,
       ...(search
@@ -206,6 +207,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
         companyId,
         id: quotationId,
         isDeleted: false,
+        isCurrentRevision: true,
         localizationSourceSignature: { not: null },
         localizationAttemptCount: { lt: 3 },
         AND: [
@@ -274,6 +276,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
     const records = await this.db.quotation.findMany({
       where: {
         isDeleted: false,
+        isCurrentRevision: true,
         localizationSourceSignature: { not: null },
         localizationAttemptCount: { lt: 3 },
         AND: [
@@ -334,6 +337,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
           companyId,
           id: quotationId,
           isDeleted: false,
+          isCurrentRevision: true,
           localizationSourceSignature: expectedSourceSignature,
           localizationClaimToken: expectedClaimToken,
         },
@@ -407,6 +411,7 @@ export class PrismaQuotationRepository implements IQuotationRepository {
         companyId,
         id: quotationId,
         isDeleted: false,
+        isCurrentRevision: true,
         localizationSourceSignature: expectedSourceSignature,
         localizationClaimToken: expectedClaimToken,
       },

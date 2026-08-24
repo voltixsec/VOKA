@@ -18,6 +18,7 @@ describe("PrismaQuotationRepository recovery discovery", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         isDeleted: false,
+        isCurrentRevision: true,
         localizationSourceSignature: { not: null },
         localizationAttemptCount: { lt: 3 },
         AND: [

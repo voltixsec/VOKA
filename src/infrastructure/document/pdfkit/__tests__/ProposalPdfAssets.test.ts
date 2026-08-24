@@ -244,8 +244,8 @@ describe("proposal PDF document assets", () => {
       switchToPage: vi.fn(() => target.doc),
     });
     decorateExistingPages(target.doc, snapshot("APPROVED", "en"), Buffer.from([1]), [true, true]);
-    expect(target.texts).toContain("Q-1 · 1 / 2");
-    expect(target.texts).toContain("Q-1 · 2 / 2");
+    expect(target.texts).toContain("Q-1 · Rev 0 · 1 / 2");
+    expect(target.texts).toContain("Q-1 · Rev 0 · 2 / 2");
     expect(target.texts).not.toContain("VOKA — Q-1");
     expect(target.images).toHaveLength(0);
   });
@@ -257,7 +257,7 @@ describe("proposal PDF document assets", () => {
       switchToPage: vi.fn(() => target.doc),
     });
     decorateExistingPages(target.doc, snapshot("APPROVED", "ar"), Buffer.from([1]), [true, true]);
-    expect(target.texts).toContain("Q-1 · 1 / 2");
+    expect(target.texts).toContain("Q-1 · Rev 0 · 1 / 2");
     expect(target.texts).not.toContain("VOKA — Q-1");
   });
 
@@ -304,7 +304,7 @@ describe("proposal PDF document assets", () => {
       switchToPage: vi.fn(() => target.doc),
     });
     decorateExistingPages(target.doc, snapshot("APPROVED", "en"), Buffer.from([1]), [false, false]);
-    expect(target.texts).toContain("VOKA — Q-1");
+    expect(target.texts).toContain("VOKA — Q-1 · Rev 0");
     expect(target.images).toHaveLength(0);
   });
 

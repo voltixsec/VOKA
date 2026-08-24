@@ -49,6 +49,11 @@ export interface QuotationProps
   customerId: string;
   priceListId?: string | null;
   number: string;
+  familyId?: string;
+  revisionNumber?: number;
+  previousRevisionId?: string | null;
+  isCurrentRevision?: boolean;
+  supersededAt?: Date | null;
   status?: QuotationStatus;
   issueDate?: Date;
   expiryDate?: Date | null;
@@ -88,6 +93,11 @@ export class Quotation {
   public readonly customerId: string;
   public readonly priceListId: string | null;
   public readonly number: QuotationNumber;
+  public readonly familyId: string;
+  public readonly revisionNumber: number;
+  public readonly previousRevisionId: string | null;
+  public readonly isCurrentRevision: boolean;
+  public readonly supersededAt: Date | null;
   public readonly issueDate: Date;
   public readonly currencyCode: string;
   public readonly customer: CustomerSnapshot;
@@ -169,6 +179,15 @@ export class Quotation {
     this.customerId = props.customerId.trim();
     this.priceListId = props.priceListId?.trim() || null;
     this.number = QuotationNumber.create(props.number);
+    this.familyId = props.familyId?.trim() || props.id?.trim() || "";
+    this.revisionNumber = props.revisionNumber ?? 0;
+    this.previousRevisionId = props.previousRevisionId?.trim() || null;
+    this.isCurrentRevision = props.isCurrentRevision ?? true;
+    this.supersededAt = props.supersededAt ?? null;
+
+    if (!Number.isSafeInteger(this.revisionNumber) || this.revisionNumber < 0) {
+      throw new QuotationDomainError("Quotation revision number must be a non-negative integer.");
+    }
     this.issueDate = issueDate;
     this._expiryDate = expiryDate;
     this.currencyCode = currencyCode;
@@ -756,6 +775,7 @@ export class Quotation {
   }
 
   private assertDraft(): void {
+    this.assertCurrentRevision();
     if (this._status !== "DRAFT") {
       throw new QuotationDomainError(
         "Only draft quotations can be modified.",
@@ -781,10 +801,17 @@ export class Quotation {
     allowedStatuses: QuotationStatus[],
     targetStatus: QuotationStatus,
   ): void {
+    this.assertCurrentRevision();
     if (!allowedStatuses.includes(this._status)) {
       throw new QuotationDomainError(
         `Quotation cannot transition from ${this._status} to ${targetStatus}.`,
       );
+    }
+  }
+
+  private assertCurrentRevision(): void {
+    if (!this.isCurrentRevision) {
+      throw new QuotationDomainError("Historical quotation revisions are read-only.");
     }
   }
 

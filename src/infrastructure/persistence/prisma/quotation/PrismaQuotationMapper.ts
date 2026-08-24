@@ -21,9 +21,10 @@ export class PrismaQuotationMapper {
     quotation: Quotation,
   ): Prisma.QuotationCreateInput {
     const customer = quotation.customer.toJSON();
+    const id = quotation.id || crypto.randomUUID();
 
     return {
-      id: quotation.id,
+      id,
       company: {
         connect: {
           id: quotation.companyId,
@@ -44,6 +45,13 @@ export class PrismaQuotationMapper {
           }
         : {}),
       number: quotation.number.toString(),
+      familyId: quotation.familyId || id,
+      revisionNumber: quotation.revisionNumber,
+      previousRevision: quotation.previousRevisionId
+        ? { connect: { id: quotation.previousRevisionId } }
+        : undefined,
+      isCurrentRevision: quotation.isCurrentRevision,
+      supersededAt: quotation.supersededAt,
       status: quotation.status,
       issueDate: quotation.issueDate,
       expiryDate: quotation.expiryDate,
@@ -196,6 +204,11 @@ export class PrismaQuotationMapper {
       customerId: record.customerId,
       priceListId: record.priceListId,
       number: record.number,
+      familyId: record.familyId,
+      revisionNumber: record.revisionNumber,
+      previousRevisionId: record.previousRevisionId,
+      isCurrentRevision: record.isCurrentRevision,
+      supersededAt: record.supersededAt,
       status: record.status as QuotationStatus,
       issueDate: record.issueDate,
       expiryDate: record.expiryDate,
