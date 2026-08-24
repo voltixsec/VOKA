@@ -3,6 +3,7 @@ import {
   SystemTemplateRegistry,
   GypsumBoardSystemTemplate,
   CctvSystemTemplate,
+  AccessControlSystemTemplate,
 } from "../../../domain/smart-system";
 
 export interface SystemDetectionMatch {
@@ -18,6 +19,7 @@ export class SmartSystemBuilderService {
     this.registry = new SystemTemplateRegistry([
       new GypsumBoardSystemTemplate(),
       new CctvSystemTemplate(),
+      new AccessControlSystemTemplate(),
     ]);
   }
 
@@ -101,6 +103,15 @@ export class SmartSystemBuilderService {
           includeInstallation: this.requestsInstallation(prompt),
         },
       };
+    }
+
+    const hasAccessControl = /\baccess\s*control\b/i.test(prompt) || /(?:تحكم|التحكم)\s+(?:في\s+)?الدخول/.test(prompt) || /اكسس\s*كنترول/.test(prompt);
+    if (hasAccessControl) {
+      const doorMatch = prompt.match(/(-?\d+)\s*(?:doors?|أبواب|ابواب|باب)/i);
+      const entryExit = /entry\s*(?:and|&)\s*exit|دخول\s*و\s*خروج|قارئ(?:ين)?\s+(?:لل)?جهتين/.test(lower);
+      const entryOnly = /entry\s*only|دخول\s*فقط|قارئ\s*واحد/.test(lower);
+      const cableMatch = prompt.match(/(-?\d+(?:\.\d+)?)\s*(?:m|meter|meters|متر)\s*(?:per|لكل)\s*(?:door|باب)/i);
+      return { systemType: "ACCESS_CONTROL", confidence: 0.95, extractedParameters: { doorCount: doorMatch ? Number(doorMatch[1]) : null, accessDirection: entryExit ? "ENTRY_EXIT" : entryOnly ? "ENTRY_ONLY" : null, includeInstallation: this.requestsInstallation(prompt), cableMetersPerDoor: cableMatch ? Number(cableMatch[1]) : null } };
     }
 
     return null;
