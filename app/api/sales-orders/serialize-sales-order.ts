@@ -27,6 +27,8 @@ export function serializeSalesOrder(
     status: salesOrder.status,
     sourceQuotationId: salesOrder.sourceQuotationId,
     sourceQuotationNumber: salesOrder.sourceQuotationNumber,
+    sourceQuotationFamilyId: salesOrder.sourceQuotationFamilyId,
+    sourceQuotationRevisionNumber: salesOrder.sourceQuotationRevisionNumber,
     customerId: salesOrder.customerId,
     priceListId: salesOrder.priceListId,
     currencyCode: salesOrder.currencyCode,

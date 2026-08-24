@@ -43,6 +43,9 @@ export type ApprovedQuotationSalesOrderSnapshot = {
   customerId: string;
   priceListId: string | null;
   number: string;
+  familyId?: string;
+  revisionNumber?: number;
+  isCurrentRevision?: boolean;
   status: QuotationStatus;
   currencyCode: string;
   customerName: string;
@@ -105,6 +108,13 @@ export function buildApprovedQuotationSalesOrderDraft(
     };
   }
 
+  if (quotation.isCurrentRevision === false) {
+    return {
+      kind: "INVALID_SOURCE_SNAPSHOT",
+      message: "A Sales Order can only be created from the current approved quotation revision.",
+    };
+  }
+
   if (
     !quotation.approvedAt ||
     !quotation.approvedByName?.trim() ||
@@ -123,7 +133,9 @@ export function buildApprovedQuotationSalesOrderDraft(
         companyId: quotation.companyId,
         sourceQuotationId: quotation.id,
         sourceQuotationNumber: quotation.number,
-        number: `SO-${quotation.number}`,
+        sourceQuotationFamilyId: quotation.familyId ?? quotation.id,
+        sourceQuotationRevisionNumber: quotation.revisionNumber ?? 0,
+        number: `SO-${quotation.number}${(quotation.revisionNumber ?? 0) > 0 ? `-R${quotation.revisionNumber}` : ""}`,
         status: "DRAFT",
         customerId: quotation.customerId,
         priceListId: quotation.priceListId,

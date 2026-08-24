@@ -55,6 +55,11 @@ function quotation(
 ) {
   return {
     id: "quotation-1",
+    familyId: "quotation-1",
+    revisionNumber: 0,
+    previousRevisionId: null,
+    isCurrentRevision: true,
+    supersededAt: null,
     quotationNumber: "QT-1001",
     status,
     issueDate: "2026-08-14T00:00:00.000Z",
@@ -96,6 +101,26 @@ afterEach(() => {
 });
 
 describe("QuotationDetailsPage localization visibility", () => {
+  it("creates a revision only from the current approved snapshot and opens its editor", async () => {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/deliveries")) return response([]);
+      if (input.endsWith("/revisions") && init?.method === "POST") {
+        return response({ ...quotation("COMPLETED", "DRAFT"), id: "quotation-rev-1", revisionNumber: 1 });
+      }
+      return response(quotation("COMPLETED", "APPROVED"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(QuotationDetailsPage));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create revision" }));
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
+      "/dashboard/quotations/quotation-rev-1/edit",
+    ));
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).endsWith("/revisions") && (init as RequestInit | undefined)?.method === "POST",
+    )).toBe(true);
+  });
+
   it("shows conversion only for APPROVED and redirects new or existing orders", async () => {
     for (const created of [true, false]) {
       cleanup();

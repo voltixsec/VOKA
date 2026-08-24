@@ -60,6 +60,8 @@ export type SalesOrderProps = {
   companyId: string;
   sourceQuotationId: string;
   sourceQuotationNumber: string;
+  sourceQuotationFamilyId?: string;
+  sourceQuotationRevisionNumber?: number;
   number: string;
   status?: SalesOrderStatus;
   customerId: string;
@@ -116,6 +118,8 @@ export class SalesOrder {
   public readonly companyId: string;
   public readonly sourceQuotationId: string;
   public readonly sourceQuotationNumber: string;
+  public readonly sourceQuotationFamilyId: string;
+  public readonly sourceQuotationRevisionNumber: number;
   public readonly number: string;
   public readonly customerId: string;
   public readonly priceListId: string | null;
@@ -178,6 +182,14 @@ export class SalesOrder {
       props.sourceQuotationNumber,
       "Source quotation number",
     );
+    this.sourceQuotationFamilyId = required(
+      props.sourceQuotationFamilyId ?? props.sourceQuotationId,
+      "Source quotation family id",
+    );
+    this.sourceQuotationRevisionNumber = props.sourceQuotationRevisionNumber ?? 0;
+    if (!Number.isSafeInteger(this.sourceQuotationRevisionNumber) || this.sourceQuotationRevisionNumber < 0) {
+      throw new SalesOrderDomainError("Source quotation revision number must be a non-negative integer.");
+    }
     this.number = required(props.number, "Sales Order number");
     this._status = props.status ?? "DRAFT";
     this.customerId = required(props.customerId, "Customer id");

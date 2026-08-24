@@ -51,6 +51,11 @@ export function serializeQuotation(
 
     quotationNumber:
       quotation.number.toString(),
+    familyId: quotation.familyId,
+    revisionNumber: quotation.revisionNumber,
+    previousRevisionId: quotation.previousRevisionId,
+    isCurrentRevision: quotation.isCurrentRevision,
+    supersededAt: quotation.supersededAt?.toISOString() ?? null,
 
     status: quotation.status,
 

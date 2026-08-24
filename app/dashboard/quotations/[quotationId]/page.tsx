@@ -52,6 +52,11 @@ type Line = {
 
 type Quote = {
   id: string;
+  familyId: string;
+  revisionNumber: number;
+  previousRevisionId: string | null;
+  isCurrentRevision: boolean;
+  supersededAt: string | null;
   customerId: string;
   quotationNumber: string;
   status: string;
@@ -235,6 +240,7 @@ export default function QuotationDetailsPage() {
   const conversionInFlight = useRef(false);
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [revisionHistory, setRevisionHistory] = useState<Quote[]>([]);
 
   const [deliveryChannels, setDeliveryChannels] =
     useState<DeliveryChannelAvailability>({
@@ -324,6 +330,23 @@ export default function QuotationDetailsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadRevisionHistory = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/quotations/${encodeURIComponent(params.quotationId)}/revisions`,
+      );
+      if (!response.ok) return;
+      const body = await response.json();
+      setRevisionHistory(Array.isArray(body.data) ? body.data : []);
+    } catch {
+      // Revision history is supplementary to the exact quotation view.
+    }
+  }, [params.quotationId]);
+
+  useEffect(() => {
+    void loadRevisionHistory();
+  }, [loadRevisionHistory]);
 
   const loadDeliveries = useCallback(async () => {
     try {
@@ -684,6 +707,29 @@ export default function QuotationDetailsPage() {
     }
   }
 
+  async function createRevision() {
+    if (!quote || acting) return;
+    if (!window.confirm(t("إنشاء إصدار جديد قابل للتعديل من هذه اللقطة المعتمدة؟", "Create a new editable revision from this approved snapshot?"))) return;
+
+    try {
+      setActing("create-revision");
+      setError("");
+      const response = await fetch(
+        `/api/quotations/${encodeURIComponent(quote.id)}/revisions`,
+        { method: "POST" },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.data?.id) {
+        throw new Error(body?.error?.message ?? t("تعذر إنشاء الإصدار.", "Could not create revision."));
+      }
+      router.push(`/dashboard/quotations/${encodeURIComponent(body.data.id)}/edit`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("تعذر إنشاء الإصدار.", "Could not create revision."));
+    } finally {
+      setActing("");
+    }
+  }
+
   const money = (amount: number) =>
     new Intl.NumberFormat(isArabic ? "ar-KW" : "en-US", {
       style: "currency",
@@ -718,7 +764,9 @@ export default function QuotationDetailsPage() {
   }
 
   const actions =
-    quote.status === "DRAFT"
+    quote.isCurrentRevision === false
+      ? []
+      : quote.status === "DRAFT"
       ? ["send", "cancel"]
       : quote.status === "SENT"
         ? ["approve", "reject", "cancel"]
@@ -792,7 +840,25 @@ export default function QuotationDetailsPage() {
               {isArabic ? arabicStatuses[quote.status] ?? quote.status : quote.status}
             </Badge>
 
+            <Badge>
+              {t("الإصدار", "Revision")} {quote.revisionNumber ?? 0}
+              {quote.isCurrentRevision === false ? ` · ${t("تاريخي", "Historical")}` : ""}
+            </Badge>
+
             {quote.status === "APPROVED" && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={Boolean(acting) || quote.isCurrentRevision === false}
+                onClick={() => void createRevision()}
+              >
+                {acting === "create-revision"
+                  ? t("جارٍ الإنشاء...", "Creating...")
+                  : t("إنشاء إصدار جديد", "Create revision")}
+              </Button>
+            )}
+
+            {quote.status === "APPROVED" && quote.isCurrentRevision !== false && (
               <Button
                 size="sm"
                 variant="success"
@@ -844,6 +910,33 @@ export default function QuotationDetailsPage() {
             "Document branding is locked to the approval snapshot.",
           )}
         </p>
+      )}
+
+      {quote.isCurrentRevision === false && (
+        <p className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-200">
+          {t(
+            "هذا إصدار تاريخي للقراءة فقط. استخدم الإصدار الحالي لأي إجراء جديد.",
+            "This is a read-only historical revision. Use the current revision for new actions.",
+          )}
+        </p>
+      )}
+
+      {revisionHistory.length > 1 && (
+        <Card>
+          <h3 className="font-semibold">{t("سجل الإصدارات", "Revision history")}</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {revisionHistory.map((revision) => (
+              <Link
+                key={revision.id}
+                href={`/dashboard/quotations/${encodeURIComponent(revision.id)}`}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-sky-300"
+              >
+                {t("الإصدار", "Revision")} {revision.revisionNumber}
+                {revision.isCurrentRevision ? ` · ${t("الحالي", "Current")}` : ""}
+              </Link>
+            ))}
+          </div>
+        </Card>
       )}
 
       {error && (

@@ -1,6 +1,7 @@
 export * from "./dto/CreateQuotationDto";
 
 export * from "./repositories/IQuotationRepository";
+export * from "./repositories/IQuotationRevisionRepository";
 export * from "./repositories/IQuotationReferenceValidator";
 export * from "./repositories/IQuotationCancellationRepository";
 
@@ -8,6 +9,7 @@ export * from "./repositories/IQuotationCancellationRepository";
 export * from "./results/ApplicationResult";
 
 export * from "./use-cases/GetQuotationUseCase";
+export * from "./use-cases/CreateQuotationRevisionUseCase";
 
 export * from "./use-cases/ListQuotationsUseCase";
 

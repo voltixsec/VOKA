@@ -462,18 +462,23 @@ model Quotation {
   customerId  String
   priceListId String?
 
-  number         String
-  status         QuotationStatus @default(DRAFT)
-  issueDate      DateTime        @default(now())
-  expiryDate     DateTime?
-  currencyCode   String          @default("KWD")
-  customerName   String
-  customerNameAr String?
-  customerNameEn String?
-  customerEmail  String?
-  customerPhone  String?
-  customerTaxNo  String?
-  billingAddress String?
+  number             String
+  familyId           String
+  revisionNumber     Int             @default(0)
+  previousRevisionId String?         @unique
+  isCurrentRevision  Boolean         @default(true)
+  supersededAt       DateTime?
+  status             QuotationStatus @default(DRAFT)
+  issueDate          DateTime        @default(now())
+  expiryDate         DateTime?
+  currencyCode       String          @default("KWD")
+  customerName       String
+  customerNameAr     String?
+  customerNameEn     String?
+  customerEmail      String?
+  customerPhone      String?
+  customerTaxNo      String?
+  billingAddress     String?
 
   subjectAr       String?
   subjectEn       String?
@@ -523,17 +528,21 @@ model Quotation {
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
 
-  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer   Customer            @relation(fields: [customerId], references: [id])
-  priceList  PriceList?          @relation(fields: [priceListId], references: [id], onDelete: SetNull)
-  lines      QuotationLine[]
-  deliveries QuotationDelivery[]
-  salesOrder SalesOrder?
+  company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer         Customer            @relation(fields: [customerId], references: [id])
+  priceList        PriceList?          @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  lines            QuotationLine[]
+  deliveries       QuotationDelivery[]
+  salesOrder       SalesOrder?
+  previousRevision Quotation?          @relation("QuotationRevisionChain", fields: [previousRevisionId], references: [id], onDelete: Restrict)
+  nextRevision     Quotation?          @relation("QuotationRevisionChain")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([companyId, number])
+  @@unique([companyId, number, revisionNumber])
+  @@unique([companyId, familyId, revisionNumber])
+  @@index([companyId, familyId, revisionNumber])
   @@index([companyId])
   @@index([companyId, status])
   @@index([companyId, customerId])
@@ -631,15 +640,17 @@ model QuotationLine {
 model SalesOrder {
   id String @id @default(cuid())
 
-  companyId             String
-  sourceQuotationId     String           @unique
-  sourceQuotationNumber String
-  number                String
-  status                SalesOrderStatus @default(DRAFT)
-  customerId            String
-  priceListId           String?
-  currencyCode          String
-  orderDate             DateTime         @default(now())
+  companyId                     String
+  sourceQuotationId             String           @unique
+  sourceQuotationNumber         String
+  sourceQuotationFamilyId       String
+  sourceQuotationRevisionNumber Int
+  number                        String
+  status                        SalesOrderStatus @default(DRAFT)
+  customerId                    String
+  priceListId                   String?
+  currencyCode                  String
+  orderDate                     DateTime         @default(now())
 
   customerName   String
   customerNameAr String?
