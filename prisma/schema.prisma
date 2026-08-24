@@ -104,6 +104,7 @@ model User {
   salesOrderActivities SalesOrderActivity[]
   createdContracts     Contract[]              @relation("ContractCreatedBy")
   universalAdoptions   UniversalItemAdoption[]
+  quotationDeliveries  QuotationDelivery[]
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
@@ -549,12 +550,16 @@ model QuotationDelivery {
 
   companyId   String
   quotationId String
+  actorUserId String?
+  requestKey  String
 
   channel   QuotationDeliveryChannel
   recipient String
   status    QuotationDeliveryStatus  @default(PENDING)
+  provider  String
 
   providerMessageId String?
+  documentSha256    String?
   errorCode         String?
   errorMessage      String?
 
@@ -565,10 +570,13 @@ model QuotationDelivery {
 
   company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
+  @@unique([companyId, requestKey])
   @@index([companyId, quotationId])
   @@index([quotationId, createdAt])
   @@index([companyId, status])
+  @@index([actorUserId])
 }
 
 model QuotationLine {

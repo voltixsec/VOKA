@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  create: vi.fn(),
+  reserve: vi.fn(),
   findById: vi.fn(),
   generateDocument: vi.fn(),
   gatewayDeliver: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock(
   "@/src/infrastructure/persistence/prisma/quotation-delivery/PrismaQuotationDeliveryRepository",
   () => ({
     PrismaQuotationDeliveryRepository: class {
-      create = mocks.create;
+      reserve = mocks.reserve;
       update = mocks.update;
     },
   }),
@@ -78,7 +78,11 @@ vi.mock("@/lib/api", async () => {
       mocks.roleSets.push([...allowedRoles]);
       return async (request: Request) => {
         try {
-          return await handler(request, {} as never, { companyId: "company-1" });
+          return await handler(
+            request,
+            { user: { id: "user-1" } } as never,
+            { companyId: "company-1" },
+          );
         } catch (error) {
           return responses.handleApiError(error);
         }
@@ -107,7 +111,10 @@ function quotation() {
 function request(body: unknown) {
   return new Request("http://localhost/api/quotations/quotation-1/deliver", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      requestKey: "00000000-0000-4000-8000-000000000001",
+      ...(body as Record<string, unknown>),
+    }),
   });
 }
 
@@ -115,7 +122,10 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findById.mockResolvedValue(quotation());
-    mocks.create.mockResolvedValue(undefined);
+    mocks.reserve.mockImplementation(async (value) => ({
+      created: true,
+      delivery: value,
+    }));
     mocks.update.mockResolvedValue(undefined);
     mocks.updateCustomer.mockResolvedValue(true);
     mocks.generateDocument.mockResolvedValue({
@@ -147,8 +157,13 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     const body = await response.json();
 
     expect(mocks.findById).toHaveBeenCalledWith("company-1", "quotation-1");
-    expect(mocks.create).toHaveBeenCalledOnce();
-    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(mocks.reserve).toHaveBeenCalledOnce();
+    expect(mocks.reserve).toHaveBeenCalledWith(expect.objectContaining({
+      actorUserId: "user-1",
+      requestKey: "00000000-0000-4000-8000-000000000001",
+      provider: expect.any(String),
+    }));
+    expect(mocks.update).toHaveBeenCalledTimes(2);
     expect(response.status).toBe(201);
     expect(body).toMatchObject({
       success: true,
@@ -161,6 +176,8 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
       },
     });
     expect(body.data).not.toHaveProperty("companyId");
+    expect(body.data).not.toHaveProperty("actorUserId");
+    expect(body.data).not.toHaveProperty("requestKey");
     expect(body.data).not.toHaveProperty("providerResponse");
   });
 
@@ -170,13 +187,14 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     [{ channel: "EMAIL", recipient: "x", locale: "fr" }, "DELIVERY_LOCALE_INVALID"],
     [{ channel: "EMAIL", recipient: "not-an-email", locale: "en" }, "DELIVERY_EMAIL_RECIPIENT_INVALID"],
     [{ channel: "WHATSAPP", recipient: "0501234567", locale: "ar" }, "DELIVERY_WHATSAPP_RECIPIENT_INVALID"],
+    [{ requestKey: "not-a-uuid", channel: "EMAIL", recipient: "customer@example.com", locale: "en" }, "DELIVERY_REQUEST_KEY_INVALID"],
   ])("rejects invalid input", async (invalid, code) => {
     const response = await POST(request(invalid));
     const body = await response.json();
 
     expect(response.status).toBe(400);
     expect(body).toMatchObject({ success: false, error: { code } });
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it("persists SENT and the provider message ID from a configured email gateway", async () => {
@@ -208,7 +226,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
       }),
     }));
     expect(value.status).toBe("APPROVED");
-    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(mocks.update).toHaveBeenCalledTimes(2);
   });
 
   it("persists a normalized WhatsApp recipient and Meta message ID without changing lifecycle", async () => {
@@ -276,7 +294,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
 
     expect(response.status).toBe(404);
     expect(mocks.findById).toHaveBeenCalledWith("company-1", "quotation-1");
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it("rejects delivery of a draft without creating an audit attempt or calling providers", async () => {
@@ -300,7 +318,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
       success: false,
       error: { code: "QUOTATION_NOT_DELIVERABLE" },
     });
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
     expect(mocks.generateDocument).not.toHaveBeenCalled();
     expect(mocks.gatewayDeliver).not.toHaveBeenCalled();
   });

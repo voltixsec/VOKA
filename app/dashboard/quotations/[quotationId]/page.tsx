@@ -447,6 +447,7 @@ export default function QuotationDetailsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            requestKey: crypto.randomUUID(),
             channel,
             recipient: recipient.trim(),
             locale: activeLocale,

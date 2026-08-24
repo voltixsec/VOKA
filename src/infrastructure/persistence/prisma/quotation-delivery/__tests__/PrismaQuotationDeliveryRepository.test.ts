@@ -9,6 +9,7 @@ import { PrismaQuotationDeliveryRepository } from "../PrismaQuotationDeliveryRep
 const db = {
   quotationDelivery: {
     create: vi.fn(),
+    findUnique: vi.fn(),
     updateMany: vi.fn(),
     findMany: vi.fn(),
   },
@@ -33,7 +34,11 @@ function record(id: string, createdAt: string) {
     channel: "EMAIL" as const,
     recipient: "customer@example.com",
     status: "FAILED" as const,
+    actorUserId: "user-1",
+    requestKey: id,
+    provider: "RESEND",
     providerMessageId: null,
+    documentSha256: null,
     errorCode: "DELIVERY_PROVIDER_NOT_CONFIGURED",
     errorMessage: "Quotation delivery provider is not configured.",
     attemptedAt: new Date(createdAt),
@@ -46,7 +51,8 @@ function record(id: string, createdAt: string) {
 describe("PrismaQuotationDeliveryRepository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    db.quotationDelivery.create.mockResolvedValue(undefined);
+    db.quotationDelivery.findUnique.mockResolvedValue(null);
+    db.quotationDelivery.create.mockImplementation(async ({ data }) => data);
     db.quotationDelivery.updateMany.mockResolvedValue({ count: 1 });
     db.quotationDelivery.findMany.mockResolvedValue([]);
   });
@@ -54,7 +60,7 @@ describe("PrismaQuotationDeliveryRepository", () => {
   it("persists the immutable tenant, quotation, channel, and recipient fields", async () => {
     const repository = new PrismaQuotationDeliveryRepository(db as never);
 
-    await repository.create(delivery());
+    await repository.reserve(delivery());
 
     expect(db.quotationDelivery.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -65,6 +71,48 @@ describe("PrismaQuotationDeliveryRepository", () => {
         recipient: "customer@example.com",
         status: "PENDING",
       }),
+    });
+  });
+
+  it("returns an existing tenant request reservation without creating a duplicate", async () => {
+    db.quotationDelivery.findUnique.mockResolvedValue({
+      ...record("delivery-existing", "2026-08-14T10:00:00.000Z"),
+      requestKey: "delivery-1",
+    });
+    const repository = new PrismaQuotationDeliveryRepository(db as never);
+
+    const result = await repository.reserve(delivery());
+
+    expect(result).toMatchObject({
+      created: false,
+      delivery: { id: "delivery-existing" },
+    });
+    expect(db.quotationDelivery.create).not.toHaveBeenCalled();
+    expect(db.quotationDelivery.findUnique).toHaveBeenCalledWith({
+      where: {
+        companyId_requestKey: {
+          companyId: "company-1",
+          requestKey: "delivery-1",
+        },
+      },
+    });
+  });
+
+  it("recovers a concurrent unique-key race as the same reserved attempt", async () => {
+    db.quotationDelivery.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...record("delivery-winner", "2026-08-14T10:00:00.000Z"),
+        requestKey: "delivery-1",
+      });
+    db.quotationDelivery.create.mockRejectedValueOnce(new Error("unique constraint"));
+    const repository = new PrismaQuotationDeliveryRepository(db as never);
+
+    const result = await repository.reserve(delivery());
+
+    expect(result).toMatchObject({
+      created: false,
+      delivery: { id: "delivery-winner" },
     });
   });
 
