@@ -14,12 +14,12 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<"INVALID_CREDENTIALS" | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    setErrorCode(null);
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -29,22 +29,12 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        throw new Error(
-          isArabic
-            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-            : "Invalid email or password",
-        );
+        throw new Error("INVALID_CREDENTIALS");
       }
 
       window.location.href = returnTo;
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : isArabic
-          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-          : "Invalid email or password",
-      );
+    } catch {
+      setErrorCode("INVALID_CREDENTIALS");
     } finally {
       setLoading(false);
     }
@@ -117,9 +107,11 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && (
+            {errorCode === "INVALID_CREDENTIALS" && (
               <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-                {error}
+                {isArabic
+                  ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+                  : "Email address or password is incorrect."}
               </div>
             )}
 
