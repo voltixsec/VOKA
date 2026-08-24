@@ -114,4 +114,21 @@ describe("BrowserSpeechRecognizer", () => {
     expect(onError).toHaveBeenCalledWith("Microphone permission denied.");
     expect(recognizer.getState()).toBe("PERMISSION_DENIED");
   });
+
+  it("aborts an active browser recognition session on reset", () => {
+    const mockRecognitionInstance = {
+      continuous: false, interimResults: false, lang: "",
+      onstart: null as any, onend: null as any, onresult: null as any, onerror: null as any,
+      start: vi.fn(), stop: vi.fn(), abort: vi.fn(),
+    };
+    (window as any).SpeechRecognition = vi.fn(function () { return mockRecognitionInstance; });
+
+    recognizer.start();
+    mockRecognitionInstance.onstart?.();
+    recognizer.reset();
+
+    expect(mockRecognitionInstance.abort).toHaveBeenCalledTimes(1);
+    expect(recognizer.getState()).toBe("IDLE");
+    expect(recognizer.getTranscript()).toEqual({ interim: "", final: "" });
+  });
 });

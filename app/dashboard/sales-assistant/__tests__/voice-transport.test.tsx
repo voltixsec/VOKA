@@ -31,6 +31,7 @@ class MockVoiceRecognizer implements IVoiceRecognizer {
   public lastOptions: VoiceRecognizerOptions | null = null;
   public startCount = 0;
   public stopCount = 0;
+  public resetCount = 0;
 
   isSupported(): boolean {
     return this.supported;
@@ -64,6 +65,7 @@ class MockVoiceRecognizer implements IVoiceRecognizer {
   }
 
   reset(): void {
+    this.resetCount++;
     this.state = this.supported ? "IDLE" : "UNAVAILABLE";
     this.transcript = { interim: "", final: "" };
   }
@@ -277,5 +279,20 @@ describe("Voice Input Transport Integration Tests", () => {
 
     expect(screen.getByText(/ERROR/)).toBeTruthy();
     expect(screen.getByText(/Network recognition error/i)).toBeTruthy();
+  });
+
+  it("privacy: leaving the page terminates the active recognition session", () => {
+    const mockRecognizer = new MockVoiceRecognizer();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const view = render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Voice Input/i }));
+    expect(mockRecognizer.state).toBe("LISTENING");
+    view.unmount();
+
+    expect(mockRecognizer.resetCount).toBe(1);
+    expect(mockRecognizer.state).toBe("IDLE");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
