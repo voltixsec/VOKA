@@ -81,6 +81,10 @@ model Company {
   quotationTermsTemplates CompanyQuotationTermsTemplate[]
   contracts               Contract[]
   contractNumberSequences ContractNumberSequence[]
+  invoices                Invoice[]
+  invoiceNumberSequences  InvoiceNumberSequence[]
+  payments                Payment[]
+  invoiceEvents           InvoiceEvent[]
   universalAdoptions      UniversalItemAdoption[]
   localizedContents       LocalizedContent[]
   createdAt               DateTime                        @default(now())
@@ -103,6 +107,11 @@ model User {
   cancelledSalesOrders SalesOrder[]            @relation("SalesOrderCancelledBy")
   salesOrderActivities SalesOrderActivity[]
   createdContracts     Contract[]              @relation("ContractCreatedBy")
+  createdInvoices      Invoice[]               @relation("InvoiceCreatedBy")
+  issuedInvoices       Invoice[]               @relation("InvoiceIssuedBy")
+  voidedInvoices       Invoice[]               @relation("InvoiceVoidedBy")
+  recordedPayments     Payment[]               @relation("PaymentRecordedBy")
+  invoiceEvents        InvoiceEvent[]
   universalAdoptions   UniversalItemAdoption[]
   quotationDeliveries  QuotationDelivery[]
   createdAt            DateTime                @default(now())
@@ -171,6 +180,7 @@ model Customer {
   quotations        Quotation[]
   salesOrders       SalesOrder[]
   contracts         Contract[]
+  invoices          Invoice[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -210,6 +220,26 @@ enum SalesOrderStatus {
 
 enum ContractStatus {
   DRAFT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  VOID
+}
+
+enum InvoiceSettlementStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  OTHER
 }
 
 enum CommercialDocumentOrigin {
@@ -324,6 +354,7 @@ model TaxRate {
   quotationLines  QuotationLine[]
   salesOrderLines SalesOrderLine[]
   contractLines   ContractLine[]
+  invoiceLines    InvoiceLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -381,6 +412,7 @@ model CatalogItem {
   quotationLines    QuotationLine[]
   salesOrderLines   SalesOrderLine[]
   contractLines     ContractLine[]
+  invoiceLines      InvoiceLine[]
   universalAdoption UniversalItemAdoption?
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
@@ -408,6 +440,7 @@ model PriceList {
   quotations  Quotation[]
   salesOrders SalesOrder[]
   contracts   Contract[]
+  invoices    Invoice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -958,6 +991,155 @@ model ContractMilestone {
 
   @@unique([contractId, position])
   @@index([contractId])
+}
+
+model InvoiceNumberSequence {
+  companyId String
+  yearMonth String
+  nextValue Int     @default(1)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, yearMonth])
+}
+
+model Invoice {
+  id                            String                   @id @default(cuid())
+  companyId                     String
+  number                        String
+  creationRequestKey            String
+  creationRequestFingerprint    String
+  status                        InvoiceStatus            @default(DRAFT)
+  settlementStatus              InvoiceSettlementStatus  @default(UNPAID)
+  origin                        CommercialDocumentOrigin @default(DIRECT)
+  sourceKind                    String?
+  sourceId                      String?
+  sourceQuotationFamilyId       String?
+  sourceQuotationRevisionNumber Int?
+  customerId                    String
+  priceListId                   String?
+  currencyCode                  String                   @default("KWD")
+  invoiceDate                   DateTime                 @default(now())
+  dueDate                       DateTime?
+  customerName                  String
+  customerNameAr                String?
+  customerNameEn                String?
+  customerEmail                 String?
+  customerPhone                 String?
+  customerTaxNo                 String?
+  billingAddress                String?
+  subtotal                      Decimal                  @db.Decimal(18, 3)
+  discountType                  DiscountType?
+  discountValue                 Decimal                  @default(0) @db.Decimal(18, 3)
+  discountAmount                Decimal                  @default(0) @db.Decimal(18, 3)
+  taxAmount                     Decimal                  @default(0) @db.Decimal(18, 3)
+  totalAmount                   Decimal                  @db.Decimal(18, 3)
+  paidAmount                    Decimal                  @default(0) @db.Decimal(18, 3)
+  outstandingAmount             Decimal                  @db.Decimal(18, 3)
+  notes                         String?
+  termsAndConditions            String?
+  createdByUserId               String?
+  createdByName                 String
+  createdByRole                 String
+  issuedAt                      DateTime?
+  issuedByUserId                String?
+  issuedByName                  String?
+  issuedByRole                  String?
+  voidedAt                      DateTime?
+  voidedByUserId                String?
+  voidedByName                  String?
+  voidedByRole                  String?
+  voidReason                    String?
+  company                       Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer                      Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  priceList                     PriceList?               @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  createdBy                     User?                    @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  issuedBy                      User?                    @relation("InvoiceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  voidedBy                      User?                    @relation("InvoiceVoidedBy", fields: [voidedByUserId], references: [id], onDelete: SetNull)
+  lines                         InvoiceLine[]
+  payments                      Payment[]
+  events                        InvoiceEvent[]
+  createdAt                     DateTime                 @default(now())
+  updatedAt                     DateTime                 @updatedAt
+
+  @@unique([companyId, number])
+  @@unique([companyId, creationRequestKey])
+  @@unique([companyId, sourceKind, sourceId])
+  @@index([companyId, status, invoiceDate])
+  @@index([companyId, settlementStatus, dueDate])
+  @@index([companyId, customerId, invoiceDate])
+  @@index([companyId, sourceKind, sourceId])
+  @@index([companyId, sourceQuotationFamilyId, sourceQuotationRevisionNumber])
+}
+
+model InvoiceLine {
+  id             String          @id @default(cuid())
+  invoiceId      String
+  sourceLineId   String?
+  catalogItemId  String?
+  taxRateId      String?
+  position       Int
+  type           CatalogItemType
+  itemCode       String?
+  itemName       String
+  itemNameAr     String?
+  itemNameEn     String?
+  description    String?
+  unitName       String?
+  quantity       Decimal         @db.Decimal(18, 3)
+  unitPrice      Decimal         @db.Decimal(18, 3)
+  discountType   DiscountType?
+  discountValue  Decimal         @default(0) @db.Decimal(18, 3)
+  discountAmount Decimal         @default(0) @db.Decimal(18, 3)
+  taxPercentage  Decimal         @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal         @default(0) @db.Decimal(18, 3)
+  subtotal       Decimal         @db.Decimal(18, 3)
+  totalAmount    Decimal         @db.Decimal(18, 3)
+  invoice        Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  catalogItem    CatalogItem?    @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  taxRate        TaxRate?        @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+
+  @@unique([invoiceId, position])
+  @@index([invoiceId])
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  companyId        String
+  invoiceId        String
+  requestKey       String
+  amount           Decimal       @db.Decimal(18, 3)
+  currencyCode     String
+  method           PaymentMethod
+  receivedAt       DateTime
+  reference        String?
+  notes            String?
+  recordedByUserId String?
+  recordedByName   String
+  recordedByRole   String
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice          Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  recordedBy       User?         @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now())
+
+  @@unique([companyId, requestKey])
+  @@index([companyId, invoiceId, receivedAt])
+  @@index([companyId, receivedAt])
+}
+
+model InvoiceEvent {
+  id          String   @id @default(cuid())
+  companyId   String
+  invoiceId   String
+  actorUserId String?
+  action      String
+  details     Json?
+  occurredAt  DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, invoiceId, occurredAt])
 }
 
 enum UniversalVerificationStatus {

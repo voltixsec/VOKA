@@ -112,8 +112,8 @@ const navigationItems: NavigationItem[] = [
     ),
   },
   {
-    labelEn: "Contracts / Invoices",
-    labelAr: "العقود والفواتير",
+    labelEn: "Contracts",
+    labelAr: "العقود",
     descriptionEn: "Approved deals",
     descriptionAr: "الصفقات المعتمدة",
     href: "/dashboard/contracts",
@@ -124,6 +124,23 @@ const navigationItems: NavigationItem[] = [
         <path d="M8 10h8" />
         <path d="M8 14h4" />
         <path d="m15 17 2 2 3-4" />
+      </Icon>
+    ),
+  },
+  {
+    labelEn: "Invoices & Payments",
+    labelAr: "الفواتير والمدفوعات",
+    descriptionEn: "Receivables",
+    descriptionAr: "الذمم والتحصيل",
+    href: "/dashboard/invoices",
+    icon: (
+      <Icon>
+        <path d="M4 2h16v20H4z" />
+        <path d="M8 7h8" />
+        <path d="M8 11h8" />
+        <path d="M8 16h3" />
+        <path d="M16 14v5" />
+        <path d="M14 16h4" />
       </Icon>
     ),
   },
