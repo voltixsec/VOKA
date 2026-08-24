@@ -38,5 +38,5 @@ export interface IInvoiceRepository {
   issue(companyId: string, invoiceId: string, actor: InvoiceActor): Promise<Invoice | null>;
   void(companyId: string, invoiceId: string, actor: InvoiceActor, reason: string): Promise<Invoice | null>;
   recordPayment(request: RecordPaymentRequest): Promise<{ invoice: Invoice; payment: PaymentRecord; created: boolean }>;
-  listPayments(companyId: string, invoiceId: string): Promise<PaymentRecord[] | null>;
+  listPayments(companyId: string, invoiceId: string, skip: number, take: number): Promise<{ payments: PaymentRecord[]; total: number } | null>;
 }
