@@ -7,6 +7,16 @@ describe("Smart System Builder adversarial intent boundary", () => {
   const builder = new SmartSystemBuilderService();
   const extractor = new AISalesAssistantExtractor();
 
+  it("detects access control but requires explicit direction and installed cable allowance", () => {
+    const incomplete = builder.detectSystemIntent("توريد وتركيب نظام تحكم في الدخول لعدد 4 أبواب");
+    expect(incomplete?.systemType).toBe("ACCESS_CONTROL");
+    expect(builder.calculateSystem(incomplete!.systemType, incomplete!.extractedParameters)?.status).toBe("NEEDS_CONFIRMATION");
+    const complete = builder.detectSystemIntent("Install access control for 4 doors, entry only, 30 meters per door");
+    const result = builder.calculateSystem(complete!.systemType, complete!.extractedParameters);
+    expect(result?.status).toBe("COMPLETE");
+    expect(result?.components.find((item) => item.componentKey === "ACCESS_CABLE")?.quantity).toBe(120);
+  });
+
   it("derives the authorized Arabic CCTV request deterministically", () => {
     const prompt = "عايز عرض سعر توريد وتركيب 8 كاميرات لفيلا";
     const first = extractor.heuristicExtract(prompt, "ar");
