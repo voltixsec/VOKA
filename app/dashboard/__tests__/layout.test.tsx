@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import DashboardLayout from "../layout";
 import { getCurrentUser } from "../../../lib/auth";
-import { ApiError } from "../../../lib/api/api-error";
+import { ApiError } from "../../../lib/api/ApiError";
 import { redirect } from "next/navigation";
 
 vi.mock("next/font/google", () => ({
@@ -31,13 +31,21 @@ describe("DashboardLayout Server Auth Gate", () => {
   });
 
   it("redirects unauthenticated users (ApiError 401) to /login with safe returnTo", async () => {
-    vi.mocked(getCurrentUser).mockRejectedValue(ApiError.unauthorized("Session expired"));
+    vi.mocked(getCurrentUser).mockRejectedValue(ApiError.unauthorized());
 
     await expect(DashboardLayout({ children: "Dashboard Content" })).rejects.toThrow(
       "REDIRECT: /login?returnTo=%2Fdashboard%2Fquotations",
     );
 
     expect(redirect).toHaveBeenCalledWith("/login?returnTo=%2Fdashboard%2Fquotations");
+  });
+
+  it("re-throws canonical ApiError 500 unchanged and does NOT redirect", async () => {
+    const serverError = ApiError.internal("Database unavailable");
+    vi.mocked(getCurrentUser).mockRejectedValue(serverError);
+
+    await expect(DashboardLayout({ children: "Dashboard Content" })).rejects.toBe(serverError);
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("re-throws non-auth errors unchanged and does NOT redirect", async () => {
