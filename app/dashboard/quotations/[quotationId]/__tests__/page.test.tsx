@@ -364,7 +364,7 @@ describe("QuotationDetailsPage localization visibility", () => {
           },
         ]);
       }
-      return response(quotation("COMPLETED", "DRAFT"));
+      return response(quotation("COMPLETED", "APPROVED"));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -383,6 +383,31 @@ describe("QuotationDetailsPage localization visibility", () => {
     expect(screen.getByText("+96590000000")).toBeTruthy();
     expect(screen.getByText("Failed")).toBeTruthy();
     expect(screen.getByText("Sent")).toBeTruthy();
+  });
+
+  it("keeps delivery disabled for a draft even when the provider and recipient are ready", async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith("/deliveries")) {
+        return response([], {
+          channels: {
+            EMAIL: { configured: true, provider: "RESEND" },
+            WHATSAPP: { configured: false, provider: null },
+          },
+        });
+      }
+      return response(quotation("COMPLETED", "DRAFT"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(QuotationDetailsPage));
+
+    const send = await screen.findByRole("button", { name: "Send by email" });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(send);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/quotations/quotation-1/deliver",
+      expect.anything(),
+    );
   });
 
   it("enables configured EMAIL, uses the active locale, and refreshes history after SENT", async () => {
@@ -405,7 +430,7 @@ describe("QuotationDetailsPage localization visibility", () => {
           recipient: "customer@example.com",
         });
       }
-      return response(quotation("COMPLETED", "DRAFT"));
+      return response(quotation("COMPLETED", "APPROVED"));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -448,7 +473,7 @@ describe("QuotationDetailsPage localization visibility", () => {
           errorMessage: "Email provider rate limit was reached.",
         });
       }
-      return response(quotation("COMPLETED", "DRAFT"));
+      return response(quotation("COMPLETED", "APPROVED"));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -477,7 +502,7 @@ describe("QuotationDetailsPage localization visibility", () => {
         return response({ status: "SENT", providerMessageId: "wamid.1" });
       }
       return response({
-        ...quotation("COMPLETED", "DRAFT"),
+        ...quotation("COMPLETED", "APPROVED"),
         customer: { name: "Acme", phone: "+965 9000-0000" },
       });
     });
@@ -518,7 +543,7 @@ describe("QuotationDetailsPage localization visibility", () => {
         });
       }
       return response({
-        ...quotation("COMPLETED", "DRAFT"),
+        ...quotation("COMPLETED", "APPROVED"),
         customer: { name: "Acme", phone: "+96590000000" },
       });
     });
@@ -576,7 +601,7 @@ describe("QuotationDetailsPage localization visibility", () => {
         });
       }
       return response({
-        ...quotation("COMPLETED", "DRAFT"),
+        ...quotation("COMPLETED", "APPROVED"),
         customer: { name: "Acme", email: "", phone: "" },
         deliveryContacts: {
           email: { value: null, source: "MISSING", differsFromSnapshot: false },

@@ -92,10 +92,13 @@ import { Quotation } from "@/src/domain/quotation";
 import { POST } from "../route";
 
 function quotation() {
-  return new Quotation({
+  return Quotation.restore({
+    id: "quotation-1",
     companyId: "company-1",
     customerId: "customer-1",
     number: "Q-001",
+    status: "APPROVED",
+    approvedAt: new Date("2026-08-14T09:00:00.000Z"),
     customer: { name: "Customer" },
     lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
   });
@@ -204,7 +207,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
         contentType: "application/pdf",
       }),
     }));
-    expect(value.status).toBe("DRAFT");
+    expect(value.status).toBe("APPROVED");
     expect(mocks.update).toHaveBeenCalledOnce();
   });
 
@@ -235,7 +238,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
       recipient: "96590000000",
       locale: "ar",
     }));
-    expect(value.status).toBe("DRAFT");
+    expect(value.status).toBe("APPROVED");
   });
 
   it("truthfully persists a failed Meta send without changing quotation lifecycle", async () => {
@@ -259,7 +262,7 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
       status: "FAILED",
       errorCode: "DELIVERY_WHATSAPP_RATE_LIMITED",
     });
-    expect(value.status).toBe("DRAFT");
+    expect(value.status).toBe("APPROVED");
   });
 
   it("returns the same not-found result for a cross-tenant quotation id", async () => {
@@ -274,6 +277,32 @@ describe("POST /api/quotations/[quotationId]/deliver", () => {
     expect(response.status).toBe(404);
     expect(mocks.findById).toHaveBeenCalledWith("company-1", "quotation-1");
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects delivery of a draft without creating an audit attempt or calling providers", async () => {
+    mocks.findById.mockResolvedValue(new Quotation({
+      companyId: "company-1",
+      customerId: "customer-1",
+      number: "Q-001",
+      customer: { name: "Customer" },
+      lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
+    }));
+
+    const response = await POST(request({
+      channel: "EMAIL",
+      recipient: "customer@example.com",
+      locale: "en",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      error: { code: "QUOTATION_NOT_DELIVERABLE" },
+    });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.generateDocument).not.toHaveBeenCalled();
+    expect(mocks.gatewayDeliver).not.toHaveBeenCalled();
   });
 
   it("passes an explicit profile-update choice through without trusting a browser customer id", async () => {

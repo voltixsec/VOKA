@@ -24,6 +24,7 @@ describe("MetaWhatsAppCloudTransport", () => {
 
     expect(url).toBe("https://graph.facebook.com/v23.0/phone%2Fid/media");
     expect(init.headers).toEqual({ Authorization: "Bearer test-secret-token" });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(form.get("messaging_product")).toBe("whatsapp");
     expect(file.name).toBe(document.filename);
     expect(file.type).toBe("application/pdf");
@@ -49,6 +50,7 @@ describe("MetaWhatsAppCloudTransport", () => {
     const [url, init] = request.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe("https://graph.facebook.com/v23.0/123/messages");
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(String(init.body))).toEqual({
       messaging_product: "whatsapp",
       recipient_type: "individual",

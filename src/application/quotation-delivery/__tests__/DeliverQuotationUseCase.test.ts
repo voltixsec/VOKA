@@ -11,10 +11,13 @@ import type { QuotationDeliveryRepository } from "../QuotationDeliveryRepository
 import type { QuotationCustomerContactRepository } from "../QuotationCustomerContactRepository";
 
 function quotation() {
-  return new Quotation({
+  return Quotation.restore({
+    id: "quotation-1",
     companyId: "company-1",
     customerId: "customer-1",
     number: "Q-001",
+    status: "APPROVED",
+    approvedAt: new Date("2026-08-14T09:00:00.000Z"),
     customer: { name: "Customer" },
     lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
   });
@@ -127,7 +130,7 @@ describe("DeliverQuotationUseCase", () => {
     expect(context.deliveries.values[0]).toMatchObject({
       status: "FAILED", errorCode: "DELIVERY_PROVIDER_NOT_CONFIGURED",
     });
-    expect(value.status).toBe("DRAFT");
+    expect(value.status).toBe("APPROVED");
     expect(context.quotations.update).not.toHaveBeenCalled();
   });
 
@@ -352,6 +355,71 @@ describe("DeliverQuotationUseCase", () => {
 
     expect(result).toMatchObject({ success: false, error: { code: "QUOTATION_NOT_FOUND" } });
     expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["DRAFT", "SENT", "REJECTED", "CANCELLED"] as const)(
+    "rejects a %s quotation before contact, audit, document, or provider side effects",
+    async (status) => {
+      const contacts = { find: vi.fn(), updateSelected: vi.fn() };
+      const value = Quotation.restore({
+        id: "quotation-1",
+        companyId: "company-1",
+        customerId: "customer-1",
+        number: "Q-001",
+        status,
+        customer: { name: "Customer" },
+        lines: [{ position: 1, type: "SERVICE", itemName: "Service", quantity: 1, unitPrice: 10 }],
+      });
+      const context = useCase({ quotation: value, contacts });
+
+      const result = await context.execute.execute({
+        companyId: "company-1",
+        quotationId: "quotation-1",
+        channel: "EMAIL",
+        recipient: "customer@example.com",
+        locale: "en",
+        updateCustomerContact: true,
+      });
+
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: "QUOTATION_NOT_DELIVERABLE" },
+      });
+      expect(contacts.updateSelected).not.toHaveBeenCalled();
+      expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+      expect(context.documents.generate).not.toHaveBeenCalled();
+      expect(context.gateway.deliver).not.toHaveBeenCalled();
+    },
+  );
+
+  it("records an invalid generated document as failed without invoking the gateway", async () => {
+    const context = useCase({
+      documents: {
+        generate: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            filename: "quotation-Q-001.pdf",
+            contentType: "application/pdf",
+            bytes: new Uint8Array([0, 1, 2, 3]),
+          },
+        }),
+      },
+    });
+
+    const result = await context.execute.execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      channel: "EMAIL",
+      recipient: "customer@example.com",
+      locale: "en",
+    });
+
+    expect(result.success && result.data).toMatchObject({
+      status: "FAILED",
+      errorCode: "DELIVERY_DOCUMENT_INVALID",
+    });
+    expect(context.gateway.deliver).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.update).toHaveBeenCalledOnce();
   });
 
   it("keeps an edited recipient as a one-time override by default", async () => {
