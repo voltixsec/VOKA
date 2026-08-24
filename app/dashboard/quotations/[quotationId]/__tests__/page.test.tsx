@@ -84,6 +84,9 @@ beforeEach(() => {
   isArabic = false;
   navigation.push.mockReset();
   vi.spyOn(window, "confirm").mockReturnValue(true);
+  vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(
+    "00000000-0000-4000-8000-000000000001",
+  );
 });
 
 afterEach(() => {
@@ -446,6 +449,7 @@ describe("QuotationDetailsPage localization visibility", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
+          requestKey: "00000000-0000-4000-8000-000000000001",
           channel: "EMAIL",
           recipient: "customer@example.com",
           locale: "en",
@@ -522,6 +526,7 @@ describe("QuotationDetailsPage localization visibility", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
+          requestKey: "00000000-0000-4000-8000-000000000001",
           channel: "WHATSAPP",
           recipient: "00965 9111 1111",
           locale: "en",

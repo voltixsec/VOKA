@@ -1,4 +1,5 @@
 import type { IQuotationRepository } from "@/src/application/quotation";
+import { createHash } from "node:crypto";
 import type { QuotationDocumentProvider } from "@/src/application/document";
 import {
   isQuotationDeliveryChannel,
@@ -16,7 +17,10 @@ import { normalizeWhatsAppRecipient } from "./normalizeWhatsAppRecipient";
 
 export type DeliverQuotationInput = {
   companyId: string;
+  actorUserId: string;
   quotationId: string;
+  requestKey: string;
+  provider: string;
   channel: QuotationDeliveryChannel;
   recipient: string;
   locale: "ar" | "en";
@@ -95,6 +99,16 @@ export class DeliverQuotationUseCase {
       };
     }
 
+    if (!input.actorUserId?.trim() || !input.requestKey?.trim() || !input.provider?.trim()) {
+      return {
+        success: false,
+        error: {
+          code: "DELIVERY_AUDIT_CONTEXT_INVALID",
+          message: "Delivery audit context is invalid.",
+        },
+      };
+    }
+
     if (input.updateCustomerContact) {
       let canonicalWhatsApp: string | undefined;
       if (input.channel === "WHATSAPP") {
@@ -119,12 +133,33 @@ export class DeliverQuotationUseCase {
       id: this.createId(),
       companyId: input.companyId,
       quotationId: input.quotationId,
+      actorUserId: input.actorUserId,
+      requestKey: input.requestKey,
       channel: input.channel,
       recipient,
+      provider: input.provider,
       attemptedAt,
     });
 
-    await this.deliveries.create(delivery);
+    const reservation = await this.deliveries.reserve(delivery);
+    if (!reservation.created) {
+      const existing = reservation.delivery;
+      if (
+        existing.quotationId !== delivery.quotationId ||
+        existing.channel !== delivery.channel ||
+        existing.recipient !== delivery.recipient ||
+        existing.actorUserId !== delivery.actorUserId
+      ) {
+        return {
+          success: false,
+          error: {
+            code: "DELIVERY_REQUEST_KEY_CONFLICT",
+            message: "Delivery request identity conflicts with an existing attempt.",
+          },
+        };
+      }
+      return { success: true, data: existing };
+    }
 
     let documentResult;
     try {
@@ -172,6 +207,12 @@ export class DeliverQuotationUseCase {
       await this.deliveries.update(delivery);
       return { success: true, data: delivery };
     }
+
+    delivery.attachDocumentSha256(
+      createHash("sha256").update(document.bytes).digest("hex"),
+      this.now(),
+    );
+    await this.deliveries.update(delivery);
 
     let result;
     try {

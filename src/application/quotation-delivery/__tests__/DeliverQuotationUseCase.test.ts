@@ -34,7 +34,15 @@ function quotationRepository(value: Quotation | null): IQuotationRepository {
 function deliveryRepository() {
   const values: QuotationDelivery[] = [];
   const repository: QuotationDeliveryRepository = {
-    create: vi.fn(async (value) => { values.push(value); }),
+    reserve: vi.fn(async (value) => {
+      const existing = values.find((candidate) =>
+        candidate.companyId === value.companyId &&
+        candidate.requestKey === value.requestKey,
+      );
+      if (existing) return { created: false, delivery: existing };
+      values.push(value);
+      return { created: true, delivery: value };
+    }),
     update: vi.fn(async () => undefined),
     findHistory: vi.fn(async () => values),
   };
@@ -64,7 +72,7 @@ function useCase(options?: {
       },
     }),
   };
-  const execute = new DeliverQuotationUseCase(
+  const raw = new DeliverQuotationUseCase(
     quotations,
     deliveries.repository,
     documents,
@@ -73,6 +81,25 @@ function useCase(options?: {
     () => `delivery-${deliveries.values.length + 1}`,
     options?.contacts,
   );
+  let requestSequence = 0;
+  type ExecuteInput = Omit<
+    Parameters<DeliverQuotationUseCase["execute"]>[0],
+    "actorUserId" | "requestKey" | "provider"
+  > & Partial<Pick<
+    Parameters<DeliverQuotationUseCase["execute"]>[0],
+    "actorUserId" | "requestKey" | "provider"
+  >>;
+  const execute = {
+    execute: (input: ExecuteInput) => {
+      requestSequence += 1;
+      return raw.execute({
+        ...input,
+        actorUserId: input.actorUserId ?? "user-1",
+        requestKey: input.requestKey ?? `00000000-0000-4000-8000-${String(requestSequence).padStart(12, "0")}`,
+        provider: input.provider ?? (input.channel === "EMAIL" ? "RESEND" : "META"),
+      });
+    },
+  };
   return { execute, quotations, deliveries, documents, gateway };
 }
 
@@ -93,8 +120,8 @@ describe("DeliverQuotationUseCase", () => {
       recipient: channel === "WHATSAPP" ? "96590000000" : recipient,
       status: "SENT",
     });
-    expect(context.deliveries.repository.create).toHaveBeenCalledOnce();
-    expect(context.deliveries.repository.update).toHaveBeenCalledOnce();
+    expect(context.deliveries.repository.reserve).toHaveBeenCalledOnce();
+    expect(context.deliveries.repository.update).toHaveBeenCalledTimes(2);
     expect(context.documents.generate).toHaveBeenCalledWith({
       companyId: "company-1",
       quotationId: "quotation-1",
@@ -154,7 +181,7 @@ describe("DeliverQuotationUseCase", () => {
       errorCode: "DELIVERY_PROVIDER_ERROR",
       errorMessage: "Quotation delivery provider failed safely.",
     });
-    expect(context.deliveries.repository.update).toHaveBeenCalledOnce();
+    expect(context.deliveries.repository.update).toHaveBeenCalledTimes(2);
   });
 
   it("records document generation failure without invoking the gateway", async () => {
@@ -256,6 +283,51 @@ describe("DeliverQuotationUseCase", () => {
     );
   });
 
+  it("returns the reserved attempt without a second provider call for the same tenant request key", async () => {
+    const context = useCase();
+    const input = {
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      actorUserId: "user-1",
+      requestKey: "00000000-0000-4000-8000-000000000099",
+      provider: "RESEND",
+      channel: "EMAIL" as const,
+      recipient: "customer@example.com",
+      locale: "en" as const,
+    };
+
+    const first = await context.execute.execute(input);
+    const repeated = await context.execute.execute(input);
+
+    expect(first.success && first.data.id).toBe("delivery-1");
+    expect(repeated.success && repeated.data.id).toBe("delivery-1");
+    expect(context.documents.generate).toHaveBeenCalledOnce();
+    expect(context.gateway.deliver).toHaveBeenCalledOnce();
+    expect(context.deliveries.repository.reserve).toHaveBeenCalledTimes(2);
+  });
+
+  it("persists trusted actor, provider, request identity, and PDF digest on the attempt", async () => {
+    const context = useCase();
+
+    const result = await context.execute.execute({
+      companyId: "company-1",
+      quotationId: "quotation-1",
+      actorUserId: "user-42",
+      requestKey: "00000000-0000-4000-8000-000000000042",
+      provider: "RESEND",
+      channel: "EMAIL",
+      recipient: "customer@example.com",
+      locale: "en",
+    });
+
+    expect(result.success && result.data).toMatchObject({
+      actorUserId: "user-42",
+      requestKey: "00000000-0000-4000-8000-000000000042",
+      provider: "RESEND",
+      documentSha256: "315d429b7714cedb6ad04ac31240145257692630457f3c88253c5beceac76027",
+    });
+  });
+
   it.each([
     [{ channel: "SMS", recipient: "x", locale: "en" }, "DELIVERY_CHANNEL_INVALID"],
     [{ channel: "EMAIL", recipient: " ", locale: "en" }, "DELIVERY_RECIPIENT_REQUIRED"],
@@ -268,7 +340,7 @@ describe("DeliverQuotationUseCase", () => {
     } as never);
 
     expect(result).toMatchObject({ success: false, error: { code } });
-    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.reserve).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid EMAIL recipient before document generation or gateway call", async () => {
@@ -288,7 +360,7 @@ describe("DeliverQuotationUseCase", () => {
     });
     expect(context.documents.generate).not.toHaveBeenCalled();
     expect(context.gateway.deliver).not.toHaveBeenCalled();
-    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.reserve).not.toHaveBeenCalled();
   });
 
   it("normalizes a valid EMAIL recipient before persistence and provider delivery", async () => {
@@ -341,7 +413,7 @@ describe("DeliverQuotationUseCase", () => {
       success: false,
       error: { code: "DELIVERY_WHATSAPP_RECIPIENT_INVALID" },
     });
-    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.reserve).not.toHaveBeenCalled();
     expect(context.documents.generate).not.toHaveBeenCalled();
     expect(context.gateway.deliver).not.toHaveBeenCalled();
   });
@@ -354,7 +426,7 @@ describe("DeliverQuotationUseCase", () => {
     });
 
     expect(result).toMatchObject({ success: false, error: { code: "QUOTATION_NOT_FOUND" } });
-    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.reserve).not.toHaveBeenCalled();
   });
 
   it.each(["DRAFT", "SENT", "REJECTED", "CANCELLED"] as const)(
@@ -386,7 +458,7 @@ describe("DeliverQuotationUseCase", () => {
         error: { code: "QUOTATION_NOT_DELIVERABLE" },
       });
       expect(contacts.updateSelected).not.toHaveBeenCalled();
-      expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+      expect(context.deliveries.repository.reserve).not.toHaveBeenCalled();
       expect(context.documents.generate).not.toHaveBeenCalled();
       expect(context.gateway.deliver).not.toHaveBeenCalled();
     },
@@ -450,7 +522,7 @@ describe("DeliverQuotationUseCase", () => {
     const context = useCase({ contacts });
     const result = await context.execute.execute({ companyId: "company-1", quotationId: "quotation-1", channel: "EMAIL", recipient: "new@example.com", locale: "en", updateCustomerContact: true });
     expect(result).toMatchObject({ success: false, error: { code: "DELIVERY_CUSTOMER_NOT_FOUND" } });
-    expect(context.deliveries.repository.create).not.toHaveBeenCalled();
+    expect(context.deliveries.repository.reserve).not.toHaveBeenCalled();
     expect(context.gateway.deliver).not.toHaveBeenCalled();
   });
 
