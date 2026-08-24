@@ -29,20 +29,11 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        let errMsg = isArabic
-          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-          : "Invalid email or password";
-
-        try {
-          const json = await response.json();
-          if (json.error?.message) {
-            errMsg = json.error.message;
-          }
-        } catch {
-          // fallback to default
-        }
-
-        throw new Error(errMsg);
+        throw new Error(
+          isArabic
+            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+            : "Invalid email or password",
+        );
       }
 
       window.location.href = returnTo;
@@ -51,8 +42,8 @@ export default function LoginPage() {
         err instanceof Error
           ? err.message
           : isArabic
-          ? "حدث خطأ أثناء تسجيل الدخول"
-          : "An error occurred during sign in",
+          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+          : "Invalid email or password",
       );
     } finally {
       setLoading(false);

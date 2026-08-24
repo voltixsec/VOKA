@@ -7,6 +7,7 @@ import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import { Sidebar } from "../../components/dashboard/Sidebar";
 import { LanguageProvider } from "../../components/i18n/LanguageProvider";
 import { getCurrentUser } from "../../lib/auth";
+import { ApiError } from "../../lib/api/api-error";
 import { sanitizeReturnTo } from "../../lib/auth/return-to";
 
 const cairo = Cairo({
@@ -15,11 +16,21 @@ const cairo = Cairo({
   variable: "--font-voka",
 });
 
+function isUnauthenticatedError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.statusCode === 401;
+  }
+  return false;
+}
+
 export default async function DashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
+  // Server layout level pathname capture limitation:
+  // Next.js App Router layouts do not reliably expose requested sub-paths without custom middleware header injection.
+  // We use /dashboard as the safe server-gate fallback and preserve exact sub-paths via client-side 401 redirects.
   let requestedPath = "/dashboard";
 
   try {
@@ -35,9 +46,14 @@ export default async function DashboardLayout({
 
   try {
     await getCurrentUser();
-  } catch {
-    const returnToParam = encodeURIComponent(requestedPath);
-    redirect(`/login?returnTo=${returnToParam}`);
+  } catch (error) {
+    if (isUnauthenticatedError(error)) {
+      const returnToParam = encodeURIComponent(requestedPath);
+      redirect(`/login?returnTo=${returnToParam}`);
+    }
+
+    // Re-throw non-auth infrastructure/Prisma/database errors unchanged
+    throw error;
   }
 
   return (

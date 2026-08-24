@@ -67,11 +67,11 @@ describe("LoginPage Component", () => {
     });
   });
 
-  it("handles invalid credentials error safely", async () => {
+  it("handles invalid credentials error safely with localized messaging", async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: false,
       json: async () => ({
-        error: { message: "Invalid email or password" },
+        error: { message: "Internal server error details" },
       }),
     } as Response);
 
@@ -87,7 +87,9 @@ describe("LoginPage Component", () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(screen.getByText("Invalid email or password")).toBeInTheDocument();
+      expect(
+        screen.getByText("البريد الإلكتروني أو كلمة المرور غير صحيحة"),
+      ).toBeInTheDocument();
     });
   });
 });
