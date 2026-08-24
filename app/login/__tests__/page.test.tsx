@@ -91,5 +91,37 @@ describe("LoginPage Component", () => {
         screen.getByText("البريد الإلكتروني أو كلمة المرور غير صحيحة"),
       ).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(
+      screen.getByText("Email address or password is incorrect."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("البريد الإلكتروني أو كلمة المرور غير صحيحة"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the English generic error for an invalid attempt made in English", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: { message: "Sensitive backend detail" } }),
+    } as Response);
+
+    render(<LoginPage />);
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    fireEvent.change(screen.getByPlaceholderText("name@company.com"), {
+      target: { value: "wrong@voka.local" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("••••••••"), {
+      target: { value: "wrongpass" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Email address or password is incorrect."),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Sensitive backend detail")).not.toBeInTheDocument();
   });
 });
