@@ -372,12 +372,19 @@ export default function QuotationDetailsPage() {
   const emailHasRecipient = Boolean(emailRecipient.trim());
   const whatsappHasRecipient = Boolean(whatsappRecipient.trim());
 
-  const canSendEmail = emailReady && emailHasRecipient;
-  const canSendWhatsApp = whatsappReady && whatsappHasRecipient;
+  const quotationDeliverable = quote?.status === "APPROVED";
+  const canSendEmail = quotationDeliverable && emailReady && emailHasRecipient;
+  const canSendWhatsApp = quotationDeliverable && whatsappReady && whatsappHasRecipient;
   const canSendBoth = canSendEmail && canSendWhatsApp;
 
   // Disabled explanations
   const getEmailDisabledReason = () => {
+    if (!quotationDeliverable) {
+      return t(
+        "يجب اعتماد عرض السعر قبل إرساله.",
+        "Approve the quotation before delivery.",
+      );
+    }
     if (!emailReady) {
       return t(
         "مزود البريد الإلكتروني غير مهيأ على الخادم",
@@ -394,6 +401,12 @@ export default function QuotationDetailsPage() {
   };
 
   const getWhatsAppDisabledReason = () => {
+    if (!quotationDeliverable) {
+      return t(
+        "يجب اعتماد عرض السعر قبل إرساله.",
+        "Approve the quotation before delivery.",
+      );
+    }
     if (!whatsappBaseReady) {
       return t(
         "مزود واتساب غير مهيأ على الخادم",
@@ -547,10 +560,17 @@ export default function QuotationDetailsPage() {
   }
 
   function retryAvailable(delivery: Delivery) {
-    return delivery.channel === "EMAIL" ? emailReady : whatsappReady;
+    return quotationDeliverable &&
+      (delivery.channel === "EMAIL" ? emailReady : whatsappReady);
   }
 
   function retryDisabledReason(delivery: Delivery) {
+    if (!quotationDeliverable) {
+      return t(
+        "يجب اعتماد عرض السعر قبل إعادة الإرسال.",
+        "Approve the quotation before retrying delivery.",
+      );
+    }
     if (delivery.channel === "EMAIL") {
       if (!emailReady) {
         return t("إعدادات البريد غير متاحة للإعادة", "Email setup unavailable for retry");

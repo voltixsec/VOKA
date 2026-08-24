@@ -31,6 +31,7 @@ export class MetaWhatsAppCloudTransport implements MetaWhatsAppTransport {
       graphApiVersion: string;
     },
     private readonly request: Fetch = fetch,
+    private readonly timeoutMs = 30_000,
   ) {
     this.endpoint = `https://graph.facebook.com/${configuration.graphApiVersion}/${encodeURIComponent(configuration.phoneNumberId)}`;
   }
@@ -48,6 +49,7 @@ export class MetaWhatsAppCloudTransport implements MetaWhatsAppTransport {
       method: "POST",
       headers: { Authorization: `Bearer ${this.configuration.accessToken}` },
       body: form,
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     return this.toResponse(response);
   }
@@ -76,6 +78,7 @@ export class MetaWhatsAppCloudTransport implements MetaWhatsAppTransport {
           }],
         },
       }),
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     return this.toResponse(response);
   }

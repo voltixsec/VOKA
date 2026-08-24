@@ -85,6 +85,16 @@ export class DeliverQuotationUseCase {
       return { success: false, error: { code: "QUOTATION_NOT_FOUND", message: "Quotation not found." } };
     }
 
+    if (quotation.status !== "APPROVED") {
+      return {
+        success: false,
+        error: {
+          code: "QUOTATION_NOT_DELIVERABLE",
+          message: "Only an approved quotation can be delivered.",
+        },
+      };
+    }
+
     if (input.updateCustomerContact) {
       let canonicalWhatsApp: string | undefined;
       if (input.channel === "WHATSAPP") {
@@ -143,6 +153,26 @@ export class DeliverQuotationUseCase {
       return { success: true, data: delivery };
     }
 
+    const document = documentResult.data;
+    const isPdf =
+      document.contentType === "application/pdf" &&
+      document.filename.trim().length > 0 &&
+      document.bytes.length >= 4 &&
+      document.bytes[0] === 0x25 &&
+      document.bytes[1] === 0x50 &&
+      document.bytes[2] === 0x44 &&
+      document.bytes[3] === 0x46;
+
+    if (!isPdf) {
+      delivery.markFailed(
+        "DELIVERY_DOCUMENT_INVALID",
+        "Quotation delivery document is invalid.",
+        this.now(),
+      );
+      await this.deliveries.update(delivery);
+      return { success: true, data: delivery };
+    }
+
     let result;
     try {
       result = await this.gateway.deliver({
@@ -154,7 +184,7 @@ export class DeliverQuotationUseCase {
         channel: input.channel,
         recipient,
         locale: input.locale,
-        document: documentResult.data,
+        document,
       });
     } catch {
       result = {
