@@ -7,7 +7,7 @@ import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import { Sidebar } from "../../components/dashboard/Sidebar";
 import { LanguageProvider } from "../../components/i18n/LanguageProvider";
 import { getCurrentUser } from "../../lib/auth";
-import { ApiError } from "../../lib/api/api-error";
+import { ApiError } from "../../lib/api/ApiError";
 import { sanitizeReturnTo } from "../../lib/auth/return-to";
 
 const cairo = Cairo({
