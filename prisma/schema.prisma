@@ -86,6 +86,7 @@ model Company {
   payments                Payment[]
   invoiceEvents           InvoiceEvent[]
   authorizedSignatories   AuthorizedSignatory[]
+  drawingTakeoffSessions  DrawingTakeoffSession[]
   universalAdoptions      UniversalItemAdoption[]
   localizedContents       LocalizedContent[]
   createdAt               DateTime                        @default(now())
@@ -93,6 +94,70 @@ model Company {
 
   @@index([name])
   @@index([isActive])
+}
+
+enum DrawingTakeoffStatus {
+  REVIEW_REQUIRED
+  CONFIRMED
+  CONVERTED
+  CANCELLED
+}
+
+enum TakeoffQuantityProvenance {
+  DRAWING_COUNTED
+  DRAWING_MEASURED
+  CALCULATED
+  USER_PROVIDED
+  AI_INTERPRETED
+  CATALOG_MAPPED
+  NEEDS_CONFIRMATION
+}
+
+model DrawingTakeoffSession {
+  id              String               @id @default(cuid())
+  companyId       String
+  createdByUserId String
+  sourceFileName  String
+  sourceMimeType  String
+  sourceSizeBytes Int
+  sourceSha256    String
+  userIntent      String
+  discipline      String               @default("CCTV_LOW_VOLTAGE")
+  status          DrawingTakeoffStatus @default(REVIEW_REQUIRED)
+  confirmedAt     DateTime?
+  convertedAt     DateTime?
+  quotationId     String?
+  version         Int                  @default(1)
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines           DrawingTakeoffLine[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([companyId, sourceSha256, userIntent])
+  @@index([companyId, status, createdAt])
+  @@index([companyId, quotationId])
+}
+
+model DrawingTakeoffLine {
+  id            String                    @id @default(cuid())
+  sessionId     String
+  position      Int
+  itemName      String
+  description   String?
+  quantity      Decimal?                  @db.Decimal(18, 3)
+  unitName      String?
+  provenance    TakeoffQuantityProvenance
+  evidence      String?
+  confidence    Decimal?                  @db.Decimal(5, 4)
+  isConfirmed   Boolean                   @default(false)
+  confirmedById String?
+  confirmedAt   DateTime?
+  session       DrawingTakeoffSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@unique([sessionId, position])
+  @@index([sessionId, isConfirmed])
 }
 
 model AuthorizedSignatory {

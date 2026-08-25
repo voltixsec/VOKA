@@ -145,6 +145,16 @@ const navigationItems: NavigationItem[] = [
     ),
   },
   {
+    labelEn: "Drawing Takeoff",
+    labelAr: "حصر الرسومات",
+    descriptionEn: "CCTV / Low Voltage",
+    descriptionAr: "كاميرات وتيار خفيف",
+    href: "/dashboard/takeoff",
+    icon: (
+      <Icon><path d="M4 3h16v18H4z" /><path d="m7 16 3-4 3 2 4-6" /><circle cx="8" cy="8" r="1" /></Icon>
+    ),
+  },
+  {
     labelEn: "Settings",
     labelAr: "الإعدادات",
     descriptionEn: "Workspace",
