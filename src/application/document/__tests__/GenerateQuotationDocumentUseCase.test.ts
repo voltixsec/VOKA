@@ -26,7 +26,7 @@ function createQuotation(): Quotation {
   });
 }
 
-function approvedQuotation(withSnapshot: boolean, verificationToken: string | null = "existing-verification-token-1234567890"): Quotation {
+function approvedQuotation(withSnapshot: boolean, verificationToken: string | null = "existing-verification-token-1234567890", withSignatory = false): Quotation {
   const base = createQuotation();
   return Quotation.restore({
     id: base.id, companyId: base.companyId, customerId: base.customerId,
@@ -43,11 +43,43 @@ function approvedQuotation(withSnapshot: boolean, verificationToken: string | nu
       letterheadUrl: "data:image/png;base64,LETTERHEAD",
       signatureUrl: "data:image/png;base64,SIGNATURE",
       stampUrl: "data:image/png;base64,STAMP",
+      authorizedSignatory: withSignatory ? {
+        id: "signatory-1", nameAr: "أحمد", nameEn: "Ahmed", titleAr: "المدير", titleEn: "Director", signatureUrl: "data:image/png;base64,SIGNATORY",
+      } : null,
     }) : null,
   });
+
 }
 
 describe("GenerateQuotationDocumentUseCase", () => {
+  it("renders the snapshotted authorized signatory without replacing approval audit identity", async () => {
+    const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array()) };
+    const quotation = approvedQuotation(true, "existing-verification-token-1234567890", true);
+    const useCase = new GenerateQuotationDocumentUseCase(createRepository(quotation), renderer);
+    await useCase.execute({ companyId: "company-1", quotationId: "quotation-1", locale: "ar", companyName: "Changed Company" });
+    expect(quotation.approvedByName).toBe("Approver");
+    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({
+      company: expect.objectContaining({ signatureUrl: "data:image/png;base64,SIGNATORY" }),
+      quotation: expect.objectContaining({ approvedByName: "أحمد", approvedByRole: "المدير" }),
+    }));
+  });
+
+  it("does not substitute a mutable company signature when the snapshotted signatory has none", async () => {
+    const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array()) };
+    const quotation = approvedQuotation(true, "existing-verification-token-1234567890", true);
+    const snapshot = quotation.documentBrandSnapshot;
+    expect(snapshot?.version).toBe(3);
+    if (!snapshot || snapshot.version !== 3 || !snapshot.authorizedSignatory) throw new Error("Expected signatory snapshot.");
+    const restored = Quotation.restore({
+      id: quotation.id, companyId: quotation.companyId, customerId: quotation.customerId, number: quotation.number.toString(), status: "APPROVED",
+      issueDate: quotation.issueDate, customer: quotation.customer.toJSON(), lines: [...quotation.lines], approvedAt: quotation.approvedAt,
+      approvedByName: quotation.approvedByName, approvedByRole: quotation.approvedByRole,
+      documentBrandSnapshot: { ...snapshot, signatureUrl: "data:image/png;base64,COMPANY", authorizedSignatory: { ...snapshot.authorizedSignatory, signatureUrl: null } },
+    });
+    await new GenerateQuotationDocumentUseCase(createRepository(restored), renderer).execute({ companyId: "company-1", quotationId: "quotation-1", locale: "en", companyName: "VOKA" });
+    expect(renderer.render).toHaveBeenCalledWith(expect.objectContaining({ company: expect.objectContaining({ signatureUrl: null }) }));
+  });
+
   it("builds a tenant-scoped snapshot with persisted totals and a safe filename", async () => {
     const repository = createRepository(createQuotation());
     const renderer: IQuotationDocumentRenderer = { render: vi.fn().mockResolvedValue(new Uint8Array([37, 80, 68, 70])) };

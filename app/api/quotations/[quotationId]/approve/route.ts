@@ -42,14 +42,20 @@ export const POST = withCompanyAuth(
         request,
       );
 
-    const brand = await prisma.company.findUnique({
-      where: { id: company.companyId },
-      select: {
-        name: true, nameAr: true, nameEn: true, addressAr: true, addressEn: true,
-        poBox: true, phone: true, mobile: true, whatsapp: true,
-        logoUrl: true, letterheadUrl: true, signatureUrl: true, stampUrl: true, brandTheme: true,
-      },
-    });
+    const [brand, signatory] = await Promise.all([
+      prisma.company.findUnique({
+        where: { id: company.companyId },
+        select: {
+          name: true, nameAr: true, nameEn: true, addressAr: true, addressEn: true,
+          poBox: true, phone: true, mobile: true, whatsapp: true,
+          logoUrl: true, letterheadUrl: true, signatureUrl: true, stampUrl: true, brandTheme: true,
+        },
+      }),
+      prisma.authorizedSignatory.findFirst({
+        where: { companyId: company.companyId, isActive: true, isDefault: true, allowedDocumentTypes: { has: "QUOTATION" } },
+        select: { id: true, nameAr: true, nameEn: true, titleAr: true, titleEn: true, signatureUrl: true },
+      }),
+    ]);
 
     if (!brand) {
       throw ApiError.notFound("COMPANY_NOT_FOUND", "Company not found.");
@@ -72,6 +78,7 @@ export const POST = withCompanyAuth(
           ...brand,
           nameEn: brand.nameEn ?? brand.name,
           brandTheme: brand.brandTheme,
+          authorizedSignatory: signatory,
         }),
       });
 

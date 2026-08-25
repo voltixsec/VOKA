@@ -130,6 +130,9 @@ export class GenerateQuotationDocumentUseCase {
       usePersistedBrand
         ? "VOKA"
         : input.companyName;
+    const signatory = effectiveBrand.version === 3
+      ? effectiveBrand.authorizedSignatory
+      : null;
 
     const snapshot:
       QuotationDocumentSnapshot = {
@@ -205,9 +208,11 @@ export class GenerateQuotationDocumentUseCase {
             ?.trim() ||
           null,
 
-        letterheadUrl: effectiveBrand.version === 2 ? effectiveBrand.letterheadUrl : null,
-        signatureUrl: effectiveBrand.version === 2 ? effectiveBrand.signatureUrl : null,
-        stampUrl: effectiveBrand.version === 2 ? effectiveBrand.stampUrl : null,
+        letterheadUrl: effectiveBrand.version !== 1 ? effectiveBrand.letterheadUrl : null,
+        signatureUrl: signatory
+          ? signatory.signatureUrl
+          : effectiveBrand.version !== 1 ? effectiveBrand.signatureUrl : null,
+        stampUrl: effectiveBrand.version !== 1 ? effectiveBrand.stampUrl : null,
 
         brandTheme:
           effectiveBrand
@@ -407,10 +412,18 @@ export class GenerateQuotationDocumentUseCase {
           quotation.approvedAt,
 
         approvedByName:
-          quotation.approvedByName,
+          signatory
+            ? input.locale === "ar"
+              ? signatory.nameAr ?? signatory.nameEn
+              : signatory.nameEn ?? signatory.nameAr
+            : quotation.approvedByName,
 
         approvedByRole:
-          quotation.approvedByRole,
+          signatory
+            ? input.locale === "ar"
+              ? signatory.titleAr ?? signatory.titleEn
+              : signatory.titleEn ?? signatory.titleAr
+            : quotation.approvedByRole,
       },
 
       qrValue:

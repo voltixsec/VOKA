@@ -85,6 +85,7 @@ model Company {
   invoiceNumberSequences  InvoiceNumberSequence[]
   payments                Payment[]
   invoiceEvents           InvoiceEvent[]
+  authorizedSignatories   AuthorizedSignatory[]
   universalAdoptions      UniversalItemAdoption[]
   localizedContents       LocalizedContent[]
   createdAt               DateTime                        @default(now())
@@ -92,6 +93,25 @@ model Company {
 
   @@index([name])
   @@index([isActive])
+}
+
+model AuthorizedSignatory {
+  id                   String   @id @default(cuid())
+  companyId            String
+  nameAr               String?
+  nameEn               String?
+  titleAr              String?
+  titleEn              String?
+  signatureUrl         String?
+  isActive             Boolean  @default(true)
+  isDefault            Boolean  @default(false)
+  allowedDocumentTypes String[] @default([])
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([companyId, isActive])
+  @@index([companyId, isDefault])
 }
 
 model User {
