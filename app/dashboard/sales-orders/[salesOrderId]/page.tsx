@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, Modal, SectionHeader } from "../../../../components/ui";
 import { useLanguage } from "../../../../components/i18n/LanguageProvider";
+import { CommercialComposer } from "@/components/commercial";
 
 type SalesOrder = {
   id: string;
@@ -12,6 +13,8 @@ type SalesOrder = {
   status: "DRAFT" | "CONFIRMED" | "CANCELLED";
   sourceQuotationId: string;
   sourceQuotationNumber: string;
+  sourceQuotationFamilyId: string;
+  sourceQuotationRevisionNumber: number;
   currencyCode: string;
   orderDate: string;
   customer: {
@@ -406,6 +409,8 @@ export default function SalesOrderDetailsPage() {
         </Card>
       )}
 
+      <CommercialComposer mode="SALES_ORDER" isArabic={isArabic} title={t("سجل أمر البيع", "Sales order record")} description={t("نسخة تجارية من عرض السعر المعتمد؛ البنود والأسعار والمرجع التاريخي للقراءة فقط.", "A commercial snapshot of the approved quotation; lines, prices, and historical provenance are read-only.")}>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <p className="text-sm text-slate-500">{t("العميل", "Customer")}</p>
@@ -426,7 +431,7 @@ export default function SalesOrderDetailsPage() {
             {salesOrder.sourceQuotationNumber}
           </Link>
           <p className="mt-1 text-xs text-slate-500">
-            {new Date(salesOrder.sourceApproval.approvedAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}
+            {t("المراجعة", "Revision")} {salesOrder.sourceQuotationRevisionNumber} · {new Date(salesOrder.sourceApproval.approvedAt).toLocaleString(isArabic ? "ar-KW" : "en-GB")}
           </p>
         </Card>
         <Card>
@@ -594,6 +599,8 @@ export default function SalesOrderDetailsPage() {
           )}
         </dl>
       </Card>
+
+      </CommercialComposer>
 
       <Modal
         open={cancelModalOpen}
