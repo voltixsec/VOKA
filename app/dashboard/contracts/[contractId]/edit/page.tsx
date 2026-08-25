@@ -6,6 +6,7 @@ import { Button, Card, Input, SectionHeader } from "@/components/ui";
 import { QuotationLineItemCombobox } from "@/components/quotations/QuotationLineItemCombobox";
 import { CatalogItemModal, type CatalogItemModalItem } from "@/components/catalog/CatalogItemModal";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { CommercialComposer } from "@/components/commercial";
 import { QuotationCalculator, type QuotationLineType } from "@/src/domain/quotation";
 import { MilestoneAmountType } from "@/src/domain/contract";
 import { normalizeQuotationLinePositions } from "@/app/dashboard/quotations/quotation-line-order";
@@ -519,7 +520,7 @@ export default function EditContractPage() {
         )}
       />
 
-      <form onSubmit={submit} className="space-y-6">
+      <form onSubmit={submit}><CommercialComposer mode="CONTRACT" isArabic={isArabic} title={t("مسودة العقد", "Contract draft")} description={t("نفس المحرر التجاري المستخدم عند الإنشاء مع الحفاظ على دورة حياة العقد.", "The same commercial editor used for creation while preserving the contract lifecycle.")}>
         {error && (
           <Card className="border-red-400/20 bg-red-400/5">
             <p className="text-red-300">{error}</p>
@@ -957,7 +958,7 @@ export default function EditContractPage() {
             </div>
           </div>
         </Card>
-      </form>
+      </CommercialComposer></form>
 
       <CatalogItemModal
         open={catalogItemModalOpen}

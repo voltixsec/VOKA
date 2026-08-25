@@ -21,4 +21,10 @@ describe("shared Commercial Composer", () => {
     render(<CommercialLineEditor isArabic currencyCode="KWD" lines={[createCommercialLine("line-1")]} items={[]} onChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: "حذف البند 1" })).toBeDisabled();
   });
+
+  it("uses a full-width shell when a document has its own inline summary", () => {
+    const { container } = render(<CommercialComposer mode="CONTRACT" isArabic={false} title="Contract" description="Terms"><div>Contract fields</div></CommercialComposer>);
+    expect(container.querySelector("aside")).not.toBeInTheDocument();
+    expect(container.querySelector('[data-commercial-composer="CONTRACT"]')).toHaveClass("grid-cols-1");
+  });
 });
