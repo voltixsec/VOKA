@@ -100,6 +100,9 @@ export class GenerateSalesOrderDocumentUseCase {
     const persistedBrand = salesOrder.documentBrandSnapshot;
     const effectiveBrand = persistedBrand ?? liveBrand;
     const effectiveFallbackName = persistedBrand ? "VOKA" : input.companyName;
+    const signatory = effectiveBrand.version === 3
+      ? effectiveBrand.authorizedSignatory
+      : null;
 
     const createdAt = salesOrder.createdAt;
 
@@ -136,11 +139,15 @@ export class GenerateSalesOrderDocumentUseCase {
         whatsapp: effectiveBrand.whatsapp?.trim() || null,
         logoUrl: effectiveBrand.logoUrl?.trim() || null,
         letterheadUrl:
-          effectiveBrand.version === 2 ? effectiveBrand.letterheadUrl : null,
+          effectiveBrand.version !== 1 ? effectiveBrand.letterheadUrl : null,
         signatureUrl:
-          effectiveBrand.version === 2 ? effectiveBrand.signatureUrl : null,
+          effectiveBrand.version === 3
+            ? effectiveBrand.authorizedSignatory
+              ? effectiveBrand.authorizedSignatory.signatureUrl
+              : effectiveBrand.signatureUrl
+            : effectiveBrand.version === 2 ? effectiveBrand.signatureUrl : null,
         stampUrl:
-          effectiveBrand.version === 2 ? effectiveBrand.stampUrl : null,
+          effectiveBrand.version !== 1 ? effectiveBrand.stampUrl : null,
         brandTheme: effectiveBrand.brandTheme?.trim() || "NAVY_GOLD",
       },
       salesOrder: {
@@ -212,8 +219,12 @@ export class GenerateSalesOrderDocumentUseCase {
         termsAndConditionsEn: salesOrder.termsAndConditionsEn,
         sourceApproval: {
           approvedAt: salesOrder.sourceApprovedAt,
-          approvedByName: salesOrder.sourceApprovedByName,
-          approvedByRole: salesOrder.sourceApprovedByRole,
+          approvedByName: signatory
+            ? (input.locale === "ar" ? signatory.nameAr ?? signatory.nameEn : signatory.nameEn ?? signatory.nameAr) ?? salesOrder.sourceApprovedByName
+            : salesOrder.sourceApprovedByName,
+          approvedByRole: signatory
+            ? (input.locale === "ar" ? signatory.titleAr ?? signatory.titleEn : signatory.titleEn ?? signatory.titleAr) ?? salesOrder.sourceApprovedByRole
+            : salesOrder.sourceApprovedByRole,
         },
         creator: {
           userId: salesOrder.createdByUserId,

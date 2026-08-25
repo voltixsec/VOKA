@@ -14,14 +14,20 @@ describe("company document brand snapshot versions", () => {
     expect(parseCompanyDocumentBrandSnapshot(v1)).not.toHaveProperty("letterheadUrl");
   });
 
-  it("creates and parses v2 with immutable document assets", () => {
-    const v2 = createCompanyDocumentBrandSnapshot({
+  it("creates and parses v3 with immutable document assets and signatory identity", () => {
+    const v3 = createCompanyDocumentBrandSnapshot({
       ...identity,
       letterheadUrl: "data:image/png;base64,AAAA",
       signatureUrl: "data:image/jpeg;base64,BBBB",
       stampUrl: "data:image/png;base64,CCCC",
+      authorizedSignatory: { id: "signatory-1", nameAr: "أحمد", nameEn: "Ahmed", titleAr: "المدير", titleEn: "Director", signatureUrl: "data:image/png;base64,DDDD" },
     });
-    expect(v2.version).toBe(2);
+    expect(v3.version).toBe(3);
+    expect(parseCompanyDocumentBrandSnapshot(v3)).toEqual(v3);
+  });
+
+  it("continues to parse historical v2 snapshots", () => {
+    const v2 = { version: 2 as const, ...identity, letterheadUrl: null, signatureUrl: null, stampUrl: null };
     expect(parseCompanyDocumentBrandSnapshot(v2)).toEqual(v2);
   });
 });
