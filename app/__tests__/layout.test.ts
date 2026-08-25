@@ -8,7 +8,7 @@ import { metadata } from "../layout";
 
 describe("root metadata", () => {
   it("uses valid UTF-8 branding without a replacement character", () => {
-    expect(metadata.title).toBe("VOKA — Your AI Sales Employee");
+    expect(metadata.title).toBe("VOKA — Speak. Understand. Quote.");
     expect(String(metadata.title)).not.toContain("�");
   });
 });
