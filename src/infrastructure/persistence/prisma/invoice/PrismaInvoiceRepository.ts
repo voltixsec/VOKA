@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from "../../../../../lib/generated/prisma/c
 import type {
   CreateInvoiceRequest, IInvoiceRepository, InvoiceListResult,
   PaymentRecord, RecordPaymentRequest,
+  UpdateInvoiceRequest,
 } from "../../../../application/invoice";
 import { Invoice, InvoiceDomainError, type InvoiceActor } from "../../../../domain/invoice";
 import type { Discount, QuotationLineInput } from "../../../../domain/quotation";
@@ -222,6 +223,98 @@ export class PrismaInvoiceRepository implements IInvoiceRepository {
   async findById(companyId: string, invoiceId: string) {
     const record = await this.db.invoice.findFirst({ where: { id: invoiceId, companyId }, include: this.include() });
     return record ? this.toDomain(record) : null;
+  }
+
+  async updateDraft(request: UpdateInvoiceRequest): Promise<Invoice | null> {
+    return this.db.$transaction(async (tx: any) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${request.companyId}:invoice-update:${request.invoiceId}`}))`;
+      const record = await tx.invoice.findFirst({
+        where: { id: request.invoiceId, companyId: request.companyId },
+        include: this.include(),
+      });
+      if (!record) return null;
+      if (record.status !== "DRAFT") throw new InvoiceDomainError("Only draft invoices can be edited.");
+      if (record.updatedAt.getTime() !== request.expectedUpdatedAt.getTime()) {
+        throw new InvoiceDomainError("Invoice changed since it was opened. Reload before saving.");
+      }
+
+      let snapshot: any;
+      if (record.origin === "DIRECT") {
+        snapshot = await this.directSnapshot(tx, {
+          ...request,
+          requestKey: record.creationRequestKey,
+          lines: request.lines,
+        });
+      } else {
+        if (request.customerId || request.lines || request.currencyCode || request.priceListId) {
+          throw new InvoiceDomainError("Source-derived invoice identity and lines cannot be silently replaced.");
+        }
+        snapshot = {
+          origin: record.origin,
+          sourceKind: record.sourceKind,
+          sourceId: record.sourceId,
+          sourceQuotationFamilyId: record.sourceQuotationFamilyId,
+          sourceQuotationRevisionNumber: record.sourceQuotationRevisionNumber,
+          customerId: record.customerId,
+          priceListId: record.priceListId,
+          currencyCode: record.currencyCode,
+          customer: {
+            name: record.customerName, nameAr: record.customerNameAr, nameEn: record.customerNameEn,
+            email: record.customerEmail, phone: record.customerPhone,
+            taxNumber: record.customerTaxNo, billingAddress: record.billingAddress,
+          },
+          lines: record.lines.map((line: any) => ({
+            sourceLineId: line.sourceLineId, catalogItemId: line.catalogItemId, taxRateId: line.taxRateId,
+            position: line.position, type: line.type, itemCode: line.itemCode, itemName: line.itemName,
+            itemNameAr: line.itemNameAr, itemNameEn: line.itemNameEn, description: line.description,
+            unitName: line.unitName, quantity: Number(line.quantity), unitPrice: Number(line.unitPrice),
+            discount: line.discountType ? { type: line.discountType, value: Number(line.discountValue) } : null,
+            taxPercentage: Number(line.taxPercentage),
+          })),
+          discount: record.discountType ? { type: record.discountType, value: Number(record.discountValue) } : null,
+        };
+      }
+
+      const invoice = new Invoice({
+        id: record.id, companyId: record.companyId, number: record.number, status: "DRAFT",
+        ...snapshot, invoiceDate: request.invoiceDate, dueDate: request.dueDate ?? null,
+        notes: request.notes, termsAndConditions: request.termsAndConditions,
+        createdBy: { userId: record.createdByUserId, name: record.createdByName, role: record.createdByRole },
+        createdAt: record.createdAt, updatedAt: record.updatedAt,
+      });
+      const trusted = actorData(request.actor);
+      await tx.invoiceLine.deleteMany({ where: { invoiceId: record.id } });
+      const updated = await tx.invoice.update({
+        where: { id: record.id, companyId: request.companyId, status: "DRAFT" },
+        data: {
+          customerId: invoice.customerId, priceListId: invoice.priceListId,
+          currencyCode: invoice.currencyCode, invoiceDate: invoice.invoiceDate, dueDate: invoice.dueDate,
+          customerName: invoice.customer.name, customerNameAr: invoice.customer.nameAr,
+          customerNameEn: invoice.customer.nameEn, customerEmail: invoice.customer.email,
+          customerPhone: invoice.customer.phone, customerTaxNo: invoice.customer.taxNumber,
+          billingAddress: invoice.customer.billingAddress, subtotal: invoice.totals.subtotal,
+          discountType: invoice.discount?.type, discountValue: invoice.discount?.value ?? 0,
+          discountAmount: invoice.totals.discountAmount, taxAmount: invoice.totals.taxAmount,
+          totalAmount: invoice.totals.totalAmount, outstandingAmount: invoice.totals.totalAmount,
+          notes: invoice.notes, termsAndConditions: invoice.termsAndConditions,
+          lines: { create: invoice.lines.map((line) => ({
+            sourceLineId: (line as any).sourceLineId, catalogItemId: line.catalogItemId,
+            taxRateId: line.taxRateId, position: line.position, type: line.type,
+            itemCode: line.itemCode, itemName: line.itemName, itemNameAr: line.itemNameAr,
+            itemNameEn: line.itemNameEn, description: line.description, unitName: line.unitName,
+            quantity: line.quantity, unitPrice: line.unitPrice, discountType: line.discount?.type,
+            discountValue: line.discount?.value ?? 0, discountAmount: line.discountAmount,
+            taxPercentage: line.taxPercentage ?? 0, taxAmount: line.taxAmount,
+            subtotal: line.subtotal, totalAmount: line.totalAmount,
+          })) },
+        },
+        include: this.include(),
+      });
+      await tx.invoiceEvent.create({
+        data: { companyId: request.companyId, invoiceId: record.id, actorUserId: trusted.userId, action: "UPDATED", details: { previousUpdatedAt: record.updatedAt.toISOString() } },
+      });
+      return this.toDomain(updated);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async list(input: Parameters<IInvoiceRepository["list"]>[0]): Promise<InvoiceListResult> {

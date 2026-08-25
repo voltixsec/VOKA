@@ -19,6 +19,22 @@ export type CreateInvoiceRequest = {
   actor: InvoiceActor;
 };
 
+export type UpdateInvoiceRequest = {
+  companyId: string;
+  invoiceId: string;
+  expectedUpdatedAt: Date;
+  customerId?: string;
+  priceListId?: string | null;
+  currencyCode?: string;
+  invoiceDate: Date;
+  dueDate?: Date | null;
+  lines?: InvoiceLineRequest[];
+  discount?: Discount | null;
+  notes?: string | null;
+  termsAndConditions?: string | null;
+  actor: InvoiceActor;
+};
+
 export type InvoiceListResult = { invoices: Invoice[]; total: number };
 export type PaymentRecord = {
   id: string; invoiceId: string; amount: number; currencyCode: string;
@@ -33,6 +49,7 @@ export type RecordPaymentRequest = {
 
 export interface IInvoiceRepository {
   create(request: CreateInvoiceRequest): Promise<Invoice>;
+  updateDraft(request: UpdateInvoiceRequest): Promise<Invoice | null>;
   findById(companyId: string, invoiceId: string): Promise<Invoice | null>;
   list(input: { companyId: string; customerId?: string; status?: string; settlementStatus?: string; search?: string; skip: number; take: number }): Promise<InvoiceListResult>;
   issue(companyId: string, invoiceId: string, actor: InvoiceActor): Promise<Invoice | null>;

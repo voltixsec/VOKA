@@ -17,5 +17,6 @@ export function serializeInvoice(invoice: Invoice) {
     issuedBy: invoice.issuedBy, voidedAt: invoice.voidedAt?.toISOString() ?? null,
     voidedBy: invoice.voidedBy, voidReason: invoice.voidReason,
     createdAt: invoice.createdAt?.toISOString() ?? null,
+    updatedAt: invoice.updatedAt?.toISOString() ?? null,
   };
 }

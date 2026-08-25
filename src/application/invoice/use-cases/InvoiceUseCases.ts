@@ -1,4 +1,4 @@
-import type { CreateInvoiceRequest, IInvoiceRepository, RecordPaymentRequest } from "../repositories/IInvoiceRepository";
+import type { CreateInvoiceRequest, IInvoiceRepository, RecordPaymentRequest, UpdateInvoiceRequest } from "../repositories/IInvoiceRepository";
 
 export class CreateInvoiceUseCase {
   constructor(private readonly repository: IInvoiceRepository) {}
@@ -7,6 +7,10 @@ export class CreateInvoiceUseCase {
 export class GetInvoiceUseCase {
   constructor(private readonly repository: IInvoiceRepository) {}
   execute(companyId: string, invoiceId: string) { return this.repository.findById(companyId, invoiceId); }
+}
+export class UpdateDraftInvoiceUseCase {
+  constructor(private readonly repository: IInvoiceRepository) {}
+  execute(request: UpdateInvoiceRequest) { return this.repository.updateDraft(request); }
 }
 export class ListInvoicesUseCase {
   constructor(private readonly repository: IInvoiceRepository) {}

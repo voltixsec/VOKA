@@ -47,3 +47,36 @@ describe("PrismaInvoiceRepository payment integrity", () => {
     expect(tx.invoice.findFirst).not.toHaveBeenCalled();
   });
 });
+
+describe("PrismaInvoiceRepository draft edit integrity", () => {
+  const updateRequest = (overrides: Record<string, unknown> = {}) => ({
+    companyId: "tenant-a", invoiceId: "invoice-1",
+    expectedUpdatedAt: new Date("2026-08-25T00:00:00.000Z"),
+    invoiceDate: new Date("2026-08-25T00:00:00.000Z"), actor,
+    ...overrides,
+  });
+
+  it("rejects editing a non-draft before any financial mutation", async () => {
+    const tx = {
+      invoice: { findFirst: vi.fn().mockResolvedValue({ status: "ISSUED", updatedAt: new Date("2026-08-25T00:00:00.000Z") }), update: vi.fn() },
+      invoiceLine: { deleteMany: vi.fn() }, invoiceEvent: { create: vi.fn() },
+    };
+    const repository = makeRepository(tx);
+    await expect(repository.updateDraft(updateRequest())).rejects.toThrow("Only draft invoices");
+    expect(tx.invoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "invoice-1", companyId: "tenant-a" } }));
+    expect(tx.invoiceLine.deleteMany).not.toHaveBeenCalled();
+    expect(tx.invoice.update).not.toHaveBeenCalled();
+    expect(tx.invoiceEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale editing before replacing lines", async () => {
+    const tx = {
+      invoice: { findFirst: vi.fn().mockResolvedValue({ status: "DRAFT", updatedAt: new Date("2026-08-25T01:00:00.000Z") }), update: vi.fn() },
+      invoiceLine: { deleteMany: vi.fn() }, invoiceEvent: { create: vi.fn() },
+    };
+    const repository = makeRepository(tx);
+    await expect(repository.updateDraft(updateRequest())).rejects.toThrow("changed since");
+    expect(tx.invoiceLine.deleteMany).not.toHaveBeenCalled();
+    expect(tx.invoice.update).not.toHaveBeenCalled();
+  });
+});
