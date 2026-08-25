@@ -10,9 +10,9 @@ const vokaFont = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "VOKA — Your AI Sales Employee",
+  title: "VOKA — Speak. Understand. Quote.",
   description:
-    "Turn conversations into professional quotations in seconds using AI with VOKA.",
+    "Voice-first commercial operations for governed bilingual quotations, sales orders, invoices, and payments.",
 };
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <body
         className={vokaFont.variable}
         suppressHydrationWarning

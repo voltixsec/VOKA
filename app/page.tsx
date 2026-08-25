@@ -6,7 +6,7 @@ import { getTranslations } from '../services/translation';
 import { DEFAULT_LOCALE, getDirection, type Locale } from '../lib/i18n';
 import type { Translations } from '../types/translation';
 
-export default function Home() {
+function LegacyHome() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
 
   useEffect(() => {
@@ -189,4 +189,6 @@ export default function Home() {
     </main>
   );
 }
+
+export { LandingPageV1 as default } from "../components/landing/LandingPageV1";
 
