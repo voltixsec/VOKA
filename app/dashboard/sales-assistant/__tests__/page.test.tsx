@@ -24,6 +24,9 @@ afterEach(() => {
 describe("SalesAssistantPage", () => {
   it("renders natural language input prompt and triggers proposal generation", async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
+      if (url === "/api/ai/commercial-intent") {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ data: { operation: "QUOTATION", confidence: "EXPLICIT", requiresHumanReview: true, executed: false } }) });
+      }
       if (url === "/api/ai/sales-assistant/draft") {
         return Promise.resolve({
           ok: true,
@@ -80,14 +83,14 @@ describe("SalesAssistantPage", () => {
 
     render(createElement(SalesAssistantPage));
 
-    expect(screen.getByText(/Structured Commercial Draft/i)).toBeTruthy();
+    expect(screen.getByText(/VOKA Commercial AI Entry/i)).toBeTruthy();
 
     const textarea = screen.getByRole("textbox");
     fireEvent.change(textarea, {
       target: { value: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras" },
     });
 
-    const generateBtn = screen.getByRole("button", { name: "Generate Proposal Draft" });
+    const generateBtn = screen.getByRole("button", { name: "Understand & review operation" });
     fireEvent.click(generateBtn);
 
     await waitFor(() => {

@@ -613,6 +613,8 @@ Implementation sequence:
 6. **UCL-6 — controlled external data acquisition and source governance (MERGED - PR #65).**
 7. **UCL Real-Data Source Validation — controlled source pilots & qualification (COMPLETED & RECORDED).**
 
+   Status boundary: **ENGINEERING FOUNDATION COMPLETE / CANONICAL POPULATION INCOMPLETE / EXTERNAL SOURCE & GOVERNED POPULATION PENDING**. Completed pilots and platform capabilities must not be interpreted as a fully populated Universal Commercial Library.
+
 ### UCL Real-Data Source Validation & Next CTO Options
 
 Status: **PILOT EVALUATIONS COMPLETED / DOCUMENTED.**

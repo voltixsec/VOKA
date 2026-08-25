@@ -1,0 +1,3 @@
+import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
+import { classifyCommercialOperation } from "@/src/application/commercial-entry";
+export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request) => { const body = await request.json().catch(() => ({})) as Record<string, unknown>; if (typeof body.prompt !== "string" || body.prompt.trim().length < 3 || body.prompt.length > 4000) throw ApiError.badRequest("COMMERCIAL_PROMPT_INVALID", "Prompt must contain 3 to 4000 characters."); return apiSuccess({ ...classifyCommercialOperation(body.prompt), requiresHumanReview: true, executed: false }, { headers: { "Cache-Control": "private, no-store" } }); });

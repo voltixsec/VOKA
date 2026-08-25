@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { SalesAssistantDraftProposal } from "@/src/application/ai-sales-assistant";
 import { useVoiceInput, IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
+import { VoiceOrb } from "@/components/voice";
 
 const SAMPLES = [
   {
@@ -67,6 +68,17 @@ export default function SalesAssistantPage(props: any) {
     setProposal(null);
 
     try {
+      const intentResponse = await fetch("/api/ai/commercial-intent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt.trim() }) });
+      const intentBody = await intentResponse.json();
+      if (!intentResponse.ok) throw new Error(intentBody.error?.message || "Unable to classify commercial operation.");
+      const operation = intentBody.data.operation as string | null;
+      if (!operation) { setError(isArabic ? "حدد نوع العملية: عرض سعر، فاتورة، عقد، أمر بيع، دفعة، أو تحليل مخطط." : "Choose the operation: quotation, invoice, contract, sales order, payment, or drawing takeoff."); return; }
+      if (operation !== "QUOTATION") {
+        sessionStorage.setItem("voka_commercial_entry_prompt", prompt.trim());
+        const routes: Record<string, string> = { INVOICE: "/dashboard/invoices/new", CONTRACT: "/dashboard/contracts/new", SALES_ORDER: "/dashboard/sales-orders", PAYMENT: "/dashboard/payments", DRAWING_TAKEOFF: "/dashboard/takeoff" };
+        router.push(routes[operation] ?? "/dashboard");
+        return;
+      }
       const response = await fetch("/api/ai/sales-assistant/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,17 +151,17 @@ export default function SalesAssistantPage(props: any) {
     <div className="space-y-8 max-w-5xl" dir={isArabic ? "rtl" : "ltr"}>
       <div>
         <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-300">
-          {isArabic ? "المساعد الذكي للمبيعات" : "AI Sales Assistant"}
+          {isArabic ? "مدخل VOKA التجاري الذكي" : "VOKA Commercial AI Entry"}
         </p>
 
         <h2 className="mt-2 text-3xl font-semibold text-white">
-          {isArabic ? "مسودة تجارية هيكلية من النص والصوت" : "Structured Commercial Draft from Text & Voice"}
+          {isArabic ? "قل أو اكتب ما تريد إنشاءه" : "Tell VOKA what you want to create"}
         </h2>
 
         <p className="mt-2 text-slate-400">
           {isArabic
-            ? "تحدث أو أدخل طلب المبيعات باللغة الطبيعية لاستخراج وتدقيق العميل والمنتجات والأسعار وتوليد مسودة مقترحة للمراجعة."
-            : "Speak or type a natural language sales request to extract and resolve customer, catalog items, pricing, and generate a proposal draft for human review."}
+            ? "عرض سعر، فاتورة، عقد، أمر بيع، دفعة أو تحليل مخطط — يفهم VOKA الطلب ثم ينقلك إلى المراجعة الصحيحة دون تنفيذ تلقائي."
+            : "Quotation, invoice, contract, sales order, payment, or drawing takeoff—VOKA understands the request and routes it to the right review without automatic execution."}
         </p>
       </div>
 
@@ -162,44 +174,7 @@ export default function SalesAssistantPage(props: any) {
 
           {/* Microphone Transport Control */}
           <div className="flex items-center gap-2">
-            {voice.state === "LISTENING" || voice.state === "PROCESSING" ? (
-              <button
-                type="button"
-                onClick={handleStopListening}
-                aria-label={isArabic ? "إيقاف الاستماع" : "Stop listening"}
-                aria-pressed={true}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-500/20 border border-rose-500/40 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/30 transition animate-pulse"
-              >
-                <span className="h-2 w-2 rounded-full bg-rose-400 animate-ping" />
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="2" strokeWidth="2" fill="currentColor" />
-                </svg>
-                {isArabic ? "إيقاف الاستماع" : "Stop Listening"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleStartListening}
-                disabled={!voice.isSupported}
-                aria-label={isArabic ? "بدء الإدخال الصوتي" : "Start voice input"}
-                aria-pressed={false}
-                title={
-                  !voice.isSupported
-                    ? isArabic
-                      ? "إدخال الصوت غير مدعوم في هذا المتصفح"
-                      : "Voice input is not supported in this browser"
-                    : isArabic
-                    ? "انقر للتحدث"
-                    : "Click to speak"
-                }
-                className="inline-flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-1.5 text-xs font-semibold text-sky-300 hover:bg-sky-400/20 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-14 0m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-                {isArabic ? "إدخال صوتي" : "Voice Input"}
-              </button>
-            )}
+            <VoiceOrb state={voice.state === "LISTENING" ? "LISTENING" : voice.state === "PROCESSING" ? "PROCESSING" : "IDLE"} label={voice.state === "LISTENING" || voice.state === "PROCESSING" ? (isArabic ? "إيقاف الاستماع" : "Stop Listening") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={!voice.isSupported} onClick={voice.state === "LISTENING" || voice.state === "PROCESSING" ? handleStopListening : handleStartListening} />
           </div>
         </div>
 
@@ -286,7 +261,7 @@ export default function SalesAssistantPage(props: any) {
                 {isArabic ? "جاري استخراج وتدقيق البيانات..." : "Extracting & Resolving Data..."}
               </>
             ) : (
-              <>{isArabic ? "توليد مسودة عرض السعر" : "Generate Proposal Draft"}</>
+              <>{isArabic ? "فهم العملية ومراجعتها" : "Understand & review operation"}</>
             )}
           </button>
         </div>

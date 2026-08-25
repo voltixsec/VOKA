@@ -8,7 +8,7 @@ describe("VOKA V1 landing page", () => {
 
   it("leads with the V1 voice-first positioning and a real login CTA", () => {
     render(<Home />);
-    expect(screen.getByRole("heading", { level: 1, name: "Speak. Understand. Quote." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "From speech and drawings to intelligent commercial execution." })).toBeInTheDocument();
     const loginLinks = screen.getAllByRole("link", { name: "Sign in" });
     expect(loginLinks.length).toBeGreaterThan(1);
     expect(loginLinks.every((link) => link.getAttribute("href") === "/login")).toBe(true);
@@ -18,15 +18,16 @@ describe("VOKA V1 landing page", () => {
   it("switches immediately to strong English copy and persists direction", async () => {
     window.localStorage.setItem("voka-locale", "ar");
     render(<Home />);
-    expect(await screen.findByRole("heading", { level: 1, name: "تكلّم. نفهم. نُعِدّ عرض السعر." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "من الكلام والمخططات إلى تنفيذ تجاري ذكي." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "English" }));
-    expect(screen.getByRole("heading", { level: 1, name: "Speak. Understand. Quote." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "From speech and drawings to intelligent commercial execution." })).toBeInTheDocument();
     await waitFor(() => { expect(window.localStorage.getItem("voka-locale")).toBe("en"); expect(document.documentElement.dir).toBe("ltr"); });
   });
 
   it("does not promise autonomous commercial commitment", () => {
     render(<Home />);
-    expect(screen.getByText("Human approval before every commercial commitment")).toBeInTheDocument();
-    expect(screen.getByText(/Deterministic quantities/)).toBeInTheDocument();
+    expect(screen.getByText("Human approves.")).toBeInTheDocument();
+    expect(screen.getByText(/Uncertain quantities stay visible/)).toBeInTheDocument();
+    expect(screen.getByText("Technical preview")).toBeInTheDocument();
   });
 });
