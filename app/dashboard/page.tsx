@@ -26,7 +26,7 @@ const dashboardCards = [
   },
 ];
 
-export default function DashboardPage() {
+function LegacyDashboardPage() {
   const { isArabic } = useLanguage();
   const t = (ar: string, en: string) => isArabic ? ar : en;
 
@@ -102,3 +102,5 @@ export default function DashboardPage() {
     </section>
   );
 }
+
+export { DashboardCommandCenter as default } from "@/components/dashboard/command-center/DashboardCommandCenter";
