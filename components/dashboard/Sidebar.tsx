@@ -128,8 +128,8 @@ const navigationItems: NavigationItem[] = [
     ),
   },
   {
-    labelEn: "Invoices & Payments",
-    labelAr: "الفواتير والمدفوعات",
+    labelEn: "Invoices",
+    labelAr: "الفواتير",
     descriptionEn: "Receivables",
     descriptionAr: "الذمم والتحصيل",
     href: "/dashboard/invoices",
@@ -143,6 +143,14 @@ const navigationItems: NavigationItem[] = [
         <path d="M14 16h4" />
       </Icon>
     ),
+  },
+  {
+    labelEn: "Payments",
+    labelAr: "المدفوعات",
+    descriptionEn: "Collections",
+    descriptionAr: "التحصيل",
+    href: "/dashboard/payments",
+    icon: (<Icon><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /><path d="M12 8v8" /></Icon>),
   },
   {
     labelEn: "Drawing Takeoff",

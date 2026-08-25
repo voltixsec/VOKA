@@ -14,7 +14,7 @@ const modules = [
   { key: "salesOrders", href: "/dashboard/sales-orders", en: "Sales Orders", ar: "أوامر البيع", detailEn: "Draft and confirmed orders", detailAr: "أوامر البيع المسودة والمؤكدة" },
   { key: "contracts", href: "/dashboard/contracts", en: "Contracts", ar: "العقود", detailEn: "Contract records", detailAr: "سجلات العقود" },
   { key: "invoices", href: "/dashboard/invoices", en: "Receivables", ar: "الذمم المدينة", detailEn: "Issued invoices awaiting settlement", detailAr: "فواتير صادرة بانتظار السداد" },
-  { key: "payments", href: "/dashboard/invoices", en: "Payments", ar: "المدفوعات", detailEn: "Recorded payment transactions", detailAr: "عمليات الدفع المسجلة" },
+  { key: "payments", href: "/dashboard/payments", en: "Payments", ar: "المدفوعات", detailEn: "Recorded payment transactions", detailAr: "عمليات الدفع المسجلة" },
 ] as const;
 
 export function DashboardCommandCenter() {
