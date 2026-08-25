@@ -11,7 +11,7 @@ export default function InvoicesPage(){
  useEffect(()=>{const timer=setTimeout(()=>void load(),250);return()=>clearTimeout(timer)},[load]);
  const money=(n:number,c:string)=>new Intl.NumberFormat(isArabic?"ar-KW":"en-US",{style:"currency",currency:c,minimumFractionDigits:3}).format(n);
  return <section className="space-y-6" dir={isArabic?"rtl":"ltr"}>
-  <SectionHeader eyebrow={isArabic?"الذمم المدينة":"Receivables"} title={isArabic?"الفواتير والمدفوعات":"Invoices & Payments"} description={isArabic?"إصدار المطالبات المالية ومتابعة التحصيل الحقيقي.":"Issue financial claims and track actual settlement."} actions={<Link href="/dashboard/invoices/new"><Button>{isArabic?"إنشاء فاتورة":"Create invoice"}</Button></Link>}/>
+  <SectionHeader eyebrow={isArabic?"الذمم المدينة":"Receivables"} title={isArabic?"الفواتير والمدفوعات":"Invoices & Payments"} description={isArabic?"إصدار المطالبات المالية ومتابعة التحصيل الحقيقي.":"Issue financial claims and track actual settlement."} actions={<div className="flex gap-3"><Link href="/dashboard/reports"><Button variant="secondary">{isArabic?"أعمار الذمم":"Aging report"}</Button></Link><Link href="/dashboard/invoices/new"><Button>{isArabic?"إنشاء فاتورة":"Create invoice"}</Button></Link></div>}/>
   <Card padding="sm"><Input value={search} onChange={e=>setSearch(e.target.value)} placeholder={isArabic?"ابحث برقم الفاتورة أو العميل":"Search invoice or customer"}/></Card>
   {loading&&<Card><div className="h-24 animate-pulse rounded-xl bg-white/5"/></Card>}{error&&<Card className="border-red-400/20"><p className="text-red-300">{error}</p></Card>}
   {!loading&&!error&&rows.length===0&&<Card className="py-12 text-center">{isArabic?"لا توجد فواتير بعد":"No invoices yet"}</Card>}
