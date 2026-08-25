@@ -424,6 +424,12 @@ export default function CustomerDetailPage() {
         actions={
           <div className="flex gap-3">
             <Link
+              className="rounded-xl border border-emerald-500/40 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/10"
+              href={`/dashboard/customers/${encodeURIComponent(customer.id)}/statement`}
+            >
+              {isArabic ? 'كشف الحساب' : 'Statement'}
+            </Link>
+            <Link
               className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
               href="/dashboard/customers"
             >
