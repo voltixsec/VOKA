@@ -132,6 +132,36 @@ function exportCustomersCsv(
   URL.revokeObjectURL(url);
 }
 
+async function exportCustomersXlsx(customers: Customer[], isArabic: boolean) {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "VOKA";
+  workbook.created = new Date();
+  const worksheet = workbook.addWorksheet(isArabic ? "العملاء" : "Customers", {
+    views: [{ rightToLeft: isArabic }],
+  });
+  worksheet.columns = [
+    { header: isArabic ? "الرمز" : "Code", key: "code", width: 18 },
+    { header: isArabic ? "العميل" : "Customer", key: "name", width: 34 },
+    { header: isArabic ? "النوع" : "Type", key: "type", width: 18 },
+    { header: isArabic ? "الحالة" : "Status", key: "status", width: 18 },
+    { header: isArabic ? "الهاتف" : "Phone", key: "phone", width: 22 },
+    { header: isArabic ? "البريد الإلكتروني" : "Email", key: "email", width: 34 },
+  ];
+  customers.forEach((customer) => worksheet.addRow({ code: customer.code, name: customer.name, type: customer.type, status: customer.status, phone: customer.phone ?? "", email: customer.email ?? "" }));
+  worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF075985" } };
+  worksheet.autoFilter = { from: "A1", to: "F1" };
+  worksheet.views = [{ state: "frozen", ySplit: 1, rightToLeft: isArabic }];
+  const buffer = await workbook.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = isArabic ? "عملاء-voka.xlsx" : "voka-customers.xlsx";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [exportOpen, setExportOpen] =
@@ -416,14 +446,8 @@ export default function CustomersPage() {
                       : "Export CSV"}
                   </button>
 
-                  <button
-                    type="button"
-                    disabled
-                    className="block w-full rounded-lg px-3 py-2 text-start text-sm text-slate-500"
-                  >
-                    {isArabic
-                      ? "تصدير Excel — قريبًا"
-                      : "Export Excel — Soon"}
+                  <button type="button" onClick={() => { void exportCustomersXlsx(filteredCustomers, isArabic); setExportOpen(false); }} className="block w-full rounded-lg px-3 py-2 text-start text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">
+                    {isArabic ? "تصدير Excel" : "Export Excel"}
                   </button>
 
                   <button
