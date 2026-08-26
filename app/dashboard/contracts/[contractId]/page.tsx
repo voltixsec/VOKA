@@ -186,11 +186,11 @@ export default function ContractDetailPage() {
           ← {t("العودة للعقود", "Back to contracts")}
         </button>
 
-        <Link href={`/dashboard/contracts/${contract.id}/edit`}>
-          <Button variant="secondary">
-            {t("تعديل العقد", "Edit contract")}
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <a href={`/api/contracts/${encodeURIComponent(contract.id)}/pdf`}><Button variant="secondary">{t("تنزيل PDF", "Download PDF")}</Button></a>
+          <a href={`/api/contracts/${encodeURIComponent(contract.id)}/xlsx`}><Button variant="secondary">{t("تنزيل Excel", "Download Excel")}</Button></a>
+          <Link href={`/dashboard/contracts/${contract.id}/edit`}><Button variant="secondary">{t("تعديل العقد", "Edit contract")}</Button></Link>
+        </div>
       </div>
 
       <SectionHeader
