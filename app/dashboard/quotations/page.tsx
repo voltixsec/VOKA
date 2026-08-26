@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
+import { ModuleSummaryBar } from "@/components/reporting/ModuleSummaryBar";
 
 type Quote = { id:string; quotationNumber:string; status:string; issueDate:string; currencyCode:string; customer:{name:string}; totals:{totalAmount:number} };
 type Pagination = { total:number; page:number; pageSize:number; totalPages:number };
@@ -26,11 +27,7 @@ export default function QuotationsPage() {
   const money=(quote:Quote)=>new Intl.NumberFormat(isArabic?"ar-KW":"en-US",{style:"currency",currency:quote.currencyCode}).format(quote.totals.totalAmount);
   return <section className="space-y-6" dir={isArabic?"rtl":"ltr"}>
     <SectionHeader eyebrow={isArabic?"محرك المبيعات":"Sales engine"} title={isArabic?"عروض الأسعار":"Quotations"} description={isArabic?"أنشئ وتابع واعتمد عروض الأسعار من مكان واحد.":"Create, track and approve quotations from one workspace."} actions={<Link href="/dashboard/quotations/new"><Button title={isArabic?"سيتم تنفيذه في جزء إنشاء العرض":"Coming in the create quotation slice"}><span>+</span>{isArabic?"إنشاء عرض سعر":"Create quotation"}</Button></Link>} />
-    <div className="grid gap-4 sm:grid-cols-3">
-      <Card padding="sm"><p className="text-sm text-slate-500">{isArabic?"إجمالي العروض":"Total quotations"}</p><p className="mt-3 text-3xl font-semibold">{pagination.total}</p></Card>
-      <Card padding="sm" className="border-sky-400/20"><p className="text-sm text-slate-500">{isArabic?"الصفحة الحالية":"Current page"}</p><p className="mt-3 text-3xl font-semibold text-sky-300">{pagination.page}</p></Card>
-      <Card padding="sm" className="border-emerald-400/20"><p className="text-sm text-slate-500">{isArabic?"عدد الصفحات":"Total pages"}</p><p className="mt-3 text-3xl font-semibold text-emerald-300">{pagination.totalPages}</p></Card>
-    </div>
+    <ModuleSummaryBar module="quotations" isArabic={isArabic} />
     <Card padding="sm"><div className="flex flex-col gap-3 md:flex-row"><div className="flex-1"><Input value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder={isArabic?"ابحث برقم العرض أو اسم العميل...":"Search by quotation number or customer..."} /></div><select value={status} onChange={e=>{setStatus(e.target.value);setPage(1)}} className="min-h-11 rounded-xl border border-white/10 bg-slate-950 px-4 text-sm text-slate-300"><option value="">{isArabic?"كل الحالات":"All statuses"}</option>{Object.keys(statusAr).map(value=><option key={value} value={value}>{isArabic?statusAr[value]:value}</option>)}</select></div></Card>
     {loading&&<Card><div className="h-28 animate-pulse rounded-2xl bg-white/5"/></Card>}
     {!loading&&error&&<Card className="border-red-400/20 bg-red-400/5"><p className="text-red-300">{isArabic?"تعذر تحميل عروض الأسعار":"Could not load quotations"}</p><p className="mt-2 text-sm text-red-200/70">{error}</p></Card>}

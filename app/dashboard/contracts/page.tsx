@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
+import { ModuleSummaryBar } from "@/components/reporting/ModuleSummaryBar";
 
 type ContractItem = {
   id: string;
@@ -95,24 +96,7 @@ export default function ContractsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card padding="sm">
-          <p className="text-sm text-slate-500">{isArabic ? "إجمالي العقود" : "Total contracts"}</p>
-          <p className="mt-3 text-3xl font-semibold">{pagination.total}</p>
-        </Card>
-        <Card padding="sm" className="border-sky-400/20">
-          <p className="text-sm text-slate-500">{isArabic ? "الصفحة الحالية" : "Current page"}</p>
-          <p className="mt-3 text-3xl font-semibold text-sky-300">
-            {pagination.page}
-          </p>
-        </Card>
-        <Card padding="sm" className="border-emerald-400/20">
-          <p className="text-sm text-slate-500">{isArabic ? "عدد الصفحات" : "Total pages"}</p>
-          <p className="mt-3 text-3xl font-semibold text-emerald-300">
-            {pagination.totalPages}
-          </p>
-        </Card>
-      </div>
+      <ModuleSummaryBar module="contracts" isArabic={isArabic} />
 
       <Card padding="sm">
         <div className="flex flex-col gap-3 md:flex-row">

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "@/components/ui";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { ModuleSummaryBar } from "@/components/reporting/ModuleSummaryBar";
 
 type Row = { id:string; number:string; status:string; settlementStatus:string; invoiceDate:string; dueDate:string|null; currencyCode:string; customer:{name:string}; totals:{totalAmount:number}; paidAmount:number; outstandingAmount:number };
 export default function InvoicesPage(){
@@ -12,6 +13,7 @@ export default function InvoicesPage(){
  const money=(n:number,c:string)=>new Intl.NumberFormat(isArabic?"ar-KW":"en-US",{style:"currency",currency:c,minimumFractionDigits:3}).format(n);
  return <section className="space-y-6" dir={isArabic?"rtl":"ltr"}>
   <SectionHeader eyebrow={isArabic?"الذمم المدينة":"Receivables"} title={isArabic?"الفواتير والمدفوعات":"Invoices & Payments"} description={isArabic?"إصدار المطالبات المالية ومتابعة التحصيل الحقيقي.":"Issue financial claims and track actual settlement."} actions={<div className="flex gap-3"><Link href="/dashboard/reports"><Button variant="secondary">{isArabic?"أعمار الذمم":"Aging report"}</Button></Link><Link href="/dashboard/invoices/new"><Button>{isArabic?"إنشاء فاتورة":"Create invoice"}</Button></Link></div>}/>
+  <ModuleSummaryBar module="invoices" isArabic={isArabic} />
   <Card padding="sm"><Input value={search} onChange={e=>setSearch(e.target.value)} placeholder={isArabic?"ابحث برقم الفاتورة أو العميل":"Search invoice or customer"}/></Card>
   {loading&&<Card><div className="h-24 animate-pulse rounded-xl bg-white/5"/></Card>}{error&&<Card className="border-red-400/20"><p className="text-red-300">{error}</p></Card>}
   {!loading&&!error&&rows.length===0&&<Card className="py-12 text-center">{isArabic?"لا توجد فواتير بعد":"No invoices yet"}</Card>}
