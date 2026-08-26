@@ -35,6 +35,103 @@ describe(
   'customer contact UI',
   () => {
     it(
+      'prefills editable name and mobile fields from the supported Contact Picker without assuming WhatsApp',
+      async () => {
+        const select = vi.fn().mockResolvedValue([
+          {
+            name: ['Noura Al Salem'],
+            tel: ['+965 5000 1234'],
+          },
+        ]);
+
+        Object.defineProperty(
+          navigator,
+          'contacts',
+          {
+            configurable: true,
+            value: { select },
+          },
+        );
+
+        render(
+          <CustomerForm
+            isArabic={false}
+            submitLabel="Create customer"
+            onSubmit={vi.fn()}
+          />,
+        );
+
+        fireEvent.click(
+          await screen.findByRole(
+            'button',
+            { name: 'Choose from contacts' },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            screen.getByLabelText('Customer Name'),
+          ).toHaveValue('Noura Al Salem');
+          expect(
+            screen.getByLabelText('Mobile'),
+          ).toHaveValue('+965 5000 1234');
+        });
+
+        expect(select).toHaveBeenCalledWith(
+          ['name', 'tel'],
+          { multiple: false },
+        );
+        expect(
+          screen.getByRole(
+            'button',
+            { name: 'Use as WhatsApp' },
+          ),
+        ).toBeInTheDocument();
+
+        expect(
+          screen.getByLabelText('National number'),
+        ).toHaveValue('');
+
+        delete (navigator as Navigator & {
+          contacts?: unknown;
+        }).contacts;
+      },
+    );
+
+    it(
+      'keeps manual contact entry available when Contact Picker is unsupported',
+      () => {
+        delete (navigator as Navigator & {
+          contacts?: unknown;
+        }).contacts;
+
+        render(
+          <CustomerForm
+            isArabic
+            submitLabel="إنشاء العميل"
+            onSubmit={vi.fn()}
+          />,
+        );
+
+        expect(
+          screen.queryByRole(
+            'button',
+            { name: 'اختيار من جهات الاتصال' },
+          ),
+        ).not.toBeInTheDocument();
+
+        fireEvent.change(
+          screen.getByLabelText('الجوال'),
+          { target: { value: '55501234' } },
+        );
+
+        expect(
+          screen.getByLabelText('الجوال'),
+        ).toHaveValue('55501234');
+      },
+    );
+
+    it(
       'renders accessible customer navigation links with visible focus styling',
       () => {
         render(

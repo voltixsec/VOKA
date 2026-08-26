@@ -145,6 +145,21 @@ type LocalizedField =
 
 type UiLocale = 'ar' | 'en';
 
+type ContactPickerContact = {
+  name?: string[];
+  tel?: string[];
+};
+
+type ContactPickerNavigator = Navigator & {
+  contacts?: {
+    select:
+      (
+        properties: Array<'name' | 'tel'>,
+        options: { multiple: false },
+      ) => Promise<ContactPickerContact[]>;
+  };
+};
+
 type EditedLocales =
   Partial<
     Record<
@@ -385,6 +400,15 @@ export function CustomerForm(
     setErrorMsg,
   ] = useState('');
 
+  const [contactPickerSupported, setContactPickerSupported] =
+    useState(false);
+
+  const [pickedMobile, setPickedMobile] =
+    useState('');
+
+  const [contactPickerError, setContactPickerError] =
+    useState('');
+
   const previousArabic =
     useRef(props.isArabic);
 
@@ -392,6 +416,18 @@ export function CustomerForm(
     props.isArabic
       ? 'ar'
       : 'en';
+
+  useEffect(() => {
+    const picker =
+      typeof navigator === 'undefined'
+        ? undefined
+        : (navigator as ContactPickerNavigator)
+            .contacts;
+
+    setContactPickerSupported(
+      typeof picker?.select === 'function',
+    );
+  }, []);
 
   function updateValue(
     updater:
@@ -475,6 +511,57 @@ export function CustomerForm(
         [field]: sourceLocale,
       }),
     );
+  }
+
+  async function pickContact() {
+    const picker =
+      (navigator as ContactPickerNavigator)
+        .contacts;
+
+    if (!picker) {
+      return;
+    }
+
+    setContactPickerError('');
+
+    try {
+      const [contact] = await picker.select(
+        ['name', 'tel'],
+        { multiple: false },
+      );
+
+      if (!contact) {
+        return;
+      }
+
+      const name =
+        contact.name?.[0]?.trim() ?? '';
+      const mobile =
+        contact.tel?.[0]?.trim() ?? '';
+
+      if (name) {
+        setLocalized('name', name);
+      }
+
+      if (mobile) {
+        set('mobile', mobile);
+        setPickedMobile(mobile);
+      }
+    }
+    catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === 'AbortError'
+      ) {
+        return;
+      }
+
+      setContactPickerError(
+        props.isArabic
+          ? 'تعذر قراءة جهة الاتصال. يمكنك إدخال البيانات يدويًا.'
+          : 'The contact could not be read. You can enter the details manually.',
+      );
+    }
   }
 
   async function localizeEditedFields(
@@ -1070,6 +1157,41 @@ export function CustomerForm(
       </Card>
 
       <Card className="space-y-5">
+        {
+          contactPickerSupported &&
+          (
+            <div className="space-y-2 rounded-xl border border-sky-400/20 bg-sky-400/5 p-4">
+              <Button
+                type="button"
+                onClick={pickContact}
+              >
+                {
+                  props.isArabic
+                    ? 'اختيار من جهات الاتصال'
+                    : 'Choose from contacts'
+                }
+              </Button>
+
+              <p className="text-xs text-slate-400">
+                {
+                  props.isArabic
+                    ? 'سيتم تعبئة الاسم والجوال فقط، ويمكنك مراجعتهما وتعديلهما قبل الحفظ.'
+                    : 'Only the name and mobile will be filled. You can review and edit them before saving.'
+                }
+              </p>
+            </div>
+          )
+        }
+
+        {
+          contactPickerError &&
+          (
+            <p className="text-sm text-amber-300">
+              {contactPickerError}
+            </p>
+          )
+        }
+
         <Input
           type="email"
           label={labels.email}
@@ -1130,6 +1252,37 @@ export function CustomerForm(
             }
           }
         />
+
+        {
+          pickedMobile &&
+          value.mobile === pickedMobile &&
+          value.whatsapp !== pickedMobile &&
+          (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 p-3">
+              <p className="text-xs text-slate-400">
+                {
+                  props.isArabic
+                    ? 'هل هذا الرقم مستخدم لواتساب؟'
+                    : 'Is this number used for WhatsApp?'
+                }
+              </p>
+
+              <Button
+                type="button"
+                onClick={() => {
+                  set('whatsapp', pickedMobile);
+                  setWhatsAppValid(true);
+                }}
+              >
+                {
+                  props.isArabic
+                    ? 'استخدامه كرقم واتساب'
+                    : 'Use as WhatsApp'
+                }
+              </Button>
+            </div>
+          )
+        }
       </Card>
 
       <Card className="space-y-5">
