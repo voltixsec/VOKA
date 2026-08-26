@@ -29,6 +29,7 @@ export default function SalesAssistantPage(props: any) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<SalesAssistantDraftProposal | null>(null);
+  const [attachment, setAttachment] = useState<File | null>(null);
 
   const basePromptRef = useRef<string>("");
 
@@ -73,6 +74,19 @@ export default function SalesAssistantPage(props: any) {
       if (!intentResponse.ok) throw new Error(intentBody.error?.message || "Unable to classify commercial operation.");
       const operation = intentBody.data.operation as string | null;
       if (!operation) { setError(isArabic ? "حدد نوع العملية: عرض سعر، فاتورة، عقد، أمر بيع، دفعة، أو تحليل مخطط." : "Choose the operation: quotation, invoice, contract, sales order, payment, or drawing takeoff."); return; }
+      if (attachment && operation !== "DRAWING_TAKEOFF") {
+        setError(isArabic ? "المرفقات العامة مثل جداول الكميات والمواصفات تحتاج مسار استيعاب مستقل غير مفعّل بعد. أزل الملف للمتابعة بالنص، أو وضّح أن الملف رسم PDF مطلوب حصره." : "General attachments such as BOQs and specifications need a dedicated intake workflow that is not enabled yet. Remove the file to continue with text, or clarify that it is a drawing PDF for takeoff.");
+        return;
+      }
+      if (attachment && operation === "DRAWING_TAKEOFF") {
+        const form = new FormData(); form.set("drawing", attachment); form.set("intent", prompt.trim());
+        const uploadResponse = await fetch("/api/drawing-takeoffs", { method: "POST", body: form });
+        const uploadBody = await uploadResponse.json().catch(() => null);
+        if (!uploadResponse.ok) throw new Error(uploadBody?.error?.message || (isArabic ? "تعذر تسجيل الرسم بأمان." : "Unable to register the drawing safely."));
+        sessionStorage.setItem("voka_commercial_entry_prompt", prompt.trim());
+        router.push(`/dashboard/takeoff?sessionId=${encodeURIComponent(uploadBody.data.session.id)}`);
+        return;
+      }
       if (operation !== "QUOTATION") {
         sessionStorage.setItem("voka_commercial_entry_prompt", prompt.trim());
         const routes: Record<string, string> = { INVOICE: "/dashboard/invoices/new", CONTRACT: "/dashboard/contracts/new", SALES_ORDER: "/dashboard/sales-orders", PAYMENT: "/dashboard/payments", DRAWING_TAKEOFF: "/dashboard/takeoff" };
@@ -167,6 +181,11 @@ export default function SalesAssistantPage(props: any) {
 
       {/* Input Prompt Card */}
       <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-soft space-y-4">
+        <div className="rounded-2xl border border-dashed border-sky-400/25 bg-sky-400/[0.04] p-4">
+          <label htmlFor="commercial-attachment" className="flex cursor-pointer flex-wrap items-center justify-between gap-3"><span><strong className="block text-sm text-slate-200">{isArabic ? "أرفق السياق أولًا (اختياري)" : "Attach context first (optional)"}</strong><small className="mt-1 block text-slate-500">{isArabic ? "المتاح الآن: رسم PDF لمسار الحصر. ملفات BOQ والمواصفات تتطلب مسار استيعاب لاحقًا." : "Available now: drawing PDF for takeoff. BOQ and specification intake remains a future governed workflow."}</small></span><span className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-sky-200">{isArabic ? "اختيار ملف" : "Choose file"}</span></label>
+          <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
+          {attachment ? <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-950/70 px-3 py-2 text-sm"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : null}
+        </div>
         <div className="flex items-center justify-between">
           <label htmlFor="sales-prompt-input" className="block text-sm font-semibold text-slate-200">
             {isArabic ? "طلب المبيعات (اللغة الطبيعية)" : "Sales Request Prompt (Natural Language)"}
