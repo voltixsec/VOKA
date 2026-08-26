@@ -1,0 +1,17 @@
+import path from 'node:path';
+import PDFDocument from 'pdfkit';
+import { NextResponse } from 'next/server';
+import { ApiError, withCompanyAuth } from '@/lib/api';
+import { getDrawingTakeoffSnapshot } from '@/lib/reporting/drawing-takeoff';
+
+export const runtime = 'nodejs'; export const dynamic = 'force-dynamic';
+function id(request: Request) { const parts = new URL(request.url).pathname.split('/').filter(Boolean); const index = parts.indexOf('pdf'); const value = decodeURIComponent(parts[index - 1] ?? ''); if (!value) throw ApiError.badRequest('TAKEOFF_ID_REQUIRED', 'sessionId is required.'); return value; }
+
+export const GET = withCompanyAuth(['OWNER', 'ADMIN', 'SALES', 'VIEWER'], async (request, auth, company) => {
+  const s = await getDrawingTakeoffSnapshot(company.companyId, id(request)); const ar = auth.user.locale.startsWith('ar'); const t = (a: string, e: string) => ar ? a : e; const align = { align: ar ? 'right' as const : 'left' as const };
+  const doc = new PDFDocument({ size: 'A4', margin: 40, info: { Title: t('حصر الرسم / جدول الكميات', 'Drawing Takeoff / BOQ'), Author: 'VOKA' } }); const chunks: Buffer[] = []; doc.on('data', (x) => chunks.push(Buffer.from(x))); const finished = new Promise<Buffer>((resolve, reject) => { doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); }); doc.registerFont('VOKA', path.join(process.cwd(), 'assets', 'fonts', 'Cairo-Variable.ttf')).font('VOKA');
+  doc.fontSize(20).fillColor('#0f172a').text(t('حصر الرسم / جدول الكميات', 'Drawing Takeoff / BOQ'), align).fontSize(10).fillColor('#475569').text(`${t('رقم الحصر', 'Takeoff ID')}: ${s.id}`, align).text(`${t('ملف المصدر', 'Source drawing')}: ${s.source.fileName}`, align).text(`${t('النظام / النطاق', 'System / scope')}: ${s.systemScope} — ${s.userIntent}`, align).text(`${t('الحالة', 'Status')}: ${s.status} | ${t('الإصدار', 'Version')}: ${s.version}`, align).text(`${t('مراجعة بشرية مطلوبة', 'Human Review Required')}: ${s.review.requiresHumanReview ? t('نعم', 'Yes') : t('لا', 'No')}`, align).moveDown();
+  doc.fontSize(9).fillColor('#b45309').text(t('هذا التصدير لا يمثل اعتمادًا هندسيًا أو تسعيرًا. تبقى الكميات غير المؤكدة ظاهرة للمراجعة البشرية.', 'This export is not engineering approval or pricing. Unconfirmed quantities remain visibly subject to human review.'), align).moveDown();
+  for (const line of s.lines) { if (doc.y > 700) doc.addPage(); doc.fontSize(10).fillColor('#0f172a').text(`${line.position}. ${line.detectedItem} — ${line.quantity ?? t('غير محسوم', 'UNRESOLVED')} ${line.unit ?? ''}`, align).fontSize(8).fillColor('#64748b').text(`${t('مصدر الكمية', 'Quantity provenance')}: ${line.quantityProvenance} | ${t('الثقة', 'Confidence')}: ${line.confidence ?? '—'} | ${t('المراجعة البشرية', 'Human review')}: ${line.humanReviewState}`, align).text(`${t('يحتاج تأكيدًا', 'Needs confirmation')}: ${line.needsConfirmation ? t('نعم', 'Yes') : t('لا', 'No')} | ${t('الدليل / عدم اليقين', 'Evidence / uncertainty')}: ${line.evidence ?? '—'}`, align).text(`${t('الربط بالكتالوج', 'Catalog mapping')}: ${line.catalogMapping ?? '—'} | ${t('السعر المحكوم', 'Governed price')}: —`, align).moveDown(.5); }
+  doc.end(); return new NextResponse(await finished, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="drawing-takeoff-${s.id}.pdf"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
+});

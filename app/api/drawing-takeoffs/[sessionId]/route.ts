@@ -1,5 +1,6 @@
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { getDrawingTakeoffSnapshot } from '@/lib/reporting/drawing-takeoff';
 import { assertTakeoffConfirmable, DrawingTakeoffPolicyError, validateTakeoffLines } from "@/src/domain/drawing-takeoff";
 
 function policyError(error: unknown): never { if (error instanceof DrawingTakeoffPolicyError) throw ApiError.badRequest(error.code, error.message); throw error; }
@@ -7,10 +8,8 @@ function id(request: Request) { const parts = new URL(request.url).pathname.spli
 function serializeSession<T extends { sourceSha256: string; createdByUserId: string }>(session: T) { const { sourceSha256: _hash, createdByUserId: _actor, ...safe } = session; return safe; }
 
 export const GET = withCompanyAuth(["OWNER", "ADMIN", "SALES", "VIEWER"], async (request, _auth, company) => {
-  const sessionId = id(request);
-  const session = await prisma.drawingTakeoffSession.findFirst({ where: { id: sessionId, companyId: company.companyId }, include: { lines: { orderBy: { position: "asc" } } } });
-  if (!session) throw ApiError.notFound("TAKEOFF_NOT_FOUND", "Takeoff session was not found.");
-  return apiSuccess({ session: serializeSession(session) }, { headers: { "Cache-Control": "private, no-store" } });
+  const session = await getDrawingTakeoffSnapshot(company.companyId, id(request));
+  return apiSuccess({ session }, { headers: { "Cache-Control": "private, no-store" } });
 });
 
 export const PATCH = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request, auth, company) => {
