@@ -1,1 +1,1 @@
-import{PublicSitePage}from'@/components/public/PublicSitePage';export default()=> <PublicSitePage page="drawing"/>;
+import{PublicSitePage}from'@/components/public/PublicSitePage';export default function DrawingIntelligencePage(){return <PublicSitePage page="drawing"/>}

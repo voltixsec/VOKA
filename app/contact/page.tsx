@@ -1,1 +1,1 @@
-import{PublicSitePage}from'@/components/public/PublicSitePage';export default()=> <PublicSitePage page="contact"/>;
+import{PublicSitePage}from'@/components/public/PublicSitePage';export default function ContactPage(){return <PublicSitePage page="contact"/>}
