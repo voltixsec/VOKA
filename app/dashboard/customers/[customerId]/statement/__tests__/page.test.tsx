@@ -16,7 +16,8 @@ describe("customer statement page", () => {
     render(<CustomerStatementPage />);
     expect(await screen.findByText("INV-1")).toBeInTheDocument(); expect(screen.getByText("PAY-1")).toBeInTheDocument();
     expect(screen.getByText("Opening balance")).toBeInTheDocument(); expect(screen.getByText("Outstanding balance")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Print / PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download PDF" })).toHaveAttribute("href", expect.stringContaining("/statement/pdf?"));
+    expect(screen.getByRole("link", { name: "Download Excel" })).toHaveAttribute("href", expect.stringContaining("/statement/xlsx?"));
     expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/customers/customer-1/statement?"), { cache: "no-store" });
   });
 });

@@ -436,7 +436,7 @@ export default function CustomerDetailPage() {
             : 'Current customer details.'
         }
         actions={
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <a className="rounded-xl border border-sky-500/40 px-4 py-2 text-sm text-sky-200 hover:bg-sky-500/10" href={`/api/customers/${encodeURIComponent(customer.id)}/activity/pdf`}>{isArabic ? 'نشاط العميل PDF' : 'Activity PDF'}</a>
             <a className="rounded-xl border border-sky-500/40 px-4 py-2 text-sm text-sky-200 hover:bg-sky-500/10" href={`/api/customers/${encodeURIComponent(customer.id)}/activity/xlsx`}>{isArabic ? 'نشاط العميل Excel' : 'Activity Excel'}</a>
             <Link

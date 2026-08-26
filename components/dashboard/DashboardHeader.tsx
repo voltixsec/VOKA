@@ -72,8 +72,14 @@ export function DashboardHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex min-h-[88px] items-center justify-between border-b border-white/10 bg-slate-950/90 px-8 backdrop-blur-xl">
-        <div>
+      <header className="sticky top-0 z-30 flex min-h-[76px] items-center justify-between gap-2 border-b border-white/10 bg-slate-950/90 px-3 backdrop-blur-xl sm:min-h-[88px] sm:px-8">
+        <details className="relative lg:hidden">
+          <summary className="cursor-pointer list-none rounded-xl border border-white/10 bg-white/5 px-3 py-2" aria-label={isArabic ? "فتح التنقل" : "Open navigation"}>☰</summary>
+          <nav className="absolute start-0 top-12 flex w-60 flex-col rounded-2xl border border-white/10 bg-slate-900 p-2 text-sm shadow-2xl">
+            {[["Dashboard","لوحة التحكم","/dashboard"],["Customers","العملاء","/dashboard/customers"],["Quotations","عروض الأسعار","/dashboard/quotations"],["Sales Orders","أوامر البيع","/dashboard/sales-orders"],["Contracts","العقود","/dashboard/contracts"],["Invoices","الفواتير","/dashboard/invoices"],["Payments","المدفوعات","/dashboard/payments"],["Reports","التقارير","/dashboard/reports"],["Drawing Takeoff","حصر الرسومات","/dashboard/takeoff"],["Settings","الإعدادات","/dashboard/settings"]].map(([en, ar, href]) => <a key={href} href={href} className="rounded-xl px-3 py-2 hover:bg-white/5">{isArabic ? ar : en}</a>)}
+          </nav>
+        </details>
+        <div className="hidden sm:block">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
             {isArabic ? "مساحة عمل VOKA" : "VOKA Workspace"}
           </p>
@@ -87,6 +93,7 @@ export function DashboardHeader() {
           <Button
             variant="secondary"
             className={[
+              "hidden lg:inline-flex",
               "relative overflow-hidden border-violet-400/30",
               "bg-gradient-to-r from-violet-500/25 via-fuchsia-500/20 to-sky-500/20",
               "text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.16)]",
@@ -130,7 +137,7 @@ export function DashboardHeader() {
           <button
             type="button"
             onClick={() => setSearchOpen((value) => !value)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+            className="hidden h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white md:flex"
             aria-label="Search"
           >
             <svg
@@ -147,7 +154,7 @@ export function DashboardHeader() {
 
           <button
             type="button"
-            className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400"
+            className="relative hidden h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 md:flex"
             aria-label="Notifications"
           >
             🔔
@@ -157,7 +164,7 @@ export function DashboardHeader() {
           <button
             type="button"
             onClick={toggleLanguage}
-            className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+            className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4"
           >
             <span>{isArabic ? "English" : "العربية"}</span>
             <span aria-hidden="true">🌐</span>

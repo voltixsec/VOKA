@@ -29,6 +29,7 @@ export function LanguageProvider({
 }) {
   const [language, setLanguageState] =
     useState<Language>("en");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const savedLanguage =
@@ -40,9 +41,11 @@ export function LanguageProvider({
     ) {
       setLanguageState(savedLanguage);
     }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     const direction =
       language === "ar" ? "rtl" : "ltr";
 
@@ -53,7 +56,7 @@ export function LanguageProvider({
       STORAGE_KEY,
       language
     );
-  }, [language]);
+  }, [hydrated, language]);
 
   function setLanguage(
     nextLanguage: Language
