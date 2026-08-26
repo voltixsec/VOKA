@@ -35,6 +35,9 @@ type Customer =
     status: string;
     type?: string | null;
   };
+type SummaryGroup = { currencyCode: string; count: number; totalAmount?: number; paidAmount?: number; outstandingAmount?: number; amount?: number };
+type SummaryRecord = { id: string; number?: string; status?: string; currencyCode: string; totalAmount?: number; outstandingAmount?: number; amount?: number; method?: string; invoice?: { id: string; number: string } };
+type CommercialSummary = Record<"quotations" | "salesOrders" | "contracts" | "invoices" | "payments", { totals: SummaryGroup[]; records: SummaryRecord[]; statuses?: Record<string, number> }>;
 
 function localizedValue(
   customer: Customer,
@@ -112,6 +115,7 @@ export default function CustomerDetailPage() {
       | 'forbidden'
       | 'error'
     >('loading');
+  const [commercial, setCommercial] = useState<CommercialSummary | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -157,6 +161,8 @@ export default function CustomerDetailPage() {
       setCustomer(
         json.data.customer,
       );
+
+      try { const summaryResponse = await fetch(`/api/customers/${encodeURIComponent(customerId)}/commercial-summary`, { cache: 'no-store' }); if (summaryResponse.ok) { const summary = (await summaryResponse.json()).data; if (summary?.quotations?.totals && summary?.salesOrders?.totals && summary?.contracts?.totals && summary?.invoices?.totals && summary?.payments?.totals) setCommercial(summary); } } catch { setCommercial(null); }
 
       setState(
         'ready',
@@ -400,6 +406,14 @@ export default function CustomerDetailPage() {
       ],
     ];
 
+  const modules = commercial ? [
+    { key: 'quotations', ar: 'عروض الأسعار', en: 'Quotations', href: '/dashboard/quotations', totalField: 'totalAmount' },
+    { key: 'salesOrders', ar: 'أوامر البيع', en: 'Sales Orders', href: '/dashboard/sales-orders', totalField: 'totalAmount' },
+    { key: 'contracts', ar: 'العقود', en: 'Contracts', href: '/dashboard/contracts', totalField: 'totalAmount' },
+    { key: 'invoices', ar: 'الفواتير والذمم', en: 'Invoices & Receivables', href: '/dashboard/invoices', totalField: 'totalAmount' },
+    { key: 'payments', ar: 'المدفوعات', en: 'Payments', href: '/dashboard/payments', totalField: 'amount' },
+  ] as const : [];
+
   return (
     <section
       className="space-y-6"
@@ -476,6 +490,8 @@ export default function CustomerDetailPage() {
           </Badge>
         </div>
       </Card>
+
+      {commercial ? <div className="space-y-4"><div><h2 className="text-xl font-semibold">{isArabic ? 'نظرة تجارية شاملة' : 'Commercial 360 overview'}</h2><p className="mt-1 text-sm text-slate-500">{isArabic ? 'المجاميع مفصولة حسب العملة؛ لا يتم جمع العملات المختلفة.' : 'Totals are grouped by currency; unlike currencies are never added together.'}</p></div><div className="grid gap-4 lg:grid-cols-2">{modules.map((module) => { const data = commercial[module.key]; return <Card key={module.key}><div className="flex items-center justify-between"><h3 className="font-semibold">{isArabic ? module.ar : module.en}</h3><Link href={`${module.href}?customerId=${encodeURIComponent(customer.id)}`} className="text-sm text-sky-300">{isArabic ? 'فتح الوحدة' : 'Open workspace'}</Link></div><div className="mt-4 flex flex-wrap gap-2">{data.totals.length ? data.totals.map((group) => <span key={group.currencyCode} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"><strong>{group.count}</strong> · {new Intl.NumberFormat(isArabic ? 'ar-KW' : 'en-US', { style: 'currency', currency: group.currencyCode }).format(Number(group[module.totalField] ?? 0))}{module.key === 'invoices' ? <small className="ms-2 text-amber-300">{isArabic ? 'مستحق' : 'due'} {new Intl.NumberFormat(isArabic ? 'ar-KW' : 'en-US', { style: 'currency', currency: group.currencyCode }).format(group.outstandingAmount ?? 0)}</small> : null}</span>) : <span className="text-sm text-slate-500">{isArabic ? 'لا توجد سجلات' : 'No records'}</span>}</div>{data.records.length ? <div className="mt-4 space-y-2 border-t border-white/10 pt-3">{data.records.slice(0, 4).map((record) => <Link key={record.id} href={module.key === 'payments' ? `/dashboard/payments?invoiceId=${encodeURIComponent(record.invoice?.id ?? '')}` : `${module.href}/${encodeURIComponent(record.id)}`} className="flex justify-between text-sm text-slate-300 hover:text-sky-200"><span>{record.number ?? record.invoice?.number ?? record.method}</span><span>{record.status ?? record.currencyCode}</span></Link>)}</div> : null}</Card>; })}</div></div> : <Card><p className="text-sm text-slate-500">{isArabic ? 'تعذر تحميل الملخص التجاري؛ بيانات العميل ما زالت متاحة.' : 'Commercial summary is unavailable; customer details remain available.'}</p></Card>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {
