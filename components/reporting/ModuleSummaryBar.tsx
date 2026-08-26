@@ -6,7 +6,7 @@ type Summary = { totalCount: number; byStatus?: Record<string, number>; byCurren
 type Module = 'quotations' | 'contracts' | 'invoices' | 'payments';
 export function ModuleSummaryBar({ module, isArabic }: { module: Module; isArabic: boolean }) {
   const [summary, setSummary] = useState<Summary | null>(null);
-  useEffect(() => { let active = true; void fetch('/api/dashboard/module-summaries', { cache: 'no-store' }).then((response) => response.ok ? response.json() : null).then((body) => { if (active && body?.data?.[module]) setSummary(body.data[module]); }); return () => { active = false; }; }, [module]);
+  useEffect(() => { let active = true; void fetch('/api/dashboard/module-summaries', { cache: 'no-store' }).then((response) => response.ok ? response.json() : null).then((body) => { if (active && body?.data?.[module]) setSummary({ ...body.data[module], byCurrency: body.data[module].byCurrency ?? [] }); }); return () => { active = false; }; }, [module]);
   if (!summary) return <div className="h-24 animate-pulse rounded-2xl bg-white/5" aria-label={isArabic ? 'جارٍ تحميل الملخص' : 'Loading summary'} />;
   const t = (ar: string, en: string) => isArabic ? ar : en;
   const statuses = Object.entries(summary.byStatus ?? {}).sort(([a], [b]) => a.localeCompare(b));
