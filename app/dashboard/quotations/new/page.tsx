@@ -24,6 +24,7 @@ import {
 import {
   useLanguage,
 } from "../../../../components/i18n/LanguageProvider";
+import { CustomerPicker } from "@/components/commercial";
 import {
   QuotationCalculator,
   type QuotationLineType,
@@ -1050,35 +1051,7 @@ export default function NewQuotationPage() {
                 )}
               </span>
 
-              <select
-                required
-                value={customerId}
-                onChange={(event) => {
-                  setCustomerId(
-                    event.target.value,
-                  );
-                  setDirty(true);
-                }}
-                className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4"
-              >
-                <option value="">
-                  {t(
-                    "\u0627\u062e\u062a\u0631 \u0627\u0644\u0639\u0645\u064a\u0644",
-                    "Select customer",
-                  )}
-                </option>
-
-                {customers.map(
-                  (customer) => (
-                    <option
-                      key={customer.id}
-                      value={customer.id}
-                    >
-                      {customer.name}
-                    </option>
-                  ),
-                )}
-              </select>
+              <CustomerPicker customers={customers} value={customerId} isArabic={isArabic} onChange={(id) => { setCustomerId(id); setDirty(true); }} onCreated={(customer) => setCustomers((current) => [...current, customer])} />
             </label>
 
             <label className="space-y-2">

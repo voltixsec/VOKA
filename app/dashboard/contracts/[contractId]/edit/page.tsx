@@ -6,7 +6,7 @@ import { Button, Card, Input, SectionHeader } from "@/components/ui";
 import { QuotationLineItemCombobox } from "@/components/quotations/QuotationLineItemCombobox";
 import { CatalogItemModal, type CatalogItemModalItem } from "@/components/catalog/CatalogItemModal";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
-import { CommercialComposer } from "@/components/commercial";
+import { CommercialComposer, CustomerPicker } from "@/components/commercial";
 import { QuotationCalculator, type QuotationLineType } from "@/src/domain/quotation";
 import { MilestoneAmountType } from "@/src/domain/contract";
 import { normalizeQuotationLinePositions } from "@/app/dashboard/quotations/quotation-line-order";
@@ -532,22 +532,7 @@ export default function EditContractPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
               <span className="text-sm text-slate-400">{t("العميل", "Customer")}</span>
-              <select
-                required
-                value={customerId}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                  setCustomerId(e.target.value);
-                  setDirty(true);
-                }}
-                className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-white"
-              >
-                <option value="">{t("اختر العميل", "Select customer")}</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {isArabic ? c.nameAr || c.name : c.nameEn || c.name}
-                  </option>
-                ))}
-              </select>
+              <CustomerPicker customers={customers} value={customerId} isArabic={isArabic} onChange={(id) => { setCustomerId(id); setDirty(true); }} onCreated={(customer) => setCustomers((current) => [...current, customer])} />
             </label>
 
             <label className="space-y-2">

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,6 +52,7 @@ describe("NewContractPage", () => {
     render(createElement(NewContractPage));
 
     expect(await screen.findByText("Contract Builder")).toBeTruthy();
+    fireEvent.focus(screen.getByLabelText("Customer search"));
     expect(screen.getByText("Acme Kuwait")).toBeTruthy();
     expect(screen.getByText("Contract lines")).toBeTruthy();
     expect(screen.getByText("Payment Milestones")).toBeTruthy();

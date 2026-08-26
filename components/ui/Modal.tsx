@@ -34,7 +34,7 @@ export function Modal({
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/10 bg-slate-900 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
