@@ -134,6 +134,7 @@ export default function PaymentsPage() {
           "سجل دفع غير قابل للتعديل مرتبط بالفاتورة والعميل، مع رصيد قبل وبعد محفوظ على الخادم.",
           "Immutable payment records tied to invoice and customer, with server-authoritative settlement balances.",
         )}
+        actions={<div className="flex flex-wrap gap-2"><a href="/api/payments/pdf"><Button variant="secondary">{t("تنزيل PDF", "Download PDF")}</Button></a><a href="/api/payments/xlsx"><Button variant="secondary">{t("تنزيل Excel", "Download Excel")}</Button></a></div>}
       />
       <ModuleSummaryBar module="payments" isArabic={isArabic} />
       {error ? (
