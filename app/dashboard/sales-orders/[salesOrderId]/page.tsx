@@ -337,6 +337,7 @@ export default function SalesOrderDetailsPage() {
   }
 
   const pdfUrl = `/api/sales-orders/${encodeURIComponent(salesOrder.id)}/pdf?locale=${isArabic ? "ar" : "en"}&disposition=inline`;
+  const xlsxUrl = `/api/sales-orders/${encodeURIComponent(salesOrder.id)}/xlsx?locale=${isArabic ? "ar" : "en"}`;
 
   return (
     <section className="space-y-6" dir={isArabic ? "rtl" : "ltr"}>
@@ -359,6 +360,10 @@ export default function SalesOrderDetailsPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-400"
             >
               📄 {t("تحميل / طباعة المستند PDF", "View / Download PDF")}
+            </a>
+
+            <a href={xlsxUrl} className="inline-flex items-center gap-2 rounded-xl bg-emerald-950 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              {t("تنزيل Excel", "Download Excel")}
             </a>
 
             {salesOrder.status === "DRAFT" && (
