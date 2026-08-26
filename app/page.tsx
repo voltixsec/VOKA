@@ -190,5 +190,5 @@ function LegacyHome() {
   );
 }
 
-export { LandingPageV1 as default } from "../components/landing/LandingPageV1";
+export { LandingSourcePage as default } from "../components/landing/LandingSourcePage";
 
