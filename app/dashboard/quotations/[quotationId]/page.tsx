@@ -828,6 +828,19 @@ export default function QuotationDetailsPage() {
               </Button>
             </a>
 
+            <a
+              href={
+                "/api/quotations/" +
+                encodeURIComponent(quote.id) +
+                "/xlsx?locale=" +
+                (isArabic ? "ar" : "en")
+              }
+            >
+              <Button size="sm" variant="secondary">
+                {t("تنزيل Excel", "Download Excel")}
+              </Button>
+            </a>
+
             {quote.status === "DRAFT" && (
               <Link href={"/dashboard/quotations/" + quote.id + "/edit"}>
                 <Button size="sm" variant="secondary">
