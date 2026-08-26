@@ -236,21 +236,9 @@ function postBody(
 }
 
 async function chooseCustomer() {
-  await screen.findByRole(
-    "option",
-    {
-      name: "Acme",
-    },
-  );
-
-  fireEvent.change(
-    selectFor("Customer"),
-    {
-      target: {
-        value: "customer-1",
-      },
-    },
-  );
+  const search = await screen.findByRole("textbox", { name: "Customer search" });
+  fireEvent.focus(search);
+  fireEvent.click(await screen.findByRole("button", { name: "Acme" }));
 }
 
 async function quickCreateLine(
