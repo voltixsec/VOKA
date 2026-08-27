@@ -1,8 +1,11 @@
 import type { CommercialOperation } from "../commercial-entry";
+import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
 
 export type ConversationalOperation = Exclude<CommercialOperation, "PAYMENT">;
 export type ConversationReplySource = "TEXT" | "VOICE" | "CHIP";
 export type ConversationLocale = "ar" | "en";
+export type ConversationDocumentMode = "AUTO" | "QUOTATION" | "INVOICE" | "CONTRACT" | "SALES_ORDER";
+export type ConversationBuildMode = "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM" | "DRAWING";
 
 export type DraftAttachment = {
   name: string;
@@ -36,13 +39,14 @@ export type ConversationTurn = {
   text: string;
 };
 
-export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent";
+export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput";
 
 export type MissingField = {
   key: MissingFieldKey;
   required: true;
   labelAr: string;
   labelEn: string;
+  sourceField?: string;
 };
 
 export type RecommendedField = {
@@ -54,9 +58,12 @@ export type RecommendedField = {
 export type WorkingCommercialDraft = {
   id: string;
   operation: ConversationalOperation;
+  documentMode: ConversationDocumentMode;
+  buildMode: ConversationBuildMode;
   locale: ConversationLocale;
   fields: DraftFields;
   customerResolution: CustomerResolution;
+  canonicalProposal: SalesAssistantDraftProposal | null;
   attachment: DraftAttachment | null;
   turns: ConversationTurn[];
   contextText: string;
@@ -75,4 +82,6 @@ export type AdvanceConversationInput = {
   locale: ConversationLocale;
   operation?: ConversationalOperation | null;
   attachment?: DraftAttachment | null;
+  documentMode?: ConversationDocumentMode;
+  buildMode?: ConversationBuildMode;
 };

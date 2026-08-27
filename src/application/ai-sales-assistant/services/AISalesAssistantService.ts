@@ -37,7 +37,7 @@ export class AISalesAssistantService {
       (/[\u0600-\u06FF]/.test(prompt) ? "ar" : "en");
 
     const { intent, extractionMode, warnings } =
-      await this.extractor.extractIntent(prompt, sourceLocale);
+      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode);
 
     return this.resolver.resolveProposal(
       request.companyId,

@@ -3,33 +3,8 @@ import {
   apiSuccess,
   withCompanyAuth,
 } from "@/lib/api";
-import { prisma } from "@/lib/prisma";
-import { AISalesAssistantService } from "@/src/application/ai-sales-assistant";
 import { SALES_ASSISTANT_PROMPT_MAX_LENGTH } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
-import { createSalesAssistantPort } from "@/src/infrastructure/ai/createSalesAssistantPort";
-import { PrismaAISalesAssistantPricingAdapter } from "@/src/infrastructure/ai/PrismaAISalesAssistantPricingAdapter";
-import { PrismaCatalogItemRepository } from "@/features/catalog/infrastructure/prisma/PrismaCatalogItemRepository";
-import { PrismaUnitRepository } from "@/features/catalog/infrastructure/prisma/PrismaUnitRepository";
-import { PrismaCompanyRepository } from "@/features/company/infrastructure/prisma/PrismaCompanyRepository";
-import { PrismaCustomerRepository } from "@/features/customers/infrastructure/prisma/PrismaCustomerRepository";
-import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
-
-function createService(): AISalesAssistantService {
-  const provider = createSalesAssistantPort();
-  const pricing = new PrismaAISalesAssistantPricingAdapter(prisma);
-
-  return new AISalesAssistantService(
-    {
-      companies: new PrismaCompanyRepository(prisma),
-      customers: new PrismaCustomerRepository(prisma),
-      catalogItems: new PrismaCatalogItemRepository(prisma),
-      units: new PrismaUnitRepository(prisma),
-      quotationReferences: new PrismaQuotationReferenceValidator(),
-      pricing,
-    },
-    provider,
-  );
-}
+import { createAISalesAssistantService } from "@/src/infrastructure/ai/createAISalesAssistantService";
 
 type RequestBody = {
   prompt?: unknown;
@@ -84,7 +59,7 @@ export const POST = withCompanyAuth(
     }
 
     try {
-      const service = createService();
+      const service = createAISalesAssistantService();
       const draftProposal = await service.generateDraftProposal({
         companyId: company.companyId,
         prompt: trimmedPrompt,

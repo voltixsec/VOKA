@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  sessionStorage.clear();
 });
 
 describe("SalesAssistantPage", () => {
@@ -42,8 +43,17 @@ describe("SalesAssistantPage", () => {
     await waitFor(() => {
       expect(screen.getByText("READY FOR REVIEW")).toBeTruthy();
     });
-    expect(screen.getByText(/Kuwait National Telecom/)).toBeTruthy();
+    expect(screen.getAllByText(/Kuwait National Telecom/).length).toBeGreaterThan(1);
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain("Kuwait National Telecom");
     expect(screen.getByRole("button", { name: "Open for human review" })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody).toMatchObject({ documentMode: "AUTO", buildMode: "AUTO" });
+
+    fireEvent.change(textarea, { target: { value: "A changed request" } });
+    expect(screen.queryByText("READY FOR REVIEW")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "New Request" }));
+    expect((textarea as HTMLTextAreaElement).value).toBe("");
+    expect(sessionStorage.getItem("voka_commercial_conversation_draft")).toBeNull();
   });
 });

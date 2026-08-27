@@ -7,7 +7,7 @@ import type { SalesAssistantDraftProposal } from "@/src/application/ai-sales-ass
 import { useRecordedVoiceInput, useVoiceInput, type AudioTranscriber, type IRawAudioRecorder, type IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
 import { VoiceOrb } from "@/components/voice";
 import { displayLabel } from "@/lib/i18n/display-labels";
-import type { ConversationReplySource, WorkingCommercialDraft } from "@/src/application/commercial-conversation";
+import type { ConversationBuildMode, ConversationDocumentMode, ConversationReplySource, WorkingCommercialDraft } from "@/src/application/commercial-conversation";
 
 const CONVERSATION_STORAGE_KEY = "voka_commercial_conversation_draft";
 
@@ -37,8 +37,12 @@ export default function SalesAssistantPage(props: any) {
   const [proposal, setProposal] = useState<SalesAssistantDraftProposal | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [workingDraft, setWorkingDraft] = useState<WorkingCommercialDraft | null>(null);
+  const [documentMode, setDocumentMode] = useState<ConversationDocumentMode>("AUTO");
+  const [buildMode, setBuildMode] = useState<ConversationBuildMode>("AUTO");
+  const [resultStale, setResultStale] = useState(false);
 
   const replySourceRef = useRef<ConversationReplySource>("TEXT");
+  const lastAnalyzedTextRef = useRef("");
 
   const voice = useVoiceInput({
     locale: isArabic ? "ar" : "en",
@@ -56,7 +60,7 @@ export default function SalesAssistantPage(props: any) {
       const newAddition = voice.transcript.final.startsWith(previous)
         ? voice.transcript.final.slice(previous.length).trim()
         : voice.transcript.final.trim();
-      if (newAddition) setPrompt((visible) => visible.trim() ? `${visible.trim()} ${newAddition}` : newAddition);
+      if (newAddition) { setPrompt((visible) => visible.trim() ? `${visible.trim()} ${newAddition}` : newAddition); setResultStale(true); }
       replySourceRef.current = "VOICE";
       prevFinalRef.current = voice.transcript.final;
     }
@@ -66,6 +70,7 @@ export default function SalesAssistantPage(props: any) {
   useEffect(() => {
     if (!recorded.transcript || recorded.transcript === previousRecordingTranscriptRef.current) return;
     setPrompt((visible) => visible.trim() ? `${visible.trim()} ${recorded.transcript}` : recorded.transcript);
+    setResultStale(true);
     replySourceRef.current = "VOICE";
     previousRecordingTranscriptRef.current = recorded.transcript;
   }, [recorded.transcript]);
@@ -73,7 +78,11 @@ export default function SalesAssistantPage(props: any) {
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(CONVERSATION_STORAGE_KEY);
-      if (stored) setWorkingDraft(JSON.parse(stored));
+      if (stored) {
+        const draft = JSON.parse(stored) as WorkingCommercialDraft;
+        setWorkingDraft(draft); setPrompt(draft.contextText); lastAnalyzedTextRef.current = draft.contextText;
+        setDocumentMode(draft.documentMode ?? "AUTO"); setBuildMode(draft.buildMode ?? "AUTO");
+      }
     } catch {
       sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
     }
@@ -97,11 +106,14 @@ export default function SalesAssistantPage(props: any) {
     voice.startListening(isArabic ? "ar-KW" : "en-US");
   };
 
-  const advanceConversation = async (reply = prompt, source = replySourceRef.current) => {
+  const advanceConversation = async (explicitReply?: string, source = replySourceRef.current) => {
+    const visibleBefore = prompt.trim();
+    const reply = explicitReply ?? (!workingDraft ? visibleBefore : visibleBefore.startsWith(lastAnalyzedTextRef.current) ? visibleBefore.slice(lastAnalyzedTextRef.current.length).trim() || visibleBefore : `Updated request: ${visibleBefore}`);
     if (!reply.trim()) return;
 
     setIsGenerating(true);
     setError(null);
+    setResultStale(true);
 
     try {
       const response = await fetch("/api/ai/commercial-conversation", {
@@ -113,18 +125,34 @@ export default function SalesAssistantPage(props: any) {
           replySource: source,
           locale: isArabic ? "ar" : "en",
           attachment: attachment ? { name: attachment.name, type: attachment.type, size: attachment.size } : workingDraft?.attachment,
+          documentMode,
+          buildMode,
         }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error?.message || "Unable to continue the conversation.");
       setWorkingDraft(json.data);
-      setPrompt("");
+      const nextVisible = explicitReply && source === "CHIP" ? `${visibleBefore}${visibleBefore ? "\n" : ""}${explicitReply}` : visibleBefore;
+      if (source === "CHIP") setPrompt(nextVisible);
+      lastAnalyzedTextRef.current = nextVisible;
+      setResultStale(false);
       replySourceRef.current = "TEXT";
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const invalidateSelection = (nextDocument: ConversationDocumentMode, nextBuild: ConversationBuildMode) => {
+    setDocumentMode(nextDocument); setBuildMode(nextBuild); setWorkingDraft(null); setResultStale(false);
+    lastAnalyzedTextRef.current = ""; sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
+  };
+
+  const newRequest = () => {
+    setPrompt(""); setWorkingDraft(null); setAttachment(null); setProposal(null); setError(null); setResultStale(false);
+    setDocumentMode("AUTO"); setBuildMode("AUTO"); lastAnalyzedTextRef.current = ""; replySourceRef.current = "TEXT";
+    sessionStorage.removeItem(CONVERSATION_STORAGE_KEY); sessionStorage.removeItem("voka_commercial_entry_prompt"); sessionStorage.removeItem("voka_ai_proposal_draft");
   };
 
   const openForHumanReview = async () => {
@@ -144,10 +172,8 @@ export default function SalesAssistantPage(props: any) {
         return;
       }
       if (workingDraft.operation === "QUOTATION") {
-        const response = await fetch("/api/ai/sales-assistant/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: workingDraft.contextText, sourceLocale: isArabic ? "ar" : "en" }) });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error?.message || "Unable to prepare the quotation form.");
-        sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(body.data));
+        if (!workingDraft.canonicalProposal) throw new Error(isArabic ? "المسودة الذكية غير مكتملة." : "The canonical intelligence draft is unavailable.");
+        sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(workingDraft.canonicalProposal));
       }
       const routes = { QUOTATION: "/dashboard/quotations/new", INVOICE: "/dashboard/invoices/new", CONTRACT: "/dashboard/contracts/new", SALES_ORDER: "/dashboard/quotations" } as const;
       router.push(routes[workingDraft.operation]);
@@ -242,7 +268,7 @@ export default function SalesAssistantPage(props: any) {
           <textarea
             id="sales-prompt-input"
             value={prompt}
-            onChange={(e) => { setPrompt(e.target.value); replySourceRef.current = "TEXT"; }}
+            onChange={(e) => { setPrompt(e.target.value); replySourceRef.current = "TEXT"; if (workingDraft) setResultStale(true); }}
             rows={4}
             placeholder={
               isArabic
@@ -263,6 +289,8 @@ export default function SalesAssistantPage(props: any) {
         </div>
 
         <div className="order-1 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+          <label className="text-xs text-slate-400">{isArabic ? "المستند" : "Document"}<select aria-label={isArabic ? "نوع المستند" : "Document type"} value={documentMode} onChange={(event) => invalidateSelection(event.target.value as ConversationDocumentMode, buildMode)} className="ms-2 rounded-lg border border-white/10 bg-slate-900 px-2 py-2 text-slate-100"><option value="AUTO">AUTO</option><option value="QUOTATION">QUOTATION</option><option value="INVOICE">INVOICE</option><option value="CONTRACT">CONTRACT</option><option value="SALES_ORDER">SALES ORDER</option></select></label>
+          <label className="text-xs text-slate-400">{isArabic ? "البناء" : "Build"}<select aria-label={isArabic ? "نمط البناء" : "Build mode"} value={buildMode} onChange={(event) => invalidateSelection(documentMode, event.target.value as ConversationBuildMode)} className="ms-2 rounded-lg border border-white/10 bg-slate-900 px-2 py-2 text-slate-100"><option value="AUTO">AUTO</option><option value="CATALOG_ONLY">CATALOG ONLY</option><option value="SUPPLY_INSTALL_SYSTEM">SUPPLY + INSTALL SYSTEM</option><option value="DRAWING">DRAWING</option></select></label>
           <label htmlFor="commercial-attachment" className="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-sky-200">
             {isArabic ? "إرفاق ملف" : "Attach file"}
           </label>
@@ -270,6 +298,7 @@ export default function SalesAssistantPage(props: any) {
           {attachment ? <div className="flex min-w-0 flex-1 items-center gap-2 text-sm"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="shrink-0 text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : <span className="flex-1 text-xs text-slate-500">{isArabic ? "اكتب أو تحدث، وأرفق رسم PDF عند الحاجة." : "Type or speak, and attach a drawing PDF when needed."}</span>}
           <VoiceOrb state={(recorded.isSupported && recorded.state === "RECORDING") || (!recorded.isSupported && voice.state === "LISTENING") ? "LISTENING" : (recorded.isSupported && recorded.state === "TRANSCRIBING") || (!recorded.isSupported && voice.state === "PROCESSING") ? "PROCESSING" : "IDLE"} label={(recorded.isSupported ? recorded.state === "RECORDING" : voice.state === "LISTENING" || voice.state === "PROCESSING") ? (isArabic ? "إيقاف الميكروفون" : "Stop microphone") : recorded.isSupported ? (isArabic ? "بدء تسجيل الصوت" : "Record voice") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!recorded.isSupported && !voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={recorded.isSupported ? recorded.state === "TRANSCRIBING" : !voice.isSupported} onClick={handleVoiceToggle} />
           <button type="button" onClick={() => advanceConversation()} disabled={isGenerating || !prompt.trim()} className="min-h-11 rounded-xl bg-sky-400 px-5 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50">{isGenerating ? (isArabic ? "جاري الفهم..." : "Understanding…") : (isArabic ? "فهم العملية" : "Understand")}</button>
+          <button type="button" onClick={newRequest} className="min-h-11 rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-slate-300">{isArabic ? "طلب جديد" : "New Request"}</button>
         </div>
 
         {recorded.isSupported && (recorded.state === "RECORDING" || recorded.state === "TRANSCRIBING") && <div className="order-2 flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-500/5" aria-label={isArabic ? "موجة التسجيل الصوتي" : "Audio recording waveform"}>{recorded.waveform.map((level, index) => <span key={index} className="w-1 rounded-full bg-sky-400 transition-[height] duration-100" style={{ height: `${Math.max(5, level * 34)}px` }} />)}</div>}
@@ -305,7 +334,7 @@ export default function SalesAssistantPage(props: any) {
             <button
               key={i}
               type="button"
-              onClick={() => { setPrompt(sample.text); replySourceRef.current = "TEXT"; }}
+              onClick={() => { setPrompt(sample.text); replySourceRef.current = "TEXT"; if (workingDraft) setResultStale(true); }}
               className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-sky-300 hover:bg-white/10 transition"
             >
               {isArabic ? sample.labelAr : sample.labelEn}
@@ -319,11 +348,12 @@ export default function SalesAssistantPage(props: any) {
           </div>
         )}
 
-        {workingDraft && (
+        {workingDraft && !resultStale && (
           <div className="order-3 space-y-3 rounded-2xl border border-sky-400/20 bg-slate-950/80 p-4" data-testid="commercial-conversation">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}</p><p className="mt-1 text-xs text-slate-400">{isArabic ? "مسودة محادثة واحدة محفوظة — لن يتم إنشاء أي مستند تلقائياً." : "One saved conversational draft — no document will be created automatically."}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${workingDraft.status === "READY_FOR_REVIEW" ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{workingDraft.status === "READY_FOR_REVIEW" ? (isArabic ? "جاهز للمراجعة" : "READY FOR REVIEW") : (isArabic ? "يحتاج معلومات" : "Needs information")}</span></div>
             <p className="text-sm text-slate-200">{isArabic ? "فهمت أنك تريد" : "I understood"}: {displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}{workingDraft.fields.lines.length ? ` — ${workingDraft.fields.lines.map((line) => `${line.quantity ?? ""} ${line.itemName}`.trim()).join(" + ")}` : ""}{workingDraft.fields.customerMention ? ` — ${workingDraft.fields.customerMention}` : ""}.</p>
-            {workingDraft.missingRequired.length > 0 && <div className="rounded-xl border-2 border-rose-400/50 bg-rose-500/10 p-3"><p className="text-sm font-bold text-rose-200">{isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:"}</p><ul className="mt-2 list-inside list-disc space-y-1 text-sm font-semibold text-white">{workingDraft.missingRequired.map((field) => <li key={field.key}>{isArabic ? field.labelAr : field.labelEn}</li>)}</ul></div>}
+            {workingDraft.canonicalProposal?.smartSystem && <p className="rounded-xl border border-violet-400/20 bg-violet-400/5 p-2 text-xs text-violet-200">{isArabic ? workingDraft.canonicalProposal.smartSystem.systemNameAr : workingDraft.canonicalProposal.smartSystem.systemNameEn} · {workingDraft.canonicalProposal.smartSystem.status} · {isArabic ? "تمت محاولة مطابقة الكتالوج" : "Catalog resolution attempted"}</p>}
+            {workingDraft.missingRequired.length > 0 && <div className="rounded-xl border-2 border-rose-400/50 bg-rose-500/10 p-3"><p className="text-sm font-bold text-rose-200">{isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:"}</p><ul className="mt-2 list-inside list-disc space-y-1 text-sm font-semibold text-white">{workingDraft.missingRequired.map((field) => <li key={`${field.key}-${field.sourceField ?? ""}`}>{isArabic ? field.labelAr : field.labelEn}</li>)}</ul></div>}
             {workingDraft.clarification && <div className="space-y-3"><p className="text-sm text-white">{isArabic ? workingDraft.clarification.ar : workingDraft.clarification.en}</p><div className="flex flex-wrap gap-2">{workingDraft.clarification.suggestions.map((chip, index) => <button key={`${chip.reply}-${index}`} type="button" disabled={isGenerating} onClick={() => advanceConversation(chip.reply, "CHIP")} className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-xs text-sky-200">{isArabic ? chip.ar : chip.en}</button>)}</div></div>}
             {workingDraft.customerResolution?.status === "NOT_FOUND" && <button type="button" onClick={() => router.push("/dashboard/customers/new")} className="text-start text-xs font-semibold text-sky-300 underline">{isArabic ? "فتح نموذج إنشاء عميل" : "Open create customer form"}</button>}
             {workingDraft.recommended.length > 0 && <p className="text-xs text-slate-500">{isArabic ? "اختياري/موصى به: " : "Optional/recommended: "}{workingDraft.recommended.map((field) => isArabic ? field.labelAr : field.labelEn).join("، ")}</p>}

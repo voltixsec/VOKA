@@ -16,6 +16,7 @@ export interface AISalesAssistantRequest {
   companyId: string;
   prompt: string;
   sourceLocale?: SalesAssistantSourceLocale;
+  buildMode?: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM";
 }
 
 export interface ExtractedLineItem {

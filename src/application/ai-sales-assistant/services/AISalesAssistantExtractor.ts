@@ -26,13 +26,16 @@ export class AISalesAssistantExtractor {
   async extractIntent(
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
+    buildMode: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM" = "AUTO",
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
+    const effectivePrompt = buildMode === "SUPPLY_INSTALL_SYSTEM" ? `${trimmed}\nSupply and installation system.` : trimmed;
+    const allowSmartSystems = buildMode !== "CATALOG_ONLY";
 
     // Engineering-system intent is always resolved by server-owned rules. The
     // untrusted AI provider must never get authority over component quantities.
-    if (this.smartSystemBuilder.detectSystemIntent(trimmed)) {
-      const intent = this.heuristicExtract(trimmed, sourceLocale);
+    if (allowSmartSystems && this.smartSystemBuilder.detectSystemIntent(effectivePrompt)) {
+      const intent = this.heuristicExtract(effectivePrompt, sourceLocale, true);
       return {
         intent,
         extractionMode: "heuristic",
@@ -63,7 +66,7 @@ export class AISalesAssistantExtractor {
       }
     }
 
-    const intent = this.heuristicExtract(trimmed, sourceLocale);
+    const intent = this.heuristicExtract(trimmed, sourceLocale, allowSmartSystems);
     return {
       intent,
       extractionMode: "heuristic",
@@ -74,8 +77,9 @@ export class AISalesAssistantExtractor {
   public heuristicExtract(
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
+    allowSmartSystems = true,
   ): ExtractedSalesIntent {
-    const systemMatch = this.smartSystemBuilder.detectSystemIntent(prompt);
+    const systemMatch = allowSmartSystems ? this.smartSystemBuilder.detectSystemIntent(prompt) : null;
 
     if (systemMatch) {
       const calcResult = this.smartSystemBuilder.calculateSystem(

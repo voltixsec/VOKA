@@ -1,4 +1,5 @@
 import type { ConversationalOperation, DraftFields, MissingField, RecommendedField } from "./types";
+import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
 
 const missing = {
   customer: { key: "customer", required: true, labelAr: "العميل", labelEn: "Customer" },
@@ -14,7 +15,7 @@ const recommended = {
   scopeType: { key: "scopeType", labelAr: "نطاق التوريد أو الخدمة", labelEn: "Supply or service scope" },
 } satisfies Record<string, RecommendedField>;
 
-export function evaluateFormRequirements(operation: ConversationalOperation, fields: DraftFields, hasAttachment: boolean, contextText: string) {
+export function evaluateFormRequirements(operation: ConversationalOperation, fields: DraftFields, hasAttachment: boolean, contextText: string, canonicalProposal?: SalesAssistantDraftProposal | null) {
   const missingRequired: MissingField[] = [];
   if (operation === "SALES_ORDER") {
     if (!fields.sourceReference) missingRequired.push(missing.sourceReference);
@@ -23,7 +24,11 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
     if (!contextText.trim()) missingRequired.push(missing.userIntent);
   } else {
     if (!fields.customerId) missingRequired.push(missing.customer);
-    if (!fields.lines.length) missingRequired.push(missing.lines);
+    if (!fields.lines.length && !(canonicalProposal?.smartSystem?.missingInputs.length)) missingRequired.push(missing.lines);
+    for (const name of canonicalProposal?.smartSystem?.missingInputs ?? []) {
+      const input = canonicalProposal?.smartSystem?.inputs.find((candidate) => candidate.name === name);
+      missingRequired.push({ key: "systemInput", required: true, sourceField: name, labelAr: input?.labelAr ?? name, labelEn: input?.labelEn ?? name });
+    }
   }
 
   const optional: RecommendedField[] = [];
