@@ -3,6 +3,7 @@ export { Button } from "./Button";
 export { Card } from "./Card";
 export { EmptyState } from "./EmptyState";
 export { Input } from "./Input";
+export { LocalizedFileInput } from "./LocalizedFileInput";
 export { Modal } from "./Modal";
 export { SectionHeader } from "./SectionHeader";
 export {

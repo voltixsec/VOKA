@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Cairo } from "next/font/google";
 
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import { Sidebar } from "../../components/dashboard/Sidebar";
@@ -9,12 +8,6 @@ import { LanguageProvider } from "../../components/i18n/LanguageProvider";
 import { getCurrentUser } from "../../lib/auth";
 import { ApiError } from "../../lib/api/ApiError";
 import { sanitizeReturnTo } from "../../lib/auth/return-to";
-
-const cairo = Cairo({
-  subsets: ["arabic", "latin"],
-  display: "swap",
-  variable: "--font-voka",
-});
 
 function isUnauthenticatedError(error: unknown): boolean {
   if (error instanceof ApiError) {
@@ -59,7 +52,7 @@ export default async function DashboardLayout({
   return (
     <LanguageProvider>
       <div
-        className={`${cairo.className} ${cairo.variable} flex min-h-screen bg-slate-950 text-white`}
+        className="flex min-h-screen bg-slate-950 text-white"
       >
         <Sidebar />
 
