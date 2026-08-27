@@ -180,22 +180,13 @@ export default function SalesAssistantPage(props: any) {
         </p>
       </div>
 
-      {/* Input Prompt Card */}
+      {/* Unified Attach + Text + Voice input */}
       <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-soft space-y-4">
-        <div className="rounded-2xl border border-dashed border-sky-400/25 bg-sky-400/[0.04] p-4">
-          <label htmlFor="commercial-attachment" className="flex cursor-pointer flex-wrap items-center justify-between gap-3"><span><strong className="block text-sm text-slate-200">{isArabic ? "أرفق السياق أولًا (اختياري)" : "Attach context first (optional)"}</strong><small className="mt-1 block text-slate-500">{isArabic ? "المتاح الآن: رسم PDF لمسار الحصر. ملفات BOQ والمواصفات تتطلب مسار استيعاب لاحقًا." : "Available now: drawing PDF for takeoff. BOQ and specification intake remains a future governed workflow."}</small></span><span className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-sky-200">{isArabic ? "اختيار ملف" : "Choose file"}</span></label>
-          <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
-          {attachment ? <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-950/70 px-3 py-2 text-sm"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : null}
-        </div>
         <div className="flex items-center justify-between">
           <label htmlFor="sales-prompt-input" className="block text-sm font-semibold text-slate-200">
             {isArabic ? "طلب المبيعات (اللغة الطبيعية)" : "Sales Request Prompt (Natural Language)"}
           </label>
 
-          {/* Microphone Transport Control */}
-          <div className="flex items-center gap-2">
-            <VoiceOrb state={voice.state === "LISTENING" ? "LISTENING" : voice.state === "PROCESSING" ? "PROCESSING" : "IDLE"} label={voice.state === "LISTENING" || voice.state === "PROCESSING" ? (isArabic ? "إيقاف الاستماع" : "Stop Listening") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={!voice.isSupported} onClick={voice.state === "LISTENING" || voice.state === "PROCESSING" ? handleStopListening : handleStartListening} />
-          </div>
         </div>
 
         {/* Text Area */}
@@ -221,6 +212,16 @@ export default function SalesAssistantPage(props: any) {
               <span className="italic text-slate-300">{voice.transcript.interim}</span>
             </div>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+          <label htmlFor="commercial-attachment" className="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-sky-200">
+            {isArabic ? "إرفاق ملف" : "Attach file"}
+          </label>
+          <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
+          {attachment ? <div className="flex min-w-0 flex-1 items-center gap-2 text-sm"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="shrink-0 text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : <span className="flex-1 text-xs text-slate-500">{isArabic ? "اكتب أو تحدث، وأرفق رسم PDF عند الحاجة." : "Type or speak, and attach a drawing PDF when needed."}</span>}
+          <VoiceOrb state={voice.state === "LISTENING" ? "LISTENING" : voice.state === "PROCESSING" ? "PROCESSING" : "IDLE"} label={isArabic ? "بدء الإدخال الصوتي" : "Voice Input"} title={!voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={!voice.isSupported || voice.state === "LISTENING" || voice.state === "PROCESSING"} onClick={handleStartListening} />
+          {(voice.state === "LISTENING" || voice.state === "PROCESSING") && <button type="button" onClick={handleStopListening} className="min-h-11 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950">{isArabic ? "إيقاف وتم" : "Stop / Done"}</button>}
         </div>
 
         {/* Accessible Voice Status Live Region */}

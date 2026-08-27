@@ -63,7 +63,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
 
       recognizer.start({
         lang: targetLang,
-        continuous: false,
+        continuous: true,
         interimResults: true,
         onStateChange: (newState) => {
           setState(newState);

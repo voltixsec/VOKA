@@ -131,4 +131,47 @@ describe("BrowserSpeechRecognizer", () => {
     expect(recognizer.getState()).toBe("IDLE");
     expect(recognizer.getTranscript()).toEqual({ interim: "", final: "" });
   });
+
+  it("tolerates a natural browser pause by restarting and preserving accumulated transcript", () => {
+    vi.useFakeTimers();
+    const mockRecognitionInstance = {
+      continuous: false, interimResults: false, lang: "",
+      onstart: null as any, onend: null as any, onresult: null as any, onerror: null as any,
+      start: vi.fn(), stop: vi.fn(), abort: vi.fn(),
+    };
+    (window as any).SpeechRecognition = vi.fn(function () { return mockRecognitionInstance; });
+
+    recognizer.start({ continuous: true });
+    mockRecognitionInstance.onstart?.();
+    mockRecognitionInstance.onresult?.({ results: [Object.assign([{ transcript: "Create a quotation" }], { isFinal: true })] });
+
+    mockRecognitionInstance.onend?.();
+    expect(recognizer.getState()).toBe("LISTENING");
+    vi.advanceTimersByTime(250);
+    expect(mockRecognitionInstance.start).toHaveBeenCalledTimes(2);
+
+    mockRecognitionInstance.onresult?.({ results: [Object.assign([{ transcript: "for Acme" }], { isFinal: true })] });
+    expect(recognizer.getTranscript().final).toBe("Create a quotation for Acme");
+    vi.useRealTimers();
+  });
+
+  it("does not restart after an explicit stop", () => {
+    vi.useFakeTimers();
+    const mockRecognitionInstance = {
+      continuous: false, interimResults: false, lang: "",
+      onstart: null as any, onend: null as any, onresult: null as any, onerror: null as any,
+      start: vi.fn(), stop: vi.fn(function (this: any) { this.onend?.(); }), abort: vi.fn(),
+    };
+    (window as any).SpeechRecognition = vi.fn(function () { return mockRecognitionInstance; });
+
+    recognizer.start({ continuous: true });
+    mockRecognitionInstance.onstart?.();
+    recognizer.stop();
+    vi.advanceTimersByTime(500);
+
+    expect(mockRecognitionInstance.stop).toHaveBeenCalledTimes(1);
+    expect(mockRecognitionInstance.start).toHaveBeenCalledTimes(1);
+    expect(recognizer.getState()).toBe("READY");
+    vi.useRealTimers();
+  });
 });

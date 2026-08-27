@@ -153,7 +153,7 @@ describe("Voice Input Transport Integration Tests", () => {
     expect(matchesSecond).toBe(1);
   });
 
-  it("Requirement 2 & 3: microphone action starts and user can explicitly stop listening", () => {
+  it("Requirement 2 & 3: microphone action starts continuously and user can explicitly finish", () => {
     const mockRecognizer = new MockVoiceRecognizer();
 
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
@@ -162,12 +162,23 @@ describe("Voice Input Transport Integration Tests", () => {
     fireEvent.click(startBtn);
 
     expect(mockRecognizer.startCount).toBe(1);
-    expect(screen.getByRole("button", { name: /Stop Listening/i })).toBeTruthy();
+    expect(mockRecognizer.lastOptions?.continuous).toBe(true);
+    expect(screen.getByRole("button", { name: /Stop \/ Done/i })).toBeTruthy();
 
-    const stopBtn = screen.getByRole("button", { name: /Stop Listening/i });
+    const stopBtn = screen.getByRole("button", { name: /Stop \/ Done/i });
     fireEvent.click(stopBtn);
 
     expect(mockRecognizer.stopCount).toBe(1);
+  });
+
+  it("presents attachment, editable text, voice, and explicit completion in one input surface", () => {
+    const mockRecognizer = new MockVoiceRecognizer();
+    render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
+
+    expect(screen.getByLabelText("Attach commercial file")).toBeTruthy();
+    expect(screen.getByRole("textbox")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Voice Input" }));
+    expect(screen.getByRole("button", { name: "Stop / Done" })).toBeTruthy();
   });
 
   it("Requirement 4 & 5: configures correct recognition locale for Arabic and English", () => {

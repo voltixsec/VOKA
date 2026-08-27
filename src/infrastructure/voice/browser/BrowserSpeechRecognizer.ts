@@ -17,6 +17,9 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
   private transcript: VoiceTranscript = { interim: "", final: "" };
   private recognitionInstance: any = null;
   private options: VoiceRecognizerOptions = {};
+  private stopRequested = false;
+  private restartBase = "";
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
 
   public isSupported(): boolean {
     if (typeof window === "undefined") {
@@ -52,14 +55,19 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
 
   public start(options: VoiceRecognizerOptions = {}): void {
     this.options = options;
+    this.stopRequested = false;
+    this.restartBase = "";
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
 
     if (!this.isSupported()) {
       this.setState("UNAVAILABLE");
       return;
     }
 
-    // Always reset session transcript at the start of a new voice recognition session
-    this.transcript = { interim: "", final: "" };
+    this.setTranscript({ interim: "", final: "" });
 
     const SpeechRecognitionClass =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -76,7 +84,7 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
       const recognition = new SpeechRecognitionClass();
       this.recognitionInstance = recognition;
 
-      recognition.continuous = options.continuous ?? false;
+      recognition.continuous = options.continuous ?? true;
       recognition.interimResults = options.interimResults ?? true;
       recognition.lang = options.lang || "en-US";
 
@@ -99,9 +107,13 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
           }
         }
 
+        const accumulatedFinal = [this.restartBase, finalTranscript.trim()]
+          .filter(Boolean)
+          .join(" ");
+
         this.setTranscript({
           interim: interimTranscript,
-          final: finalTranscript,
+          final: accumulatedFinal,
         });
 
         if (interimTranscript && !event.results[event.results.length - 1]?.isFinal) {
@@ -119,7 +131,7 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
             this.options.onError("Microphone permission denied.");
           }
         } else if (error === "no-speech") {
-          this.setState("READY");
+          this.setState(this.options.continuous && !this.stopRequested ? "LISTENING" : "READY");
         } else if (error === "aborted") {
           if (this.state !== "READY" && this.state !== "IDLE") {
             this.setState("IDLE");
@@ -133,6 +145,24 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
       };
 
       recognition.onend = () => {
+        if (this.options.continuous && !this.stopRequested && (
+          this.state === "LISTENING" || this.state === "PROCESSING"
+        )) {
+          this.restartBase = this.transcript.final.trim();
+          this.setState("LISTENING");
+          this.restartTimer = setTimeout(() => {
+            this.restartTimer = null;
+            if (this.stopRequested || this.recognitionInstance !== recognition) return;
+            try {
+              recognition.start();
+            } catch {
+              this.recognitionInstance = null;
+              this.setState("READY");
+            }
+          }, 250);
+          return;
+        }
+
         this.recognitionInstance = null;
         if (
           this.state === "LISTENING" ||
@@ -152,6 +182,11 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
   }
 
   public stop(): void {
+    this.stopRequested = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     if (this.recognitionInstance) {
       try {
         if (this.state === "LISTENING") {
@@ -167,6 +202,11 @@ export class BrowserSpeechRecognizer implements IVoiceRecognizer {
   }
 
   public reset(): void {
+    this.stopRequested = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     if (this.recognitionInstance) {
       try {
         this.recognitionInstance.abort();
