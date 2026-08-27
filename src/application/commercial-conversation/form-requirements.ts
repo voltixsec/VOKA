@@ -22,7 +22,7 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
     if (!hasAttachment) missingRequired.push(missing.attachment);
     if (!contextText.trim()) missingRequired.push(missing.userIntent);
   } else {
-    if (!fields.customerMention) missingRequired.push(missing.customer);
+    if (!fields.customerId) missingRequired.push(missing.customer);
     if (!fields.lines.length) missingRequired.push(missing.lines);
   }
 

@@ -163,12 +163,30 @@ describe("Voice Input Transport Integration Tests", () => {
 
     expect(mockRecognizer.startCount).toBe(1);
     expect(mockRecognizer.lastOptions?.continuous).toBe(true);
-    expect(screen.getByRole("button", { name: /Stop \/ Done/i })).toBeTruthy();
-
-    const stopBtn = screen.getByRole("button", { name: /Stop \/ Done/i });
+    const stopBtn = screen.getByRole("button", { name: /Stop microphone/i });
     fireEvent.click(stopBtn);
 
     expect(mockRecognizer.stopCount).toBe(1);
+  });
+
+  it("treats textarea edits and deletions as authoritative across voice continuation and restart", () => {
+    const mockRecognizer = new MockVoiceRecognizer();
+    render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+    fireEvent.click(screen.getByRole("button", { name: /Voice Input/i }));
+    act(() => mockRecognizer.emitTranscript("deleted words"));
+    expect(textarea.value).toBe("deleted words");
+    fireEvent.change(textarea, { target: { value: "kept" } });
+    act(() => mockRecognizer.emitTranscript("deleted words new words"));
+    expect(textarea.value).toBe("kept new words");
+
+    fireEvent.click(screen.getByRole("button", { name: /Stop microphone/i }));
+    fireEvent.change(textarea, { target: { value: "current textarea" } });
+    fireEvent.click(screen.getByRole("button", { name: /Voice Input/i }));
+    act(() => mockRecognizer.emitTranscript("fresh voice"));
+    expect(textarea.value).toBe("current textarea fresh voice");
+    expect(textarea.value).not.toContain("deleted words");
   });
 
   it("presents attachment, editable text, voice, and explicit completion in one input surface", () => {
@@ -178,7 +196,7 @@ describe("Voice Input Transport Integration Tests", () => {
     expect(screen.getByLabelText("Attach commercial file")).toBeTruthy();
     expect(screen.getByRole("textbox")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Voice Input" }));
-    expect(screen.getByRole("button", { name: "Stop / Done" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop microphone" })).toBeTruthy();
   });
 
   it("Requirement 4 & 5: configures correct recognition locale for Arabic and English", () => {

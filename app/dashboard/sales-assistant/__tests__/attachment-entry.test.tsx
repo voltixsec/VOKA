@@ -18,7 +18,7 @@ describe("Commercial AI attachment-first entry", () => {
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByLabelText("Attach commercial file"), { target: { files: [new File(["%PDF-1.7"], "drawing.pdf", { type: "application/pdf" })] } });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Count CCTV cameras in this drawing" } });
-    fireEvent.click(screen.getByRole("button", { name: "Understand & review operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     fireEvent.click(await screen.findByRole("button", { name: "Open for human review" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/dashboard/takeoff?sessionId=takeoff-1"));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/drawing-takeoffs", expect.objectContaining({ method: "POST", body: expect.any(FormData) }));
@@ -30,7 +30,7 @@ describe("Commercial AI attachment-first entry", () => {
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByLabelText("Attach commercial file"), { target: { files: [new File(["%PDF-1.7"], "supplier-quote.pdf", { type: "application/pdf" })] } });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Create a quotation from this supplier document" } });
-    fireEvent.click(screen.getByRole("button", { name: "Understand & review operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     expect(await screen.findByText(/Who is the customer/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mocks.push).not.toHaveBeenCalled();

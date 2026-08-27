@@ -36,7 +36,6 @@ export default function SalesAssistantPage(props: any) {
   const [attachment, setAttachment] = useState<File | null>(null);
   const [workingDraft, setWorkingDraft] = useState<WorkingCommercialDraft | null>(null);
 
-  const basePromptRef = useRef<string>("");
   const replySourceRef = useRef<ConversationReplySource>("TEXT");
 
   const voice = useVoiceInput({
@@ -49,10 +48,11 @@ export default function SalesAssistantPage(props: any) {
 
   useEffect(() => {
     if (voice.transcript.final && voice.transcript.final !== prevFinalRef.current) {
-      const newAddition = voice.transcript.final;
-      const base = basePromptRef.current;
-      const merged = base ? `${base.trim()} ${newAddition.trim()}` : newAddition.trim();
-      setPrompt(merged);
+      const previous = prevFinalRef.current;
+      const newAddition = voice.transcript.final.startsWith(previous)
+        ? voice.transcript.final.slice(previous.length).trim()
+        : voice.transcript.final.trim();
+      if (newAddition) setPrompt((visible) => visible.trim() ? `${visible.trim()} ${newAddition}` : newAddition);
       replySourceRef.current = "VOICE";
       prevFinalRef.current = voice.transcript.final;
     }
@@ -71,14 +71,13 @@ export default function SalesAssistantPage(props: any) {
     if (workingDraft) sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(workingDraft));
   }, [workingDraft]);
 
-  const handleStartListening = () => {
-    basePromptRef.current = prompt;
+  const handleVoiceToggle = () => {
+    if (voice.state === "LISTENING" || voice.state === "PROCESSING") {
+      voice.stopListening();
+      return;
+    }
     prevFinalRef.current = "";
     voice.startListening(isArabic ? "ar-KW" : "en-US");
-  };
-
-  const handleStopListening = () => {
-    voice.stopListening();
   };
 
   const advanceConversation = async (reply = prompt, source = replySourceRef.current) => {
@@ -103,7 +102,6 @@ export default function SalesAssistantPage(props: any) {
       if (!response.ok) throw new Error(json.error?.message || "Unable to continue the conversation.");
       setWorkingDraft(json.data);
       setPrompt("");
-      basePromptRef.current = "";
       replySourceRef.current = "TEXT";
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -207,7 +205,7 @@ export default function SalesAssistantPage(props: any) {
       </div>
 
       {/* Unified Attach + Text + Voice input */}
-      <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-soft space-y-4">
+      <div className="flex flex-col rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-soft gap-3">
         <div className="flex items-center justify-between">
           <label htmlFor="sales-prompt-input" className="block text-sm font-semibold text-slate-200">
             {isArabic ? "طلب المبيعات (اللغة الطبيعية)" : "Sales Request Prompt (Natural Language)"}
@@ -216,7 +214,7 @@ export default function SalesAssistantPage(props: any) {
         </div>
 
         {/* Text Area */}
-        <div className="relative">
+        <div className="relative order-2">
           <textarea
             id="sales-prompt-input"
             value={prompt}
@@ -240,14 +238,14 @@ export default function SalesAssistantPage(props: any) {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+        <div className="order-1 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-3">
           <label htmlFor="commercial-attachment" className="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-sky-200">
             {isArabic ? "إرفاق ملف" : "Attach file"}
           </label>
           <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
           {attachment ? <div className="flex min-w-0 flex-1 items-center gap-2 text-sm"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="shrink-0 text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : <span className="flex-1 text-xs text-slate-500">{isArabic ? "اكتب أو تحدث، وأرفق رسم PDF عند الحاجة." : "Type or speak, and attach a drawing PDF when needed."}</span>}
-          <VoiceOrb state={voice.state === "LISTENING" ? "LISTENING" : voice.state === "PROCESSING" ? "PROCESSING" : "IDLE"} label={isArabic ? "بدء الإدخال الصوتي" : "Voice Input"} title={!voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={!voice.isSupported || voice.state === "LISTENING" || voice.state === "PROCESSING"} onClick={handleStartListening} />
-          {(voice.state === "LISTENING" || voice.state === "PROCESSING") && <button type="button" onClick={handleStopListening} className="min-h-11 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950">{isArabic ? "إيقاف وتم" : "Stop / Done"}</button>}
+          <VoiceOrb state={voice.state === "LISTENING" ? "LISTENING" : voice.state === "PROCESSING" ? "PROCESSING" : "IDLE"} label={voice.state === "LISTENING" || voice.state === "PROCESSING" ? (isArabic ? "إيقاف الميكروفون" : "Stop microphone") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={!voice.isSupported} onClick={handleVoiceToggle} />
+          <button type="button" onClick={() => advanceConversation()} disabled={isGenerating || !prompt.trim()} className="min-h-11 rounded-xl bg-sky-400 px-5 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50">{isGenerating ? (isArabic ? "جاري الفهم..." : "Understanding…") : (isArabic ? "فهم العملية" : "Understand")}</button>
         </div>
 
         {/* Accessible Voice Status Live Region */}
@@ -255,7 +253,7 @@ export default function SalesAssistantPage(props: any) {
           <div
             role="status"
             aria-live="polite"
-            className={`rounded-2xl p-3 text-xs flex items-center gap-2 ${
+            className={`order-4 rounded-2xl p-3 text-xs flex items-center gap-2 ${
               voice.state === "PERMISSION_DENIED" || voice.state === "ERROR"
                 ? "border border-rose-500/30 bg-rose-500/10 text-rose-300"
                 : voice.state === "UNAVAILABLE"
@@ -273,7 +271,7 @@ export default function SalesAssistantPage(props: any) {
         )}
 
         {/* Sample Prompt Presets */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="order-5 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-400">
             {isArabic ? "نماذج سريعة:" : "Sample Prompts:"}
           </span>
@@ -290,34 +288,18 @@ export default function SalesAssistantPage(props: any) {
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">
+          <div className="order-6 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">
             {error}
           </div>
         )}
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => advanceConversation()}
-            disabled={isGenerating || !prompt.trim()}
-            className="inline-flex items-center gap-2 rounded-2xl bg-sky-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-300 disabled:opacity-50 transition"
-          >
-            {isGenerating ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
-                {isArabic ? "جاري استخراج وتدقيق البيانات..." : "Extracting & Resolving Data..."}
-              </>
-            ) : (
-              <>{isArabic ? "فهم العملية ومراجعتها" : "Understand & review operation"}</>
-            )}
-          </button>
-        </div>
-
         {workingDraft && (
-          <div className="space-y-4 rounded-2xl border border-sky-400/20 bg-slate-950/80 p-5" data-testid="commercial-conversation">
+          <div className="order-3 space-y-3 rounded-2xl border border-sky-400/20 bg-slate-950/80 p-4" data-testid="commercial-conversation">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}</p><p className="mt-1 text-xs text-slate-400">{isArabic ? "مسودة محادثة واحدة محفوظة — لن يتم إنشاء أي مستند تلقائياً." : "One saved conversational draft — no document will be created automatically."}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${workingDraft.status === "READY_FOR_REVIEW" ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{workingDraft.status === "READY_FOR_REVIEW" ? (isArabic ? "جاهز للمراجعة" : "READY FOR REVIEW") : (isArabic ? "يحتاج معلومات" : "Needs information")}</span></div>
-            <div className="max-h-48 space-y-2 overflow-y-auto">{workingDraft.turns.map((turn, index) => <div key={`${index}-${turn.source}`} className="rounded-xl bg-white/5 px-3 py-2 text-sm text-slate-200"><span className="me-2 text-[10px] font-semibold text-sky-300">{turn.source}</span>{turn.text}</div>)}</div>
+            <p className="text-sm text-slate-200">{isArabic ? "فهمت أنك تريد" : "I understood"}: {displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}{workingDraft.fields.lines.length ? ` — ${workingDraft.fields.lines.map((line) => `${line.quantity ?? ""} ${line.itemName}`.trim()).join(" + ")}` : ""}{workingDraft.fields.customerMention ? ` — ${workingDraft.fields.customerMention}` : ""}.</p>
+            {workingDraft.missingRequired.length > 0 && <div className="rounded-xl border-2 border-rose-400/50 bg-rose-500/10 p-3"><p className="text-sm font-bold text-rose-200">{isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:"}</p><ul className="mt-2 list-inside list-disc space-y-1 text-sm font-semibold text-white">{workingDraft.missingRequired.map((field) => <li key={field.key}>{isArabic ? field.labelAr : field.labelEn}</li>)}</ul></div>}
             {workingDraft.clarification && <div className="space-y-3"><p className="text-sm text-white">{isArabic ? workingDraft.clarification.ar : workingDraft.clarification.en}</p><div className="flex flex-wrap gap-2">{workingDraft.clarification.suggestions.map((chip, index) => <button key={`${chip.reply}-${index}`} type="button" disabled={isGenerating} onClick={() => advanceConversation(chip.reply, "CHIP")} className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-xs text-sky-200">{isArabic ? chip.ar : chip.en}</button>)}</div></div>}
+            {workingDraft.customerResolution?.status === "NOT_FOUND" && <button type="button" onClick={() => router.push("/dashboard/customers/new")} className="text-start text-xs font-semibold text-sky-300 underline">{isArabic ? "فتح نموذج إنشاء عميل" : "Open create customer form"}</button>}
             {workingDraft.recommended.length > 0 && <p className="text-xs text-slate-500">{isArabic ? "اختياري/موصى به: " : "Optional/recommended: "}{workingDraft.recommended.map((field) => isArabic ? field.labelAr : field.labelEn).join("، ")}</p>}
             {workingDraft.status === "READY_FOR_REVIEW" && <button type="button" onClick={openForHumanReview} disabled={isGenerating} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">{isArabic ? "فتح للمراجعة البشرية" : "Open for human review"}</button>}
           </div>

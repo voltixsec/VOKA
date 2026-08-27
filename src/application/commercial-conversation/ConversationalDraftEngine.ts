@@ -1,6 +1,8 @@
 import { classifyCommercialOperation } from "../commercial-entry";
 import { evaluateFormRequirements } from "./form-requirements";
 import type { AdvanceConversationInput, ConversationalOperation, DraftFields, DraftLine, WorkingCommercialDraft } from "./types";
+import type { CustomerCandidate } from "./types";
+import { normalizeTechnicalSpeech } from "./technical-speech";
 
 const SUPPORTED = new Set<ConversationalOperation>(["QUOTATION", "INVOICE", "CONTRACT", "SALES_ORDER", "DRAWING_TAKEOFF"]);
 
@@ -51,17 +53,20 @@ function extractSource(text: string): string | null {
 }
 
 function mergeFields(current: DraftFields, reply: string): DraftFields {
-  const newLines = extractLines(reply);
+  const normalizedReply = normalizeTechnicalSpeech(reply);
+  const customerMention = extractCustomer(normalizedReply);
+  const newLines = extractLines(normalizedReply);
   const lines = [...current.lines];
   for (const line of newLines) {
     if (!lines.some((existing) => existing.quantity === line.quantity && existing.itemName.toLowerCase() === line.itemName.toLowerCase())) lines.push(line);
   }
   return {
-    customerMention: extractCustomer(reply) ?? current.customerMention,
-    currencyCode: extractCurrency(reply) ?? current.currencyCode,
-    paymentTerms: extractPaymentTerms(reply) ?? current.paymentTerms,
-    scopeType: extractScope(reply) ?? current.scopeType,
-    sourceReference: extractSource(reply) ?? current.sourceReference,
+    customerId: customerMention && customerMention !== current.customerMention ? null : current.customerId,
+    customerMention: customerMention ?? current.customerMention,
+    currencyCode: extractCurrency(normalizedReply) ?? current.currencyCode,
+    paymentTerms: extractPaymentTerms(normalizedReply) ?? current.paymentTerms,
+    scopeType: extractScope(normalizedReply) ?? current.scopeType,
+    sourceReference: extractSource(normalizedReply) ?? current.sourceReference,
     lines,
   };
 }
@@ -95,16 +100,45 @@ export class ConversationalDraftEngine {
     const turns = [...(input.draft?.turns ?? []), { source: input.replySource, text: reply }];
     const contextText = turns.map((turn) => turn.text).join("\n");
     const fields = mergeFields(input.draft?.fields ?? {
-      customerMention: null, currencyCode: null, paymentTerms: null, scopeType: null, sourceReference: null, lines: [],
+      customerId: null, customerMention: null, currencyCode: null, paymentTerms: null, scopeType: null, sourceReference: null, lines: [],
     }, reply);
     const attachment = input.attachment === undefined ? input.draft?.attachment ?? null : input.attachment;
     const requirements = evaluateFormRequirements(operation, fields, Boolean(attachment), contextText);
     const status = requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW";
     const draft: WorkingCommercialDraft = {
       id: input.draft?.id ?? crypto.randomUUID(), operation, locale: input.locale, fields, attachment,
+      customerResolution: input.draft?.customerResolution ?? { status: "UNRESOLVED", candidates: [] },
       turns, contextText, ...requirements, status, clarification: null, requiresHumanReview: true, executed: false,
     };
     draft.clarification = clarification(draft.missingRequired);
     return draft;
   }
+}
+
+function comparable(value: string) {
+  return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+export function applyCustomerResolution(draft: WorkingCommercialDraft, candidates: CustomerCandidate[]): WorkingCommercialDraft {
+  if (draft.operation === "SALES_ORDER" || draft.operation === "DRAWING_TAKEOFF" || !draft.fields.customerMention) return draft;
+  const mention = comparable(draft.fields.customerMention);
+  const names = (candidate: CustomerCandidate) => [candidate.name, ...(candidate.aliases ?? [])].map(comparable).filter(Boolean);
+  const exact = candidates.filter((candidate) => names(candidate).includes(mention));
+  const plausible = exact.length ? exact : candidates.filter((candidate) => {
+    return names(candidate).some((name) => name.includes(mention) || mention.includes(name));
+  });
+  const status = plausible.length === 1 ? "MATCHED" : plausible.length > 1 ? "AMBIGUOUS" : "NOT_FOUND";
+  const fields = { ...draft.fields, customerId: status === "MATCHED" ? plausible[0].id : null };
+  const requirements = evaluateFormRequirements(draft.operation, fields, Boolean(draft.attachment), draft.contextText);
+  const resolved: WorkingCommercialDraft = { ...draft, fields, customerResolution: { status, candidates: plausible.slice(0, 5) }, ...requirements, status: requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW" };
+  resolved.clarification = clarification(resolved.missingRequired);
+  if (status === "AMBIGUOUS") resolved.clarification = {
+    ar: "وجدت أكثر من عميل مطابق. اختر العميل الصحيح.", en: "I found more than one matching customer. Choose the correct customer.",
+    suggestions: plausible.slice(0, 5).map((candidate) => ({ ar: candidate.name, en: candidate.name, reply: `العميل ${candidate.name}` })),
+  };
+  if (status === "NOT_FOUND") resolved.clarification = {
+    ar: `لم أجد العميل «${draft.fields.customerMention}» في قاعدة العملاء. راجع الاسم أو أنشئ العميل أولاً.`,
+    en: `Customer “${draft.fields.customerMention}” was not found. Check the name or create the customer first.`, suggestions: [],
+  };
+  return resolved;
 }

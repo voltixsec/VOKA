@@ -16,12 +16,19 @@ export type DraftLine = {
 };
 
 export type DraftFields = {
+  customerId: string | null;
   customerMention: string | null;
   currencyCode: string | null;
   paymentTerms: string | null;
   scopeType: string | null;
   sourceReference: string | null;
   lines: DraftLine[];
+};
+
+export type CustomerCandidate = { id: string; name: string; aliases?: string[] };
+export type CustomerResolution = {
+  status: "UNRESOLVED" | "MATCHED" | "AMBIGUOUS" | "NOT_FOUND";
+  candidates: CustomerCandidate[];
 };
 
 export type ConversationTurn = {
@@ -49,6 +56,7 @@ export type WorkingCommercialDraft = {
   operation: ConversationalOperation;
   locale: ConversationLocale;
   fields: DraftFields;
+  customerResolution: CustomerResolution;
   attachment: DraftAttachment | null;
   turns: ConversationTurn[];
   contextText: string;

@@ -18,10 +18,10 @@ describe("commercial conversational clarification", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Create quotation for 20 cameras" } });
-    fireEvent.click(screen.getByRole("button", { name: "Understand & review operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     await screen.findByText("Who is the customer?");
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Customer is Al Noor" } });
-    fireEvent.click(screen.getByRole("button", { name: "Understand & review operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     await screen.findByText("READY FOR REVIEW");
     const body = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
     expect(body.draft.id).toBe("same-draft");
@@ -35,7 +35,7 @@ describe("commercial conversational clarification", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Create contract for Al Noor cameras" } });
-    fireEvent.click(screen.getByRole("button", { name: "Understand & review operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     fireEvent.click(await screen.findByRole("button", { name: "Service" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const body = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));

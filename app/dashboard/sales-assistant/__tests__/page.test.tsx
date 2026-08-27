@@ -36,7 +36,7 @@ describe("SalesAssistantPage", () => {
       target: { value: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras" },
     });
 
-    const generateBtn = screen.getByRole("button", { name: "Understand & review operation" });
+    const generateBtn = screen.getByRole("button", { name: "Understand" });
     fireEvent.click(generateBtn);
 
     await waitFor(() => {

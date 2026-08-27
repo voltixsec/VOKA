@@ -190,9 +190,7 @@ export default function NewContractPage() {
       if (!raw) return;
       const draft = JSON.parse(raw) as WorkingCommercialDraft;
       if (draft.operation !== "CONTRACT" || draft.status !== "READY_FOR_REVIEW") return;
-      const mention = draft.fields.customerMention?.trim().toLocaleLowerCase();
-      const customer = mention ? customers.find((candidate) => [candidate.name, candidate.nameAr, candidate.nameEn].some((name) => name?.trim().toLocaleLowerCase() === mention)) : null;
-      if (customer) setCustomerId(customer.id);
+      if (draft.fields.customerId && customers.some((customer) => customer.id === draft.fields.customerId)) setCustomerId(draft.fields.customerId);
       if (draft.fields.currencyCode) setCurrencyCode(draft.fields.currencyCode);
       if (draft.fields.paymentTerms) setTerms(draft.fields.paymentTerms);
       if (draft.fields.scopeType && scopeOptions.some((option) => option.value === draft.fields.scopeType)) setScopeType(draft.fields.scopeType as ScopeType);
