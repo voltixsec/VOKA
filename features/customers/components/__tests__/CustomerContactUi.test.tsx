@@ -34,6 +34,84 @@ import {
 describe(
   'customer contact UI',
   () => {
+    it('requires deliberate Create and preserves ordinary Enter and multiline Notes input', async () => {
+      const onSubmit = vi.fn();
+
+      render(
+        <CustomerForm
+          isArabic={false}
+          submitLabel="Create customer"
+          onSubmit={onSubmit}
+        />,
+      );
+
+      const name = screen.getByLabelText('Customer Name');
+      const notes = screen.getByLabelText('Notes');
+
+      fireEvent.change(name, { target: { value: 'Acme' } });
+      fireEvent.keyDown(name, { key: 'Enter', code: 'Enter' });
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      fireEvent.change(notes, { target: { value: 'First line\nSecond line' } });
+      fireEvent.keyDown(notes, { key: 'Enter', code: 'Enter' });
+      expect(notes).toHaveValue('First line\nSecond line');
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create customer' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      expect(onSubmit.mock.calls[0][0].notesEn).toBe('First line\nSecond line');
+    });
+
+    it('requires deliberate Save when editing', async () => {
+      const onSubmit = vi.fn();
+
+      render(
+        <CustomerForm
+          initialValue={{ ...emptyCustomerForm, nameEn: 'Acme' }}
+          isArabic={false}
+          isEdit
+          submitLabel="Save changes"
+          onSubmit={onSubmit}
+        />,
+      );
+
+      const email = screen.getByLabelText('Email');
+      fireEvent.change(email, { target: { value: 'sales@example.com' } });
+      fireEvent.keyDown(email, { key: 'Enter', code: 'Enter' });
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    });
+
+    it('never submits when the Contact Picker control is activated', async () => {
+      const onSubmit = vi.fn();
+      const select = vi.fn().mockResolvedValue([
+        { name: ['Noura'], tel: ['+96550001234'] },
+      ]);
+
+      Object.defineProperty(navigator, 'contacts', {
+        configurable: true,
+        value: { select },
+      });
+
+      render(
+        <CustomerForm
+          isArabic={false}
+          submitLabel="Create customer"
+          onSubmit={onSubmit}
+        />,
+      );
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Choose from contacts' }),
+      );
+      await waitFor(() => expect(select).toHaveBeenCalledTimes(1));
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      delete (navigator as Navigator & { contacts?: unknown }).contacts;
+    });
+
     it(
       'prefills editable name and mobile fields from the supported Contact Picker without assuming WhatsApp',
       async () => {
