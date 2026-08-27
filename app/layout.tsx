@@ -1,6 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
 
 const vokaFont = IBM_Plex_Sans_Arabic({
   subsets: ["arabic", "latin"],
@@ -8,6 +8,7 @@ const vokaFont = IBM_Plex_Sans_Arabic({
   display: "swap",
   variable: "--font-voka",
 });
+const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
 
 export const metadata: Metadata = {
   title: "VOKA — Speak. Understand. Quote.",
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <body
-        className={vokaFont.variable}
+        className={`${vokaFont.variable} ${cairo.variable}`}
         suppressHydrationWarning
       >
         {children}

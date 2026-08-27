@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { SalesAssistantDraftProposal } from "@/src/application/ai-sales-assistant";
-import { useVoiceInput, IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
+import { useRecordedVoiceInput, useVoiceInput, type AudioTranscriber, type IRawAudioRecorder, type IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
 import { VoiceOrb } from "@/components/voice";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import type { ConversationReplySource, WorkingCommercialDraft } from "@/src/application/commercial-conversation";
@@ -26,6 +26,8 @@ const SAMPLES = [
 
 export default function SalesAssistantPage(props: any) {
   const customRecognizer: IVoiceRecognizer | undefined = props?.customRecognizer;
+  const customAudioRecorder: IRawAudioRecorder | undefined = props?.customAudioRecorder;
+  const customTranscribe: AudioTranscriber | undefined = props?.customTranscribe;
   const { isArabic } = useLanguage();
   const router = useRouter();
 
@@ -42,11 +44,13 @@ export default function SalesAssistantPage(props: any) {
     locale: isArabic ? "ar" : "en",
     recognizer: customRecognizer,
   });
+  const recorded = useRecordedVoiceInput({ recorder: customAudioRecorder, transcribe: customTranscribe });
 
   // Keep track of the transcript final result and merge into prompt
   const prevFinalRef = useRef<string>("");
 
   useEffect(() => {
+    if (recorded.isSupported) return;
     if (voice.transcript.final && voice.transcript.final !== prevFinalRef.current) {
       const previous = prevFinalRef.current;
       const newAddition = voice.transcript.final.startsWith(previous)
@@ -56,7 +60,15 @@ export default function SalesAssistantPage(props: any) {
       replySourceRef.current = "VOICE";
       prevFinalRef.current = voice.transcript.final;
     }
-  }, [voice.transcript.final]);
+  }, [recorded.isSupported, voice.transcript.final]);
+
+  const previousRecordingTranscriptRef = useRef("");
+  useEffect(() => {
+    if (!recorded.transcript || recorded.transcript === previousRecordingTranscriptRef.current) return;
+    setPrompt((visible) => visible.trim() ? `${visible.trim()} ${recorded.transcript}` : recorded.transcript);
+    replySourceRef.current = "VOICE";
+    previousRecordingTranscriptRef.current = recorded.transcript;
+  }, [recorded.transcript]);
 
   useEffect(() => {
     try {
@@ -72,6 +84,11 @@ export default function SalesAssistantPage(props: any) {
   }, [workingDraft]);
 
   const handleVoiceToggle = () => {
+    if (recorded.isSupported) {
+      if (recorded.state === "RECORDING") recorded.stopRecording();
+      else if (recorded.state !== "TRANSCRIBING") { previousRecordingTranscriptRef.current = ""; void recorded.startRecording(); }
+      return;
+    }
     if (voice.state === "LISTENING" || voice.state === "PROCESSING") {
       voice.stopListening();
       return;
@@ -156,6 +173,13 @@ export default function SalesAssistantPage(props: any) {
   };
 
   const getVoiceStatusMessage = () => {
+    if (recorded.isSupported) {
+      if (recorded.state === "RECORDING") return isArabic ? "جاري تسجيل الصوت... اضغط الميكروفون للإيقاف." : "Recording audio… Press the microphone to stop.";
+      if (recorded.state === "TRANSCRIBING") return isArabic ? "جاري تفريغ التسجيل كاملاً..." : "Transcribing the complete recording…";
+      if (recorded.state === "READY") return isArabic ? "اكتمل التفريغ. راجع النص وعدّله ثم اضغط فهم العملية." : "Transcription complete. Edit the text, then press Understand.";
+      if (recorded.state === "PERMISSION_DENIED" || recorded.state === "ERROR") return recorded.errorMessage;
+      return null;
+    }
     switch (voice.state) {
       case "LISTENING":
         return isArabic
@@ -187,7 +211,7 @@ export default function SalesAssistantPage(props: any) {
   };
 
   return (
-    <div className="space-y-8 max-w-5xl" dir={isArabic ? "rtl" : "ltr"}>
+    <div className={`space-y-8 max-w-5xl ${isArabic ? "font-[var(--font-cairo)]" : ""}`} dir={isArabic ? "rtl" : "ltr"}>
       <div>
         <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-300">
           {isArabic ? "مدخل VOKA التجاري الذكي" : "VOKA Commercial AI Entry"}
@@ -244,9 +268,11 @@ export default function SalesAssistantPage(props: any) {
           </label>
           <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
           {attachment ? <div className="flex min-w-0 flex-1 items-center gap-2 text-sm"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="shrink-0 text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : <span className="flex-1 text-xs text-slate-500">{isArabic ? "اكتب أو تحدث، وأرفق رسم PDF عند الحاجة." : "Type or speak, and attach a drawing PDF when needed."}</span>}
-          <VoiceOrb state={voice.state === "LISTENING" ? "LISTENING" : voice.state === "PROCESSING" ? "PROCESSING" : "IDLE"} label={voice.state === "LISTENING" || voice.state === "PROCESSING" ? (isArabic ? "إيقاف الميكروفون" : "Stop microphone") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={!voice.isSupported} onClick={handleVoiceToggle} />
+          <VoiceOrb state={(recorded.isSupported && recorded.state === "RECORDING") || (!recorded.isSupported && voice.state === "LISTENING") ? "LISTENING" : (recorded.isSupported && recorded.state === "TRANSCRIBING") || (!recorded.isSupported && voice.state === "PROCESSING") ? "PROCESSING" : "IDLE"} label={(recorded.isSupported ? recorded.state === "RECORDING" : voice.state === "LISTENING" || voice.state === "PROCESSING") ? (isArabic ? "إيقاف الميكروفون" : "Stop microphone") : recorded.isSupported ? (isArabic ? "بدء تسجيل الصوت" : "Record voice") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!recorded.isSupported && !voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={recorded.isSupported ? recorded.state === "TRANSCRIBING" : !voice.isSupported} onClick={handleVoiceToggle} />
           <button type="button" onClick={() => advanceConversation()} disabled={isGenerating || !prompt.trim()} className="min-h-11 rounded-xl bg-sky-400 px-5 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50">{isGenerating ? (isArabic ? "جاري الفهم..." : "Understanding…") : (isArabic ? "فهم العملية" : "Understand")}</button>
         </div>
+
+        {recorded.isSupported && (recorded.state === "RECORDING" || recorded.state === "TRANSCRIBING") && <div className="order-2 flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-500/5" aria-label={isArabic ? "موجة التسجيل الصوتي" : "Audio recording waveform"}>{recorded.waveform.map((level, index) => <span key={index} className="w-1 rounded-full bg-sky-400 transition-[height] duration-100" style={{ height: `${Math.max(5, level * 34)}px` }} />)}</div>}
 
         {/* Accessible Voice Status Live Region */}
         {getVoiceStatusMessage() && (
@@ -254,17 +280,17 @@ export default function SalesAssistantPage(props: any) {
             role="status"
             aria-live="polite"
             className={`order-4 rounded-2xl p-3 text-xs flex items-center gap-2 ${
-              voice.state === "PERMISSION_DENIED" || voice.state === "ERROR"
+              (recorded.isSupported ? recorded.state === "PERMISSION_DENIED" || recorded.state === "ERROR" : voice.state === "PERMISSION_DENIED" || voice.state === "ERROR")
                 ? "border border-rose-500/30 bg-rose-500/10 text-rose-300"
-                : voice.state === "UNAVAILABLE"
+                : !recorded.isSupported && voice.state === "UNAVAILABLE"
                 ? "border border-amber-500/30 bg-amber-500/10 text-amber-300"
-                : voice.state === "LISTENING" || voice.state === "PROCESSING"
+                : (recorded.isSupported ? recorded.state === "RECORDING" || recorded.state === "TRANSCRIBING" : voice.state === "LISTENING" || voice.state === "PROCESSING")
                 ? "border border-sky-500/30 bg-sky-500/10 text-sky-300"
                 : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
             }`}
           >
             <span className="font-semibold uppercase tracking-wider text-[10px]">
-              [{voice.state}]
+              [{recorded.isSupported ? recorded.state : voice.state}]
             </span>
             <span>{getVoiceStatusMessage()}</span>
           </div>

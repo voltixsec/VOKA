@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/font/google", () => ({
   IBM_Plex_Sans_Arabic: () => ({ variable: "--font-voka" }),
+  Cairo: () => ({ variable: "--font-cairo" }),
 }));
 
 import { metadata } from "../layout";
