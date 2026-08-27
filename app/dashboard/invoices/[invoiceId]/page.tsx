@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "@/components/ui";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { displayActorName, displayLabel } from "@/lib/i18n/display-labels";
 
 type Invoice = {
   id: string;
@@ -50,6 +51,7 @@ type Payment = {
 };
 export default function InvoiceDetails() {
   const { isArabic } = useLanguage();
+  const locale = isArabic ? "ar" : "en";
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -88,6 +90,11 @@ export default function InvoiceDetails() {
       currency: invoice?.currencyCode ?? "KWD",
       minimumFractionDigits: 3,
     }).format(n);
+  const dateTime = (value: string) =>
+    new Intl.DateTimeFormat(isArabic ? "ar-KW" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
   async function action(name: "issue" | "void") {
     if (!invoice) return;
     const body =
@@ -150,8 +157,8 @@ export default function InvoiceDetails() {
         description={invoice.customer.name}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Badge>{invoice.status}</Badge>
-            <Badge>{invoice.settlementStatus}</Badge>
+            <Badge>{displayLabel(invoice.status, locale)}</Badge>
+            <Badge>{displayLabel(invoice.settlementStatus, locale)}</Badge>
             <a
               href={`/api/invoices/${encodeURIComponent(invoice.id)}/pdf?locale=${isArabic ? "ar" : "en"}`}
             >
@@ -218,7 +225,7 @@ export default function InvoiceDetails() {
           {isArabic ? "المصدر والتدقيق" : "Provenance & audit"}
         </h3>
         <p className="mt-2 text-sm text-slate-400">
-          {invoice.origin}
+          {displayLabel(invoice.origin, locale)}
           {invoice.sourceId ? ` · ${invoice.sourceId}` : ""}
           {invoice.sourceQuotationRevisionNumber !== null
             ? ` · Rev ${invoice.sourceQuotationRevisionNumber}`
@@ -226,8 +233,8 @@ export default function InvoiceDetails() {
         </p>
         {invoice.issuedAt && (
           <p className="mt-2 text-sm">
-            {isArabic ? "أصدر بواسطة" : "Issued by"}: {invoice.issuedBy?.name} ·{" "}
-            {new Date(invoice.issuedAt).toLocaleString()}
+            {isArabic ? "أصدرها" : "Issued by"}: {invoice.issuedBy ? displayActorName(invoice.issuedBy.name, locale) : "—"} ·{" "}
+            {dateTime(invoice.issuedAt)}
           </p>
         )}
         {invoice.voidReason && (
@@ -270,11 +277,9 @@ export default function InvoiceDetails() {
               onChange={(e) => setMethod(e.target.value)}
               className="rounded-xl border border-white/10 bg-slate-950 px-4"
             >
-              <option value="BANK_TRANSFER">Bank transfer</option>
-              <option value="CASH">Cash</option>
-              <option value="CARD">Card</option>
-              <option value="CHEQUE">Cheque</option>
-              <option value="OTHER">Other</option>
+              {(["BANK_TRANSFER", "CASH", "CARD", "CHEQUE", "OTHER"] as const).map((value) => (
+                <option key={value} value={value}>{displayLabel(value, locale)}</option>
+              ))}
             </select>
             <Input
               value={reference}
@@ -301,11 +306,11 @@ export default function InvoiceDetails() {
             >
               <div>
                 <p>
-                  {p.method}
+                  {displayLabel(p.method, locale)}
                   {p.reference ? ` · ${p.reference}` : ""}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {new Date(p.receivedAt).toLocaleString()} · {p.recordedByName}
+                  {dateTime(p.receivedAt)} · {displayActorName(p.recordedByName, locale)}
                 </p>
               </div>
               <p className="text-emerald-300">{money(p.amount)}</p>

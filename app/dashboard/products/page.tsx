@@ -18,6 +18,7 @@ import {
 } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
 import { CatalogItemModal } from "../../../components/catalog/CatalogItemModal";
+import { catalogFallbackDisclosure } from "@/lib/i18n/display-labels";
 
 type CatalogItemType = "PRODUCT" | "SERVICE";
 
@@ -367,7 +368,7 @@ export default function ProductsPage() {
                     </TableCell>
                     <TableCell className="font-medium text-white">
                       {item.display?.name ?? item.name}
-                      {item.display?.isFallback && <div className="text-xs font-normal text-amber-300">{t("الاسم الأساسي — لا توجد ترجمة معتمدة", "Canonical fallback — no maintained localization")}</div>}
+                      {item.display?.isFallback && <div className="text-xs font-normal text-amber-300">{catalogFallbackDisclosure(isArabic ? "ar" : "en")}</div>}
                     </TableCell>
                     <TableCell className="font-semibold text-emerald-300">{item.salePrice.toFixed(3)}</TableCell>
                     <TableCell>

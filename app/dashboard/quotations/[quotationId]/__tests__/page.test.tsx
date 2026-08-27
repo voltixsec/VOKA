@@ -248,16 +248,22 @@ describe("QuotationDetailsPage localization visibility", () => {
 
   it.each([
     ["PENDING", "Preparing translated version"],
-    ["COMPLETED", "Arabic and English versions are ready"],
     ["FAILED", "Translation failed"],
-  ] as const)("renders %s status", async (status, label) => {
+  ] as const)("renders actionable %s localization status", async (status, label) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(quotation(status, "DRAFT"))));
 
     render(createElement(QuotationDetailsPage));
 
     const indicator = await screen.findByTestId("localization-status");
-    expect(indicator.textContent).toContain(status);
     expect(indicator.textContent).toContain(label);
+  });
+
+  it("does not advertise inactive-language readiness after localization completes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(quotation("COMPLETED", "DRAFT"))));
+    render(createElement(QuotationDetailsPage));
+    await screen.findByText("QT-1001");
+    expect(screen.queryByTestId("localization-status")).toBeNull();
+    expect(screen.queryByText("Arabic and English versions are ready")).toBeNull();
   });
 
   it.each([

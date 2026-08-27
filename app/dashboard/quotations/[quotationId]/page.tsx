@@ -178,10 +178,6 @@ const localizationLabels = {
     ar: "جارٍ تجهيز النسخة المترجمة",
     en: "Preparing translated version",
   },
-  COMPLETED: {
-    ar: "النسختان العربية والإنجليزية جاهزتان",
-    en: "Arabic and English versions are ready",
-  },
   FAILED: {
     ar: "تعذرت الترجمة",
     en: "Translation failed",
@@ -958,16 +954,14 @@ export default function QuotationDetailsPage() {
         </Card>
       )}
 
-      <div
+      {quote.localizationStatus !== "COMPLETED" && <div
         className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm"
         data-testid="localization-status"
       >
-        <Badge>{quote.localizationStatus}</Badge>
-
         <span className="text-slate-300">
           {localizationLabels[quote.localizationStatus][isArabic ? "ar" : "en"]}
         </span>
-      </div>
+      </div>}
 
       {quote.status === "SENT" && quote.localizationStatus !== "COMPLETED" && (
         <Card className="border-amber-400/20 bg-amber-400/5">

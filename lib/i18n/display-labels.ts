@@ -22,8 +22,29 @@ const labels: Record<string, Record<DisplayLocale, string>> = {
   SALES_ORDER: { ar: 'أمر بيع', en: 'Sales order' },
   CONTRACT: { ar: 'عقد', en: 'Contract' },
   INVOICE: { ar: 'فاتورة', en: 'Invoice' },
+  DIRECT: { ar: 'مباشرة', en: 'Direct' },
+  BANK_TRANSFER: { ar: 'تحويل بنكي', en: 'Bank transfer' },
+  CASH: { ar: 'نقداً', en: 'Cash' },
+  CARD: { ar: 'بطاقة', en: 'Card' },
+  CHEQUE: { ar: 'شيك', en: 'Cheque' },
+  OTHER: { ar: 'أخرى', en: 'Other' },
+  ADMIN: { ar: 'مسؤول النظام', en: 'System administrator' },
+  SALES: { ar: 'المبيعات', en: 'Sales' },
 };
 
 export function displayLabel(value: string, locale: DisplayLocale): string {
   return labels[value]?.[locale] ?? value;
+}
+
+export function displayActorName(value: string, locale: DisplayLocale): string {
+  if (value.trim().toLowerCase() === 'system administrator') {
+    return locale === 'ar' ? 'مسؤول النظام' : 'System administrator';
+  }
+  return value;
+}
+
+export function catalogFallbackDisclosure(locale: DisplayLocale): string {
+  return locale === 'ar'
+    ? 'يُعرض الاسم الأصلي لعدم إضافة ترجمة عربية حتى الآن.'
+    : 'Showing the original name — no English localization has been added yet.';
 }
