@@ -34,14 +34,18 @@ follows each bounded delivery.
 
 - **Findings:** CEO-R1-005, CEO-R1-006, CEO-R1-021, CEO-R1-024, CEO-R1-036
 - **Priority:** HIGH
-- **Implementation status:** PARTIAL — shared foundation and priority authenticated surfaces complete; final product-wide visual acceptance remains.
-- **Evidence:** `5adf5e9` (`fix(i18n): unify authenticated locale presentation`).
+- **Implementation status:** COMPLETE IN CODE — focused authenticated sweep and responsive Signatories acceptance complete; residual data-backed visual acceptance remains.
+- **Evidence:** `5adf5e9` (`fix(i18n): unify authenticated locale presentation`), `f4c631c` (`fix(i18n): close priority authenticated language leaks`), and `8f82ddd` (`fix(i18n): localize authenticated domain presentation`).
 - [x] Apply one established Arabic/Latin typography source across authenticated pages.
 - [x] Add shared user-visible status/document/provenance labels and apply them to priority surfaces.
 - [x] Replace native file input leakage in Drawing and Authorized Signatories.
-- [ ] Remove remaining inactive-language readiness clutter across every commercial detail surface.
-- [ ] Correct statement/summary terminology and formal-output labels.
+- [x] Remove completed inactive-language readiness clutter from the commercial detail surface while retaining actionable localization-failure/pending guidance and approval fencing.
+- [x] Correct priority statement/summary terminology and authenticated status, provenance, origin, payment-method, document-type, and audit presentation labels.
+- [x] Present Authorized Signatory identity entry only in the active language while preserving compatible AR/EN storage and existing-data fallback.
+- [x] Replace developer-facing catalog fallback disclosure with truthful active-language user wording.
+- [x] Verify Authorized Signatories in AR RTL / EN LTR at desktop and mobile widths, including controlled file inputs and overflow.
 - [ ] Complete AR RTL / EN LTR desktop/mobile acceptance.
+- **Residual manual acceptance:** Recheck data-backed Invoice detail/list, Catalog fallback records, Customer 360, Contracts, Quotations, Payments, and Commercial AI results in both languages once the local authenticated database/API fixture is available. The current browser session rendered the authenticated shell but its data APIs did not provide the required Invoice/Catalog records; automated UI regressions cover the fixed presentation paths.
 - **Dependencies:** Supplies localization patterns to WS-E, WS-G, WS-K, WS-N, WS-O.
 - **Acceptance gate:** Arabic and English each feel native and uncluttered across affected surfaces.
 
