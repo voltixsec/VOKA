@@ -185,6 +185,7 @@ export function CatalogItemModal({
     initialType,
     initialName,
     isArabic,
+    language,
   ]);
 
   async function handleSave(

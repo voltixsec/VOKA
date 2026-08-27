@@ -11,7 +11,7 @@ describe("dashboard command center", () => {
     render(<DashboardPage />);
     expect(await screen.findByText("22")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Products & Services/ })).toHaveAttribute("href", "/dashboard/products");
-    expect(screen.getByRole("link", { name: /Receivables/ })).toHaveAttribute("href", "/dashboard/invoices");
+    expect(screen.getByRole("link", { name: /Invoices/ })).toHaveAttribute("href", "/dashboard/invoices");
     expect(screen.getByRole("link", { name: "Start with voice" })).toHaveAttribute("href", "/dashboard/sales-assistant");
   });
   it("does not render decorative zeroes while data is loading", () => {

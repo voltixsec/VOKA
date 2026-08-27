@@ -34,9 +34,12 @@ follows each bounded delivery.
 
 - **Findings:** CEO-R1-005, CEO-R1-006, CEO-R1-021, CEO-R1-024, CEO-R1-036
 - **Priority:** HIGH
-- [ ] Apply the approved Arabic typography consistently.
-- [ ] Inventory and replace avoidable English leakage/raw business enums in AR mode.
-- [ ] Remove inactive-language readiness clutter.
+- **Implementation status:** PARTIAL — shared foundation and priority authenticated surfaces complete; final product-wide visual acceptance remains.
+- **Evidence:** `5adf5e9` (`fix(i18n): unify authenticated locale presentation`).
+- [x] Apply one established Arabic/Latin typography source across authenticated pages.
+- [x] Add shared user-visible status/document/provenance labels and apply them to priority surfaces.
+- [x] Replace native file input leakage in Drawing and Authorized Signatories.
+- [ ] Remove remaining inactive-language readiness clutter across every commercial detail surface.
 - [ ] Correct statement/summary terminology and formal-output labels.
 - [ ] Complete AR RTL / EN LTR desktop/mobile acceptance.
 - **Dependencies:** Supplies localization patterns to WS-E, WS-G, WS-K, WS-N, WS-O.
@@ -46,11 +49,13 @@ follows each bounded delivery.
 
 - **Finding:** CEO-R1-009
 - **Priority:** HIGH
-- [ ] Define meaningful notification events and noise policy.
-- [ ] Add tenant-safe notification records and authorization boundaries.
-- [ ] Implement unread count, list/popover, timestamp, description, and related-record link.
-- [ ] Implement mark-one and mark-all read with correct count transitions.
-- [ ] Verify cross-tenant safety and no fake seeded indicators.
+- **Implementation status:** COMPLETE IN CODE — manual browser acceptance remains.
+- **Evidence:** `ebf4a80` (`feat(notifications): add tenant-safe notification center`).
+- [x] Define a small meaningful event set: successful Invoice issuance.
+- [x] Add tenant-safe persistent notification records and authorization boundaries.
+- [x] Implement unread count, list/popover, timestamp, description, and related-record link.
+- [x] Implement mark-one and mark-all read with correct count transitions.
+- [x] Verify tenant/user query boundaries, deterministic deduplication, and no fake seeded indicators.
 - **Dependencies:** Event/audit sources; WS-M may emit payment lifecycle events.
 - **Acceptance gate:** A real event produces a useful actionable notification whose read state persists.
 
@@ -95,11 +100,13 @@ follows each bounded delivery.
 
 - **Findings:** CEO-R1-005, CEO-R1-017
 - **Priority:** HIGH
-- [ ] Produce an approved scalable localization model/UX decision before destructive schema change.
-- [ ] Separate canonical identity from extensible localized representations.
-- [ ] Define governed missing-translation behavior and persistent manual overrides.
-- [ ] Correct active-language product presentation.
-- [ ] Preserve legitimate historical document snapshots and overrides.
+- **Implementation status:** COMPLETE IN CODE — migration deployment and manual acceptance remain.
+- **Evidence:** `240ea99` (`feat(catalog): add extensible item localizations`).
+- [x] Implement an additive scalable localization model without destructive legacy-column removal.
+- [x] Separate canonical identity from extensible localized representations.
+- [x] Define deterministic visible fallback and persistent human overrides.
+- [x] Correct active-language product presentation without paired-language UI.
+- [x] Preserve legacy AR/EN data and immutable historical document snapshots.
 - **Dependencies:** Affects composers, documents, WS-E and WS-J; precedes broad data-model implementation.
 - **Acceptance gate:** Product identity resolves correctly in the active language and can extend beyond Arabic/English without paired-field UX.
 
@@ -119,11 +126,13 @@ follows each bounded delivery.
 
 - **Findings:** CEO-R1-004, CEO-R1-022
 - **Priority:** HIGH
-- [ ] Document the authoritative definition for every dashboard count.
-- [ ] Reconcile tenant, status, deletion, and current-revision filters with modules.
-- [ ] Remove sample/hard-coded/stale independent metrics.
-- [ ] Verify refresh after relevant lifecycle actions.
-- [ ] Add cross-module reconciliation tests.
+- **Implementation status:** COMPLETE IN CODE — manual data reconciliation remains.
+- **Evidence:** `b47ef67` (`fix(dashboard): reconcile authoritative module metrics`).
+- [x] Encode authoritative definitions in one shared server snapshot and tests.
+- [x] Reconcile tenant, status, deletion, and current-revision filters with modules.
+- [x] Remove narrower independent Dashboard quotation/invoice semantics.
+- [x] Keep invoice total and outstanding counts distinct.
+- [x] Add reconciliation, tenant/filter, and currency-separated aggregation coverage.
 - **Acceptance gate:** Dashboard and module totals reconcile for Customers, Products, Quotations, Sales Orders, Contracts, Invoices, and Payments.
 
 ## WS-J — Shared Commercial Document visual/output system
