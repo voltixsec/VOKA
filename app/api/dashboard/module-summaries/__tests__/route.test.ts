@@ -1,27 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({ quotation: vi.fn(), contract: vi.fn(), invoice: vi.fn(), payment: vi.fn() }));
-vi.mock('@/lib/prisma', () => ({ prisma: { quotation: { groupBy: mocks.quotation }, contract: { groupBy: mocks.contract }, invoice: { groupBy: mocks.invoice }, payment: { groupBy: mocks.payment } } }));
-vi.mock('@/lib/api', () => ({
-  apiSuccess: (data: unknown, init?: ResponseInit) => Response.json({ data }, init),
-  withCompanyAuth: (_roles: readonly string[], handler: Function) => (request: Request) => handler(request, {}, { companyId: 'trusted-company' }),
-}));
+const mocks = vi.hoisted(() => ({ count: vi.fn(), quotation: vi.fn(), contract: vi.fn(), invoice: vi.fn(), payment: vi.fn() }));
+vi.mock('@/lib/prisma', () => ({ prisma: {
+  customer: { count: mocks.count }, catalogItem: { count: mocks.count }, salesOrder: { count: mocks.count },
+  quotation: { count: mocks.count, groupBy: mocks.quotation }, contract: { count: mocks.count, groupBy: mocks.contract },
+  invoice: { count: mocks.count, groupBy: mocks.invoice }, payment: { count: mocks.count, groupBy: mocks.payment },
+} }));
+vi.mock('@/lib/api', () => ({ apiSuccess: (data: unknown, init?: ResponseInit) => Response.json({ data }, init), withCompanyAuth: (_roles: unknown, handler: Function) => (request: Request) => handler(request, {}, { companyId: 'trusted-company' }) }));
 import { GET } from '../route';
 
 describe('module summaries', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.clearAllMocks(); mocks.count.mockResolvedValue(2);
     mocks.quotation.mockResolvedValueOnce([{ status: 'DRAFT', _count: { _all: 2 } }]).mockResolvedValueOnce([{ currencyCode: 'KWD', _count: { _all: 2 }, _sum: { totalAmount: '12.000' } }]);
     mocks.contract.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     mocks.invoice.mockResolvedValueOnce([{ status: 'ISSUED', _count: { _all: 1 } }]).mockResolvedValueOnce([{ currencyCode: 'USD', _count: { _all: 1 }, _sum: { totalAmount: '20.000', paidAmount: '5.000', outstandingAmount: '15.000' } }]);
     mocks.payment.mockResolvedValueOnce([{ currencyCode: 'USD', _count: { _all: 1 }, _sum: { amount: '5.000' } }]);
   });
-  it('uses the trusted tenant and keeps currencies separated', async () => {
+  it('shares tenant-scoped counts and keeps each currency in a separate row', async () => {
     const response = await GET(new Request('http://localhost/api/dashboard/module-summaries?companyId=attacker'));
     const body = await response.json();
-    expect(body.data.quotations.byCurrency).toEqual([{ currencyCode: 'KWD', count: 2, totalAmount: '12.000' }]);
+    expect(body.data.quotations).toMatchObject({ totalCount: 2, byCurrency: [{ currencyCode: 'KWD', count: 2, totalAmount: '12.000' }] });
     expect(body.data.invoices.byCurrency[0]).toMatchObject({ currencyCode: 'USD', paidAmount: '5.000', outstandingAmount: '15.000' });
     expect(body.data.payments.byCurrency[0]).toMatchObject({ currencyCode: 'USD', collectedAmount: '5.000' });
-    for (const mock of Object.values(mocks)) for (const call of mock.mock.calls) expect(call[0].where.companyId).toBe('trusted-company');
+    for (const mock of [mocks.quotation, mocks.contract, mocks.invoice, mocks.payment]) for (const call of mock.mock.calls) expect(call[0].where.companyId).toBe('trusted-company');
   });
 });

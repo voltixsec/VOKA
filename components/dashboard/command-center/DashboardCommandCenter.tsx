@@ -5,16 +5,16 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { VoiceOrb } from "@/components/voice";
 
-type Summary = { customers: number; catalogItems: number; quotations: number; salesOrders: number; contracts: number; invoices: number; payments: number };
-const EMPTY: Summary = { customers: 0, catalogItems: 0, quotations: 0, salesOrders: 0, contracts: 0, invoices: 0, payments: 0 };
+type Summary = { customers: number; catalogItems: number; quotations: number; salesOrders: number; contracts: number; invoices: number; outstandingInvoices: number; payments: number };
+const EMPTY: Summary = { customers: 0, catalogItems: 0, quotations: 0, salesOrders: 0, contracts: 0, invoices: 0, outstandingInvoices: 0, payments: 0 };
 
 const modules = [
   { key: "customers", href: "/dashboard/customers", en: "Customers", ar: "العملاء", detailEn: "Active customer records", detailAr: "سجلات العملاء الحالية" },
   { key: "catalogItems", href: "/dashboard/products", en: "Products & Services", ar: "المنتجات والخدمات", detailEn: "Active catalog items", detailAr: "أصناف الكتالوج النشطة" },
-  { key: "quotations", href: "/dashboard/quotations", en: "Quotations", ar: "عروض الأسعار", detailEn: "Current drafts and sent offers", detailAr: "المسودات والعروض المرسلة الحالية" },
-  { key: "salesOrders", href: "/dashboard/sales-orders", en: "Sales Orders", ar: "أوامر البيع", detailEn: "Draft and confirmed orders", detailAr: "أوامر البيع المسودة والمؤكدة" },
+  { key: "quotations", href: "/dashboard/quotations", en: "Quotations", ar: "عروض الأسعار", detailEn: "All current quotation revisions", detailAr: "جميع الإصدارات الحالية لعروض الأسعار" },
+  { key: "salesOrders", href: "/dashboard/sales-orders", en: "Sales Orders", ar: "أوامر البيع", detailEn: "All sales order records", detailAr: "جميع سجلات أوامر البيع" },
   { key: "contracts", href: "/dashboard/contracts", en: "Contracts", ar: "العقود", detailEn: "Contract records", detailAr: "سجلات العقود" },
-  { key: "invoices", href: "/dashboard/invoices", en: "Receivables", ar: "الذمم المدينة", detailEn: "Issued invoices awaiting settlement", detailAr: "فواتير صادرة بانتظار السداد" },
+  { key: "invoices", href: "/dashboard/invoices", en: "Invoices", ar: "الفواتير", detailEn: "All invoice records", detailAr: "جميع سجلات الفواتير" },
   { key: "payments", href: "/dashboard/payments", en: "Payments", ar: "المدفوعات", detailEn: "Recorded payment transactions", detailAr: "عمليات الدفع المسجلة" },
 ] as const;
 
