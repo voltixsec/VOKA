@@ -90,6 +90,7 @@ model Company {
   drawingTakeoffSessions   DrawingTakeoffSession[]
   universalAdoptions       UniversalItemAdoption[]
   localizedContents        LocalizedContent[]
+  notifications            Notification[]
   createdAt                DateTime                        @default(now())
   updatedAt                DateTime                        @updatedAt
 
@@ -200,6 +201,7 @@ model User {
   invoiceEvents        InvoiceEvent[]
   universalAdoptions   UniversalItemAdoption[]
   quotationDeliveries  QuotationDelivery[]
+  notifications        Notification[]
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
@@ -1252,6 +1254,29 @@ model InvoiceEvent {
   actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId, invoiceId, occurredAt])
+}
+
+model Notification {
+  id           String    @id @default(cuid())
+  companyId    String
+  targetUserId String?
+  type         String
+  titleAr      String
+  titleEn      String
+  messageAr    String
+  messageEn    String
+  href         String?
+  entityType   String?
+  entityId     String?
+  dedupeKey    String
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  targetUser User?   @relation(fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, dedupeKey])
+  @@index([companyId, targetUserId, readAt, createdAt])
 }
 
 enum UniversalVerificationStatus {

@@ -13,6 +13,7 @@ type UserProfile = {
   name: string;
   email: string;
 };
+type NotificationItem = { id: string; titleAr: string; titleEn: string; messageAr: string; messageEn: string; href?: string | null; readAt?: string | null; createdAt: string };
 
 export function DashboardHeader() {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -20,6 +21,9 @@ export function DashboardHeader() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const { isArabic, toggleLanguage } = useLanguage();
 
@@ -44,6 +48,19 @@ export function DashboardHeader() {
     }
 
     loadUser();
+    async function loadNotifications() {
+      try {
+        const response = await fetch("/api/notifications?limit=20");
+        const body = response?.ok ? await response.json() : null;
+        if (active && body?.data) {
+          setNotifications(body.data.notifications ?? []);
+          setUnreadCount(body.data.unreadCount ?? 0);
+        }
+      } catch {
+        // Notification availability must not disrupt the workspace header.
+      }
+    }
+    void loadNotifications();
 
     return () => {
       active = false;
@@ -152,14 +169,16 @@ export function DashboardHeader() {
             </svg>
           </button>
 
-          <button
-            type="button"
-            className="relative hidden h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 md:flex"
-            aria-label="Notifications"
-          >
-            🔔
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-sky-400 ring-2 ring-slate-950" />
-          </button>
+          <div className="relative hidden md:block">
+            <button type="button" onClick={() => setNotificationsOpen((value) => !value)} className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400" aria-label={isArabic ? "الإشعارات" : "Notifications"} aria-expanded={notificationsOpen}>
+              🔔
+              {unreadCount > 0 ? <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-sky-400 px-1 text-center text-xs font-bold text-slate-950">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
+            </button>
+            {notificationsOpen ? <div className={`absolute ${isArabic ? "left-0" : "right-0"} mt-2 w-80 rounded-2xl border border-white/10 bg-slate-900 p-3 shadow-2xl`}>
+              <div className="flex items-center justify-between"><h2 className="font-semibold">{isArabic ? "الإشعارات" : "Notifications"}</h2>{unreadCount ? <button type="button" className="text-xs text-sky-300" onClick={async () => { const response = await fetch("/api/notifications/read-all", { method: "POST" }); if (response.ok) { setUnreadCount(0); setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }))); } }}>{isArabic ? "تحديد الكل كمقروء" : "Mark all read"}</button> : null}</div>
+              <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">{notifications.length ? notifications.map((item) => <a key={item.id} href={item.href ?? "#"} onClick={() => { if (!item.readAt) { void fetch(`/api/notifications/${encodeURIComponent(item.id)}`, { method: "PATCH" }); setUnreadCount((count) => Math.max(0, count - 1)); } }} className={`block rounded-xl p-3 text-sm ${item.readAt ? "bg-white/5 text-slate-400" : "bg-sky-400/10 text-white"}`}><strong className="block">{isArabic ? item.titleAr : item.titleEn}</strong><span className="mt-1 block text-xs text-slate-400">{isArabic ? item.messageAr : item.messageEn}</span><time className="mt-1 block text-[11px] text-slate-500">{new Date(item.createdAt).toLocaleString(isArabic ? "ar-KW" : "en-KW")}</time></a>) : <p className="py-6 text-center text-sm text-slate-500">{isArabic ? "لا توجد إشعارات" : "No notifications"}</p>}</div>
+            </div> : null}
+          </div>
 
           <button
             type="button"
