@@ -10,6 +10,7 @@ import { CommercialComposer, CustomerPicker } from "@/components/commercial";
 import { QuotationCalculator, type QuotationLineType } from "@/src/domain/quotation";
 import { MilestoneAmountType } from "@/src/domain/contract";
 import { normalizeQuotationLinePositions } from "@/app/dashboard/quotations/quotation-line-order";
+import type { WorkingCommercialDraft } from "@/src/application/commercial-conversation";
 
 type Customer = {
   id: string;
@@ -181,6 +182,23 @@ export default function NewContractPage() {
   const [catalogItemModalOpen, setCatalogItemModalOpen] = useState(false);
   const [catalogItemModalLineKey, setCatalogItemModalLineKey] = useState<string | null>(null);
   const [catalogItemModalInitialName, setCatalogItemModalInitialName] = useState("");
+
+  useEffect(() => {
+    if (loading) return;
+    try {
+      const raw = sessionStorage.getItem("voka_commercial_conversation_draft");
+      if (!raw) return;
+      const draft = JSON.parse(raw) as WorkingCommercialDraft;
+      if (draft.operation !== "CONTRACT" || draft.status !== "READY_FOR_REVIEW") return;
+      const mention = draft.fields.customerMention?.trim().toLocaleLowerCase();
+      const customer = mention ? customers.find((candidate) => [candidate.name, candidate.nameAr, candidate.nameEn].some((name) => name?.trim().toLocaleLowerCase() === mention)) : null;
+      if (customer) setCustomerId(customer.id);
+      if (draft.fields.currencyCode) setCurrencyCode(draft.fields.currencyCode);
+      if (draft.fields.paymentTerms) setTerms(draft.fields.paymentTerms);
+      if (draft.fields.scopeType && scopeOptions.some((option) => option.value === draft.fields.scopeType)) setScopeType(draft.fields.scopeType as ScopeType);
+      if (draft.fields.lines.length) setLines(draft.fields.lines.map((line, index) => ({ editorKey: createLineKey(), position: index + 1, catalogItemId: "", type: "CUSTOM", itemCode: "", itemName: line.itemName, description: "", unitName: "PCS", quantity: line.quantity ?? 1, unitPrice: 0, taxRateId: null, taxPercentage: 0 })));
+    } catch { /* Keep the normal empty form when stored context is invalid. */ }
+  }, [customers, loading]);
 
   useEffect(() => {
     let cancelled = false;

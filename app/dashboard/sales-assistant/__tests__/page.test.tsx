@@ -22,62 +22,8 @@ afterEach(() => {
 });
 
 describe("SalesAssistantPage", () => {
-  it("renders natural language input prompt and triggers proposal generation", async () => {
-    const fetchMock = vi.fn().mockImplementation((url) => {
-      if (url === "/api/ai/commercial-intent") {
-        return Promise.resolve({ ok: true, status: 200, json: async () => ({ data: { operation: "QUOTATION", confidence: "EXPLICIT", requiresHumanReview: true, executed: false } }) });
-      }
-      if (url === "/api/ai/sales-assistant/draft") {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            data: {
-              customer: {
-                status: "MATCHED",
-                candidates: [],
-                reviewRequired: false,
-                name: "Kuwait National Telecom",
-                matchConfidence: 0.95,
-              },
-              proposal: {
-                subject: "Quotation - Kuwait National Telecom",
-                scopeType: "SUPPLY_AND_INSTALLATION",
-                validityDays: 30,
-                currencyCode: "KWD",
-              },
-              lines: [
-                {
-                  resolutionStatus: "MATCHED",
-                  catalogCandidates: [],
-                  reviewRequired: false,
-                  itemName: "4K IP Camera",
-                  quantity: 5,
-                  unit: "PCS",
-                  unitPrice: 45,
-                  subtotal: 225,
-                  isMatchedFromCatalog: true,
-                },
-              ],
-              financials: {
-                subtotal: 225,
-                discountAmount: 0,
-                taxRatePercentage: 0,
-                taxAmount: 0,
-                totalAmount: 225,
-              },
-              metadata: {
-                sourcePrompt: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras",
-                extractedLocale: "en",
-                resolvedAt: new Date().toISOString(),
-                confidenceSummary: "Existing customer matched | 1 of 1 line items matched",
-              },
-            },
-          }),
-        });
-      }
-      return Promise.reject(new Error("Unknown URL"));
-    });
+  it("renders natural language input and prepares a draft for human review", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: { id: "draft-1", operation: "QUOTATION", locale: "en", fields: { customerMention: "Kuwait National Telecom", currencyCode: null, paymentTerms: null, scopeType: null, sourceReference: null, lines: [{ itemName: "4K IP Camera", quantity: 5 }] }, attachment: null, turns: [{ source: "TEXT", text: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras" }], contextText: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras", missingRequired: [], recommended: [], status: "READY_FOR_REVIEW", clarification: null, requiresHumanReview: true, executed: false } }) });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -94,11 +40,10 @@ describe("SalesAssistantPage", () => {
     fireEvent.click(generateBtn);
 
     await waitFor(() => {
-      expect(screen.getByText("Kuwait National Telecom")).toBeTruthy();
+      expect(screen.getByText("READY FOR REVIEW")).toBeTruthy();
     });
-
-    expect(screen.getByText("Existing Customer Matched")).toBeTruthy();
-    expect(screen.getByText("4K IP Camera")).toBeTruthy();
-    expect(screen.getAllByText(/225.000 KWD/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Kuwait National Telecom/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open for human review" })).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

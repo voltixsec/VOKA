@@ -7,6 +7,9 @@ import type { SalesAssistantDraftProposal } from "@/src/application/ai-sales-ass
 import { useVoiceInput, IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
 import { VoiceOrb } from "@/components/voice";
 import { displayLabel } from "@/lib/i18n/display-labels";
+import type { ConversationReplySource, WorkingCommercialDraft } from "@/src/application/commercial-conversation";
+
+const CONVERSATION_STORAGE_KEY = "voka_commercial_conversation_draft";
 
 const SAMPLES = [
   {
@@ -31,8 +34,10 @@ export default function SalesAssistantPage(props: any) {
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<SalesAssistantDraftProposal | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [workingDraft, setWorkingDraft] = useState<WorkingCommercialDraft | null>(null);
 
   const basePromptRef = useRef<string>("");
+  const replySourceRef = useRef<ConversationReplySource>("TEXT");
 
   const voice = useVoiceInput({
     locale: isArabic ? "ar" : "en",
@@ -48,9 +53,23 @@ export default function SalesAssistantPage(props: any) {
       const base = basePromptRef.current;
       const merged = base ? `${base.trim()} ${newAddition.trim()}` : newAddition.trim();
       setPrompt(merged);
+      replySourceRef.current = "VOICE";
       prevFinalRef.current = voice.transcript.final;
     }
   }, [voice.transcript.final]);
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(CONVERSATION_STORAGE_KEY);
+      if (stored) setWorkingDraft(JSON.parse(stored));
+    } catch {
+      sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (workingDraft) sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(workingDraft));
+  }, [workingDraft]);
 
   const handleStartListening = () => {
     basePromptRef.current = prompt;
@@ -62,56 +81,63 @@ export default function SalesAssistantPage(props: any) {
     voice.stopListening();
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+  const advanceConversation = async (reply = prompt, source = replySourceRef.current) => {
+    if (!reply.trim()) return;
 
     setIsGenerating(true);
     setError(null);
-    setProposal(null);
 
     try {
-      const intentResponse = await fetch("/api/ai/commercial-intent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt.trim() }) });
-      const intentBody = await intentResponse.json();
-      if (!intentResponse.ok) throw new Error(intentBody.error?.message || "Unable to classify commercial operation.");
-      const operation = intentBody.data.operation as string | null;
-      if (!operation) { setError(isArabic ? "حدد نوع العملية: عرض سعر، فاتورة، عقد، أمر بيع، دفعة، أو تحليل مخطط." : "Choose the operation: quotation, invoice, contract, sales order, payment, or drawing takeoff."); return; }
-      if (attachment && operation !== "DRAWING_TAKEOFF") {
-        setError(isArabic ? "المرفقات العامة مثل جداول الكميات والمواصفات تحتاج مسار استيعاب مستقل غير مفعّل بعد. أزل الملف للمتابعة بالنص، أو وضّح أن الملف رسم PDF مطلوب حصره." : "General attachments such as BOQs and specifications need a dedicated intake workflow that is not enabled yet. Remove the file to continue with text, or clarify that it is a drawing PDF for takeoff.");
-        return;
-      }
-      if (attachment && operation === "DRAWING_TAKEOFF") {
-        const form = new FormData(); form.set("drawing", attachment); form.set("intent", prompt.trim());
-        const uploadResponse = await fetch("/api/drawing-takeoffs", { method: "POST", body: form });
-        const uploadBody = await uploadResponse.json().catch(() => null);
-        if (!uploadResponse.ok) throw new Error(uploadBody?.error?.message || (isArabic ? "تعذر تسجيل الرسم بأمان." : "Unable to register the drawing safely."));
-        sessionStorage.setItem("voka_commercial_entry_prompt", prompt.trim());
-        router.push(`/dashboard/takeoff?sessionId=${encodeURIComponent(uploadBody.data.session.id)}`);
-        return;
-      }
-      if (operation !== "QUOTATION") {
-        sessionStorage.setItem("voka_commercial_entry_prompt", prompt.trim());
-        const routes: Record<string, string> = { INVOICE: "/dashboard/invoices/new", CONTRACT: "/dashboard/contracts/new", SALES_ORDER: "/dashboard/sales-orders", PAYMENT: "/dashboard/payments", DRAWING_TAKEOFF: "/dashboard/takeoff" };
-        router.push(routes[operation] ?? "/dashboard");
-        return;
-      }
-      const response = await fetch("/api/ai/sales-assistant/draft", {
+      const response = await fetch("/api/ai/commercial-conversation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: prompt.trim(),
-          sourceLocale: isArabic ? "ar" : "en",
+          draft: workingDraft,
+          reply: reply.trim(),
+          replySource: source,
+          locale: isArabic ? "ar" : "en",
+          attachment: attachment ? { name: attachment.name, type: attachment.type, size: attachment.size } : workingDraft?.attachment,
         }),
       });
-
       const json = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json.error?.message || "Failed to generate AI proposal draft.");
-      }
-
-      setProposal(json.data);
+      if (!response.ok) throw new Error(json.error?.message || "Unable to continue the conversation.");
+      setWorkingDraft(json.data);
+      setPrompt("");
+      basePromptRef.current = "";
+      replySourceRef.current = "TEXT";
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const openForHumanReview = async () => {
+    if (!workingDraft || workingDraft.status !== "READY_FOR_REVIEW") return;
+    setIsGenerating(true);
+    setError(null);
+    try {
+      sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(workingDraft));
+      sessionStorage.setItem("voka_commercial_entry_prompt", workingDraft.contextText);
+      if (workingDraft.operation === "DRAWING_TAKEOFF") {
+        if (!attachment) throw new Error(isArabic ? "أعد إرفاق ملف الرسم لفتحه للمراجعة." : "Reattach the drawing file to open it for review.");
+        const form = new FormData(); form.set("drawing", attachment); form.set("intent", workingDraft.contextText);
+        const response = await fetch("/api/drawing-takeoffs", { method: "POST", body: form });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(body?.error?.message || "Unable to register the drawing safely.");
+        router.push(`/dashboard/takeoff?sessionId=${encodeURIComponent(body.data.session.id)}`);
+        return;
+      }
+      if (workingDraft.operation === "QUOTATION") {
+        const response = await fetch("/api/ai/sales-assistant/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: workingDraft.contextText, sourceLocale: isArabic ? "ar" : "en" }) });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || "Unable to prepare the quotation form.");
+        sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(body.data));
+      }
+      const routes = { QUOTATION: "/dashboard/quotations/new", INVOICE: "/dashboard/invoices/new", CONTRACT: "/dashboard/contracts/new", SALES_ORDER: "/dashboard/quotations" } as const;
+      router.push(routes[workingDraft.operation]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to open the review form.");
     } finally {
       setIsGenerating(false);
     }
@@ -194,7 +220,7 @@ export default function SalesAssistantPage(props: any) {
           <textarea
             id="sales-prompt-input"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => { setPrompt(e.target.value); replySourceRef.current = "TEXT"; }}
             rows={4}
             placeholder={
               isArabic
@@ -255,7 +281,7 @@ export default function SalesAssistantPage(props: any) {
             <button
               key={i}
               type="button"
-              onClick={() => setPrompt(sample.text)}
+              onClick={() => { setPrompt(sample.text); replySourceRef.current = "TEXT"; }}
               className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-sky-300 hover:bg-white/10 transition"
             >
               {isArabic ? sample.labelAr : sample.labelEn}
@@ -272,7 +298,7 @@ export default function SalesAssistantPage(props: any) {
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={handleGenerate}
+            onClick={() => advanceConversation()}
             disabled={isGenerating || !prompt.trim()}
             className="inline-flex items-center gap-2 rounded-2xl bg-sky-400 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-300 disabled:opacity-50 transition"
           >
@@ -286,6 +312,16 @@ export default function SalesAssistantPage(props: any) {
             )}
           </button>
         </div>
+
+        {workingDraft && (
+          <div className="space-y-4 rounded-2xl border border-sky-400/20 bg-slate-950/80 p-5" data-testid="commercial-conversation">
+            <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}</p><p className="mt-1 text-xs text-slate-400">{isArabic ? "مسودة محادثة واحدة محفوظة — لن يتم إنشاء أي مستند تلقائياً." : "One saved conversational draft — no document will be created automatically."}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${workingDraft.status === "READY_FOR_REVIEW" ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{workingDraft.status === "READY_FOR_REVIEW" ? (isArabic ? "جاهز للمراجعة" : "READY FOR REVIEW") : (isArabic ? "يحتاج معلومات" : "Needs information")}</span></div>
+            <div className="max-h-48 space-y-2 overflow-y-auto">{workingDraft.turns.map((turn, index) => <div key={`${index}-${turn.source}`} className="rounded-xl bg-white/5 px-3 py-2 text-sm text-slate-200"><span className="me-2 text-[10px] font-semibold text-sky-300">{turn.source}</span>{turn.text}</div>)}</div>
+            {workingDraft.clarification && <div className="space-y-3"><p className="text-sm text-white">{isArabic ? workingDraft.clarification.ar : workingDraft.clarification.en}</p><div className="flex flex-wrap gap-2">{workingDraft.clarification.suggestions.map((chip, index) => <button key={`${chip.reply}-${index}`} type="button" disabled={isGenerating} onClick={() => advanceConversation(chip.reply, "CHIP")} className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-xs text-sky-200">{isArabic ? chip.ar : chip.en}</button>)}</div></div>}
+            {workingDraft.recommended.length > 0 && <p className="text-xs text-slate-500">{isArabic ? "اختياري/موصى به: " : "Optional/recommended: "}{workingDraft.recommended.map((field) => isArabic ? field.labelAr : field.labelEn).join("، ")}</p>}
+            {workingDraft.status === "READY_FOR_REVIEW" && <button type="button" onClick={openForHumanReview} disabled={isGenerating} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">{isArabic ? "فتح للمراجعة البشرية" : "Open for human review"}</button>}
+          </div>
+        )}
       </div>
 
       {/* Structured Review Panel */}
