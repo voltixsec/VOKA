@@ -48,7 +48,8 @@ describe("QuotationsPage", () => {
 
     expect(await screen.findByText("QT-1001")).toBeTruthy();
     expect(screen.getByText("Acme Kuwait")).toBeTruthy();
-    expect(screen.getAllByText("DRAFT")).toHaveLength(2);
+    expect(screen.getAllByText("Draft")).toHaveLength(2);
+    expect(screen.queryByText("DRAFT")).not.toBeInTheDocument();
     expect(screen.getByText(/125/)).toBeTruthy();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

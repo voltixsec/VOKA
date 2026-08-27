@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
 import { ModuleSummaryBar } from "@/components/reporting/ModuleSummaryBar";
+import { displayLabel } from "@/lib/i18n/display-labels";
 
 type ContractItem = {
   id: string;
@@ -20,9 +21,7 @@ type ContractItem = {
 
 type Pagination = { total: number; page: number; pageSize: number; totalPages: number };
 
-const statusAr: Record<string, string> = {
-  DRAFT: "مسودة",
-};
+const statuses = ["DRAFT"];
 
 export default function ContractsPage() {
   const { isArabic } = useLanguage();
@@ -123,9 +122,9 @@ export default function ContractsPage() {
             className="min-h-11 rounded-xl border border-white/10 bg-slate-950 px-4 text-sm text-slate-300"
           >
             <option value="">{isArabic ? "كل الحالات" : "All statuses"}</option>
-            {Object.keys(statusAr).map((value) => (
+            {statuses.map((value) => (
               <option key={value} value={value}>
-                {isArabic ? statusAr[value] : value}
+                {displayLabel(value, isArabic ? "ar" : "en")}
               </option>
             ))}
           </select>
@@ -201,7 +200,7 @@ export default function ContractsPage() {
                 </div>
               </div>
               <div className="text-end">
-                <Badge>{isArabic ? statusAr[c.status] ?? c.status : c.status}</Badge>
+                <Badge>{displayLabel(c.status, isArabic ? "ar" : "en")}</Badge>
                 <p className="mt-2 font-semibold text-white">{money(c)}</p>
               </div>
             </Card>

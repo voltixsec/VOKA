@@ -22,6 +22,7 @@ import {
 import {
   useLanguage,
 } from "../../../../components/i18n/LanguageProvider";
+import { displayLabel } from "@/lib/i18n/display-labels";
 
 type ScopeType =
   | "SUPPLY_ONLY"
@@ -137,15 +138,6 @@ type DeliveryChannelAvailability = {
     };
     locales: { ar: boolean; en: boolean };
   };
-};
-
-const arabicStatuses: Record<string, string> = {
-  DRAFT: "مسودة",
-  SENT: "مرسل",
-  APPROVED: "معتمد",
-  REJECTED: "مرفوض",
-  EXPIRED: "منتهي",
-  CANCELLED: "ملغى",
 };
 
 const lifecycleLabels = {
@@ -846,7 +838,7 @@ export default function QuotationDetailsPage() {
             )}
 
             <Badge>
-              {isArabic ? arabicStatuses[quote.status] ?? quote.status : quote.status}
+              {displayLabel(quote.status, isArabic ? "ar" : "en")}
             </Badge>
 
             <Badge>

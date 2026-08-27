@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, SectionHeader } from "@/components/ui";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { displayLabel } from "@/lib/i18n/display-labels";
 
 type ContractLine = {
   id?: string;
@@ -73,10 +74,6 @@ type ContractDetails = {
   createdByName: string;
   createdByRole: string;
   createdAt?: string | null;
-};
-
-const statusAr: Record<string, string> = {
-  DRAFT: "مسودة",
 };
 
 export default function ContractDetailPage() {
@@ -197,7 +194,7 @@ export default function ContractDetailPage() {
         eyebrow={contract.number}
         title={customerName}
         description={subject || t("تفاصيل العقد التجاري", "Commercial contract details")}
-        actions={<Badge>{isArabic ? statusAr[contract.status] ?? contract.status : contract.status}</Badge>}
+        actions={<Badge>{displayLabel(contract.status, isArabic ? "ar" : "en")}</Badge>}
       />
 
       <div className="grid gap-6 md:grid-cols-3">

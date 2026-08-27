@@ -48,7 +48,8 @@ describe("ContractsPage", () => {
 
     expect(await screen.findByText("CN-202608-0001")).toBeTruthy();
     expect(screen.getByText("Acme Kuwait")).toBeTruthy();
-    expect(screen.getAllByText("DRAFT")).toHaveLength(2);
+    expect(screen.getAllByText("Draft")).toHaveLength(2);
+    expect(screen.queryByText("DRAFT")).not.toBeInTheDocument();
     expect(screen.getByText(/1,250/)).toBeTruthy();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

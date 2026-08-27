@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Button, Card, Input, SectionHeader } from "@/components/ui";
 import { ModuleSummaryBar } from "@/components/reporting/ModuleSummaryBar";
+import { displayActorName, displayLabel } from "@/lib/i18n/display-labels";
 type Invoice = {
   id: string;
   number: string;
@@ -31,6 +32,7 @@ type Payment = {
 };
 export default function PaymentsPage() {
   const { isArabic } = useLanguage();
+  const locale = isArabic ? "ar" : "en";
   const t = (ar: string, en: string) => (isArabic ? ar : en);
   const [payments, setPayments] = useState<Payment[]>([]),
     [invoices, setInvoices] = useState<Invoice[]>([]),
@@ -259,7 +261,7 @@ export default function PaymentsPage() {
                       {new Date(payment.receivedAt).toLocaleDateString(
                         isArabic ? "ar-KW" : "en-GB",
                       )}{" "}
-                      · {payment.method}
+                      · {displayLabel(payment.method, locale)}
                       {payment.reference ? ` · ${payment.reference}` : ""}
                     </p>
                   </div>
@@ -268,7 +270,7 @@ export default function PaymentsPage() {
                       {payment.amount} {payment.currencyCode}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {payment.recordedByName}
+                      {displayActorName(payment.recordedByName, locale)}
                     </p>
                   </div>
                 </Link>

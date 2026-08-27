@@ -15,6 +15,8 @@ const labels: Record<string, Record<DisplayLocale, string>> = {
   PARTIALLY_PAID: { ar: 'مدفوعة جزئياً', en: 'Partially paid' },
   PAID: { ar: 'مدفوعة', en: 'Paid' },
   COMPLETED: { ar: 'مكتمل', en: 'Complete' },
+  COMPLETE: { ar: 'مكتمل', en: 'Complete' },
+  EXPIRED: { ar: 'منتهي', en: 'Expired' },
   NEEDS_CONFIRMATION: { ar: 'بحاجة إلى تأكيد', en: 'Needs confirmation' },
   USER_PROVIDED: { ar: 'أدخله المستخدم', en: 'User provided' },
   DRAWING_COUNTED: { ar: 'محسوب من الرسم', en: 'Counted from drawing' },
@@ -30,6 +32,10 @@ const labels: Record<string, Record<DisplayLocale, string>> = {
   OTHER: { ar: 'أخرى', en: 'Other' },
   ADMIN: { ar: 'مسؤول النظام', en: 'System administrator' },
   SALES: { ar: 'المبيعات', en: 'Sales' },
+  SUPPLY_ONLY: { ar: 'توريد فقط', en: 'Supply only' },
+  SUPPLY_AND_INSTALLATION: { ar: 'توريد وتركيب', en: 'Supply and installation' },
+  INSTALLATION_ONLY: { ar: 'تركيب فقط', en: 'Installation only' },
+  SERVICE: { ar: 'خدمة', en: 'Service' },
 };
 
 export function displayLabel(value: string, locale: DisplayLocale): string {

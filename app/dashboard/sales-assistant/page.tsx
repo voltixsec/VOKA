@@ -6,6 +6,7 @@ import { useLanguage } from "@/components/i18n/LanguageProvider";
 import type { SalesAssistantDraftProposal } from "@/src/application/ai-sales-assistant";
 import { useVoiceInput, IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
 import { VoiceOrb } from "@/components/voice";
+import { displayLabel } from "@/lib/i18n/display-labels";
 
 const SAMPLES = [
   {
@@ -354,7 +355,7 @@ export default function SalesAssistantPage(props: any) {
             </div>
             <div>
               <p className="text-xs text-slate-400">{isArabic ? "نطاق العمل:" : "Scope Type:"}</p>
-              <p className="font-semibold text-sky-300 mt-1">{proposal.proposal.scopeType || "—"}</p>
+              <p className="font-semibold text-sky-300 mt-1">{proposal.proposal.scopeType ? displayLabel(proposal.proposal.scopeType, isArabic ? "ar" : "en") : "—"}</p>
             </div>
             {proposal.proposal.brief && (
               <div className="md:col-span-2">
@@ -371,7 +372,7 @@ export default function SalesAssistantPage(props: any) {
                   {isArabic ? proposal.smartSystem.systemNameAr : proposal.smartSystem.systemNameEn}
                 </p>
                 <span className="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1 text-[11px] font-semibold text-slate-200">
-                  {proposal.smartSystem.status}
+                  {displayLabel(proposal.smartSystem.status, isArabic ? "ar" : "en")}
                 </span>
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -380,7 +381,7 @@ export default function SalesAssistantPage(props: any) {
                     <p className="text-slate-400">{isArabic ? input.labelAr : input.labelEn}</p>
                     <p className="mt-1 font-semibold text-white">{input.value == null ? "—" : String(input.value)} {input.unit ?? ""}</p>
                     <span className={input.provenance === "USER_PROVIDED" ? "text-emerald-300" : "text-amber-300"}>
-                      {input.provenance}{input.isDefault ? (isArabic ? " — قيمة افتراضية" : " — default") : ""}
+                      {displayLabel(input.provenance, isArabic ? "ar" : "en")}{input.isDefault ? (isArabic ? " — قيمة افتراضية" : " — default") : ""}
                     </span>
                   </div>
                 ))}
