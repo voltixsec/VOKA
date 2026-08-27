@@ -702,3 +702,10 @@ Current execution order:
    14. V1 Release
 
 The Product Integrity regression suite is a safety net and does not by itself mark VOKA as pilot-ready.
+
+# CEO Acceptance Review Round 1
+
+The authoritative hands-on review and implementation checklist are recorded in:
+
+- [CEO Acceptance Review Round 1](product/changes/2026-08-27-ceo-acceptance-review-round-1.md)
+- [CEO Acceptance Round 1 Implementation Checklist](product/changes/2026-08-27-ceo-acceptance-implementation-checklist.md)
