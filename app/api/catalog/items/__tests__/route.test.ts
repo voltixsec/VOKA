@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   findAll: vi.fn(),
   count: vi.fn(),
   save: vi.fn(),
+  findLocalizations: vi.fn(),
   roleSets: [] as string[][],
 }));
 
@@ -23,7 +24,13 @@ vi.mock('../../../../../features/catalog/infrastructure/prisma/PrismaCatalogItem
   },
 }));
 
-vi.mock('../../../../../lib/prisma', () => ({ prisma: {} }));
+vi.mock('../../../../../lib/prisma', () => ({
+  prisma: {
+    catalogItemLocalization: {
+      findMany: mocks.findLocalizations,
+    },
+  },
+}));
 
 vi.mock('../../../../../lib/api', async () => {
   const errors = await vi.importActual<typeof import('../../../../../lib/api/ApiError')>('../../../../../lib/api/ApiError');
@@ -80,6 +87,7 @@ describe('Catalog Item APIs', () => {
     mocks.findByBarcode.mockResolvedValue(null);
     mocks.count.mockResolvedValue(1);
     mocks.save.mockImplementation(async (value) => value);
+    mocks.findLocalizations.mockResolvedValue([]);
   });
 
   it('lists catalog items for authenticated active company and ignores browser spoofing', async () => {

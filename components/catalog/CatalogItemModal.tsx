@@ -30,6 +30,12 @@ export type CatalogItemModalItem = {
   description?: string | null;
   descriptionAr?: string | null;
   descriptionEn?: string | null;
+  localizations?: Array<{
+    locale: string;
+    name: string;
+    description?: string | null;
+    source: "HUMAN" | "GOVERNED" | "LEGACY";
+  }>;
   salePrice: number;
   purchasePrice?: number | null;
   unitId?: string | null;
@@ -74,7 +80,7 @@ export function CatalogItemModal({
   onClose,
   onSaved,
 }: Props) {
-  const { isArabic } = useLanguage();
+  const { isArabic, language } = useLanguage();
 
   const t = (ar: string, en: string) =>
     isArabic ? ar : en;
@@ -89,9 +95,7 @@ export function CatalogItemModal({
     useState("");
   const [formName, setFormName] =
     useState("");
-  const [formNameAr, setFormNameAr] =
-    useState("");
-  const [formNameEn, setFormNameEn] =
+  const [localizedName, setLocalizedName] =
     useState("");
   const [formSku, setFormSku] =
     useState("");
@@ -112,12 +116,8 @@ export function CatalogItemModal({
     setFormDescription,
   ] = useState("");
   const [
-    formDescriptionAr,
-    setFormDescriptionAr,
-  ] = useState("");
-  const [
-    formDescriptionEn,
-    setFormDescriptionEn,
+    localizedDescription,
+    setLocalizedDescription,
   ] = useState("");
   const [formIsActive, setFormIsActive] =
     useState(true);
@@ -132,12 +132,10 @@ export function CatalogItemModal({
       setFormType(initialItem.type);
       setFormCode(initialItem.code);
       setFormName(initialItem.name);
-      setFormNameAr(
-        initialItem.nameAr ?? "",
+      const activeLocalization = initialItem.localizations?.find(
+        (entry) => entry.locale === language,
       );
-      setFormNameEn(
-        initialItem.nameEn ?? "",
-      );
+      setLocalizedName(activeLocalization?.name ?? (isArabic ? initialItem.nameAr : initialItem.nameEn) ?? "");
       setFormSku(initialItem.sku ?? "");
       setFormSalePrice(
         initialItem.salePrice,
@@ -154,12 +152,7 @@ export function CatalogItemModal({
       setFormDescription(
         initialItem.description ?? "",
       );
-      setFormDescriptionAr(
-        initialItem.descriptionAr ?? "",
-      );
-      setFormDescriptionEn(
-        initialItem.descriptionEn ?? "",
-      );
+      setLocalizedDescription(activeLocalization?.description ?? (isArabic ? initialItem.descriptionAr : initialItem.descriptionEn) ?? "");
       setFormIsActive(
         initialItem.isActive,
       );
@@ -177,20 +170,14 @@ export function CatalogItemModal({
         .slice(-5)}`,
     );
     setFormName(initialName);
-    setFormNameAr(
-      isArabic ? initialName : "",
-    );
-    setFormNameEn(
-      isArabic ? "" : initialName,
-    );
+    setLocalizedName(initialName);
     setFormSku("");
     setFormSalePrice(0);
     setFormPurchasePrice("");
     setFormUnitId("");
     setFormTaxRateId("");
     setFormDescription("");
-    setFormDescriptionAr("");
-    setFormDescriptionEn("");
+    setLocalizedDescription("");
     setFormIsActive(true);
   }, [
     open,
@@ -229,10 +216,9 @@ export function CatalogItemModal({
           .trim()
           .toUpperCase(),
         name: formName.trim(),
-        nameAr:
-          formNameAr.trim() || null,
-        nameEn:
-          formNameEn.trim() || null,
+        localizations: localizedName.trim()
+          ? [{ locale: language, name: localizedName.trim(), description: localizedDescription.trim() || null }]
+          : [],
         sku: formSku.trim() || null,
         salePrice:
           Number(formSalePrice),
@@ -247,12 +233,6 @@ export function CatalogItemModal({
           formTaxRateId || null,
         description:
           formDescription.trim() ||
-          null,
-        descriptionAr:
-          formDescriptionAr.trim() ||
-          null,
-        descriptionEn:
-          formDescriptionEn.trim() ||
           null,
         isActive: formIsActive,
       };
@@ -421,38 +401,19 @@ export function CatalogItemModal({
             />
           </label>
 
-          <label className="space-y-1">
+          <label className="space-y-1 md:col-span-2">
             <span className="text-xs text-slate-400">
               {t(
-                "\u0627\u0644\u0627\u0633\u0645 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
-                "Arabic Name",
+                "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0645\u062d\u0644\u064a \u0644\u0644\u063a\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629",
+                "Localized name for the active language",
               )}
             </span>
 
             <Input
-              dir="rtl"
-              value={formNameAr}
+              dir={isArabic ? "rtl" : "ltr"}
+              value={localizedName}
               onChange={(event) =>
-                setFormNameAr(
-                  event.target.value,
-                )
-              }
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-xs text-slate-400">
-              {t(
-                "\u0627\u0644\u0627\u0633\u0645 \u0628\u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629",
-                "English Name",
-              )}
-            </span>
-
-            <Input
-              dir="ltr"
-              value={formNameEn}
-              onChange={(event) =>
-                setFormNameEn(
+                setLocalizedName(
                   event.target.value,
                 )
               }
@@ -581,38 +542,17 @@ export function CatalogItemModal({
           <label className="space-y-1 md:col-span-2">
             <span className="text-xs text-slate-400">
               {t(
-                "\u0627\u0644\u0648\u0635\u0641 \u0627\u0644\u0639\u0631\u0628\u064a",
-                "Arabic Description",
+                "\u0627\u0644\u0648\u0635\u0641 \u0627\u0644\u0645\u062d\u0644\u064a \u0644\u0644\u063a\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629",
+                "Localized description for the active language",
               )}
             </span>
 
             <textarea
-              dir="rtl"
+              dir={isArabic ? "rtl" : "ltr"}
               rows={2}
-              value={formDescriptionAr}
+              value={localizedDescription}
               onChange={(event) =>
-                setFormDescriptionAr(
-                  event.target.value,
-                )
-              }
-              className="w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-sm text-white"
-            />
-          </label>
-
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-xs text-slate-400">
-              {t(
-                "\u0627\u0644\u0648\u0635\u0641 \u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a",
-                "English Description",
-              )}
-            </span>
-
-            <textarea
-              dir="ltr"
-              rows={2}
-              value={formDescriptionEn}
-              onChange={(event) =>
-                setFormDescriptionEn(
+                setLocalizedDescription(
                   event.target.value,
                 )
               }

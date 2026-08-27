@@ -11,6 +11,7 @@ import {
   withCompanyAuth,
 } from '../../../../lib/api';
 import { prisma } from '../../../../lib/prisma';
+import { getCatalogLocalizations, saveHumanCatalogLocalizations, type CatalogLocalizationInput } from '../../../../lib/catalog/catalog-localization';
 import { serializeCatalogItem } from './serialize-catalog-item';
 
 const catalogItemRepository =
@@ -52,7 +53,18 @@ type CreateCatalogItemBody = {
   imageUrl?: unknown;
   notes?: unknown;
   isActive?: unknown;
+  localizations?: unknown;
 };
+
+function localizationInputs(value: unknown): CatalogLocalizationInput[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row.locale !== 'string' || typeof row.name !== 'string') return [];
+    return [{ locale: row.locale, name: row.name, description: optionalString(row.description) }];
+  });
+}
 
 function optionalString(value: unknown): string | null | undefined {
   if (value === undefined) {
@@ -157,8 +169,11 @@ export const GET = withCompanyAuth(
       ),
     });
 
+    const locale = searchParams.get('locale') ?? 'en';
+    const itemIds = result.items.map((item) => item.id.toString());
+    const localizations = await getCatalogLocalizations(prisma, company.companyId, itemIds);
     return apiSuccess(
-      result.items.map(serializeCatalogItem),
+      result.items.map((item) => serializeCatalogItem(item, localizations.get(item.id.toString()) ?? [], locale)),
       {
         meta: {
           pagination: {
@@ -277,10 +292,14 @@ export const POST = withCompanyAuth(
       );
     }
 
+    const item = result.getValue();
+    const inputs = localizationInputs(body.localizations);
+    if (inputs.length) {
+      await saveHumanCatalogLocalizations(prisma, company.companyId, item.id.toString(), inputs);
+    }
+    const localizations = await getCatalogLocalizations(prisma, company.companyId, [item.id.toString()]);
     return apiSuccess(
-      serializeCatalogItem(
-        result.getValue(),
-      ),
+      serializeCatalogItem(item, localizations.get(item.id.toString()) ?? [], 'en'),
       {
         status: 201,
         headers: {

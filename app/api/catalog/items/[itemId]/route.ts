@@ -8,6 +8,7 @@ import {
   withCompanyAuth,
 } from '../../../../../lib/api';
 import { prisma } from '../../../../../lib/prisma';
+import { getCatalogLocalizations, saveHumanCatalogLocalizations, type CatalogLocalizationInput } from '../../../../../lib/catalog/catalog-localization';
 import { serializeCatalogItem } from '../serialize-catalog-item';
 
 const catalogItemRepository = new PrismaCatalogItemRepository(prisma);
@@ -37,6 +38,16 @@ function optionalNumber(value: unknown): number | null | undefined {
   return typeof value === 'number' ? value : Number.NaN;
 }
 
+function localizationInputs(value: unknown): CatalogLocalizationInput[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row.locale !== 'string' || typeof row.name !== 'string') return [];
+    return [{ locale: row.locale, name: row.name, description: optionalString(row.description) }];
+  });
+}
+
 export const GET = withCompanyAuth(
   ['OWNER', 'ADMIN', 'SALES', 'VIEWER'],
   async (request, _auth, company) => {
@@ -54,7 +65,9 @@ export const GET = withCompanyAuth(
       );
     }
 
-    return apiSuccess(serializeCatalogItem(item), {
+    const locale = new URL(request.url).searchParams.get('locale') ?? 'en';
+    const localized = await getCatalogLocalizations(prisma, company.companyId, [id]);
+    return apiSuccess(serializeCatalogItem(item, localized.get(id) ?? [], locale), {
       headers: { 'Cache-Control': 'no-store' },
     });
   },
@@ -101,7 +114,11 @@ export const PATCH = withCompanyAuth(
       throw ApiError.badRequest(error.code, error.message);
     }
 
-    return apiSuccess(serializeCatalogItem(result.getValue()), {
+    const item = result.getValue();
+    const inputs = localizationInputs(body.localizations);
+    if (inputs.length) await saveHumanCatalogLocalizations(prisma, company.companyId, id, inputs);
+    const localized = await getCatalogLocalizations(prisma, company.companyId, [id]);
+    return apiSuccess(serializeCatalogItem(item, localized.get(id) ?? [], 'en'), {
       headers: { 'Cache-Control': 'no-store' },
     });
   },

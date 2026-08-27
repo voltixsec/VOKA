@@ -34,6 +34,8 @@ type CatalogItem = {
   description?: string | null;
   descriptionAr?: string | null;
   descriptionEn?: string | null;
+  localizations?: Array<{ locale: string; name: string; description?: string | null; source: "HUMAN" | "GOVERNED" | "LEGACY" }>;
+  display?: { name: string; description?: string | null; requestedLocale: string; resolvedLocale: string | null; isFallback: boolean };
   salePrice: number;
   purchasePrice?: number | null;
   unitId?: string | null;
@@ -119,7 +121,7 @@ export default function ProductsPage() {
       query.set("pageSize", pageSize.toString());
 
       const [itemsRes, unitsRes, taxRatesRes] = await Promise.all([
-        fetch(`/api/catalog/items?${query.toString()}`),
+        fetch(`/api/catalog/items?${query.toString()}&locale=${isArabic ? "ar" : "en"}`),
         fetch("/api/units"),
         fetch("/api/tax-rates"),
       ]);
@@ -150,7 +152,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     void loadData();
-  }, [filterType, search, page]);
+  }, [filterType, search, page, isArabic]);
 
   function openCreateModal(type: CatalogItemType) {
     setEditingItem(null);
@@ -267,7 +269,7 @@ export default function ProductsPage() {
         title={t("المنتجات والخدمات", "Products & Services")}
         description={t(
           "إدارة كود الأصناف والخدمات والأسعار المرجعية والبيانات ثنائية اللغة للربط المباشر مع عروض الأسعار.",
-          "Manage products, services, reference prices, and bilingual catalog values integrated with proposal creation.",
+          "Manage canonical products, services, prices, and localized presentation integrated with commercial documents.",
         )}
       />
 
@@ -345,8 +347,7 @@ export default function ProductsPage() {
                 <TableRow>
                   <TableHeaderCell>{t("الكود / SKU", "Code / SKU")}</TableHeaderCell>
                   <TableHeaderCell>{t("النوع", "Type")}</TableHeaderCell>
-                  <TableHeaderCell>{t("الاسم العربي", "Arabic Name")}</TableHeaderCell>
-                  <TableHeaderCell>{t("الاسم الإنجليزي", "English Name")}</TableHeaderCell>
+                  <TableHeaderCell>{t("الاسم", "Name")}</TableHeaderCell>
                   <TableHeaderCell>{t("سعر البيع", "Sale Price")}</TableHeaderCell>
                   <TableHeaderCell>{t("الحالة", "Status")}</TableHeaderCell>
                   <TableHeaderCell className="text-end">{t("الإجراءات", "Actions")}</TableHeaderCell>
@@ -364,8 +365,10 @@ export default function ProductsPage() {
                         {item.type === "PRODUCT" ? t("منتج", "Product") : t("خدمة", "Service")}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-medium text-white">{item.nameAr || item.name}</TableCell>
-                    <TableCell className="text-slate-300">{item.nameEn || "-"}</TableCell>
+                    <TableCell className="font-medium text-white">
+                      {item.display?.name ?? item.name}
+                      {item.display?.isFallback && <div className="text-xs font-normal text-amber-300">{t("الاسم الأساسي — لا توجد ترجمة معتمدة", "Canonical fallback — no maintained localization")}</div>}
+                    </TableCell>
                     <TableCell className="font-semibold text-emerald-300">{item.salePrice.toFixed(3)}</TableCell>
                     <TableCell>
                       <Badge variant={item.isActive ? "success" : "neutral"}>
