@@ -1,5 +1,5 @@
 import type { QuotationScopeType } from "../../../domain/quotation/types/QuotationScopeType";
-import type { SystemCalculationResult, SystemInputParameter } from "../../../domain/smart-system";
+import type { SystemCalculationResult, SystemInputParameter, SystemComponent } from "../../../domain/smart-system";
 
 export const SALES_ASSISTANT_PROMPT_MAX_LENGTH = 4_000;
 export const SALES_ASSISTANT_MAX_LINES = 20;
@@ -34,6 +34,8 @@ export interface AISalesAssistantRequest {
 }
 
 export interface ExtractedLineItem {
+  /** Server-owned provisional commercial scope; not an engineered SKU/count. */
+  commercializationPending?: boolean;
   text: string;
   itemNameAr?: string;
   itemNameEn?: string;
@@ -113,6 +115,7 @@ export interface CatalogCandidateOption {
 }
 
 export interface ResolvedLineItem {
+  commercializationPending?: boolean;
   priceSource?: CommercialProvenance;
   priceEstimate?: { region: string | null; reference: string; confidence: "LOW"; verified: false };
   quantitySource?: CommercialProvenance;
@@ -187,6 +190,8 @@ export interface SalesAssistantDraftProposal {
   termsAndConditionsEn: string | null;
   reviewRequired: boolean;
   smartSystem?: {
+    /** Internal engineering requirements, never customer quotation lines. */
+    requirements?: SystemComponent[];
     systemType: string;
     templateVersion: string;
     systemNameAr: string;

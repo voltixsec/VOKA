@@ -108,3 +108,46 @@ warnings remain. A late non-CCTV field-adapter correction required refreshing
 the full/type/build checks after the first successful pass; these figures are
 from the corrected implementation, not the earlier run. No schema/dependency
 changes, merge or deployment. The named manual-experiment stash remains intact.
+
+## Engineering → commercial boundary follow-up
+
+The owner's boundary clarification exposed an existing leak: the CCTV storage
+capacity requirement was being resolved/copied as a commercial line in TB. The
+engineering template itself remains unchanged. A narrow application adapter now
+projects its components into commercial lines before catalog resolution, while
+`smartSystem.requirements` retains the original engineering quantities, units,
+formulas and provenance for internal review. The assistant and quotation form
+read that internal projection only in their expandable engineering details;
+the quotation editor and save payload consume commercial lines only.
+
+Storage capacity is not an HDD quantity. There is no confirmed drive-capacity,
+RAID or recorder-bay decision in the current canonical inputs. Until the dedicated
+commercial-BOM slice supplies those decisions, storage is a truthful provisional
+custom **Surveillance storage supply package**, quantity one package, no catalog
+ID, and human review required. It is not a claim of one disk or an invented 18 TB
+SKU. Its price remains unresolved and is excluded from automatic budget-price
+estimation; a complete total is not asserted while that price is unknown. Stale
+catalog selections cannot turn the capacity requirement into an incorrectly
+quantified disk. Manual SKU selection/design and pricing remain necessary in
+the existing human-review form; automated disk allocation is explicitly deferred.
+
+Cable remains the existing deterministic number of 305 m rolls, with a commercial
+305 m roll label in both locales; it is not presented as estimated required meters.
+No unsupported shielding specification is introduced. The 130-camera example
+retains 337 TB internally and 13 rolls commercially. Re-analysis recreates the
+commercial projection instead of replaying old raw requirement phrases from
+conversation state. No engineering formulas, template BOM, schema, customer
+creation, commercial execution, merge or deployment changes are included.
+
+Boundary regression coverage includes both locales, provisional scope/no fabricated
+IDs, no automatic storage-package pricing, unchanged engineering calculations,
+stale-context re-analysis, the Voice/Text/Chip completion loop, separate internal
+review, and the real quotation form's commercial-only save payload.
+
+Boundary follow-up validation: 171 focused tests passed in 22 files; full suite
+1,411 passed / 2 existing skips (222 files passed / 1 skipped). Typecheck,
+production build, Prisma validation and diff checks passed. Full suite/build ran
+once at final validation for this follow-up. Existing lint and mocked-localization
+database warnings remain. Manual CEO acceptance should verify the storage package,
+internal TB/formulas, cable rolls and repeated clarification in AR/EN, then confirm
+actual drive design and pricing explicitly before using the quotation externally.

@@ -13,6 +13,7 @@ import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesInten
 import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
 import { SmartSystemBuilderService } from "../../smart-system/services/SmartSystemBuilderService";
 import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
+import { commercializeSystemComponent } from "./commercialize-system-component";
 
 const FALLBACK_WARNING =
   "Structured AI extraction was unavailable or invalid; conservative heuristic extraction was used.";
@@ -133,22 +134,7 @@ export class AISalesAssistantExtractor {
           prompt.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ??
           null;
 
-        const lines: ExtractedLineItem[] = calcResult.components.map((c) => ({
-          text: sourceLocale === "ar" ? c.nameAr : c.nameEn,
-          itemNameAr: c.nameAr,
-          itemNameEn: c.nameEn,
-          // Engineering audit detail remains separate from the commercial line
-          // description and is not copied into the quotation composer.
-          description: null,
-          quantity: c.quantity,
-          requestedUnitText: c.unit,
-          requestedPrice: null, // AI & System templates do not invent prices
-          typeIntent: c.itemType === "SERVICE" ? "SERVICE" : "PRODUCT",
-          provenance: c.provenance,
-          formulaExplanation: c.formulaExplanation,
-          formulaExplanationAr: c.formulaExplanationAr,
-          componentKey: c.componentKey,
-        }));
+        const lines = calcResult.components.map((component) => commercializeSystemComponent(component, sourceLocale));
 
         const systemWarnings = [
           sourceLocale === "ar"

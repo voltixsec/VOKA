@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { EngineeringQuantityDetails, type EngineeringReviewLine } from "../EngineeringQuantityDetails";
+import { EngineeringQuantityDetails, engineeringReviewLines, type EngineeringReviewLine } from "../EngineeringQuantityDetails";
 import { EstimateNotice } from "../EstimateNotice";
 
 const lines: EngineeringReviewLine[] = [
@@ -10,6 +10,15 @@ const lines: EngineeringReviewLine[] = [
 ];
 
 describe("engineering quantity explanations", () => {
+  it('projects internal requirements separately without changing commercial quantities', () => {
+    const proposal = { lines: [{ ...lines[1], itemName: 'Storage supply package', commercializationPending: true }], smartSystem: { requirements: [{ name: 'Required capacity', nameEn: 'Required capacity', nameAr: 'السعة المطلوبة', quantity: 337, unit: 'TB', provenance: 'CALCULATED', formulaExplanation: 'Internal formula' }] } } as any;
+    const review = engineeringReviewLines(proposal);
+    expect(review[0]).toMatchObject({ quantity: 337, unitName: 'TB' });
+    expect(review[1]).toMatchObject({ quantity: 1, itemName: 'Storage supply package' });
+    expect(proposal.lines).toHaveLength(1);
+    expect(proposal.lines[0].quantity).toBe(1);
+  });
+
   it.each([false, true])("exposes original calculations/assumptions in closed details and preserves the notice (Arabic=%s)", (isArabic) => {
     const { container } = render(<><EstimateNotice isArabic={isArabic} /><EngineeringQuantityDetails lines={lines} isArabic={isArabic} /></>);
     expect(container.querySelector("details")?.open).toBe(false);

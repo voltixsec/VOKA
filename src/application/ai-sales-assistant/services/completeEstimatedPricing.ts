@@ -4,7 +4,7 @@ import { QuotationCalculator } from "../../../domain/quotation";
 
 /** Estimates never overwrite internal prices, never use FX, and never claim web verification. */
 export async function completeEstimatedPricing(proposal: SalesAssistantDraftProposal, provider?: AISalesAssistantPort | null) {
-  const unresolved = proposal.lines.map((line, index) => ({ line, key: String(index) })).filter(({ line }) => line.unitPrice === null && line.resolutionStatus !== "AMBIGUOUS");
+  const unresolved = proposal.lines.map((line, index) => ({ line, key: String(index) })).filter(({ line }) => line.unitPrice === null && line.resolutionStatus !== "AMBIGUOUS" && !line.commercializationPending);
   if (!unresolved.length || !provider?.estimatePrices) return proposal;
   const region = proposal.customer.countryCode ?? proposal.metadata.region ?? null;
   if (!region) return proposal;

@@ -28,7 +28,7 @@ import { CustomerPicker } from "@/components/commercial";
 import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
-import { EngineeringQuantityDetails, commercialLineName, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
+import { EngineeringQuantityDetails, commercialLineName, engineeringReviewLines, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
 import { ESTIMATE_NOTICE_AR, ESTIMATE_NOTICE_EN } from "@/src/application/ai-sales-assistant/estimate-notice";
 import {
   QuotationCalculator,
@@ -552,7 +552,7 @@ export default function NewQuotationPage() {
         sessionStorage.removeItem(SESSION_KEY);
         const draft = JSON.parse(stored);
         setAiEstimateReview(Boolean(draft.estimateNotice));
-        setAiEngineeringLines(Array.isArray(draft.lines) ? draft.lines : []);
+        setAiEngineeringLines(Array.isArray(draft.lines) ? engineeringReviewLines(draft) : []);
         if (draft.customer?.id) {
           setCustomerId(draft.customer.id);
           setCustomers((current) => current.some((customer) => customer.id === draft.customer.id) ? current : [...current, { id: draft.customer.id, name: draft.customer.name }]);

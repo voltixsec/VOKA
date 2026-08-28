@@ -87,8 +87,8 @@ describe("Commercial Brain", () => {
     const byKey = (key: string) => proposal.lines.find((line) => line.componentKey === key)!;
     expect(byKey("NVR_RECORDER").formulaExplanation).toContain("64 channels");
     expect(byKey("POE_SWITCH").formulaExplanation).toContain("48 ports - 2 reserved uplink ports");
-    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY")).toMatchObject({ requestedUnitText: "TB" });
-    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY").formulaExplanation).toContain("30 days");
+    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY")).toMatchObject({ requestedUnitText: "Package", quantity: 1, commercializationPending: true, catalogItemId: null });
+    expect(proposal.smartSystem?.requirements?.find((item) => item.componentKey === "SURVEILLANCE_STORAGE_CAPACITY")?.formulaExplanation).toContain("30 days");
     expect(byKey("RACK_CABINET")).toMatchObject({ quantitySource: "AI_ESTIMATED", quantity: 1 });
     expect(byKey("RACK_CABINET").formulaExplanation).toContain("single collection point");
     expect(byKey("CAT6_CABLING").formulaExplanation).toContain("305m roll");
@@ -107,7 +107,8 @@ describe("Commercial Brain", () => {
     expect(proposal.lines.every((line) => line.catalogItemId === null && line.resolutionStatus === "CUSTOM" && line.reviewRequired)).toBe(true);
     expect(proposal.lines[0]).toMatchObject({ priceSource: "AI_ESTIMATED", priceEstimate: { verified: false, region: "KW" } });
     expect(proposal.estimateNotice).toBe(true);
-    expect(proposal.financials?.totalAmount).toBeGreaterThan(0);
+    expect(proposal.lines.find((line) => line.commercializationPending)?.unitPrice).toBeNull();
+    expect(proposal.financials).toBeNull();
     const draft = new ConversationalDraftEngine().advance({ reply: prompt, replySource: "VOICE", locale: "ar" });
     const fused = applyCanonicalIntelligence(draft, proposal);
     expect(fused.missingRequired.map((field) => field.key)).toEqual(["customer"]);

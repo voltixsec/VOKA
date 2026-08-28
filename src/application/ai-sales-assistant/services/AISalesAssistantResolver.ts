@@ -78,11 +78,11 @@ export class AISalesAssistantResolver {
       resolvedLines.push(
         await this.resolveLineItem(
           companyId,
-          selection?.catalog?.[line.componentKey ?? line.text] ? { ...line, text: selection.catalog[line.componentKey ?? line.text].name } : line,
+          !line.commercializationPending && selection?.catalog?.[line.componentKey ?? line.text] ? { ...line, text: selection.catalog[line.componentKey ?? line.text].name } : line,
           sourceLocale,
           priceListId,
           currencyCode, company.defaultCurrency,
-          selection?.catalog?.[line.componentKey ?? line.text]?.id,
+          line.commercializationPending ? undefined : selection?.catalog?.[line.componentKey ?? line.text]?.id,
         ),
       );
     }
@@ -214,6 +214,7 @@ export class AISalesAssistantResolver {
           systemNameEn: intent.smartSystem.systemNameEn,
           status: intent.smartSystem.status,
           inputs: intent.smartSystem.inputs,
+          requirements: intent.smartSystem.components,
           missingInputs: intent.smartSystem.missingInputs,
           warnings: intent.smartSystem.warnings,
         }
@@ -509,6 +510,7 @@ export class AISalesAssistantResolver {
 
     return {
       resolutionStatus: status,
+      commercializationPending: extracted.commercializationPending,
       type,
       catalogItemId: null,
       catalogCandidates: candidates,
@@ -523,8 +525,8 @@ export class AISalesAssistantResolver {
       quantity: extracted.quantity ?? null,
       requestedUnitText: requestedUnit,
       unitName: unit?.isActive ? unit.symbol : requestedUnit,
-      unitNameAr: unit?.isActive ? unit.nameAr : null,
-      unitNameEn: unit?.isActive ? unit.nameEn : null,
+      unitNameAr: unit?.isActive ? unit.nameAr : extracted.commercializationPending ? "حزمة" : null,
+      unitNameEn: unit?.isActive ? unit.nameEn : extracted.commercializationPending ? "Package" : null,
       requestedPrice: extracted.requestedPrice ?? null,
       unitPrice: extracted.requestedPrice ?? null,
       priceSource: extracted.requestedPrice != null ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",

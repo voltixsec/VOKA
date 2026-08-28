@@ -181,6 +181,28 @@ function fetchForCreate() {
 }
 
 describe('proposed customer in the real quotation composer', () => {
+  it('hydrates and submits commercial rows only; engineering capacity remains in internal review', async () => {
+    sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
+      customer: { id: 'customer-1' }, estimateNotice: true,
+      proposal: { subjectEn: 'Storage supply', scopeType: 'SUPPLY_ONLY', currencyCode: 'KWD' },
+      smartSystem: { requirements: [{ componentKey: 'SURVEILLANCE_STORAGE_CAPACITY', name: 'Required storage capacity', nameEn: 'Required storage capacity', nameAr: 'سعة التخزين المطلوبة', quantity: 337, unit: 'TB', provenance: 'CALCULATED', formulaExplanation: 'Internal storage formula: 337 TB', formulaExplanationAr: 'حساب داخلي للسعة المطلوبة' }] },
+      lines: [{ itemName: 'Surveillance storage supply package', itemNameEn: 'Surveillance storage supply package', itemNameAr: 'حزمة توريد وحدات تخزين المراقبة', type: 'CUSTOM', quantity: 1, unitName: 'Package', unitNameEn: 'Package', unitNameAr: 'حزمة', unitPrice: null, catalogItemId: null, commercializationPending: true, provenance: 'SUGGESTED', formulaExplanation: 'Disk selection and price require review.' }],
+    }));
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    await screen.findByText('Internal storage formula: 337 TB');
+    expect(screen.getByRole('combobox', { name: 'Item 1' })).toHaveValue('Surveillance storage supply package');
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Create proposal' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(true));
+    const body = postBody(fetchMock);
+    expect(body.lines).toHaveLength(1);
+    expect(body.lines[0]).toMatchObject({ itemName: 'Surveillance storage supply package', quantity: 1, unitName: 'Package' });
+    expect(JSON.stringify(body)).not.toMatch(/337|Required storage|Internal storage formula|formulaExplanation|requirements/);
+    expect(body.lines[0].catalogItemId).toBeFalsy();
+  });
+
   it.each(['Create', 'Create and edit'])('%s binds in place and preserves edited commercial data', async (action) => {
     sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
       customer: { id: null, proposedCustomerName: 'Horizon' }, estimateNotice: true,

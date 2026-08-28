@@ -8,6 +8,7 @@ Architecture decisions are recorded here.
 - Targeted answers are application state around the existing canonical intelligence, not a replacement engine or document schema.
 - Default precedence, nullable-field decisions and review boundaries are documented in the [slice contract](product/changes/2026-08-28-field-aware-conversational-completion.md).
 - Feature-branch only; no engineering BOM, pricing architecture, schema, merge or deployment changes. CEO acceptance remains pending.
+- Owner's engineering/commercial boundary clarification: retain raw requirements internally and use a provisional custom storage package until drive design is confirmed; see the [boundary follow-up](product/changes/2026-08-28-field-aware-conversational-completion.md#engineering--commercial-boundary-follow-up). No invented HDD capacity/catalog identity or automatic price for unspecified storage scope.
 
 ## 2026-08-04
 

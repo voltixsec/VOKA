@@ -1,4 +1,4 @@
-import type { ResolvedLineItem } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
+import type { ResolvedLineItem, SalesAssistantDraftProposal } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
 
 export type EngineeringReviewLine = Pick<ResolvedLineItem,
   "itemName" | "quantity" | "unitName" | "quantitySource" | "provenance" | "formulaExplanation"
@@ -9,9 +9,20 @@ export function commercialLineName(line: { itemName: string; itemNameAr?: string
   return (isArabic ? line.itemNameAr : line.itemNameEn) || line.itemName;
 }
 
+/** Internal review projection only. Never use these rows to hydrate a quotation. */
+export function engineeringReviewLines(proposal: SalesAssistantDraftProposal): EngineeringReviewLine[] {
+  if (!proposal.smartSystem?.requirements) return proposal.lines;
+  return [...proposal.smartSystem.requirements.map((requirement) => ({
+    itemName: requirement.name, itemNameAr: requirement.nameAr, itemNameEn: requirement.nameEn,
+    quantity: requirement.quantity, unitName: requirement.unit, provenance: requirement.provenance,
+    formulaExplanation: requirement.formulaExplanation, formulaExplanationAr: requirement.formulaExplanationAr,
+  })), ...proposal.lines.filter((line) => line.commercializationPending)];
+}
+
 const unitLabels: Record<string, [string, string]> = {
   unit: ["وحدة", "Unit"], piece: ["قطعة", "Piece"], pcs: ["قطعة", "Pieces"],
   roll: ["بكرة", "Roll"], set: ["طقم", "Set"], point: ["نقطة", "Point"],
+  package: ["حزمة", "Package"],
   sheet: ["لوح", "Sheet"], pair: ["زوج", "Pair"], lm: ["متر طولي", "Linear metre"],
   m: ["متر", "m"], "m²": ["م²", "m²"], kg: ["كجم", "kg"],
 };

@@ -87,6 +87,8 @@ describe("field-aware canonical completion", () => {
     expect(first.activeQuestion?.field).toBe("projectName");
     expect(first.activeQuestion?.ar).toBe("ما اسم المشروع؟");
     expect(first.canonicalProposal?.smartSystem?.status).toBe("COMPLETE");
+    expect(first.canonicalProposal?.smartSystem?.requirements?.find((item) => item.componentKey === "SURVEILLANCE_STORAGE_CAPACITY")).toMatchObject({ quantity: 337, unit: "TB" });
+    expect(first.canonicalProposal?.lines.find((item) => item.componentKey === "SURVEILLANCE_STORAGE_CAPACITY")).toMatchObject({ quantity: 1, requestedUnitText: "Package", catalogItemId: null, commercializationPending: true });
     const second = await run("مصنع الشويخ الجديد", first, source);
     expect(second.canonicalProposal?.proposal.projectName).toBe("مصنع الشويخ الجديد");
     expect(second.activeQuestion?.field).toBe("attentionName");
@@ -98,6 +100,7 @@ describe("field-aware canonical completion", () => {
     expect(ready).toMatchObject({ id: first.id, status: "READY_FOR_REVIEW", phase: "DRAFT_READY_FOR_REVIEW", activeQuestion: null, missingRequired: [], requiresHumanReview: true, executed: false });
     expect(ready.attachment).toEqual(first.attachment);
     expect(ready.canonicalProposal?.lines).toEqual(first.canonicalProposal?.lines);
+    expect(ready.canonicalProposal?.lines.some((line) => /required.*capacity|سعة.*مطلوبة|estimated cable/i.test(line.itemName))).toBe(false);
     expect(ready.canonicalProposal?.lines.find((line) => line.componentKey === "CCTV_CAMERAS")?.quantity).toBe(130);
     const again = await run(prompt, ready, "TEXT", { reanalyze: true });
     expect(again.activeQuestion).toBeNull();
