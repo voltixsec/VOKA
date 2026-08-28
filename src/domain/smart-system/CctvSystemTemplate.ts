@@ -5,6 +5,7 @@ import type {
   SystemComponent,
   ProvenanceType,
 } from "./types";
+import { resolveEngineeringRules, type ResolveEngineeringRulesInput } from "./EngineeringRuleResolver";
 
 export interface CctvInputs {
   cameraCount?: number | null;
@@ -25,6 +26,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
   public static readonly DEFAULT_STORAGE_DAYS = 30;
   public static readonly DEFAULT_CABLE_METERS_PER_CAMERA = 30;
   public static readonly DEFAULT_BITRATE_MBPS = 8;
+
+  public constructor(private readonly ruleContext: ResolveEngineeringRulesInput = {}) {}
 
   public calculate(rawInputs: Record<string, any>): SystemCalculationResult {
     const warnings: string[] = [];
@@ -52,10 +55,18 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const projectContextProvided = typeof rawInputs.projectContext === "string" && Boolean(rawInputs.projectContext.trim());
 
     const storageDaysProvided = rawInputs.storageDays ?? rawInputs.days;
+    const rules = resolveEngineeringRules({ ...this.ruleContext,
+      jurisdiction: typeof rawInputs.jurisdiction === "string" ? rawInputs.jurisdiction : this.ruleContext.jurisdiction,
+      userOverrides: {
+      ...this.ruleContext.userOverrides,
+      ...(typeof storageDaysProvided === "number" && storageDaysProvided > 0 ? { retentionDays: storageDaysProvided } : {}),
+      ...(typeof rawInputs.bitrateMbps === "number" ? { bitrateMbps: rawInputs.bitrateMbps } : {}),
+      ...(typeof rawInputs.cableMetersPerCamera === "number" ? { cableMetersPerCamera: rawInputs.cableMetersPerCamera } : {}),
+    } });
     const storageDays =
       typeof storageDaysProvided === "number" && storageDaysProvided > 0
         ? storageDaysProvided
-        : CctvSystemTemplate.DEFAULT_STORAGE_DAYS;
+        : rules.snapshot.values.retentionDays;
     const storageProvenance: ProvenanceType =
       typeof storageDaysProvided === "number" && storageDaysProvided > 0
         ? "USER_PROVIDED"
@@ -63,7 +74,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const bitrateProvided = rawInputs.bitrateMbps;
     const bitrateMbps = typeof bitrateProvided === "number" && Number.isFinite(bitrateProvided) && bitrateProvided > 0 && bitrateProvided <= 100
       ? bitrateProvided
-      : CctvSystemTemplate.DEFAULT_BITRATE_MBPS;
+      : rules.snapshot.values.bitrateMbps;
     const invalidStorage = storageDaysProvided != null &&
       (typeof storageDaysProvided !== "number" || !Number.isInteger(storageDaysProvided) || storageDaysProvided < 1 || storageDaysProvided > 365);
     const invalidBitrate = bitrateProvided != null &&
@@ -74,14 +85,14 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const cableProvided = rawInputs.cableMetersPerCamera;
     const cableMetersPerCamera = typeof cableProvided === "number" && Number.isFinite(cableProvided) && cableProvided > 0 && cableProvided <= 500
       ? cableProvided
-      : CctvSystemTemplate.DEFAULT_CABLE_METERS_PER_CAMERA;
+      : rules.snapshot.values.cableMetersPerCamera;
     const invalidCable = cableProvided != null &&
       (typeof cableProvided !== "number" || !Number.isFinite(cableProvided) || cableProvided <= 0 || cableProvided > 500);
     if (invalidCable) warnings.push("Cable allowance per camera must be greater than 0 and no more than 500 meters.");
     if (!projectContextProvided) warnings.push("Default assumption: project context is unspecified.");
-    if (storageDaysProvided == null) warnings.push("Default assumption: 30 days recording retention.");
-    if (bitrateProvided == null) warnings.push("Default assumption: 8 Mbps bitrate per camera for capacity planning.");
-    if (cableProvided == null) warnings.push("Default assumption: 30 meters of cable per camera.");
+    if (storageDaysProvided == null) warnings.push(`Resolved profile assumption: ${storageDays} days recording retention.`);
+    if (bitrateProvided == null) warnings.push(`Resolved profile assumption: ${bitrateMbps} Mbps bitrate per camera for capacity planning.`);
+    if (cableProvided == null) warnings.push(`Resolved profile assumption: ${cableMetersPerCamera} meters of cable per camera.`);
 
     const inputs: SystemInputParameter[] = [
       {
@@ -170,7 +181,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
     else if (count > 4) nvrChannels = 8;
 
     // Decimal TB = cameras * Mbps * seconds/day * days / 8 bits/byte / 1e6 MB/TB.
-    const estimatedTbRequired = Math.ceil(count * bitrateMbps * 86_400 * storageDays / 8 / 1_000_000);
+    const baseTbRequired = count * bitrateMbps * 86_400 * storageDays / 8 / 1_000_000;
+    const estimatedTbRequired = Math.ceil(baseTbRequired * (1 + rules.snapshot.values.storageReservePercent / 100));
 
     // PoE Switch sizing (8, 16, 24, 48 ports)
     let poePorts = 8;
@@ -178,11 +190,11 @@ export class CctvSystemTemplate implements ISystemTemplate {
     else if (count > 12) poePorts = 24;
     else if (count > 6) poePorts = 16;
 
-    const poeSwitchCount = Math.ceil(count / (poePorts - 2)); // keep uplink ports free
+    const poeSwitchCount = Math.ceil(count / (poePorts - rules.snapshot.values.poeReservedPorts));
 
     // Cabling allowance
     const totalCableMeters = count * cableMetersPerCamera;
-    const cableBoxes = Math.max(1, Math.ceil(totalCableMeters / 305)); // 305m per Cat6 box
+    const cableBoxes = Math.max(1, Math.ceil(totalCableMeters / rules.snapshot.values.cableRollMeters));
 
     const components: SystemComponent[] = [
       {
@@ -201,21 +213,21 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "NVR_RECORDER",
-        specification: { requiredChannels: count, channelsPerRecorder: nvrChannels },
+        specification: { requiredChannels: count, channelsPerRecorder: nvrChannels, utilizationPercent: rules.snapshot.values.nvrUtilizationPercent },
         name: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameAr: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameEn: `Network Video Recorder NVR (${nvrChannels} Channels)`,
         itemType: "PRODUCT",
-        quantity: Math.ceil(count / nvrChannels),
+        quantity: Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100)),
         unit: "Unit",
         provenance: "CALCULATED",
-        formulaExplanation: `${Math.ceil(count / nvrChannels)} NVR(s), ${nvrChannels} channels each for ${count} cameras. Preliminary capacity only; bandwidth, disk bays and site layout require engineering review.`,
-        formulaExplanationAr: `${Math.ceil(count / nvrChannels)} جهاز NVR بسعة ${nvrChannels} قناة لكل جهاز لخدمة ${count} كاميرا. سعة مبدئية فقط؛ يلزم مراجعة معدل نقل البيانات وفتحات الأقراص وتوزيع الموقع هندسياً.`,
+        formulaExplanation: `${Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100))} NVR(s), ${nvrChannels} channels each at ${rules.snapshot.values.nvrUtilizationPercent}% maximum utilization for ${count} cameras. Preliminary capacity only; bandwidth, disk bays and site layout require engineering review.`,
+        formulaExplanationAr: `${Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100))} جهاز NVR بسعة ${nvrChannels} قناة لكل جهاز وبحد استخدام ${rules.snapshot.values.nvrUtilizationPercent}% لخدمة ${count} كاميرا. سعة مبدئية فقط؛ يلزم مراجعة معدل نقل البيانات وفتحات الأقراص وتوزيع الموقع هندسياً.`,
         category: "HARDWARE",
       },
       {
         componentKey: "SURVEILLANCE_STORAGE_CAPACITY",
-        specification: { requiredUsableTb: estimatedTbRequired, storageDays, bitrateMbps, allocation: "RAID/reserve/bays not verified" },
+        specification: { requiredUsableTb: estimatedTbRequired, storageDays, bitrateMbps, codec: rules.snapshot.values.codec, resolutionMp: rules.snapshot.values.resolutionMp, fps: rules.snapshot.values.fps, storageReservePercent: rules.snapshot.values.storageReservePercent, allocation: "RAID/bays not verified" },
         name: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
         nameAr: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
         nameEn: `Required Surveillance Storage Capacity (${storageDays} days retention)`,
@@ -229,7 +241,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "POE_SWITCH",
-        specification: { requiredPorts: count, portsPerSwitch: poePorts, reservedPorts: 2 },
+        specification: { requiredPorts: count, portsPerSwitch: poePorts, reservedPorts: rules.snapshot.values.poeReservedPorts },
         name: `موزع شبكة PoE Switch (${poePorts} منفذ)`,
         nameAr: `موزع شبكة PoE (${poePorts} منفذ)`,
         nameEn: `PoE Network Switch (${poePorts} Ports)`,
@@ -237,8 +249,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
         quantity: poeSwitchCount,
         unit: "Unit",
         provenance: "CALCULATED",
-        formulaExplanation: `Math.ceil(${count} cameras / (${poePorts} ports - 2 reserved uplink ports)) = ${poeSwitchCount} switch(es). Assumes one port per camera; PoE power budget and network topology require review.`,
-        formulaExplanationAr: `تقريب لأعلى (${count} كاميرا ÷ (${poePorts} منفذ − 2 منفذ ربط محجوز)) = ${poeSwitchCount} موزع. بافتراض منفذ لكل كاميرا؛ يلزم مراجعة ميزانية طاقة PoE وتصميم الشبكة.`,
+        formulaExplanation: `Math.ceil(${count} cameras / (${poePorts} ports - ${rules.snapshot.values.poeReservedPorts} reserved uplink ports)) = ${poeSwitchCount} switch(es). Assumes one port per camera; PoE power budget and network topology require review.`,
+        formulaExplanationAr: `تقريب لأعلى (${count} كاميرا ÷ (${poePorts} منفذ − ${rules.snapshot.values.poeReservedPorts} منفذ ربط محجوز)) = ${poeSwitchCount} موزع. بافتراض منفذ لكل كاميرا؛ يلزم مراجعة ميزانية طاقة PoE وتصميم الشبكة.`,
         category: "NETWORKING",
       },
       {
@@ -247,25 +259,29 @@ export class CctvSystemTemplate implements ISystemTemplate {
         nameAr: "كابينة حائط لتجميع الشبكة والتسجيل",
         nameEn: "Wall Mount Server & NVR Cabinet",
         itemType: "PRODUCT",
-        quantity: 1,
+        quantity: rules.snapshot.values.rackAllowance,
         unit: "Unit",
         provenance: "SUGGESTED",
-        formulaExplanation: "Estimated allowance: 1 shared wall-mount cabinet at a single collection point. Rack units, recorder/switch dimensions, ventilation and distributed cabinet locations are not sized; confirm after site/layout review.",
-        formulaExplanationAr: "تقدير مبدئي: كابينة حائط مشتركة واحدة (1) في نقطة تجميع واحدة. لم يتم تحديد وحدات الرف أو أبعاد أجهزة التسجيل والموزعات أو التهوية أو مواقع الكبائن الموزعة؛ أكدها بعد مراجعة الموقع والمخطط.",
+        formulaExplanation: rules.snapshot.values.rackAllowance === 1
+          ? "Estimated allowance: 1 shared wall-mount cabinet at a single collection point. Rack units, recorder/switch dimensions, ventilation and distributed cabinet locations are not sized; confirm after site/layout review."
+          : `Resolved profile allowance: ${rules.snapshot.values.rackAllowance} wall-mount cabinets. Rack units, recorder/switch dimensions, ventilation and locations are not sized; confirm after site/layout review.`,
+        formulaExplanationAr: rules.snapshot.values.rackAllowance === 1
+          ? "تقدير مبدئي: كابينة حائط مشتركة واحدة (1) في نقطة تجميع واحدة. لم يتم تحديد وحدات الرف أو أبعاد أجهزة التسجيل والموزعات أو التهوية أو مواقع الكبائن الموزعة؛ أكدها بعد مراجعة الموقع والمخطط."
+          : `بدل الملف الهندسي المحسوم: ${rules.snapshot.values.rackAllowance} كابينة حائط. لم يتم تحديد وحدات الرف أو أبعاد أجهزة التسجيل والموزعات أو التهوية أو المواقع؛ أكدها بعد مراجعة الموقع والمخطط.`,
         category: "INFRASTRUCTURE",
       },
       {
         componentKey: "CAT6_CABLING",
-        specification: { requiredCableMeters: totalCableMeters, metersPerRoll: 305 },
-        name: "كابلات شبكة Cat6 المخصصة للمراقبة (بكرات)",
-        nameAr: "كابلات شبكة Cat6 المخصصة للمراقبة (بكرات)",
-        nameEn: "Cat6 Ethernet Cable Rolls (305m per roll)",
+        specification: { requiredCableMeters: totalCableMeters, metersPerRoll: rules.snapshot.values.cableRollMeters },
+        name: `كابلات شبكة Cat6 المخصصة للمراقبة (بكرات ${rules.snapshot.values.cableRollMeters} متر)`,
+        nameAr: `كابلات شبكة Cat6 المخصصة للمراقبة (بكرات ${rules.snapshot.values.cableRollMeters} متر)`,
+        nameEn: `Cat6 Ethernet Cable Rolls (${rules.snapshot.values.cableRollMeters}m per roll)`,
         itemType: "PRODUCT",
         quantity: cableBoxes,
         unit: "Roll",
         provenance: "CALCULATED",
-        formulaExplanation: `Math.ceil(${count} cameras * ${cableMetersPerCamera}m / 305m roll) = ${cableBoxes} roll(s)`,
-        formulaExplanationAr: `تقريب لأعلى (${count} كاميرا × ${cableMetersPerCamera} متر ÷ 305 متر/بكرة) = ${cableBoxes} بكرة`,
+        formulaExplanation: `Math.ceil(${count} cameras * ${cableMetersPerCamera}m / ${rules.snapshot.values.cableRollMeters}m roll) = ${cableBoxes} roll(s)`,
+        formulaExplanationAr: `تقريب لأعلى (${count} كاميرا × ${cableMetersPerCamera} متر ÷ ${rules.snapshot.values.cableRollMeters} متر/بكرة) = ${cableBoxes} بكرة`,
         category: "INFRASTRUCTURE",
       },
       {
@@ -301,11 +317,13 @@ export class CctvSystemTemplate implements ISystemTemplate {
       templateVersion: this.templateVersion,
       systemNameAr: this.displayNameAr,
       systemNameEn: this.displayNameEn,
-      status: "COMPLETE",
+      status: rules.conflict ? "RULE_CONFLICT" : "COMPLETE",
       inputs,
       missingInputs: [],
       warnings,
       components,
+      engineeringRules: rules.snapshot,
+      ruleConflict: rules.conflict,
     };
   }
 }

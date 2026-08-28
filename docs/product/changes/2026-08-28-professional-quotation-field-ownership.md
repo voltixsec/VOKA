@@ -188,3 +188,26 @@ one skipped). Known caught best-effort localization/database warnings remain.
 The single production build passed, including its type/lint checks; only existing
 hook-dependency and combobox ARIA warnings remain. No production code changed
 after these gates. Live CEO/browser acceptance remains pending.
+
+## Slice 4 Part 8 — Jurisdiction-aware engineering profiles
+
+The CCTV domain now resolves versioned engineering values in this order:
+trusted verified-jurisdiction profile, company-approved profile, then the safe
+engineering default. Explicit user values remain visible and win the calculation;
+when retention is below a trusted verified minimum, the result is `RULE_CONFLICT`
+and requires a human decision instead of silently claiming approval.
+
+Every result can retain an internal snapshot containing profile identity, version,
+jurisdiction, trust, authority-source presence, resolved values and overrides.
+Kuwait without a trusted authority source is explicitly non-government-verified
+and never creates a legal/code claim. Storage, NVR utilization, PoE reserve,
+cabling and rack allowance consume the resolved values before the existing
+Engineering-to-Commercial-BOM adapter. Quotation rows, Notes, Terms and PDFs do
+not receive this internal metadata.
+
+The existing internal engineering review presents the useful profile fields in
+Arabic and English. A profile administration UI is deferred: future administration
+must provide tenant-scoped, approved profile storage, immutable version publication,
+authority-source verification and effective-date/history controls before profiles
+can be managed outside code. No giant settings UI, schema, migration or dependency
+was added in this slice.

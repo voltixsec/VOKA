@@ -237,6 +237,8 @@ export class AISalesAssistantResolver {
           requirements: intent.smartSystem.components,
           missingInputs: intent.smartSystem.missingInputs,
           warnings: intent.smartSystem.warnings,
+          engineeringRules: intent.smartSystem.engineeringRules,
+          ruleConflict: intent.smartSystem.ruleConflict,
         }
       : null;
 

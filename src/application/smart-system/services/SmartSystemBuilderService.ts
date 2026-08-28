@@ -100,6 +100,7 @@ export class SmartSystemBuilderService {
         extractedParameters: {
           cameraCount: cameraMatch ? Number(cameraMatch[1]) : null,
           projectContext,
+          jurisdiction: /\bkuwait\b/i.test(prompt) || prompt.includes("الكويت") ? "Kuwait" : null,
           includeInstallation: this.requestsInstallation(prompt),
         },
       };

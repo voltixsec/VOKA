@@ -34,6 +34,9 @@ describe("engineering to commercial boundary", () => {
     expect(proposal.lines.find((line) => line.componentKey === "CAT6_CABLING")).toMatchObject({ quantity: 13, requestedUnitText: "Roll" });
     expect(estimatePrices.mock.calls[0][0].lines.some((line: { name: string }) => line.name === storage.itemName)).toBe(false);
     expect(proposal.financials).toBeNull();
+    const customerFacing = JSON.stringify({ lines: proposal.lines.map(({ commercialRequirement: _internal, formulaExplanation: _formula, formulaExplanationAr: _formulaAr, provenance: _provenance, quantitySource: _quantitySource, ...line }) => line), notes: proposal.notes, terms: proposal.termsAndConditions });
+    expect(customerFacing).not.toMatch(/engineeringRules|authoritySource|governmentVerified|ENGINEERING_DEFAULT|VERIFIED_AUTHORITY|ruleConflict/);
+    expect(proposal.smartSystem?.engineeringRules?.version).toBe("1.0.0");
   });
 
   it("does not let stale catalog selection relabel a capacity requirement as one HDD", async () => {
@@ -59,9 +62,11 @@ describe("engineering to commercial boundary", () => {
   it("does not alter the deterministic engineering BOM or its formulas", () => {
     const engineering = new CctvSystemTemplate().calculate({ cameraCount: 130 });
     const before = structuredClone(engineering);
-    const commercial = engineering.components.map((component) => commercializeSystemComponent(component, "en"));
+    const commercial = engineering.components.map((component) => commercializeSystemComponent(component, "en", engineering));
     expect(engineering).toEqual(before);
     expect(commercial.find((line) => line.componentKey === "CAT6_CABLING")?.text).toBe("CAT6 network cable 305m roll");
+    expect(commercial.every((line) => !("engineeringRules" in line))).toBe(true);
+    expect(commercial[0].commercialRequirement?.source.ruleVersion).toBe(engineering.templateVersion);
   });
 
   it("keeps the same cable-roll allocation for extracted catalog resolution", async () => {

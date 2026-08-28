@@ -31,8 +31,9 @@ export function commercializeSystemComponent(component: SystemComponent, locale:
     };
   }
   if (component.componentKey === "CAT6_CABLING") {
-    const ar = "بكرة كابل شبكة CAT6 بطول 305 متر";
-    const en = "CAT6 network cable 305m roll";
+    const meters = component.specification?.metersPerRoll ?? 305;
+    const ar = `بكرة كابل شبكة CAT6 بطول ${meters} متر`;
+    const en = `CAT6 network cable ${meters}m roll`;
     return { ...line, text: locale === "ar" ? ar : en, itemNameAr: ar, itemNameEn: en };
   }
   return line;

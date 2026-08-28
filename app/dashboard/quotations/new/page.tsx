@@ -30,6 +30,7 @@ import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
 import { EngineeringQuantityDetails, commercialLineName, engineeringReviewLines, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
 import { commercialUnitLabel } from '@/lib/i18n/unit-labels';
+import type { EngineeringRuleSnapshot } from '@/src/domain/smart-system';
 import { QuotationTerms } from '@/components/quotations/QuotationTerms';
 import {
   QuotationCalculator,
@@ -202,6 +203,7 @@ export default function NewQuotationPage() {
   const [aiEstimateReview, setAiEstimateReview] = useState(false);
   const [proposedCustomerName, setProposedCustomerName] = useState<string | null>(null);
   const [aiEngineeringLines, setAiEngineeringLines] = useState<Array<EngineeringReviewLine & { priceSource?: string; unitPrice?: number | null }>>([]);
+  const [aiEngineeringRules, setAiEngineeringRules] = useState<EngineeringRuleSnapshot | undefined>();
   const [number, setNumber] = useState(
     "QT-" + Date.now().toString().slice(-6),
   );
@@ -558,6 +560,7 @@ export default function NewQuotationPage() {
         const draft = JSON.parse(stored);
         setAiEstimateReview(Boolean(draft.estimateNotice));
         setAiEngineeringLines(Array.isArray(draft.lines) ? engineeringReviewLines(draft) : []);
+        setAiEngineeringRules(draft.smartSystem?.engineeringRules);
         if (draft.customer?.id) {
           setCustomerId(draft.customer.id);
           setCustomers((current) => current.some((customer) => customer.id === draft.customer.id) ? current : [...current, { id: draft.customer.id, name: draft.customer.name }]);
@@ -1026,7 +1029,7 @@ export default function NewQuotationPage() {
       dir={isArabic ? "rtl" : "ltr"}
     >
       {aiEstimateReview && <EstimateNotice isArabic={isArabic} />}
-      {aiEngineeringLines.length > 0 && <EngineeringQuantityDetails lines={aiEngineeringLines} isArabic={isArabic} />}
+      {aiEngineeringLines.length > 0 && <EngineeringQuantityDetails lines={aiEngineeringLines} isArabic={isArabic} rules={aiEngineeringRules} />}
       {aiEngineeringLines.length > 0 && <details className="text-xs text-slate-300"><summary>{isArabic ? "مصادر المسودة الأصلية — راجع قبل الاعتماد" : "Original draft sources — review before approval"}</summary>{aiEngineeringLines.map((line, index) => <p key={index}>{commercialLineName(line, isArabic)}: {displayLabel(line.priceSource ?? "NEEDS_CONFIRMATION", isArabic ? "ar" : "en")} · {displayLabel(line.quantitySource ?? "NEEDS_CONFIRMATION", isArabic ? "ar" : "en")}{line.unitPrice == null ? (isArabic ? " — السعر يحتاج مراجعة" : " — Price needs review") : ""}</p>)}</details>}
       <button
         type="button"

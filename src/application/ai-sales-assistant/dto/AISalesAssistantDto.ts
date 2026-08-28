@@ -213,7 +213,7 @@ export interface SalesAssistantDraftProposal {
     templateVersion: string;
     systemNameAr: string;
     systemNameEn: string;
-    status: "COMPLETE" | "NEEDS_CONFIRMATION" | "INVALID_INPUT";
+    status: "COMPLETE" | "RULE_CONFLICT" | "NEEDS_CONFIRMATION" | "INVALID_INPUT";
     inputs: Array<{
       name: string;
       labelAr: string;
@@ -225,6 +225,8 @@ export interface SalesAssistantDraftProposal {
     }>;
     missingInputs: string[];
     warnings: string[];
+    engineeringRules?: SystemCalculationResult["engineeringRules"];
+    ruleConflict?: SystemCalculationResult["ruleConflict"];
   } | null;
   metadata: {
     region?: string | null;
