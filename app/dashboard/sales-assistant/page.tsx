@@ -7,6 +7,8 @@ import { useRecordedVoiceInput, useVoiceInput, type AudioTranscriber, type IRawA
 import { VoiceOrb } from "@/components/voice";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
+import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
+import { bindDraftCustomer } from "@/src/application/commercial-conversation/bind-customer";
 import { EngineeringQuantityDetails, commercialLineName } from "@/components/ai/EngineeringQuantityDetails";
 import type { CommercialSelection } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
 import type { ConversationBuildMode, ConversationDocumentMode, ConversationReplySource, WorkingCommercialDraft } from "@/src/application/commercial-conversation";
@@ -170,28 +172,28 @@ export default function SalesAssistantPage(props: any) {
     sessionStorage.removeItem(CONVERSATION_STORAGE_KEY); sessionStorage.removeItem("voka_commercial_entry_prompt"); sessionStorage.removeItem("voka_ai_proposal_draft");
   };
 
-  const openForHumanReview = async () => {
-    if (!workingDraft || resultStale || workingDraft.missingRequired.length || workingDraft.status !== "READY_FOR_REVIEW") return;
+  const openForHumanReview = async (draft = workingDraft) => {
+    if (!draft || resultStale || draft.missingRequired.length || draft.status !== "READY_FOR_REVIEW") return;
     setIsGenerating(true);
     setError(null);
     try {
-      sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(workingDraft));
-      sessionStorage.setItem("voka_commercial_entry_prompt", workingDraft.contextText);
-      if (workingDraft.operation === "DRAWING_TAKEOFF") {
+      sessionStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(draft));
+      sessionStorage.setItem("voka_commercial_entry_prompt", draft.contextText);
+      if (draft.operation === "DRAWING_TAKEOFF") {
         if (!attachment) { setError("reattach"); return; }
-        const form = new FormData(); form.set("drawing", attachment); form.set("intent", workingDraft.contextText);
+        const form = new FormData(); form.set("drawing", attachment); form.set("intent", draft.contextText);
         const response = await fetch("/api/drawing-takeoffs", { method: "POST", body: form });
         const body = await response.json().catch(() => null);
         if (!response.ok) throw new Error(body?.error?.message || "Unable to register the drawing safely.");
         router.push(`/dashboard/takeoff?sessionId=${encodeURIComponent(body.data.session.id)}`);
         return;
       }
-      if (workingDraft.operation === "QUOTATION") {
-        if (!workingDraft.canonicalProposal) throw new Error(isArabic ? "المسودة الذكية غير مكتملة." : "The canonical intelligence draft is unavailable.");
-        sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(workingDraft.canonicalProposal));
+      if (draft.operation === "QUOTATION") {
+        if (!draft.canonicalProposal) throw new Error(isArabic ? "المسودة الذكية غير مكتملة." : "The canonical intelligence draft is unavailable.");
+        sessionStorage.setItem("voka_ai_proposal_draft", JSON.stringify(draft.canonicalProposal));
       }
       const routes = { QUOTATION: "/dashboard/quotations/new", INVOICE: "/dashboard/invoices/new", CONTRACT: "/dashboard/contracts/new", SALES_ORDER: "/dashboard/quotations" } as const;
-      router.push(routes[workingDraft.operation]);
+      router.push(routes[draft.operation]);
     } catch {
       setError("review");
     } finally {
@@ -309,7 +311,7 @@ export default function SalesAssistantPage(props: any) {
           <div className="min-w-0 space-y-2 break-words rounded-xl border border-sky-400/20 bg-slate-950/80 p-3" data-testid="commercial-conversation">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}</p><p className="mt-1 text-xs text-slate-400">{isArabic ? "مسودة محادثة واحدة محفوظة — لن يتم إنشاء أي مستند تلقائياً." : "One saved conversational draft — no document will be created automatically."}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${workingDraft.status === "READY_FOR_REVIEW" ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{workingDraft.status === "READY_FOR_REVIEW" ? displayLabel("READY_FOR_REVIEW", isArabic ? "ar" : "en") : (isArabic ? "يحتاج معلومات" : "Needs information")}</span></div>
             <p className="text-sm text-slate-200">{isArabic ? "فهمت أنك تريد" : "I understood"}: {displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}{workingDraft.fields.lines.length ? ` — ${(workingDraft.canonicalProposal?.lines ?? workingDraft.fields.lines).map((line) => `${line.quantity ?? ""} ${commercialLineName(line, isArabic)}`.trim()).join(" + ")}` : ""}{workingDraft.fields.customerMention ? ` — ${workingDraft.fields.customerMention}` : ""}.</p>
-            {workingDraft.canonicalProposal?.smartSystem && <p className="rounded-xl border border-violet-400/20 bg-violet-400/5 p-2 text-xs text-violet-200">{isArabic ? workingDraft.canonicalProposal.smartSystem.systemNameAr : workingDraft.canonicalProposal.smartSystem.systemNameEn} · {displayLabel(workingDraft.canonicalProposal.smartSystem.status, isArabic ? "ar" : "en")} · {isArabic ? "تمت محاولة مطابقة الكتالوج" : "Catalog resolution attempted"}</p>}
+            {workingDraft.canonicalProposal?.smartSystem && <p className="rounded-xl border border-violet-400/20 bg-violet-400/5 p-2 text-xs text-violet-200">{isArabic ? workingDraft.canonicalProposal.smartSystem.systemNameAr : workingDraft.canonicalProposal.smartSystem.systemNameEn} · {displayLabel(workingDraft.canonicalProposal.smartSystem.status, isArabic ? "ar" : "en")} · {isArabic ? "تم إنشاء بنود مبدئية، وبعض البنود تحتاج مراجعة." : "Preliminary lines are ready; some need review."}</p>}
             {workingDraft.missingRequired.length > 0 && <div className="rounded-xl border-2 border-rose-400/50 bg-rose-500/10 p-3"><p className="text-sm font-bold text-rose-200">{isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:"}</p><div className="mt-2 flex flex-wrap gap-2">{workingDraft.missingRequired.map((field) => <button type="button" key={`${field.key}-${field.sourceField ?? ""}`} className="rounded-lg border border-rose-300/40 px-3 py-2 text-sm font-semibold text-white" onClick={() => { setAnswerTarget(field.key === "customer" ? "customerMention" : field.key === "systemInput" ? field.sourceField ?? null : null); document.getElementById("sales-prompt-input")?.focus(); }}>{isArabic ? field.labelAr : field.labelEn}</button>)}</div></div>}
             {workingDraft.canonicalProposal?.estimateNotice && <EstimateNotice isArabic={isArabic} />}
             {workingDraft.canonicalProposal && <EngineeringQuantityDetails lines={workingDraft.canonicalProposal.lines} isArabic={isArabic} />}
@@ -318,9 +320,13 @@ export default function SalesAssistantPage(props: any) {
             {workingDraft.canonicalProposal && <details className="text-xs text-slate-300"><summary>{isArabic ? "البنود ومصادر الأسعار — مراجعة مطلوبة" : "Lines and price sources — review required"}</summary>{workingDraft.canonicalProposal.lines.map((line, index) => <p key={index} className="mt-2">{commercialLineName(line, isArabic)} · {line.quantity ?? "?"} · {line.unitPrice ?? (isArabic ? "السعر يحتاج مراجعة" : "Price needs review")} {workingDraft.canonicalProposal?.proposal.currencyCode} · {line.priceSource === "AI_ESTIMATED" ? (isArabic ? "تقدير ذكاء اصطناعي غير مؤكد" : "Unverified AI estimate") : line.catalogItemId ? (isArabic ? "من الكتالوج" : "Catalog matched") : (isArabic ? "بند مخصص يحتاج مراجعة" : "Custom line — review required")}</p>)}</details>}
             {workingDraft.clarification && workingDraft.customerResolution?.status !== "AMBIGUOUS" && <p className="text-sm text-white">{isArabic ? workingDraft.clarification.ar : workingDraft.clarification.en}</p>}
             {workingDraft.customerResolution?.status !== "AMBIGUOUS" && <div className="flex flex-wrap gap-2">{workingDraft.clarification?.suggestions.map((chip, index) => <button key={index} type="button" disabled={isGenerating} onClick={() => advanceConversation(isArabic ? chip.ar : chip.en, "CHIP")} className="rounded-xl border border-sky-400/30 px-3 py-2 text-xs">{isArabic ? chip.ar : chip.en}</button>)}</div>}
-            {workingDraft.customerResolution?.status === "NOT_FOUND" && <button type="button" onClick={() => router.push("/dashboard/customers/new")} className="text-start text-xs font-semibold text-sky-300 underline">{isArabic ? "فتح نموذج إنشاء عميل" : "Open create customer form"}</button>}
+            {workingDraft.proposedCustomerName && workingDraft.operation === "QUOTATION" && <ProposedCustomer key={`${workingDraft.id}:${workingDraft.proposedCustomerName}`} name={workingDraft.proposedCustomerName} isArabic={isArabic} disabled={isGenerating}
+              onContinue={workingDraft.status === "READY_FOR_REVIEW" ? () => void openForHumanReview() : undefined}
+              onBound={(customer) => { const next = bindDraftCustomer(workingDraft, customer); setWorkingDraft(next); if (next.status === "READY_FOR_REVIEW") void openForHumanReview(next); }}
+            />}
+            {workingDraft.customerResolution?.status === "NOT_FOUND" && workingDraft.operation !== "QUOTATION" && <button type="button" onClick={() => router.push("/dashboard/customers/new")} className="text-start text-xs font-semibold text-sky-300 underline">{isArabic ? "فتح نموذج إنشاء عميل" : "Open create customer form"}</button>}
             {workingDraft.recommended.length > 0 && <p className="text-xs text-slate-500">{isArabic ? "اختياري/موصى به: " : "Optional/recommended: "}{workingDraft.recommended.map((field) => isArabic ? field.labelAr : field.labelEn).join(isArabic ? "، " : ", ")}</p>}
-            {workingDraft.status === "READY_FOR_REVIEW" && <button type="button" onClick={openForHumanReview} disabled={isGenerating} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">{isArabic ? "فتح للمراجعة البشرية" : "Open for human review"}</button>}
+            {workingDraft.status === "READY_FOR_REVIEW" && !(workingDraft.proposedCustomerName && workingDraft.operation === "QUOTATION") && <button type="button" onClick={() => void openForHumanReview()} disabled={isGenerating} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">{isArabic ? "فتح للمراجعة البشرية" : "Open for human review"}</button>}
           </div>
         )}
 

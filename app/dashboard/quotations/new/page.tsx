@@ -25,8 +25,10 @@ import {
   useLanguage,
 } from "../../../../components/i18n/LanguageProvider";
 import { CustomerPicker } from "@/components/commercial";
+import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
+import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
-import { EngineeringQuantityDetails, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
+import { EngineeringQuantityDetails, commercialLineName, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
 import { ESTIMATE_NOTICE_AR, ESTIMATE_NOTICE_EN } from "@/src/application/ai-sales-assistant/estimate-notice";
 import {
   QuotationCalculator,
@@ -197,8 +199,8 @@ export default function NewQuotationPage() {
     useState("KWD");
 
   const [aiEstimateReview, setAiEstimateReview] = useState(false);
-  const [aiReviewSources, setAiReviewSources] = useState<string[]>([]);
-  const [aiEngineeringLines, setAiEngineeringLines] = useState<EngineeringReviewLine[]>([]);
+  const [proposedCustomerName, setProposedCustomerName] = useState<string | null>(null);
+  const [aiEngineeringLines, setAiEngineeringLines] = useState<Array<EngineeringReviewLine & { priceSource?: string; unitPrice?: number | null }>>([]);
   const [number, setNumber] = useState(
     "QT-" + Date.now().toString().slice(-6),
   );
@@ -551,9 +553,11 @@ export default function NewQuotationPage() {
         const draft = JSON.parse(stored);
         setAiEstimateReview(Boolean(draft.estimateNotice));
         setAiEngineeringLines(Array.isArray(draft.lines) ? draft.lines : []);
-        setAiReviewSources(Array.isArray(draft.lines) ? draft.lines.map((line: { itemName: string; unitPrice: number | null; priceSource?: string; quantitySource?: string }) => `${line.itemName}: ${line.priceSource ?? "NEEDS_CONFIRMATION"} · ${line.quantitySource ?? "NEEDS_CONFIRMATION"}${line.unitPrice == null ? " — price required" : ""}`) : []);
         if (draft.customer?.id) {
           setCustomerId(draft.customer.id);
+          setCustomers((current) => current.some((customer) => customer.id === draft.customer.id) ? current : [...current, { id: draft.customer.id, name: draft.customer.name }]);
+        } else if (draft.customer?.proposedCustomerName) {
+          setProposedCustomerName(draft.customer.proposedCustomerName);
         }
         if (draft.proposal) {
           if (draft.proposal.currencyCode) setCurrencyCode(draft.proposal.currencyCode);
@@ -1008,7 +1012,7 @@ export default function NewQuotationPage() {
     >
       {aiEstimateReview && <EstimateNotice isArabic={isArabic} />}
       {aiEngineeringLines.length > 0 && <EngineeringQuantityDetails lines={aiEngineeringLines} isArabic={isArabic} />}
-      {aiReviewSources.length > 0 && <details className="text-xs text-slate-300"><summary>{isArabic ? "مصادر المسودة الأصلية — راجع قبل الاعتماد" : "Original draft sources — review before approval"}</summary>{aiReviewSources.map((source, index) => <p key={index}>{source}</p>)}</details>}
+      {aiEngineeringLines.length > 0 && <details className="text-xs text-slate-300"><summary>{isArabic ? "مصادر المسودة الأصلية — راجع قبل الاعتماد" : "Original draft sources — review before approval"}</summary>{aiEngineeringLines.map((line, index) => <p key={index}>{commercialLineName(line, isArabic)}: {displayLabel(line.priceSource ?? "NEEDS_CONFIRMATION", isArabic ? "ar" : "en")} · {displayLabel(line.quantitySource ?? "NEEDS_CONFIRMATION", isArabic ? "ar" : "en")}{line.unitPrice == null ? (isArabic ? " — السعر يحتاج مراجعة" : " — Price needs review") : ""}</p>)}</details>}
       <button
         type="button"
         onClick={cancel}
@@ -1056,7 +1060,7 @@ export default function NewQuotationPage() {
           </h3>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
+            <div className="space-y-2">
               <span className="text-sm text-slate-400">
                 {t(
                   "\u0627\u0644\u0639\u0645\u064a\u0644",
@@ -1064,8 +1068,11 @@ export default function NewQuotationPage() {
                 )}
               </span>
 
-              <CustomerPicker customers={customers} value={customerId} isArabic={isArabic} onChange={(id) => { setCustomerId(id); setDirty(true); }} onCreated={(customer) => setCustomers((current) => [...current, customer])} />
-            </label>
+              {proposedCustomerName ? <ProposedCustomer name={proposedCustomerName} isArabic={isArabic}
+                onBound={(customer) => { setCustomers((current) => [...current.filter((item) => item.id !== customer.id), customer]); setCustomerId(customer.id); setProposedCustomerName(null); setDirty(true); }}
+                onChange={() => { setProposedCustomerName(null); setCustomerId(""); setDirty(true); }}
+              /> : <CustomerPicker customers={customers} value={customerId} isArabic={isArabic} onChange={(id) => { setCustomerId(id); setDirty(true); }} onCreated={(customer) => setCustomers((current) => [...current, customer])} />}
+            </div>
 
             <label className="space-y-2">
               <span className="text-sm text-slate-400">
@@ -1324,7 +1331,7 @@ export default function NewQuotationPage() {
                         itemInputRefs.current[line.editorKey] = element;
                       }}
                       ariaLabel={`${t("\u0627\u0644\u0635\u0646\u0641", "Item")} ${index + 1}`}
-                      value={line.itemName}
+                      value={isArabic ? line.itemNameAr || line.itemName : line.itemNameEn || line.itemName}
                       items={items}
                       placeholder={t(
                         "\u0627\u0628\u062d\u062b \u0623\u0648 \u0627\u0643\u062a\u0628 \u0627\u0644\u0635\u0646\u0641",

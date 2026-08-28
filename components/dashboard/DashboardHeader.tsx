@@ -7,6 +7,7 @@ import {
   Modal,
 } from "../ui";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { displayActorName } from "@/lib/i18n/display-labels";
 
 type UserProfile = {
   id: string;
@@ -78,8 +79,9 @@ export function DashboardHeader() {
     }
   }
 
-  const initials = user?.name
-    ? user.name
+  const actorName = user?.name ? displayActorName(user.name, isArabic ? "ar" : "en") : "";
+  const initials = actorName
+    ? actorName
         .split(" ")
         .map((part) => part[0])
         .join("")
@@ -185,7 +187,7 @@ export function DashboardHeader() {
             onClick={toggleLanguage}
             className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white sm:px-4"
           >
-            <span>{isArabic ? "English" : "العربية"}</span>
+            <span>{isArabic ? "الإنجليزية" : "Arabic"}</span>
             <span aria-hidden="true">🌐</span>
           </button>
 
@@ -193,7 +195,7 @@ export function DashboardHeader() {
             <button
               type="button"
               onClick={() => setAccountMenuOpen((prev) => !prev)}
-              aria-label="Account Menu"
+              aria-label={isArabic ? "قائمة الحساب" : "Account Menu"}
               aria-expanded={accountMenuOpen}
               className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-1.5 pe-4 transition hover:bg-white/10"
             >
@@ -203,7 +205,7 @@ export function DashboardHeader() {
 
               <span className="hidden text-start md:block">
                 <span className="block text-sm font-semibold text-white">
-                  {user?.name || (isArabic ? "مدير VOKA" : "VOKA Admin")}
+                  {actorName || (isArabic ? "مدير VOKA" : "VOKA Admin")}
                 </span>
 
                 <span className="block text-xs text-slate-500 truncate max-w-[140px]">
@@ -220,7 +222,7 @@ export function DashboardHeader() {
               >
                 <div className="border-b border-white/10 px-3 py-2">
                   <p className="text-sm font-semibold text-white truncate">
-                    {user?.name || "VOKA User"}
+                    {actorName || (isArabic ? "مستخدم VOKA" : "VOKA User")}
                   </p>
                   <p className="text-xs text-slate-400 truncate">
                     {user?.email || ""}

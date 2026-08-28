@@ -13,7 +13,7 @@ export function LanguageSwitcher({
     <div
       className="inline-flex rounded-full border border-slate-700 bg-slate-900/80 p-1"
       role="group"
-      aria-label="Language selector"
+      aria-label={locale === 'ar' ? 'اختيار اللغة' : 'Language selector'}
     >
       <button
         type="button"
@@ -25,7 +25,7 @@ export function LanguageSwitcher({
         }`}
         aria-pressed={locale === 'en'}
       >
-        English
+        {locale === 'ar' ? 'الإنجليزية' : 'English'}
       </button>
 
       <button
@@ -38,7 +38,7 @@ export function LanguageSwitcher({
         }`}
         aria-pressed={locale === 'ar'}
       >
-        العربية
+        {locale === 'ar' ? 'العربية' : 'Arabic'}
       </button>
     </div>
   );

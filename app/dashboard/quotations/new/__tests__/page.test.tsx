@@ -180,6 +180,46 @@ function fetchForCreate() {
   );
 }
 
+describe('proposed customer in the real quotation composer', () => {
+  it.each(['Create', 'Create and edit'])('%s binds in place and preserves edited commercial data', async (action) => {
+    sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
+      customer: { id: null, proposedCustomerName: 'Horizon' }, estimateNotice: true,
+      proposal: { projectName: 'Factory', subjectEn: 'CCTV system', briefEn: 'Supply and install', scopeType: 'SUPPLY_AND_INSTALLATION', currencyCode: 'KWD' },
+      lines: [{ itemName: 'IP (commercial)', itemNameAr: 'كاميرا IP تجارية', itemNameEn: 'Commercial IP camera', quantity: 36, unitPrice: 10, quantitySource: 'RULE_CALCULATED', formulaExplanation: '36 requested cameras', formulaExplanationAr: '٣٦ كاميرا حسب الطلب', priceSource: 'AI_ESTIMATED' }],
+    }));
+    const fallback = fetchForCreate();
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => url === '/api/customers' && init?.method === 'POST'
+      ? Promise.resolve(response({ customer: { id: 'created-customer', name: 'Horizon' } })) : fallback(url, init));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    await screen.findByText('Unregistered');
+    expect(screen.getByRole('button', { name: 'Create proposal' })).toBeDisabled();
+    expect((screen.getByRole('combobox', { name: 'Item 1' }) as HTMLInputElement).value).toBe('Commercial IP camera');
+    fireEvent.change(inputFor('Project name'), { target: { value: 'CEO edited factory' } });
+    fireEvent.change(inputFor('Proposal subject'), { target: { value: 'CEO edited subject' } });
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    if (action === 'Create and edit') {
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.getByDisplayValue('Horizon')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Create and continue' }));
+    }
+    await waitFor(() => expect(screen.queryByText('Unregistered')).toBeNull());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(inputFor('Project name').value).toBe('CEO edited factory');
+    expect(inputFor('Proposal subject').value).toBe('CEO edited subject');
+    expect(screen.getByRole('combobox', { name: 'Item 1' })).toHaveValue('Commercial IP camera');
+    expect(screen.getByText('36 requested cameras')).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toHaveLength(0);
+    const creation = fetchMock.mock.calls.find(([url, init]) => url === '/api/customers' && init?.method === 'POST')!;
+    expect(JSON.parse(creation[1].body)).toMatchObject({ nameEn: 'Horizon', checkDuplicates: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Create proposal' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(true));
+    const saved = JSON.parse(fetchMock.mock.calls.find(([url, init]) => url === '/api/quotations' && init?.method === 'POST')![1].body);
+    expect(saved).toMatchObject({ customerId: 'created-customer', projectName: 'CEO edited factory', subjectEn: 'CEO edited subject', lines: [{ quantity: 36, unitPrice: 10 }] });
+    expect(push).toHaveBeenCalledWith('/dashboard/quotations/quotation-1');
+  });
+});
+
 function selectFor(
   label: string,
 ): HTMLSelectElement {
@@ -300,10 +340,12 @@ async function selectCatalogItem(
 
 beforeEach(() => {
   isArabic = false;
+  sessionStorage.clear();
 });
 
 afterEach(() => {
   cleanup();
+  sessionStorage.clear();
   push.mockReset();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();

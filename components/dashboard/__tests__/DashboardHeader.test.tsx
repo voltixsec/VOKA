@@ -5,6 +5,17 @@ import { DashboardHeader } from "../DashboardHeader";
 import { LanguageProvider } from "../../i18n/LanguageProvider";
 
 describe("DashboardHeader Account Menu & Logout", () => {
+  it.each([true, false])('localizes system identity and language switch (Arabic=%s)', async (arabic) => {
+    localStorage.setItem('voka-language', arabic ? 'ar' : 'en');
+    vi.mocked(global.fetch).mockResolvedValue({ ok: true, json: async () => ({ data: { user: { id: 'system', name: 'System Administrator', email: '' }, notifications: [] } }) } as Response);
+    const { container, unmount } = render(<LanguageProvider><DashboardHeader /></LanguageProvider>);
+    await screen.findByText(arabic ? 'مسؤول النظام' : 'System administrator');
+    expect(screen.getByText(arabic ? 'الإنجليزية' : 'Arabic')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: arabic ? 'قائمة الحساب' : 'Account Menu' }));
+    const text = container.textContent!.replace(/VOKA|VO|AI/g, '');
+    expect(text).not.toMatch(arabic ? /[a-z]/i : /[\u0600-\u06ff]/);
+    unmount(); localStorage.clear();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();

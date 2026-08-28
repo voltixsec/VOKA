@@ -36,6 +36,23 @@ function request(url: string, method = 'GET', body?: unknown) {
 }
 
 describe('customer APIs', () => {
+  it('checks tenant duplicates before explicit proposed creation and does not save a near match', async () => {
+    mocks.findAll.mockResolvedValue([customer({ name: 'شركة الأفق للتجهيزات' })]);
+    const response = await POST(request('/api/customers', 'POST', { companyId: 'other', nameAr: 'شركة الافق', checkDuplicates: true }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { customer: null, candidates: [{ name: 'شركة الأفق للتجهيزات' }] } });
+    expect(mocks.findAll).toHaveBeenCalledWith({ companyId: 'company-1', search: 'شركة الافق', take: 20 });
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it('creates exactly the proposed name through the existing minimum-valid flow when no match exists', async () => {
+    mocks.findAll.mockResolvedValue([]);
+    const response = await POST(request('/api/customers', 'POST', { companyId: 'other', name: 'شركة الأفق', nameAr: 'شركة الأفق', checkDuplicates: true }));
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ data: { customer: { name: 'شركة الأفق', nameAr: 'شركة الأفق', type: 'COMPANY', status: 'LEAD' } } });
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.save.mock.calls[0][0].companyId).toBe('company-1');
+    expect(mocks.findAll.mock.invocationCallOrder[0]).toBeLessThan(mocks.save.mock.invocationCallOrder[0]);
+  });
   beforeEach(() => { vi.clearAllMocks(); mocks.findByCode.mockResolvedValue(null); mocks.count.mockResolvedValue(1); mocks.save.mockImplementation(async (value) => value); });
 
   it('uses authenticated company context for list and never accepts browser company scope', async () => {

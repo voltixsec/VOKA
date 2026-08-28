@@ -11,6 +11,7 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
+  closeLabel?: string;
 }
 
 export function Modal({
@@ -20,6 +21,7 @@ export function Modal({
   children,
   footer,
   onClose,
+  closeLabel = "Close modal",
 }: ModalProps) {
   if (!open) {
     return null;
@@ -56,7 +58,7 @@ export function Modal({
           <Button
             variant="ghost"
             size="sm"
-            aria-label="Close modal"
+            aria-label={closeLabel}
             onClick={onClose}
           >
             ✕

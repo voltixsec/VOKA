@@ -23,10 +23,14 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
     if (!hasAttachment) missingRequired.push(missing.attachment);
     if (!contextText.trim()) missingRequired.push(missing.userIntent);
   } else {
-    if (!fields.customerId) missingRequired.push(missing.customer);
+    // Review is not persistence: only quotations can carry a server-discovered
+    // unregistered name. The existing save use case still requires a real ID.
+    const proposed = operation === "QUOTATION" && canonicalProposal?.customer.status === "MISSING"
+      && canonicalProposal.customer.proposedCustomerName?.trim();
+    if (!fields.customerId && !proposed) missingRequired.push(missing.customer);
     canonicalProposal?.lines.forEach((line, index) => {
-      if (line.resolutionStatus === "AMBIGUOUS") missingRequired.push({ key: "catalogChoice", sourceField: String(index), required: true, labelAr: `اختر البند: ${line.itemName}`, labelEn: `Choose item: ${line.itemName}` });
-      if (line.quantity == null) missingRequired.push({ key: "quantity", sourceField: String(index), required: true, labelAr: `كمية ${line.itemName}`, labelEn: `Quantity for ${line.itemName}` });
+      if (line.resolutionStatus === "AMBIGUOUS") missingRequired.push({ key: "catalogChoice", sourceField: String(index), required: true, labelAr: `اختر البند: ${line.itemNameAr || line.itemName}`, labelEn: `Choose item: ${line.itemNameEn || line.itemName}` });
+      if (line.quantity == null) missingRequired.push({ key: "quantity", sourceField: String(index), required: true, labelAr: `كمية ${line.itemNameAr || line.itemName}`, labelEn: `Quantity for ${line.itemNameEn || line.itemName}` });
     });
     if (!fields.lines.length && !(canonicalProposal?.smartSystem?.missingInputs.length)) missingRequired.push(missing.lines);
     for (const name of canonicalProposal?.smartSystem?.missingInputs ?? []) {

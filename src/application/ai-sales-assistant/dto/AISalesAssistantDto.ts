@@ -81,6 +81,7 @@ export interface CustomerCandidateOption {
 }
 
 export interface ResolvedCustomerCandidate {
+  proposedCustomerName?: string | null;
   preferredCurrency?: string | null;
   paymentTermDays?: number | null;
   countryCode?: string | null;

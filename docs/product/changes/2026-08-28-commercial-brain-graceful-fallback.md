@@ -66,9 +66,11 @@ company default. Payment terms use explicit instruction, customer terms, or the
 existing scope-specific company template; potentially conflicting policies are
 not concatenated. Attention and notes remain optional.
 
-Required inputs include customer, usable lines, unknown line quantities, ambiguous
+Required inputs include customer identity, usable lines, unknown line quantities, ambiguous
 catalog choices and missing material system inputs. Optional terms/scope fields
-do not block a reviewable draft. Prices may remain unresolved for human review;
+do not block a reviewable draft. A clean proposed/unregistered customer may now
+enter quotation review as described below; persistent save still requires an ID.
+Prices may remain unresolved for human review;
 this is not approval readiness. Sales Order and Drawing keep their existing
 source-document/attachment review boundaries.
 
@@ -119,7 +121,7 @@ a legal prefix such as `شركة`. The acceptance request
 must search for `شركة الأفق`, not the commercial sentence. A sentence-shaped
 provider result triggers one focused entity-only Responses correction through the
 same provider port. A conservative fallback is used only if that result is unusable.
-The resolver rejects request-shaped mentions and resolves a single tenant match;
+The resolver rejects request-shaped mentions and resolves a unique high-confidence tenant match;
 multiple candidates retain explicit selection, and no customer is auto-created.
 Generic conversational fields cannot resurrect a rejected customer mention.
 This follows the official guidance on [handling structured-output mistakes](https://developers.openai.com/api/docs/guides/structured-outputs#handling-mistakes).
@@ -175,3 +177,63 @@ CEO checks. No schema migration, provider, deployment or merge is included.
 Final validation: 115 focused tests passed; full suite 1,362 passed / 2 skipped.
 Typecheck, production build, Prisma validation and whitespace checks passed.
 Build reports only existing lint warnings outside this slice.
+
+## Proposed customers and Arabic discovery acceptance correction
+
+Customer discovery now normalizes Arabic alef/hamza, diacritics, punctuation,
+spacing and optional شركة/الشركة prefixes. Names, existing bilingual name variants,
+legal names, customer codes and contact identifiers remain tenant scoped. The
+pure matcher also accepts aliases; there is no new alias table or schema change.
+Exact matches rank above prefix/contained names and conservative one-edit typo
+suggestions. Multiple plausible matches, or a single partial/fuzzy match, require
+explicit selection. A unique normalized exact match may resolve automatically.
+The national-company acceptance example returns all four candidates.
+
+The existing customer repository reads identity-only projections in 500-record
+tenant-scoped batches before ranking/pagination, then hydrates only the requested
+result page. This avoids dropping a match beyond the initial list page and needs
+no database extension/migration. Search cost is linear in tenant customer count;
+a normalized search index is a future scaling optimization, not part of this fix.
+
+The canonical conversational projection differentiates CUSTOMER_MISSING,
+CUSTOMER_PROPOSED_UNREGISTERED, CUSTOMER_AMBIGUOUS and CUSTOMER_RESOLVED. A clean
+no-match entity is preserved as `proposedCustomerName`, with no fabricated ID.
+Only quotations may proceed to review in that state; missing commercial/system
+inputs and ambiguous choices remain blocking. Invoice/contract/source-document
+requirements are unchanged. Quotation save still requires the existing canonical
+tenant customer reference and never promotes the proposed name into an ID.
+
+The assistant and quotation composer share in-context proposed-customer actions.
+Continue transfers the canonical proposal without saving a document. Explicit
+Create checks tenant duplicate/near matches, then delegates to the existing
+minimum-valid customer command. Existing matches are offered for selection, not
+duplicated. Create and edit reuses CustomerForm in a portal modal with the name
+prefilled. Portal submission is isolated from quotation submission. Successful
+creation/selection binds only the customer and leaves draft ID/context, editable
+commercial fields, lines and engineering review provenance intact. No background
+customer creation, approval or quotation persistence occurs. A late response after
+New Request cannot bind to or navigate an abandoned assistant draft.
+
+System administrator display names and language-switch labels now follow the
+active locale. The quotation item editor uses the existing localized item names;
+source details translate provenance labels. Primary system copy says preliminary
+lines need review rather than exposing catalog-resolution implementation jargon.
+Technical tokens and user/tenant-authored names remain data, not translated labels.
+The permanent estimate notice, Voice V2, pricing, drawing and revisioning are unchanged.
+
+Automated coverage includes normalization, all four national candidates, late-page
+discovery, ambiguity, proposed-state review, ID binding, both in-place creation
+actions preserving edited quotation fields, duplicate prevention checks, final
+reference integrity and locale purity. The isolated visual fixture now supports
+assistant-to-composer handoff and in-context customer creation without real network
+side effects. Live tenant discovery, actual customer persistence, microphone and
+production font loading still require CEO acceptance.
+
+Acceptance-correction validation: 175 focused tests passed / 2 existing persistence
+tests skipped; full suite 1,384 passed / 2 skipped. Typecheck, production build,
+Prisma validation and `git diff --check` passed. Full tests and build ran once at
+final validation. Existing build lint warnings and mocked-test localization
+database warnings remain. Browser preview verified both locales, narrow mobile
+handoff, prefilling, in-place binding and preservation of edited quotation data.
+No schema/dependency changes, merge or deployment; the named experiment stash
+remains preserved.

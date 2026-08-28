@@ -57,6 +57,8 @@ export type RecommendedField = {
 };
 
 export type WorkingCommercialDraft = {
+  proposedCustomerName?: string | null;
+  customerState?: "CUSTOMER_MISSING" | "CUSTOMER_PROPOSED_UNREGISTERED" | "CUSTOMER_AMBIGUOUS" | "CUSTOMER_RESOLVED";
   selection?: CommercialSelection;
   answers?: CommercialAnswers;
   id: string;

@@ -11,6 +11,7 @@ import type {
   CustomerRepository,
 } from '../../domain/repositories';
 import { CustomerCodeAllocator } from './CustomerCodeAllocator';
+import { customerMatchScore } from '../../domain/customer-discovery';
 
 type DecimalLike = {
   toNumber(): number;
@@ -117,183 +118,48 @@ export class PrismaCustomerRepository
     return this.toDomain(record);
   }
 
-  public async findAll(
-    filters: CustomerListFilters,
-  ): Promise<Customer[]> {
-    const search = filters.search?.trim();
-
-    const records = await this.prisma.customer.findMany({
-      where: {
-        companyId: filters.companyId,
-        isDeleted: filters.includeDeleted
-          ? undefined
-          : false,
-        status: filters.status,
-        type: filters.type,
-        ...(search
-          ? {
-              OR: [
-                {
-                  code: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  name: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  nameAr: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  nameEn: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  legalName: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  email: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  phone: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  mobile: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  whatsapp: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  taxNumber: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [
-        {
-          createdAt: 'desc',
-        },
-        {
-          name: 'asc',
-        },
-      ],
-      skip: filters.skip,
-      take: filters.take,
-    });
-
-    return records.map((record) =>
-      this.toDomain(record),
-    );
+  // No normalized-name column or database extension is required. Read only identity
+  // fields in bounded, tenant-scoped batches; hydrate just the requested result page.
+  private async searchIds(filters: CustomerListFilters): Promise<string[]> {
+    const matches: Array<{ id: string; score: number }> = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const records = await this.prisma.customer.findMany({
+        where: { companyId: filters.companyId, isDeleted: filters.includeDeleted ? undefined : false, status: filters.status, type: filters.type },
+        select: { id: true, code: true, name: true, nameAr: true, nameEn: true, legalName: true, email: true, phone: true, mobile: true, whatsapp: true, taxNumber: true },
+        orderBy: { id: 'asc' }, take: 500,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      for (const record of records) {
+        const score = customerMatchScore(record, filters.search ?? '');
+        if (score) matches.push({ id: record.id, score });
+      }
+      if (records.length < 500) break;
+      cursor = records[records.length - 1].id;
+    }
+    return matches.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).map((match) => match.id);
   }
 
-  public async count(
-    filters: CustomerListFilters,
-  ): Promise<number> {
-    const search = filters.search?.trim();
-
-    return this.prisma.customer.count({
+  public async findAll(filters: CustomerListFilters): Promise<Customer[]> {
+    const ids = filters.search?.trim() ? await this.searchIds(filters) : null;
+    const page = ids?.slice(filters.skip ?? 0, filters.take == null ? undefined : (filters.skip ?? 0) + filters.take);
+    if (page && !page.length) return [];
+    const records = await this.prisma.customer.findMany({
       where: {
-        companyId: filters.companyId,
-        isDeleted: filters.includeDeleted
-          ? undefined
-          : false,
-        status: filters.status,
-        type: filters.type,
-        ...(search
-          ? {
-              OR: [
-                {
-                  code: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  name: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  nameAr: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  nameEn: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  legalName: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  email: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  phone: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  mobile: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  whatsapp: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  taxNumber: {
-                    contains: search,
-                    mode: 'insensitive',
-                  },
-                },
-              ],
-            }
-          : {}),
+        companyId: filters.companyId, isDeleted: filters.includeDeleted ? undefined : false,
+        status: filters.status, type: filters.type, ...(page ? { id: { in: page } } : {}),
       },
+      orderBy: [{ createdAt: 'desc' }, { name: 'asc' }],
+      ...(page ? {} : { skip: filters.skip, take: filters.take }),
+    });
+    if (page) records.sort((a, b) => page.indexOf(a.id) - page.indexOf(b.id));
+    return records.map((record) => this.toDomain(record));
+  }
+
+  public async count(filters: CustomerListFilters): Promise<number> {
+    if (filters.search?.trim()) return (await this.searchIds(filters)).length;
+    return this.prisma.customer.count({
+      where: { companyId: filters.companyId, isDeleted: filters.includeDeleted ? undefined : false, status: filters.status, type: filters.type },
     });
   }
 

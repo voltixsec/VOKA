@@ -1,5 +1,6 @@
 import { ApiError, apiSuccess, withCompanyAuth } from '@/lib/api';
 import { CreateCustomer } from '@/features/customers/application/commands/CreateCustomer';
+import { CreateProposedCustomer } from '@/features/customers/application/commands/CreateProposedCustomer';
 import { ListCustomers } from '@/features/customers/application/queries/ListCustomers';
 import type { CustomerStatus, CustomerType } from '@/features/customers/domain/entities/Customer';
 import { PrismaCustomerRepository } from '@/features/customers/infrastructure/prisma/PrismaCustomerRepository';
@@ -41,6 +42,14 @@ export const POST = withCompanyAuth(
   async (request, _auth, company) => {
     const body = (await request.json()) as Record<string, unknown>;
     const changes = parseCustomerCreate(body);
+    if (body.checkDuplicates === true) {
+      const checked = await new CreateProposedCustomer(repository).execute({ ...changes, companyId: company.companyId });
+      if (!checked.isSuccess) throwCustomerError(checked.getError());
+      const { customer, candidates } = checked.getValue();
+      return apiSuccess({ customer: customer ? customerToResponse(customer) : null, candidates: candidates.map(customerToResponse) }, {
+        status: customer ? 201 : 200, headers: { 'Cache-Control': 'no-store' },
+      });
+    }
     const result = await createCustomer.execute({ ...changes, companyId: company.companyId });
     if (!result.isSuccess) throwCustomerError(result.getError());
     return apiSuccess({ customer: customerToResponse(result.getValue()) }, {

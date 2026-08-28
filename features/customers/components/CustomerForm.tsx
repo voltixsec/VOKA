@@ -1559,11 +1559,11 @@ export function CustomerForm(
                   </option>
 
                   <option value="AR">
-                    العربية
+                    {props.isArabic ? 'العربية' : 'Arabic'}
                   </option>
 
                   <option value="EN">
-                    English
+                    {props.isArabic ? 'الإنجليزية' : 'English'}
                   </option>
                 </select>
               </label>

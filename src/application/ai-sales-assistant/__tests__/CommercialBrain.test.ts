@@ -43,8 +43,10 @@ describe("Commercial Brain", () => {
     expect(proposal.customer.mention).toBe(entity);
     expect(deps.customers.findAll.mock.calls.every(([input]) => input.search === entity)).toBe(true);
     const fused = applyCanonicalIntelligence(new ConversationalDraftEngine().advance({ reply: acceptancePrompt, replySource: "VOICE", locale: "ar" }), proposal);
-    expect(fused.clarification?.ar).toContain(`«${entity}»`);
-    expect(fused.clarification?.ar).not.toContain("36");
+    expect(fused.proposedCustomerName).toBe(entity);
+    expect(fused.customerState).toBe("CUSTOMER_PROPOSED_UNREGISTERED");
+    expect(fused.status).toBe("READY_FOR_REVIEW");
+    expect(fused.fields.customerId).toBeNull();
     expect(fused.customerResolution.status).toBe("NOT_FOUND");
   });
 
@@ -60,7 +62,7 @@ describe("Commercial Brain", () => {
     expect(result.intent.customerMention).toBe(entity);
   });
 
-  it("keeps ambiguous customer chips and resolves one plausible tenant customer", async () => {
+  it("keeps partial customer matches as explicit choices even when only one is found", async () => {
     const provider = { extractIntent: vi.fn().mockResolvedValue({ customerMention: entity, lines: [] }) };
     const deps = dependencies([{ ...customer, name: `${entity} للتجارة` }, { ...customer, id: "customer-2", name: `${entity} للمقاولات` }]);
     const service = new AISalesAssistantService(deps as any, provider);
@@ -71,7 +73,8 @@ describe("Commercial Brain", () => {
     expect(draft.clarification?.suggestions).toHaveLength(2);
     deps.customers.findAll.mockResolvedValue([{ ...customer, name: `${entity} للتجارة` }]);
     const single = await service.generateDraftProposal({ companyId: "tenant-a", prompt: acceptancePrompt });
-    expect(single.customer).toMatchObject({ status: "MATCHED", id: "customer-1" });
+    expect(single.customer).toMatchObject({ status: "AMBIGUOUS", id: null });
+    expect(single.customer.candidates[0].id).toBe("customer-1");
   });
 
   it("carries every derived CCTV quantity explanation through catalog resolution", async () => {

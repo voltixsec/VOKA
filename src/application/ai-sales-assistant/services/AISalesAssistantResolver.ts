@@ -21,6 +21,7 @@ import {
 } from "../dto/AISalesAssistantDto";
 import type { AISalesAssistantPricingPort } from "../ports/AISalesAssistantPricingPort";
 import { cleanCustomerEntity } from "./customer-entity";
+import { customerMatchScore } from "@/features/customers/domain/customer-discovery";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -314,7 +315,7 @@ export class AISalesAssistantResolver {
 
     const selected = selectedId ? customers.find((candidate) => candidate.id.toString() === selectedId) : null;
     if (selectedId && !selected) throw new Error("CUSTOMER_SELECTION_INVALID");
-    if (selected || exact.length === 1 || customers.length === 1) {
+    if (selected || (customers.length === 1 && customerMatchScore(customers[0], search) === 100)) {
       const customer = selected ?? exact[0] ?? customers[0];
       return {
         status: "MATCHED",
@@ -336,6 +337,7 @@ export class AISalesAssistantResolver {
       id: null,
       mention: normalizedMention,
       name: normalizedMention,
+      proposedCustomerName: candidates.length === 0 ? normalizedMention : null,
       email: normalizedEmail,
       phone: null,
       candidates,

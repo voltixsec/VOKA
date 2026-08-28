@@ -4,6 +4,7 @@ import type { AdvanceConversationInput, ConversationalOperation, DraftFields, Dr
 import type { CustomerCandidate } from "./types";
 import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
 import { normalizeTechnicalSpeech } from "./technical-speech";
+import { cleanCustomerEntity } from "../ai-sales-assistant/services/customer-entity";
 
 const SUPPORTED = new Set<ConversationalOperation>(["QUOTATION", "INVOICE", "CONTRACT", "SALES_ORDER", "DRAWING_TAKEOFF"]);
 
@@ -149,6 +150,11 @@ export function applyCustomerResolution(draft: WorkingCommercialDraft, candidate
 }
 
 export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, proposal: SalesAssistantDraftProposal): WorkingCommercialDraft {
+  const proposedCustomerName = proposal.customer.status === "MISSING" && !proposal.customer.id && !proposal.customer.candidates.length
+    ? cleanCustomerEntity(proposal.customer.mention) : null;
+  if ((proposal.customer.proposedCustomerName ?? null) !== proposedCustomerName) {
+    proposal = { ...proposal, customer: { ...proposal.customer, proposedCustomerName } };
+  }
   const customerStatus = proposal.customer.status === "MATCHED" ? "MATCHED" : proposal.customer.status === "AMBIGUOUS" ? "AMBIGUOUS" : proposal.customer.mention ? "NOT_FOUND" : "UNRESOLVED";
   const fields: DraftFields = {
     ...draft.fields,
@@ -166,15 +172,18 @@ export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, propos
   const requirements = evaluateFormRequirements(draft.operation, fields, Boolean(draft.attachment), draft.contextText, proposal);
   const resolved: WorkingCommercialDraft = {
     ...draft, fields, customerResolution, canonicalProposal: proposal, ...requirements,
+    proposedCustomerName,
+    customerState: customerStatus === "MATCHED" ? "CUSTOMER_RESOLVED" : customerStatus === "AMBIGUOUS" ? "CUSTOMER_AMBIGUOUS" : proposedCustomerName ? "CUSTOMER_PROPOSED_UNREGISTERED" : "CUSTOMER_MISSING",
     status: requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW",
     requiresHumanReview: true, executed: false,
   };
   resolved.clarification = clarification(resolved.missingRequired);
   if (customerStatus === "AMBIGUOUS") resolved.clarification = {
-    ar: "وجدت أكثر من عميل مطابق. اختر العميل الصحيح.", en: "I found more than one matching customer. Choose the correct customer.",
+    ar: customerResolution.candidates.length === 1 ? "وجدت عميلاً مشابهاً. أكد أنه العميل المقصود." : "وجدت أكثر من عميل مطابق. اختر العميل الصحيح.",
+    en: customerResolution.candidates.length === 1 ? "I found a similar customer. Confirm this is the intended customer." : "I found more than one matching customer. Choose the correct customer.",
     suggestions: customerResolution.candidates.map((candidate) => ({ ar: candidate.name, en: candidate.name, reply: `العميل ${candidate.name}` })),
   };
-  if (customerStatus === "NOT_FOUND" && proposal.customer.mention) resolved.clarification = {
+  if (customerStatus === "NOT_FOUND" && proposal.customer.mention && draft.operation !== "QUOTATION") resolved.clarification = {
     ar: `لم أجد العميل «${proposal.customer.mention}» في قاعدة العملاء. راجع الاسم أو أنشئ العميل أولاً.`,
     en: `Customer “${proposal.customer.mention}” was not found. Check the name or create the customer first.`, suggestions: [],
   };
