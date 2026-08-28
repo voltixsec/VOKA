@@ -24,6 +24,10 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
     if (!contextText.trim()) missingRequired.push(missing.userIntent);
   } else {
     if (!fields.customerId) missingRequired.push(missing.customer);
+    canonicalProposal?.lines.forEach((line, index) => {
+      if (line.resolutionStatus === "AMBIGUOUS") missingRequired.push({ key: "catalogChoice", sourceField: String(index), required: true, labelAr: `اختر البند: ${line.itemName}`, labelEn: `Choose item: ${line.itemName}` });
+      if (line.quantity == null) missingRequired.push({ key: "quantity", sourceField: String(index), required: true, labelAr: `كمية ${line.itemName}`, labelEn: `Quantity for ${line.itemName}` });
+    });
     if (!fields.lines.length && !(canonicalProposal?.smartSystem?.missingInputs.length)) missingRequired.push(missing.lines);
     for (const name of canonicalProposal?.smartSystem?.missingInputs ?? []) {
       const input = canonicalProposal?.smartSystem?.inputs.find((candidate) => candidate.name === name);

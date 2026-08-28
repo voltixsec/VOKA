@@ -7,6 +7,7 @@ import type {
   SalesAssistantDraftProposal,
 } from "../dto/AISalesAssistantDto";
 import { SALES_ASSISTANT_PROMPT_MAX_LENGTH } from "../dto/AISalesAssistantDto";
+import { completeEstimatedPricing } from "./completeEstimatedPricing";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -14,7 +15,7 @@ export class AISalesAssistantService {
 
   constructor(
     dependencies: AISalesAssistantResolverDependencies,
-    provider?: AISalesAssistantPort | null,
+    private readonly provider?: AISalesAssistantPort | null,
   ) {
     this.extractor = new AISalesAssistantExtractor(provider);
     this.resolver = new AISalesAssistantResolver(dependencies);
@@ -37,14 +38,18 @@ export class AISalesAssistantService {
       (/[\u0600-\u06FF]/.test(prompt) ? "ar" : "en");
 
     const { intent, extractionMode, warnings } =
-      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode);
+      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers);
+    if (request.answers?.customerMention) intent.customerMention = request.answers.customerMention;
+    if (request.answers?.projectName) intent.projectName = request.answers.projectName;
 
-    return this.resolver.resolveProposal(
+    const proposal = await this.resolver.resolveProposal(
       request.companyId,
       intent,
       sourceLocale,
       extractionMode,
       warnings,
+      request.selection,
     );
+    return completeEstimatedPricing(proposal, this.provider);
   }
 }

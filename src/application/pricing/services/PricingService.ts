@@ -17,6 +17,7 @@ export class PricingService {
     request: ResolvePriceRequest,
   ): Promise<ResolvePriceResult> {
     let resolvedPrice: number | null = null;
+    let source: "PRICE_LIST" | "CATALOG" | "UNRESOLVED" = "UNRESOLVED";
 
     if (this.db && request.priceListId && request.catalogItemId) {
       const itemPrice = await this.db.priceListItem.findFirst({
@@ -32,6 +33,7 @@ export class PricingService {
 
       if (itemPrice !== null && itemPrice !== undefined) {
         resolvedPrice = Number(itemPrice.price);
+        source = "PRICE_LIST";
       }
     }
 
@@ -45,6 +47,7 @@ export class PricingService {
 
       if (catalogItem !== null && catalogItem !== undefined) {
         resolvedPrice = Number(catalogItem.salePrice);
+        source = "CATALOG";
       }
     }
 
@@ -52,6 +55,7 @@ export class PricingService {
     const subtotal = unitPrice * request.quantity;
 
     return {
+      source,
       unitPrice,
       quantity: request.quantity,
       subtotal,

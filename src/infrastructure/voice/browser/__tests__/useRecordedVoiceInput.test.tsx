@@ -13,6 +13,17 @@ class Recorder implements IRawAudioRecorder {
 }
 
 describe("useRecordedVoiceInput", () => {
+  it("discards a late transcription after New Request/reset", async () => {
+    let finish!: (text: string) => void;
+    const recorder = new Recorder();
+    const transcribe = () => new Promise<string>((resolve) => { finish = resolve; });
+    const { result } = renderHook(() => useRecordedVoiceInput({ recorder, transcribe }));
+    await act(async () => result.current.startRecording());
+    act(() => result.current.stopRecording());
+    act(() => result.current.resetRecording());
+    await act(async () => finish("stale text"));
+    expect(result.current.transcript).toBe(""); expect(result.current.state).toBe("IDLE");
+  });
   it("transcribes only a completed recording and exposes the final transcript", async () => {
     const recorder = new Recorder();
     const transcribe = vi.fn().mockResolvedValue("final mixed transcript NVR");

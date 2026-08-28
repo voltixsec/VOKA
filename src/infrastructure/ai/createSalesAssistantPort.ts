@@ -1,4 +1,5 @@
 import type { AISalesAssistantPort } from "@/src/application/ai-sales-assistant/ports/AISalesAssistantPort";
+import { OpenAISalesAssistantAdapter } from "./openai/OpenAISalesAssistantAdapter";
 import { OllamaSalesAssistantAdapter } from "./ollama/OllamaSalesAssistantAdapter";
 import { buildModelProfile, isCloudModel } from "./ollama/OllamaModelProfile";
 
@@ -36,6 +37,10 @@ function resolveTimeoutMs(raw: string | undefined, fallback: number): number {
  * Returns null when no provider is configured.
  */
 export function createSalesAssistantPort(): AISalesAssistantPort | null {
+  if ((process.env.VOKA_AI_PROVIDER?.toLowerCase() === "openai" || !process.env.VOKA_AI_PROVIDER) && process.env.OPENAI_API_KEY && process.env.VOKA_SALES_AI_MODEL) {
+    return new OpenAISalesAssistantAdapter(process.env.OPENAI_API_KEY, process.env.VOKA_SALES_AI_MODEL, process.env.OPENAI_BASE_URL);
+  }
+  if (process.env.VOKA_AI_PROVIDER?.toLowerCase() === "openai") return null;
   const baseUrl =
     process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434";
 

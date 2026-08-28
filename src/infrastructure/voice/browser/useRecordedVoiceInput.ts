@@ -22,21 +22,25 @@ export function useRecordedVoiceInput(options: { recorder?: IRawAudioRecorder; t
   const [waveform, setWaveform] = useState<number[]>(() => Array(9).fill(0.08));
   const [transcript, setTranscript] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const generation = useRef(0);
 
-  useEffect(() => () => recorder.reset(), [recorder]);
+  useEffect(() => () => { generation.current++; recorder.reset(); }, [recorder]);
 
   const startRecording = useCallback(async () => {
+    const current = ++generation.current;
     setErrorMessage(null); setTranscript("");
     await recorder.start({
-      onStateChange: setState,
-      onWaveformChange: setWaveform,
-      onError: setErrorMessage,
+      onStateChange: (value) => { if (current === generation.current) setState(value); },
+      onWaveformChange: (value) => { if (current === generation.current) setWaveform(value); },
+      onError: (value) => { if (current === generation.current) setErrorMessage(value); },
       onComplete: (audio) => {
+        if (current !== generation.current) return;
         setState("TRANSCRIBING");
-        void transcriber(audio).then((text) => { setTranscript(text); setState("READY"); }).catch((error) => { setErrorMessage(error instanceof Error ? error.message : "Unable to transcribe recording."); setState("ERROR"); });
+        void transcriber(audio).then((text) => { if (current !== generation.current) return; setTranscript(text); setState("READY"); }).catch((error) => { if (current !== generation.current) return; setErrorMessage(error instanceof Error ? error.message : "Unable to transcribe recording."); setState("ERROR"); });
       },
     });
   }, [recorder, transcriber]);
 
-  return { isSupported: recorder.isSupported(), state, waveform, transcript, errorMessage, startRecording, stopRecording: () => recorder.stop() };
+  const resetRecording = () => { generation.current++; recorder.reset(); setTranscript(""); setErrorMessage(null); setState(recorder.isSupported() ? "IDLE" : "UNAVAILABLE"); };
+  return { isSupported: recorder.isSupported(), state, waveform, transcript, errorMessage, startRecording, resetRecording, stopRecording: () => recorder.stop() };
 }

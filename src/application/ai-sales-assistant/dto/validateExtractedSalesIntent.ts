@@ -8,6 +8,7 @@ import {
 } from "./AISalesAssistantDto";
 
 const ROOT_KEYS = new Set([
+  "documentType", "facts",
   "sourceLocale",
   "customerMention",
   "customerEmail",
@@ -174,6 +175,17 @@ export function validateExtractedSalesIntent(
     currencyCode = currencyCode?.toUpperCase() ?? currencyCode;
 
     return {
+      documentType: value.documentType == null ? null : ["QUOTATION", "INVOICE", "CONTRACT", "SALES_ORDER", "DRAWING_TAKEOFF"].includes(String(value.documentType)) ? value.documentType as ExtractedSalesIntent["documentType"] : (() => { throw new InvalidProviderOutput(); })(),
+      facts: value.facts === undefined ? [] : (() => {
+        if (!Array.isArray(value.facts) || value.facts.length > 30) throw new InvalidProviderOutput();
+        return value.facts.map((fact) => {
+          if (!isRecord(fact)) throw new InvalidProviderOutput();
+          assertKnownKeys(fact, new Set(["name", "value", "evidence"]));
+          const name = optionalString(fact.name, 80), parsed = optionalString(fact.value, 300), evidence = optionalString(fact.evidence, 300);
+          if (!name || !parsed || !evidence) throw new InvalidProviderOutput();
+          return { name, value: parsed, evidence };
+        });
+      })(),
       sourceLocale: optionalLocale(value.sourceLocale),
       customerMention: optionalString(value.customerMention, 300),
       customerEmail: optionalString(value.customerEmail, 320),

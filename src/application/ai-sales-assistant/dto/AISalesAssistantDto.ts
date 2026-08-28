@@ -6,6 +6,10 @@ export const SALES_ASSISTANT_MAX_LINES = 20;
 export const SALES_ASSISTANT_MAX_CANDIDATES = 5;
 
 export type SalesAssistantSourceLocale = "ar" | "en";
+export type CommercialProvenance = "USER_PROVIDED" | "COMPANY_DEFAULT" | "CUSTOMER_DEFAULT" | "CATALOG_MATCHED" | "RULE_CALCULATED" | "AI_ESTIMATED" | "NEEDS_CONFIRMATION";
+export interface CommercialFact { name: string; value: string; evidence: string; provenance?: "USER_PROVIDED"; }
+export interface CommercialSelection { customer?: { id: string; name: string }; catalog?: Record<string, { id: string; name: string }> }
+export type CommercialAnswers = Partial<Record<"customerMention" | "projectName" | "cameraCount" | "storageDays" | "bitrateMbps" | "cableMetersPerCamera", string>>;
 export type SalesItemIntent =
   | "PRODUCT"
   | "SERVICE"
@@ -17,6 +21,8 @@ export interface AISalesAssistantRequest {
   prompt: string;
   sourceLocale?: SalesAssistantSourceLocale;
   buildMode?: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM";
+  selection?: CommercialSelection;
+  answers?: CommercialAnswers;
 }
 
 export interface ExtractedLineItem {
@@ -34,6 +40,8 @@ export interface ExtractedLineItem {
 }
 
 export interface ExtractedSalesIntent {
+  documentType?: "QUOTATION" | "INVOICE" | "CONTRACT" | "SALES_ORDER" | "DRAWING_TAKEOFF" | null;
+  facts?: CommercialFact[];
   sourceLocale?: SalesAssistantSourceLocale;
   customerMention?: string | null;
   customerEmail?: string | null;
@@ -70,6 +78,9 @@ export interface CustomerCandidateOption {
 }
 
 export interface ResolvedCustomerCandidate {
+  preferredCurrency?: string | null;
+  paymentTermDays?: number | null;
+  countryCode?: string | null;
   status: "MATCHED" | "MISSING" | "AMBIGUOUS";
   id: string | null;
   mention: string | null;
@@ -88,6 +99,9 @@ export interface CatalogCandidateOption {
 }
 
 export interface ResolvedLineItem {
+  priceSource?: CommercialProvenance;
+  priceEstimate?: { region: string | null; reference: string; confidence: "LOW"; verified: false };
+  quantitySource?: CommercialProvenance;
   resolutionStatus:
     | "MATCHED"
     | "MISSING"
@@ -126,6 +140,10 @@ export interface DraftProposalFinancials {
 }
 
 export interface SalesAssistantDraftProposal {
+  documentType?: ExtractedSalesIntent["documentType"];
+  facts?: CommercialFact[];
+  completion?: { subject: CommercialProvenance; brief: CommercialProvenance; currency: CommercialProvenance; terms: CommercialProvenance; scope: CommercialProvenance };
+  estimateNotice?: boolean;
   customer: ResolvedCustomerCandidate;
   proposal: {
     subject: string;
@@ -168,6 +186,7 @@ export interface SalesAssistantDraftProposal {
     warnings: string[];
   } | null;
   metadata: {
+    region?: string | null;
     sourceLocale: SalesAssistantSourceLocale;
     extractionMode: "provider" | "heuristic";
     confidenceSummary: string;

@@ -18,7 +18,7 @@ export interface CctvInputs {
 
 export class CctvSystemTemplate implements ISystemTemplate {
   public readonly systemType = "CCTV";
-  public readonly templateVersion = "1.1.0";
+  public readonly templateVersion = "1.2.0";
   public readonly displayNameAr = "نظام المراقبة والأمن الكاميرات (CCTV)";
   public readonly displayNameEn = "CCTV Security & Surveillance System";
 
@@ -33,13 +33,13 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const cameraCountProvided =
       rawInputs.cameraCount ?? rawInputs.cameras ?? rawInputs.count ?? null;
     const cameraCount =
-      typeof cameraCountProvided === "number" && Number.isInteger(cameraCountProvided) && cameraCountProvided > 0 && cameraCountProvided <= 64
+      typeof cameraCountProvided === "number" && Number.isInteger(cameraCountProvided) && cameraCountProvided > 0 && cameraCountProvided <= 1024
         ? cameraCountProvided
         : null;
 
     if (cameraCount === null) {
       if (cameraCountProvided !== null) {
-        warnings.push("Camera count must be an integer from 1 to 64.");
+        warnings.push("Camera count must be an integer from 1 to 1024.");
       } else {
         missingInputs.push("cameraCount");
       }
@@ -203,10 +203,10 @@ export class CctvSystemTemplate implements ISystemTemplate {
         nameAr: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameEn: `Network Video Recorder NVR (${nvrChannels} Channels)`,
         itemType: "PRODUCT",
-        quantity: 1,
+        quantity: Math.ceil(count / nvrChannels),
         unit: "Unit",
         provenance: "CALCULATED",
-        formulaExplanation: `Dimensioned NVR with ${nvrChannels} channels to support ${count} cameras`,
+        formulaExplanation: `${Math.ceil(count / nvrChannels)} NVR(s), ${nvrChannels} channels each for ${count} cameras. Preliminary capacity only; bandwidth, disk bays and site layout require engineering review.`,
         category: "HARDWARE",
       },
       {

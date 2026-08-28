@@ -149,7 +149,7 @@ describe("Smart System Templates V1 Foundation", () => {
     });
 
     it("rejects fractional, negative, and unsupported camera counts", () => {
-      for (const cameraCount of [-1, 1.5, 65]) {
+      for (const cameraCount of [-1, 1.5, 1025]) {
         const result = cctvTemplate.calculate({ cameraCount });
         expect(result.status).toBe("INVALID_INPUT");
         expect(result.components).toHaveLength(0);

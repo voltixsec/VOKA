@@ -14,6 +14,7 @@ import type {
   ResolvedLineItem,
   SalesAssistantDraftProposal,
   SalesAssistantSourceLocale,
+  CommercialSelection,
 } from "../dto/AISalesAssistantDto";
 import {
   SALES_ASSISTANT_MAX_CANDIDATES,
@@ -21,6 +22,7 @@ import {
 import type { AISalesAssistantPricingPort } from "../ports/AISalesAssistantPricingPort";
 
 export interface AISalesAssistantResolverDependencies {
+  terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
   companies: Pick<CompanyRepository, "findById">;
   customers: Pick<CustomerRepository, "findAll">;
   catalogItems: Pick<CatalogItemRepository, "findAll">;
@@ -43,6 +45,7 @@ export class AISalesAssistantResolver {
     sourceLocale: SalesAssistantSourceLocale,
     extractionMode: "provider" | "heuristic",
     extractionWarnings: string[] = [],
+    selection?: CommercialSelection,
   ): Promise<SalesAssistantDraftProposal> {
     const company = await this.dependencies.companies.findById(companyId);
     if (!company) {
@@ -51,11 +54,12 @@ export class AISalesAssistantResolver {
 
     const customer = await this.resolveCustomer(
       companyId,
-      intent.customerMention,
+      selection?.customer?.name ?? intent.customerMention,
       intent.customerEmail,
+      selection?.customer?.id,
     );
     const currencyCode =
-      intent.currencyCode ?? company.defaultCurrency;
+      intent.currencyCode ?? customer.preferredCurrency ?? company.defaultCurrency;
 
     const priceListId =
       await this.dependencies.pricing.resolvePriceListId({
@@ -69,9 +73,11 @@ export class AISalesAssistantResolver {
       resolvedLines.push(
         await this.resolveLineItem(
           companyId,
-          line,
+          selection?.catalog?.[line.componentKey ?? line.text] ? { ...line, text: selection.catalog[line.componentKey ?? line.text].name } : line,
           sourceLocale,
           priceListId,
+          currencyCode, company.defaultCurrency,
+          selection?.catalog?.[line.componentKey ?? line.text]?.id,
         ),
       );
     }
@@ -169,9 +175,12 @@ export class AISalesAssistantResolver {
         ).totals
       : null;
 
-    const subject = intent.subject ?? "";
-    const brief = intent.brief ?? intent.scopeOfWork ?? null;
-    const terms = [intent.paymentTerms, intent.warranty]
+    const subject = intent.subject ?? (sourceLocale === "ar" ? "عرض تجاري — " : "Commercial proposal — ") + (intent.lines[0]?.text ?? "");
+    const brief = intent.brief ?? intent.scopeOfWork ?? intent.lines.map((line) => `${line.quantity ?? "?"} × ${line.text}`).join("، ");
+    const defaultPayment = customer.paymentTermDays != null ? (sourceLocale === "ar" ? `الدفع خلال ${customer.paymentTermDays} يوم` : `Payment within ${customer.paymentTermDays} days`) : null;
+    const companyTerms = intent.scopeType ? await this.dependencies.terms?.find(companyId, intent.scopeType, sourceLocale) : null;
+    // Do not concatenate potentially conflicting payment policies. Explicit/user and customer terms win.
+    const terms = [intent.paymentTerms ?? defaultPayment ?? companyTerms, intent.warranty]
       .filter((value): value is string => Boolean(value))
       .join("\n") || null;
     const reviewRequired =
@@ -193,6 +202,10 @@ export class AISalesAssistantResolver {
       : null;
 
     return {
+      documentType: intent.documentType,
+      facts: intent.facts,
+      completion: { subject: "AI_ESTIMATED", brief: "AI_ESTIMATED", currency: intent.currencyCode ? "USER_PROVIDED" : customer.preferredCurrency ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT", terms: intent.paymentTerms ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : companyTerms ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION", scope: intent.scopeType ? "USER_PROVIDED" : "NEEDS_CONFIRMATION" },
+      estimateNotice: Boolean(smartSystem) || canonicalLines.some((line) => line.catalogItemId === null),
       customer,
       proposal: {
         subject,
@@ -218,6 +231,7 @@ export class AISalesAssistantResolver {
       reviewRequired: reviewRequired || Boolean(smartSystem && smartSystem.status !== "COMPLETE"),
       smartSystem,
       metadata: {
+        region: customer.countryCode ?? (company.timezone === "Asia/Kuwait" ? "KW" : null),
         sourceLocale,
         extractionMode,
         confidenceSummary: reviewRequired
@@ -232,6 +246,7 @@ export class AISalesAssistantResolver {
     companyId: string,
     mention?: string | null,
     email?: string | null,
+    selectedId?: string,
   ): Promise<ResolvedCustomerCandidate> {
     const normalizedMention = mention?.trim() || null;
     const normalizedEmail = email?.trim() || null;
@@ -296,8 +311,10 @@ export class AISalesAssistantResolver {
         status: customer.status as "LEAD" | "ACTIVE",
       }));
 
-    if (exact.length === 1) {
-      const customer = exact[0];
+    const selected = selectedId ? customers.find((candidate) => candidate.id.toString() === selectedId) : null;
+    if (selectedId && !selected) throw new Error("CUSTOMER_SELECTION_INVALID");
+    if (selected || exact.length === 1) {
+      const customer = selected ?? exact[0];
       return {
         status: "MATCHED",
         id: customer.id.toString(),
@@ -307,6 +324,9 @@ export class AISalesAssistantResolver {
         phone: customer.phone ?? customer.mobile,
         candidates: [],
         reviewRequired: false,
+        preferredCurrency: customer.preferredCurrency,
+        paymentTermDays: customer.paymentTermDays,
+        countryCode: customer.countryCode,
       };
     }
 
@@ -327,6 +347,9 @@ export class AISalesAssistantResolver {
     extracted: ExtractedLineItem,
     sourceLocale: SalesAssistantSourceLocale,
     priceListId: string | null,
+    currencyCode: string,
+    companyCurrency: string,
+    selectedId?: string,
   ): Promise<ResolvedLineItem> {
     const search = extracted.text.trim();
     const intendedType: CatalogItemType | undefined =
@@ -378,27 +401,30 @@ export class AISalesAssistantResolver {
         type: item.type === "SERVICE" ? "SERVICE" : "PRODUCT",
       }));
 
-    if (exact.length !== 1) {
+    const selectedItem = selectedId ? catalogItems.find((candidate) => candidate.id.toString() === selectedId) : null;
+    if (selectedId && !selectedItem) throw new Error("CATALOG_SELECTION_INVALID");
+    if (!selectedItem && exact.length !== 1) {
       return this.unresolvedLine(
         companyId,
         extracted,
         sourceLocale,
-        candidates.length > 0 ? "AMBIGUOUS" : "MISSING",
+        candidates.length > 0 ? "AMBIGUOUS" : "CUSTOM",
         candidates,
       );
     }
 
-    const item = exact[0];
+    const item = selectedItem ?? exact[0];
     const unit = item.unitId
       ? await this.dependencies.units.findById(item.unitId, companyId)
       : null;
-    const unitPrice =
-      await this.dependencies.pricing.resolveUnitPrice({
+    const priceInput = {
         companyId,
         priceListId,
         catalogItemId: item.id.toString(),
         quantity: extracted.quantity ?? 1,
-      });
+    };
+    const detail = this.dependencies.pricing.resolvePriceDetails ? await this.dependencies.pricing.resolvePriceDetails({ ...priceInput, currencyCode, companyCurrency }) : null;
+    const unitPrice = detail ? detail.price : currencyCode === companyCurrency ? await this.dependencies.pricing.resolveUnitPrice(priceInput) : null;
 
     const itemType: "PRODUCT" | "SERVICE" | "CUSTOM" =
       item.type === "PRODUCT" || item.type === "SERVICE" ? item.type : "CUSTOM";
@@ -421,6 +447,8 @@ export class AISalesAssistantResolver {
       unitNameEn: unit?.isActive ? unit.nameEn : null,
       requestedPrice: extracted.requestedPrice ?? null,
       unitPrice,
+      priceSource: unitPrice === null ? "NEEDS_CONFIRMATION" : "CATALOG_MATCHED",
+      quantitySource: extracted.provenance === "CALCULATED" ? "RULE_CALCULATED" : extracted.provenance === "SUGGESTED" ? "AI_ESTIMATED" : "USER_PROVIDED",
       subtotal: null,
       taxRateId: item.taxRateId,
       taxPercentage: 0,
@@ -467,7 +495,9 @@ export class AISalesAssistantResolver {
       unitNameAr: unit?.isActive ? unit.nameAr : null,
       unitNameEn: unit?.isActive ? unit.nameEn : null,
       requestedPrice: extracted.requestedPrice ?? null,
-      unitPrice: null,
+      unitPrice: extracted.requestedPrice ?? null,
+      priceSource: extracted.requestedPrice != null ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
+      quantitySource: extracted.provenance === "CALCULATED" ? "RULE_CALCULATED" : extracted.provenance === "SUGGESTED" ? "AI_ESTIMATED" : "USER_PROVIDED",
       subtotal: null,
       taxRateId: null,
       taxPercentage: 0,

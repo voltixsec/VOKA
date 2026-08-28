@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SalesAssistantPage from "../page";
 
@@ -10,6 +10,31 @@ const base = { locale: "en", fields: { customerMention: null, currencyCode: null
 
 describe("commercial conversational clarification", () => {
   beforeEach(() => sessionStorage.clear());
+  it("New Request invalidates a late analysis response", async () => {
+    let finish!: (value: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { finish = resolve; })));
+    render(<SalesAssistantPage />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Create quotation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
+    fireEvent.click(screen.getByRole("button", { name: "New Request" }));
+    await act(async () => finish({ ok: true, json: async () => ({ data: { ...base, id: "stale", status: "READY_FOR_REVIEW", missingRequired: [] } }) }));
+    expect(screen.queryByTestId("commercial-conversation")).toBeNull();
+    expect(sessionStorage.getItem("voka_commercial_conversation_draft")).toBeNull();
+  });
+
+  it("customer candidate chip sends canonical identity with the same draft", async () => {
+    const draft = { ...base, id: "same", operation: "QUOTATION", turns: [], contextText: "Quotation", status: "NEEDS_CLARIFICATION", missingRequired: [{ key: "customer", labelEn: "Customer" }], customerResolution: { status: "AMBIGUOUS", candidates: [{ id: "tenant-customer", name: "Al Noor" }] } };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: draft }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SalesAssistantPage />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Quotation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Al Noor" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(body.selection.customer).toEqual({ id: "tenant-customer", name: "Al Noor" });
+    expect(body.draft.id).toBe("same");
+  });
 
   it("merges a typed second reply into the same draft", async () => {
     const first = { ...base, id: "same-draft", operation: "QUOTATION", turns: [{ source: "TEXT", text: "Create quotation for 20 cameras" }], contextText: "Create quotation for 20 cameras", missingRequired: [{ key: "customer", required: true, labelAr: "العميل", labelEn: "Customer" }], status: "NEEDS_CLARIFICATION", clarification: { ar: "من هو العميل؟", en: "Who is the customer?", suggestions: [] } };

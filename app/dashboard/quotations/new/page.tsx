@@ -25,6 +25,8 @@ import {
   useLanguage,
 } from "../../../../components/i18n/LanguageProvider";
 import { CustomerPicker } from "@/components/commercial";
+import { EstimateNotice } from "@/components/ai/EstimateNotice";
+import { ESTIMATE_NOTICE_AR, ESTIMATE_NOTICE_EN } from "@/src/application/ai-sales-assistant/estimate-notice";
 import {
   QuotationCalculator,
   type QuotationLineType,
@@ -193,6 +195,8 @@ export default function NewQuotationPage() {
   const [currencyCode, setCurrencyCode] =
     useState("KWD");
 
+  const [aiEstimateReview, setAiEstimateReview] = useState(false);
+  const [aiReviewSources, setAiReviewSources] = useState<string[]>([]);
   const [number, setNumber] = useState(
     "QT-" + Date.now().toString().slice(-6),
   );
@@ -543,6 +547,8 @@ export default function NewQuotationPage() {
       if (stored) {
         sessionStorage.removeItem(SESSION_KEY);
         const draft = JSON.parse(stored);
+        setAiEstimateReview(Boolean(draft.estimateNotice));
+        setAiReviewSources(Array.isArray(draft.lines) ? draft.lines.map((line: { itemName: string; unitPrice: number | null; priceSource?: string; quantitySource?: string }) => `${line.itemName}: ${line.priceSource ?? "NEEDS_CONFIRMATION"} · ${line.quantitySource ?? "NEEDS_CONFIRMATION"}${line.unitPrice == null ? " — price required" : ""}`) : []);
         if (draft.customer?.id) {
           setCustomerId(draft.customer.id);
         }
@@ -556,8 +562,9 @@ export default function NewQuotationPage() {
           if (draft.proposal.projectName) setProjectName(draft.proposal.projectName);
           if (draft.proposal.attentionName) setAttentionName(draft.proposal.attentionName);
         }
-        if (draft.notes) setNotes(draft.notes);
-        if (draft.termsAndConditions) setTerms(draft.termsAndConditions);
+        if (draft.estimateNotice) setNotes([draft.notes, isArabic ? ESTIMATE_NOTICE_AR : ESTIMATE_NOTICE_EN].filter(Boolean).join("\n"));
+        else if (draft.notes) setNotes(draft.notes);
+        if (draft.termsAndConditions) { setTerms(draft.termsAndConditions); setTermsTouched(true); }
         if (Array.isArray(draft.lines) && draft.lines.length > 0) {
           setLines(
             draft.lines.map((l: any, idx: number) => ({
@@ -996,6 +1003,8 @@ export default function NewQuotationPage() {
       className="space-y-6"
       dir={isArabic ? "rtl" : "ltr"}
     >
+      {aiEstimateReview && <EstimateNotice isArabic={isArabic} />}
+      {aiReviewSources.length > 0 && <details className="text-xs text-slate-300"><summary>{isArabic ? "مصادر المسودة الأصلية — راجع قبل الاعتماد" : "Original draft sources — review before approval"}</summary>{aiReviewSources.map((source, index) => <p key={index}>{source}</p>)}</details>}
       <button
         type="button"
         onClick={cancel}

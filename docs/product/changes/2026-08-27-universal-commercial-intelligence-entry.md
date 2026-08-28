@@ -1,5 +1,9 @@
 # Universal Commercial Intelligence Entry
 
+Follow-up: [Commercial Brain and graceful fallback](2026-08-28-commercial-brain-graceful-fallback.md)
+extends this pipeline with Responses understanding, non-blocking custom lines,
+explicit selections/defaults and preliminary estimate provenance.
+
 Date: 2026-08-27
 Status: Implemented on `feature/pre-staging-product-coherence`
 

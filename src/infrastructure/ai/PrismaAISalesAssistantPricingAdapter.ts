@@ -44,4 +44,11 @@ export class PrismaAISalesAssistantPricingAdapter
 
     return result.unitPrice;
   }
+
+  async resolvePriceDetails(input: { companyId: string; priceListId: string | null; catalogItemId: string; quantity: number; currencyCode: string; companyCurrency: string }) {
+    const result = await this.pricingService.resolveUnitPrice({ ...input, priceListId: input.priceListId ?? "" });
+    const source = result.source ?? "UNRESOLVED";
+    const usable = source !== "UNRESOLVED" && !(source === "CATALOG" && input.currencyCode !== input.companyCurrency);
+    return { price: usable ? result.unitPrice : null, source: usable ? source : "UNRESOLVED" as const };
+  }
 }

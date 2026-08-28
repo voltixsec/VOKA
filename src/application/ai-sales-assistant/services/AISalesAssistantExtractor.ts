@@ -5,6 +5,7 @@ import type {
   ExtractedSalesIntent,
   SalesAssistantSourceLocale,
   SalesItemIntent,
+  CommercialAnswers,
 } from "../dto/AISalesAssistantDto";
 import { SALES_ASSISTANT_MAX_LINES } from "../dto/AISalesAssistantDto";
 import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesIntent";
@@ -27,35 +28,51 @@ export class AISalesAssistantExtractor {
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
     buildMode: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM" = "AUTO",
+    answers: CommercialAnswers = {},
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
-    const effectivePrompt = buildMode === "SUPPLY_INSTALL_SYSTEM" ? `${trimmed}\nSupply and installation system.` : trimmed;
+    let understood: ExtractedSalesIntent | null = null;
+    if (this.provider) {
+      try { understood = validateExtractedSalesIntent(await this.provider.extractIntent(trimmed, sourceLocale)); } catch { /* deterministic fallback */ }
+    }
+    // Evidence must occur in the user's context; provider assertions alone are not user facts.
+    const facts = (understood?.facts ?? []).filter((fact) => trimmed.includes(fact.evidence)).map((fact) => ({ ...fact, provenance: "USER_PROVIDED" as const }));
+    for (const [name, pattern] of [
+      ["cameraCount", /(\d+)\s*(?:cameras?|كاميرات|كاميرا)/i],
+      ["areaM2", /(\d+(?:\.\d+)?)\s*(?:sqm|m2|متر)/i],
+      ["projectContext", /(factory|مصنع|villa|فيلا|warehouse|مستودع)/i],
+      ["coverage", /(full coverage|التغطية كاملة)/i],
+    ] as const) {
+      const match = trimmed.match(pattern);
+      if (match && !facts.some((fact) => fact.name === name)) facts.push({ name, value: match[1], evidence: match[0], provenance: "USER_PROVIDED" });
+    }
+    const cameraFact = facts.find((fact) => fact.name === "cameraCount" && /^\d+$/.test(fact.value) && fact.evidence.includes(fact.value));
+    const evidencePrompt = cameraFact ? `${trimmed}\n${cameraFact.value} cameras` : trimmed;
+    const effectivePrompt = buildMode === "SUPPLY_INSTALL_SYSTEM" ? `${evidencePrompt}\nSupply and installation system.` : evidencePrompt;
     const allowSmartSystems = buildMode !== "CATALOG_ONLY";
 
     // Engineering-system intent is always resolved by server-owned rules. The
     // untrusted AI provider must never get authority over component quantities.
     if (allowSmartSystems && this.smartSystemBuilder.detectSystemIntent(effectivePrompt)) {
-      const intent = this.heuristicExtract(effectivePrompt, sourceLocale, true);
+      const parameters = { ...(cameraFact ? { cameraCount: Number(cameraFact.value) } : {}), ...Object.fromEntries(Object.entries(answers).filter(([key]) => ["cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"].includes(key)).map(([key, value]) => [key, Number(value)])) };
+      const deterministic = this.heuristicExtract(effectivePrompt, sourceLocale, true, parameters);
+      const intent = { ...understood, ...deterministic, customerMention: understood?.customerMention ?? deterministic.customerMention, subject: understood?.subject ?? deterministic.subject, brief: understood?.brief ?? trimmed, paymentTerms: understood?.paymentTerms, warranty: understood?.warranty, projectName: understood?.projectName, documentType: understood?.documentType, facts };
       return {
         intent,
-        extractionMode: "heuristic",
+        extractionMode: understood ? "provider" : "heuristic",
         warnings: [DETERMINISTIC_SYSTEM_WARNING, ...(intent.warnings ?? [])],
       };
     }
 
-    if (this.provider) {
+    if (understood) {
       try {
-        const untrusted = await this.provider.extractIntent(
-          trimmed,
-          sourceLocale,
-        );
-        const intent = validateExtractedSalesIntent(untrusted);
+        const intent = understood;
 
         if (intent) {
           return {
             intent: {
               ...intent,
-              sourceLocale,
+              sourceLocale, facts,
             },
             extractionMode: "provider",
             warnings: intent.warnings ?? [],
@@ -67,6 +84,7 @@ export class AISalesAssistantExtractor {
     }
 
     const intent = this.heuristicExtract(trimmed, sourceLocale, allowSmartSystems);
+    intent.facts = facts;
     return {
       intent,
       extractionMode: "heuristic",
@@ -78,13 +96,14 @@ export class AISalesAssistantExtractor {
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
     allowSmartSystems = true,
+    parameters: Record<string, number> = {},
   ): ExtractedSalesIntent {
     const systemMatch = allowSmartSystems ? this.smartSystemBuilder.detectSystemIntent(prompt) : null;
 
     if (systemMatch) {
       const calcResult = this.smartSystemBuilder.calculateSystem(
         systemMatch.systemType,
-        systemMatch.extractedParameters,
+        { ...systemMatch.extractedParameters, ...parameters },
       );
 
       if (calcResult) {

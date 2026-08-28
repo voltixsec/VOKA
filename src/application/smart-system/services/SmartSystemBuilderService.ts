@@ -81,7 +81,7 @@ export class SmartSystemBuilderService {
       ) {
         projectContext = "commercial";
       } else if (
-        lower.includes("warehouse") ||
+        lower.includes("warehouse") || lower.includes("factory") || prompt.includes("مصنع") ||
         prompt.includes("مستودع") ||
         prompt.includes("مخزن")
       ) {

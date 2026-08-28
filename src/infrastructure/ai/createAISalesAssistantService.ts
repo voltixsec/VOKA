@@ -10,6 +10,10 @@ import { createSalesAssistantPort } from "./createSalesAssistantPort";
 
 export function createAISalesAssistantService() {
   return new AISalesAssistantService({
+    terms: { async find(companyId, scopeType, locale) {
+      const template = await prisma.companyQuotationTermsTemplate.findUnique({ where: { companyId_scopeType: { companyId, scopeType } }, select: { termsAr: true, termsEn: true } });
+      return (locale === "ar" ? template?.termsAr : template?.termsEn) ?? null;
+    } },
     companies: new PrismaCompanyRepository(prisma),
     customers: new PrismaCustomerRepository(prisma),
     catalogItems: new PrismaCatalogItemRepository(prisma),

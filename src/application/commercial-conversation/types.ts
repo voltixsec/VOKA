@@ -1,5 +1,6 @@
 import type { CommercialOperation } from "../commercial-entry";
 import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
+import type { CommercialSelection, CommercialAnswers } from "../ai-sales-assistant/dto/AISalesAssistantDto";
 
 export type ConversationalOperation = Exclude<CommercialOperation, "PAYMENT">;
 export type ConversationReplySource = "TEXT" | "VOICE" | "CHIP";
@@ -39,7 +40,7 @@ export type ConversationTurn = {
   text: string;
 };
 
-export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput";
+export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput" | "catalogChoice" | "quantity";
 
 export type MissingField = {
   key: MissingFieldKey;
@@ -56,6 +57,8 @@ export type RecommendedField = {
 };
 
 export type WorkingCommercialDraft = {
+  selection?: CommercialSelection;
+  answers?: CommercialAnswers;
   id: string;
   operation: ConversationalOperation;
   documentMode: ConversationDocumentMode;
