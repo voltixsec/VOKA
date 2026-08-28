@@ -3,6 +3,12 @@
 
 Architecture decisions are recorded here.
 
+## 2026-08-28 — Slice 3 engineering → commercial BOM
+
+- Added explicit commercial requirements between deterministic engineering and tenant catalog resolution. Bounded CCTV capacity/unit matching preserves real IDs, codes, trusted prices and ambiguity; storage quantities remain preliminary, never verified disk designs.
+- Traceability and localized alternatives remain internal review; only sellable BOM rows cross the quotation save boundary. See the [Slice 3 contract and acceptance checks](product/changes/2026-08-28-engineering-commercial-bom.md).
+- No conversation/Voice/customer-discovery/revisioning redesign, schema, main, merge or deployment changes. Manual CEO acceptance remains pending.
+
 ## 2026-08-28 — Slice 2.1 quotation UX cleanup
 
 - Exact approved-default replacement, clean recipient framing, non-mutating numbered terms presentation and display-only unit localization are documented in the [Slice 2.1 contract](product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-21--professional-quotation-ux-cleanup).

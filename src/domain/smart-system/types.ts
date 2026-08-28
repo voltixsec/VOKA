@@ -16,6 +16,8 @@ export interface SystemInputParameter {
 }
 
 export interface SystemComponent {
+  /** Structured sizing facts; internal engineering data, never a sale-line description. */
+  specification?: Record<string, number | string>;
   componentKey: string;
   name: string;
   nameAr: string;

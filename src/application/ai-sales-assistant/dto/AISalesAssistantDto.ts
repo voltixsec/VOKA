@@ -1,4 +1,5 @@
 import type { QuotationScopeType } from "../../../domain/quotation/types/QuotationScopeType";
+import type { CommercialRequirement } from "./CommercialRequirement";
 import type { SystemCalculationResult, SystemInputParameter, SystemComponent } from "../../../domain/smart-system";
 
 export const SALES_ASSISTANT_PROMPT_MAX_LENGTH = 4_000;
@@ -36,6 +37,8 @@ export interface AISalesAssistantRequest {
 }
 
 export interface ExtractedLineItem {
+  /** Assigned only by deterministic commercialization, never provider output. */
+  commercialRequirement?: CommercialRequirement;
   /** Server-owned provisional commercial scope; not an engineered SKU/count. */
   commercializationPending?: boolean;
   text: string;
@@ -112,6 +115,10 @@ export interface ResolvedCustomerCandidate {
 }
 
 export interface CatalogCandidateOption {
+  nameAr?: string | null;
+  nameEn?: string | null;
+  quantity?: number;
+  unitName?: string;
   id: string;
   code: string;
   name: string;
@@ -119,6 +126,8 @@ export interface CatalogCandidateOption {
 }
 
 export interface ResolvedLineItem {
+  commercialRequirement?: CommercialRequirement;
+  itemCode?: string | null;
   commercializationPending?: boolean;
   priceSource?: CommercialProvenance;
   priceEstimate?: { region: string | null; reference: string; confidence: "LOW"; verified: false };

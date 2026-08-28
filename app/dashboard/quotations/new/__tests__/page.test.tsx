@@ -182,6 +182,24 @@ function fetchForCreate() {
 }
 
 describe('proposed customer in the real quotation composer', () => {
+  it('preserves matched HDD identity/code/count but excludes its internal allocation from the saved quotation', async () => {
+    sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
+      customer: { id: 'customer-1' }, proposal: { scopeType: 'SUPPLY_ONLY', currencyCode: 'KWD' },
+      lines: [{ catalogItemId: 'real-hdd-18', itemCode: 'HDD-18', type: 'PRODUCT', itemName: 'Surveillance HDD 18TB', itemNameEn: 'Surveillance HDD 18TB', quantity: 26, unitName: 'Unit', unitPrice: 125,
+        commercialRequirement: { category: 'SURVEILLANCE_STORAGE_CAPACITY', quantity: 26, unit: 'Unit', matchStatus: 'COMMERCIAL_MATCH_CONFIRMED', reviewRequired: true, source: { ruleVersion: '1.2.0' } },
+        provenance: 'CALCULATED', formulaExplanation: 'ceil(467 TB / 18 TB) = 26 disks; design unverified.',
+      }],
+    }));
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Item 1' })).toHaveValue('Surveillance HDD 18TB'));
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    fireEvent.submit(screen.getByRole('spinbutton', { name: 'Unit price 1' }).closest('form')!);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(true));
+    expect(postBody(fetchMock).lines[0]).toMatchObject({ catalogItemId: 'real-hdd-18', itemCode: 'HDD-18', itemName: 'Surveillance HDD 18TB', quantity: 26, unitName: 'Unit', unitPrice: 125 });
+    expect(JSON.stringify(postBody(fetchMock))).not.toMatch(/commercialRequirement|ruleVersion|formulaExplanation|467|design unverified/);
+  });
   it.each([true, false])('shows localized units (%s) but preserves canonical unit values on save', async (arabic) => {
     isArabic = arabic;
     const units = ['Unit', 'Package', 'Roll', 'Set', 'Point', 'TB'];

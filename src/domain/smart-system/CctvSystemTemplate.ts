@@ -187,6 +187,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const components: SystemComponent[] = [
       {
         componentKey: "CCTV_CAMERAS",
+        specification: { cameraCount: count, technology: "IP" },
         name: `كاميرات مراقبة شبكية IP (${projectContext})`,
         nameAr: "كاميرات مراقبة شبكية IP",
         nameEn: "IP CCTV Surveillance Cameras",
@@ -200,6 +201,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "NVR_RECORDER",
+        specification: { requiredChannels: count, channelsPerRecorder: nvrChannels },
         name: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameAr: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameEn: `Network Video Recorder NVR (${nvrChannels} Channels)`,
@@ -213,6 +215,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "SURVEILLANCE_STORAGE_CAPACITY",
+        specification: { requiredUsableTb: estimatedTbRequired, storageDays, bitrateMbps, allocation: "RAID/reserve/bays not verified" },
         name: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
         nameAr: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
         nameEn: `Required Surveillance Storage Capacity (${storageDays} days retention)`,
@@ -226,6 +229,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "POE_SWITCH",
+        specification: { requiredPorts: count, portsPerSwitch: poePorts, reservedPorts: 2 },
         name: `موزع شبكة PoE Switch (${poePorts} منفذ)`,
         nameAr: `موزع شبكة PoE (${poePorts} منفذ)`,
         nameEn: `PoE Network Switch (${poePorts} Ports)`,
@@ -252,6 +256,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "CAT6_CABLING",
+        specification: { requiredCableMeters: totalCableMeters, metersPerRoll: 305 },
         name: "كابلات شبكة Cat6 المخصصة للمراقبة (بكرات)",
         nameAr: "كابلات شبكة Cat6 المخصصة للمراقبة (بكرات)",
         nameEn: "Cat6 Ethernet Cable Rolls (305m per roll)",

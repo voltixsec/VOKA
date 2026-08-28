@@ -26,6 +26,7 @@ import { customerMatchScore } from "@/features/customers/domain/customer-discove
 import { companyToday, readCommercialClauses, resolveExpiry } from "./commercial-field-values";
 import { customerLocaleText, professionalQuotationText } from "./quotation-customer-text";
 import { cleanAttentionName } from "./attention-name";
+import { hasCommercialCatalogPolicy, resolveCommercialCatalog } from "./commercial-catalog";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -81,11 +82,11 @@ export class AISalesAssistantResolver {
       resolvedLines.push(
         await this.resolveLineItem(
           companyId,
-          !line.commercializationPending && selection?.catalog?.[line.componentKey ?? line.text] ? { ...line, text: selection.catalog[line.componentKey ?? line.text].name } : line,
+          !line.commercialRequirement && !line.commercializationPending && selection?.catalog?.[line.componentKey ?? line.text] ? { ...line, text: selection.catalog[line.componentKey ?? line.text].name } : line,
           sourceLocale,
           priceListId,
           currencyCode, company.defaultCurrency,
-          line.commercializationPending ? undefined : selection?.catalog?.[line.componentKey ?? line.text]?.id,
+          selection?.catalog?.[line.componentKey ?? line.text]?.id,
         ),
       );
     }
@@ -399,6 +400,19 @@ export class AISalesAssistantResolver {
     companyCurrency: string,
     selectedId?: string,
   ): Promise<ResolvedLineItem> {
+    const commercial = hasCommercialCatalogPolicy(extracted)
+      ? await resolveCommercialCatalog(companyId, extracted, sourceLocale, this.dependencies.catalogItems, this.dependencies.units, selectedId)
+      : null;
+    if (commercial && !commercial.matched) {
+      return this.unresolvedLine(companyId, { ...extracted,
+        commercialRequirement: { ...extracted.commercialRequirement!, searchTruncated: commercial.searchTruncated,
+          matchStatus: commercial.candidates.length ? "COMMERCIAL_MATCH_AMBIGUOUS" : "COMMERCIAL_ITEM_TEMPORARY" },
+      }, sourceLocale, commercial.candidates.length ? "AMBIGUOUS" : "CUSTOM", commercial.candidates);
+    }
+    if (commercial?.matched) {
+      extracted = commercial.matched.line;
+      selectedId = commercial.matched.item.id.toString();
+    }
     const search = extracted.text.trim();
     const intendedType: CatalogItemType | undefined =
       extracted.typeIntent === "PRODUCT" ||
@@ -416,7 +430,7 @@ export class AISalesAssistantResolver {
       );
     }
 
-    const catalogItems = (
+    const catalogItems = commercial?.matched ? [commercial.matched.item] : (
       await this.dependencies.catalogItems.findAll({
         companyId,
         search,
@@ -479,6 +493,9 @@ export class AISalesAssistantResolver {
 
     return {
       resolutionStatus: "MATCHED",
+      itemCode: item.code,
+      commercialRequirement: extracted.commercialRequirement,
+      commercializationPending: extracted.commercializationPending,
       type: itemType,
       catalogItemId: item.id.toString(),
       catalogCandidates: [],
@@ -500,7 +517,7 @@ export class AISalesAssistantResolver {
       subtotal: null,
       taxRateId: item.taxRateId,
       taxPercentage: 0,
-      reviewRequired: extracted.quantity == null,
+      reviewRequired: Boolean(extracted.commercialRequirement) || extracted.quantity == null,
       provenance: extracted.provenance,
       formulaExplanation: extracted.formulaExplanation,
       formulaExplanationAr: extracted.formulaExplanationAr,
@@ -527,6 +544,8 @@ export class AISalesAssistantResolver {
 
     return {
       resolutionStatus: status,
+      itemCode: null,
+      commercialRequirement: extracted.commercialRequirement,
       commercializationPending: extracted.commercializationPending,
       type,
       catalogItemId: null,
