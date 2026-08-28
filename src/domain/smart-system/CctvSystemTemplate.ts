@@ -230,7 +230,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
         quantity: poeSwitchCount,
         unit: "Unit",
         provenance: "CALCULATED",
-        formulaExplanation: `${poeSwitchCount} switch(es) with ${poePorts} PoE ports to power ${count} cameras`,
+        formulaExplanation: `Math.ceil(${count} cameras / (${poePorts} ports - 2 reserved uplink ports)) = ${poeSwitchCount} switch(es). Assumes one port per camera; PoE power budget and network topology require review.`,
         category: "NETWORKING",
       },
       {
@@ -242,7 +242,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
         quantity: 1,
         unit: "Unit",
         provenance: "SUGGESTED",
-        formulaExplanation: "Suggested standard wall mount enclosure for NVR and PoE switch",
+        formulaExplanation: "Estimated allowance: 1 shared wall-mount cabinet at a single collection point. Rack units, recorder/switch dimensions, ventilation and distributed cabinet locations are not sized; confirm after site/layout review.",
         category: "INFRASTRUCTURE",
       },
       {

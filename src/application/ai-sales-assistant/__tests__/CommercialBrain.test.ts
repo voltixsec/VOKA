@@ -17,6 +17,78 @@ function dependencies(customers: unknown[] = [], items: unknown[] = []) {
 }
 
 describe("Commercial Brain", () => {
+  const acceptancePrompt = "عايز أعمل عرض سعر توريد وتركيب 36 كاميرا مراقبة شركة الأفق";
+  const entity = "شركة الأفق";
+
+  it("uses structured customer entity only and preserves 36-camera system intent", async () => {
+    const deps = dependencies([{ ...customer, name: entity }]);
+    const provider = { extractIntent: vi.fn().mockResolvedValue({ customerMention: entity, lines: [] }), extractCustomerMention: vi.fn() };
+    const proposal = await new AISalesAssistantService(deps as any, provider).generateDraftProposal({ companyId: "tenant-a", prompt: acceptancePrompt, sourceLocale: "ar" });
+    expect(proposal.customer).toMatchObject({ id: "customer-1", mention: entity, status: "MATCHED" });
+    expect(deps.customers.findAll.mock.calls.every(([input]) => input.companyId === "tenant-a" && input.search === entity)).toBe(true);
+    expect(provider.extractCustomerMention).not.toHaveBeenCalled();
+    expect(proposal.smartSystem?.status).toBe("COMPLETE");
+    expect(proposal.lines.find((line) => line.componentKey === "CCTV_CAMERAS")?.quantity).toBe(36);
+    const draft = applyCanonicalIntelligence(new ConversationalDraftEngine().advance({ reply: acceptancePrompt, replySource: "TEXT", locale: "ar" }), proposal);
+    expect(draft.fields.customerId).toBe("customer-1");
+    expect(draft.missingRequired).toEqual([]);
+    expect(draft.executed).toBe(false);
+  });
+
+  it("corrects a sentence-shaped customer through the provider before tenant lookup", async () => {
+    const deps = dependencies();
+    const provider = { extractIntent: vi.fn().mockResolvedValue({ customerMention: acceptancePrompt, lines: [] }), extractCustomerMention: vi.fn().mockResolvedValue({ customerMention: entity }) };
+    const proposal = await new AISalesAssistantService(deps as any, provider).generateDraftProposal({ companyId: "tenant-a", prompt: acceptancePrompt, sourceLocale: "ar" });
+    expect(provider.extractCustomerMention).toHaveBeenCalledExactlyOnceWith(acceptancePrompt, "ar");
+    expect(proposal.customer.mention).toBe(entity);
+    expect(deps.customers.findAll.mock.calls.every(([input]) => input.search === entity)).toBe(true);
+    const fused = applyCanonicalIntelligence(new ConversationalDraftEngine().advance({ reply: acceptancePrompt, replySource: "VOICE", locale: "ar" }), proposal);
+    expect(fused.clarification?.ar).toContain(`«${entity}»`);
+    expect(fused.clarification?.ar).not.toContain("36");
+    expect(fused.customerResolution.status).toBe("NOT_FOUND");
+  });
+
+  it("fallback isolates the trailing company when the provider is unavailable", async () => {
+    const result = await new AISalesAssistantExtractor({ extractIntent: vi.fn().mockRejectedValue(new Error("unavailable")) }).extractIntent(acceptancePrompt, "ar");
+    expect(result.intent.customerMention).toBe(entity);
+    expect(result.intent.scopeType).toBe("SUPPLY_AND_INSTALLATION");
+    expect(result.intent.smartSystem?.status).toBe("COMPLETE");
+  });
+
+  it("rejects a second polluted provider result and uses only the clean fallback", async () => {
+    const result = await new AISalesAssistantExtractor({ extractIntent: vi.fn().mockResolvedValue({ customerMention: acceptancePrompt, lines: [] }), extractCustomerMention: vi.fn().mockResolvedValue({ customerMention: acceptancePrompt }) }).extractIntent(acceptancePrompt, "ar");
+    expect(result.intent.customerMention).toBe(entity);
+  });
+
+  it("keeps ambiguous customer chips and resolves one plausible tenant customer", async () => {
+    const provider = { extractIntent: vi.fn().mockResolvedValue({ customerMention: entity, lines: [] }) };
+    const deps = dependencies([{ ...customer, name: `${entity} للتجارة` }, { ...customer, id: "customer-2", name: `${entity} للمقاولات` }]);
+    const service = new AISalesAssistantService(deps as any, provider);
+    const proposal = await service.generateDraftProposal({ companyId: "tenant-a", prompt: acceptancePrompt });
+    const draft = applyCanonicalIntelligence(new ConversationalDraftEngine().advance({ reply: acceptancePrompt, replySource: "TEXT", locale: "ar" }), proposal);
+    expect(draft.customerResolution.status).toBe("AMBIGUOUS");
+    expect(draft.customerResolution.candidates).toHaveLength(2);
+    expect(draft.clarification?.suggestions).toHaveLength(2);
+    deps.customers.findAll.mockResolvedValue([{ ...customer, name: `${entity} للتجارة` }]);
+    const single = await service.generateDraftProposal({ companyId: "tenant-a", prompt: acceptancePrompt });
+    expect(single.customer).toMatchObject({ status: "MATCHED", id: "customer-1" });
+  });
+
+  it("carries every derived CCTV quantity explanation through catalog resolution", async () => {
+    const proposal = await new AISalesAssistantService(dependencies() as any).generateDraftProposal({ companyId: "tenant-a", prompt: acceptancePrompt });
+    const derived = proposal.lines.filter((line) => line.quantitySource === "RULE_CALCULATED" || line.quantitySource === "AI_ESTIMATED");
+    expect(derived.length).toBeGreaterThanOrEqual(5);
+    expect(derived.every((line) => Boolean(line.formulaExplanation))).toBe(true);
+    const byKey = (key: string) => proposal.lines.find((line) => line.componentKey === key)!;
+    expect(byKey("NVR_RECORDER").formulaExplanation).toContain("64 channels");
+    expect(byKey("POE_SWITCH").formulaExplanation).toContain("48 ports - 2 reserved uplink ports");
+    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY")).toMatchObject({ requestedUnitText: "TB" });
+    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY").formulaExplanation).toContain("30 days");
+    expect(byKey("RACK_CABINET")).toMatchObject({ quantitySource: "AI_ESTIMATED", quantity: 1 });
+    expect(byKey("RACK_CABINET").formulaExplanation).toContain("single collection point");
+    expect(byKey("CAT6_CABLING").formulaExplanation).toContain("305m roll");
+    expect(proposal.estimateNotice).toBe(true);
+  });
   it("retains 86 cameras and factory/area/coverage, uses deterministic multi-NVR rules with an empty catalog", async () => {
     const deps = dependencies();
     const provider = { extractIntent: vi.fn().mockResolvedValue({ documentType: "QUOTATION", lines: [{ text: "fabricated camera suggestion", quantity: 999 }] }), estimatePrices: vi.fn().mockImplementation(async ({ lines }) => ({ prices: lines.map((line: { key: string }) => ({ key: line.key, price: 20 })) })) };

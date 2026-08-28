@@ -11,6 +11,7 @@ import { SALES_ASSISTANT_MAX_LINES } from "../dto/AISalesAssistantDto";
 import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesIntent";
 import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
 import { SmartSystemBuilderService } from "../../smart-system/services/SmartSystemBuilderService";
+import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
 
 const FALLBACK_WARNING =
   "Structured AI extraction was unavailable or invalid; conservative heuristic extraction was used.";
@@ -35,6 +36,15 @@ export class AISalesAssistantExtractor {
     if (this.provider) {
       try { understood = validateExtractedSalesIntent(await this.provider.extractIntent(trimmed, sourceLocale)); } catch { /* deterministic fallback */ }
     }
+    let customerMention = cleanCustomerEntity(understood?.customerMention);
+    const fallbackCustomer = this.extractCustomerMention(trimmed, sourceLocale);
+    if (!customerMention && this.provider?.extractCustomerMention && (understood?.customerMention || fallbackCustomer)) {
+      try {
+        const repaired = await this.provider.extractCustomerMention(trimmed, sourceLocale);
+        if (repaired && typeof repaired === "object") customerMention = cleanCustomerEntity((repaired as { customerMention?: unknown }).customerMention);
+      } catch { /* Keep commercial intelligence usable if focused extraction fails. */ }
+    }
+    customerMention ??= fallbackCustomer;
     // Evidence must occur in the user's context; provider assertions alone are not user facts.
     const facts = (understood?.facts ?? []).filter((fact) => trimmed.includes(fact.evidence)).map((fact) => ({ ...fact, provenance: "USER_PROVIDED" as const }));
     for (const [name, pattern] of [
@@ -56,7 +66,7 @@ export class AISalesAssistantExtractor {
     if (allowSmartSystems && this.smartSystemBuilder.detectSystemIntent(effectivePrompt)) {
       const parameters = { ...(cameraFact ? { cameraCount: Number(cameraFact.value) } : {}), ...Object.fromEntries(Object.entries(answers).filter(([key]) => ["cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"].includes(key)).map(([key, value]) => [key, Number(value)])) };
       const deterministic = this.heuristicExtract(effectivePrompt, sourceLocale, true, parameters);
-      const intent = { ...understood, ...deterministic, customerMention: understood?.customerMention ?? deterministic.customerMention, subject: understood?.subject ?? deterministic.subject, brief: understood?.brief ?? trimmed, paymentTerms: understood?.paymentTerms, warranty: understood?.warranty, projectName: understood?.projectName, documentType: understood?.documentType, facts };
+      const intent = { ...understood, ...deterministic, customerMention, subject: understood?.subject ?? deterministic.subject, brief: understood?.brief ?? trimmed, paymentTerms: understood?.paymentTerms, warranty: understood?.warranty, projectName: understood?.projectName, documentType: understood?.documentType, facts };
       return {
         intent,
         extractionMode: understood ? "provider" : "heuristic",
@@ -72,7 +82,7 @@ export class AISalesAssistantExtractor {
           return {
             intent: {
               ...intent,
-              sourceLocale, facts,
+              sourceLocale, facts, customerMention,
             },
             extractionMode: "provider",
             warnings: intent.warnings ?? [],
@@ -85,6 +95,7 @@ export class AISalesAssistantExtractor {
 
     const intent = this.heuristicExtract(trimmed, sourceLocale, allowSmartSystems);
     intent.facts = facts;
+    intent.customerMention = customerMention;
     return {
       intent,
       extractionMode: "heuristic",
@@ -200,6 +211,8 @@ export class AISalesAssistantExtractor {
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
   ): string | null {
+    const companyEntity = fallbackCompanyEntity(prompt);
+    if (companyEntity) return companyEntity;
     const patterns =
       sourceLocale === "ar"
         ? [
@@ -212,7 +225,8 @@ export class AISalesAssistantExtractor {
 
     for (const pattern of patterns) {
       const match = prompt.match(pattern)?.[1]?.trim();
-      if (match && match.length <= 300) return match;
+      const entity = cleanCustomerEntity(match);
+      if (entity) return entity;
     }
 
     return null;

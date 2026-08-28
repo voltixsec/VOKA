@@ -26,6 +26,7 @@ import {
 } from "../../../../components/i18n/LanguageProvider";
 import { CustomerPicker } from "@/components/commercial";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
+import { EngineeringQuantityDetails, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
 import { ESTIMATE_NOTICE_AR, ESTIMATE_NOTICE_EN } from "@/src/application/ai-sales-assistant/estimate-notice";
 import {
   QuotationCalculator,
@@ -197,6 +198,7 @@ export default function NewQuotationPage() {
 
   const [aiEstimateReview, setAiEstimateReview] = useState(false);
   const [aiReviewSources, setAiReviewSources] = useState<string[]>([]);
+  const [aiEngineeringLines, setAiEngineeringLines] = useState<EngineeringReviewLine[]>([]);
   const [number, setNumber] = useState(
     "QT-" + Date.now().toString().slice(-6),
   );
@@ -548,6 +550,7 @@ export default function NewQuotationPage() {
         sessionStorage.removeItem(SESSION_KEY);
         const draft = JSON.parse(stored);
         setAiEstimateReview(Boolean(draft.estimateNotice));
+        setAiEngineeringLines(Array.isArray(draft.lines) ? draft.lines : []);
         setAiReviewSources(Array.isArray(draft.lines) ? draft.lines.map((line: { itemName: string; unitPrice: number | null; priceSource?: string; quantitySource?: string }) => `${line.itemName}: ${line.priceSource ?? "NEEDS_CONFIRMATION"} · ${line.quantitySource ?? "NEEDS_CONFIRMATION"}${line.unitPrice == null ? " — price required" : ""}`) : []);
         if (draft.customer?.id) {
           setCustomerId(draft.customer.id);
@@ -1004,6 +1007,7 @@ export default function NewQuotationPage() {
       dir={isArabic ? "rtl" : "ltr"}
     >
       {aiEstimateReview && <EstimateNotice isArabic={isArabic} />}
+      {aiEngineeringLines.length > 0 && <EngineeringQuantityDetails lines={aiEngineeringLines} isArabic={isArabic} />}
       {aiReviewSources.length > 0 && <details className="text-xs text-slate-300"><summary>{isArabic ? "مصادر المسودة الأصلية — راجع قبل الاعتماد" : "Original draft sources — review before approval"}</summary>{aiReviewSources.map((source, index) => <p key={index}>{source}</p>)}</details>}
       <button
         type="button"

@@ -153,7 +153,7 @@ export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, propos
   const fields: DraftFields = {
     ...draft.fields,
     customerId: proposal.customer.id,
-    customerMention: proposal.customer.mention ?? draft.fields.customerMention,
+    customerMention: proposal.customer.mention,
     currencyCode: proposal.proposal.currencyCode ?? draft.fields.currencyCode,
     paymentTerms: proposal.termsAndConditions ?? draft.fields.paymentTerms,
     scopeType: proposal.proposal.scopeType ?? draft.fields.scopeType,

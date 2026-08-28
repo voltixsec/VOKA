@@ -8,6 +8,7 @@ import type {
 } from "../dto/AISalesAssistantDto";
 import { SALES_ASSISTANT_PROMPT_MAX_LENGTH } from "../dto/AISalesAssistantDto";
 import { completeEstimatedPricing } from "./completeEstimatedPricing";
+import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -39,7 +40,7 @@ export class AISalesAssistantService {
 
     const { intent, extractionMode, warnings } =
       await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers);
-    if (request.answers?.customerMention) intent.customerMention = request.answers.customerMention;
+    if (request.answers?.customerMention) intent.customerMention = cleanCustomerEntity(request.answers.customerMention) ?? fallbackCompanyEntity(request.answers.customerMention);
     if (request.answers?.projectName) intent.projectName = request.answers.projectName;
 
     const proposal = await this.resolver.resolveProposal(

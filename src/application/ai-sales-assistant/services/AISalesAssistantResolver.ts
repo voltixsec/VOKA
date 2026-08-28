@@ -20,6 +20,7 @@ import {
   SALES_ASSISTANT_MAX_CANDIDATES,
 } from "../dto/AISalesAssistantDto";
 import type { AISalesAssistantPricingPort } from "../ports/AISalesAssistantPricingPort";
+import { cleanCustomerEntity } from "./customer-entity";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -248,7 +249,7 @@ export class AISalesAssistantResolver {
     email?: string | null,
     selectedId?: string,
   ): Promise<ResolvedCustomerCandidate> {
-    const normalizedMention = mention?.trim() || null;
+    const normalizedMention = cleanCustomerEntity(mention);
     const normalizedEmail = email?.trim() || null;
     const search = normalizedEmail ?? normalizedMention;
 
@@ -313,8 +314,8 @@ export class AISalesAssistantResolver {
 
     const selected = selectedId ? customers.find((candidate) => candidate.id.toString() === selectedId) : null;
     if (selectedId && !selected) throw new Error("CUSTOMER_SELECTION_INVALID");
-    if (selected || exact.length === 1) {
-      const customer = selected ?? exact[0];
+    if (selected || exact.length === 1 || customers.length === 1) {
+      const customer = selected ?? exact[0] ?? customers[0];
       return {
         status: "MATCHED",
         id: customer.id.toString(),

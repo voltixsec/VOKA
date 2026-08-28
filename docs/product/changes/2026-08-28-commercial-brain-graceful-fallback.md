@@ -110,3 +110,29 @@ UI, or certified engineering expansion is included. The experiment stash remains
 Validation: 101 focused tests passed; full suite 1,318 passed / 2 skipped;
 TypeScript, Prisma validation, production build and `git diff --check` passed.
 Build lint warnings remain, including a quotation-handoff locale-effect dependency.
+
+## Manual acceptance correction
+
+Customer extraction now constrains `customerMention` to the named entity, including
+a legal prefix such as `شركة`. The acceptance request
+`عايز أعمل عرض سعر توريد وتركيب 36 كاميرا مراقبة شركة الأفق`
+must search for `شركة الأفق`, not the commercial sentence. A sentence-shaped
+provider result triggers one focused entity-only Responses correction through the
+same provider port. A conservative fallback is used only if that result is unusable.
+The resolver rejects request-shaped mentions and resolves a single tenant match;
+multiple candidates retain explicit selection, and no customer is auto-created.
+Generic conversational fields cannot resurrect a rejected customer mention.
+This follows the official guidance on [handling structured-output mistakes](https://developers.openai.com/api/docs/guides/structured-outputs#handling-mistakes).
+
+Both the assistant and quotation review expose the original server-provided
+engineering quantities, units, formulas and assumptions in collapsed details.
+Storage is capacity in TB, not a manufactured disk count; PoE formulas state the
+two reserved uplink ports. The single-cabinet allowance is explicitly estimated,
+with size/layout confirmation outstanding. If commercial and calculation units
+differ, the UI flags that difference instead of inventing a conversion. Missing
+legacy explanations are labeled as unavailable. No quantities, pricing, Voice V2,
+Drawing behavior, quotation revision rules, or estimate-notice copy changed.
+
+Acceptance-fix validation: 102 focused tests passed; full suite 1,329 passed /
+2 skipped. Typecheck, production build, Prisma validation and whitespace checks
+passed. Existing lint warnings remain. Live CEO retesting is still required.
