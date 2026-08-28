@@ -1,3 +1,4 @@
+import { quotationTermsPresentation } from '@/src/application/document/quotation-terms-presentation';
 import {
   PROPOSAL_COLOR,
   PROPOSAL_TEXT,
@@ -171,8 +172,12 @@ function drawCoverCommercialSummary(
   }
 
   if (terms) {
+    const displayTerms = quotationTermsPresentation(terms).text;
+    doc.fontSize(8);
+    const textHeight = doc.heightOfString(displayTerms, { width: width - 28, align });
+    const availableHeight = doc.page.height - 82 - (compactForLetterhead ? 56 : 70) - currentY;
     const termsHeight =
-      compactForLetterhead ? 74 : 86;
+      Math.max(compactForLetterhead ? 74 : 86, Math.min(textHeight + 42, availableHeight));
 
     drawProposalCard(
       doc,
@@ -205,13 +210,13 @@ function drawCoverCommercialSummary(
       )
       .fontSize(8)
       .text(
-        terms,
+        displayTerms,
         left + 14,
         currentY + 29,
         proposalTextOptions(
           align,
           width - 28,
-          48,
+          termsHeight - 38,
         ),
       );
 

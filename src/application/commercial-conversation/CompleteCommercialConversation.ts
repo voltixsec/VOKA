@@ -107,6 +107,7 @@ export class CompleteCommercialConversation {
       draft = applyCanonicalIntelligence(draft, proposal);
       // Store an absolute date, not a duration that drifts on every later turn.
       if (answers.expiryDate && proposal.proposal.expiryDate) draft.answers = { ...answers, expiryDate: proposal.proposal.expiryDate };
+      if (answers.attentionName) draft.answers = { ...draft.answers, attentionName: proposal.proposal.attentionName ?? '' };
     }
     return completeFields(draft);
   }

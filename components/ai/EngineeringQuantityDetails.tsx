@@ -1,4 +1,5 @@
 import type { ResolvedLineItem, SalesAssistantDraftProposal } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
+import { commercialUnitLabel, unitLabel } from '@/lib/i18n/unit-labels';
 
 export type EngineeringReviewLine = Pick<ResolvedLineItem,
   "itemName" | "quantity" | "unitName" | "quantitySource" | "provenance" | "formulaExplanation"
@@ -19,18 +20,6 @@ export function engineeringReviewLines(proposal: SalesAssistantDraftProposal): E
   })), ...proposal.lines.filter((line) => line.commercializationPending)];
 }
 
-const unitLabels: Record<string, [string, string]> = {
-  unit: ["وحدة", "Unit"], piece: ["قطعة", "Piece"], pcs: ["قطعة", "Pieces"],
-  roll: ["بكرة", "Roll"], set: ["طقم", "Set"], point: ["نقطة", "Point"],
-  package: ["حزمة", "Package"],
-  sheet: ["لوح", "Sheet"], pair: ["زوج", "Pair"], lm: ["متر طولي", "Linear metre"],
-  m: ["متر", "m"], "m²": ["م²", "m²"], kg: ["كجم", "kg"],
-};
-
-function unitLabel(unit: string | null | undefined, isArabic: boolean) {
-  return unitLabels[unit?.toLowerCase() ?? ""]?.[isArabic ? 0 : 1] ?? unit ?? "";
-}
-
 /** Displays original server provenance; never recomputes or invents an explanation. */
 export function EngineeringQuantityDetails({ lines, isArabic }: { lines: EngineeringReviewLine[]; isArabic: boolean }) {
   const engineering = lines.filter((line) => line.quantitySource === "RULE_CALCULATED" || line.quantitySource === "AI_ESTIMATED" || line.provenance === "CALCULATED" || line.provenance === "SUGGESTED");
@@ -46,7 +35,7 @@ export function EngineeringQuantityDetails({ lines, isArabic }: { lines: Enginee
         const explanation = isArabic
           ? line.formulaExplanationAr || (/[\u0600-\u06ff]/.test(legacyExplanation) ? legacyExplanation : "")
           : (/[\u0600-\u06ff]/.test(legacyExplanation) ? "" : legacyExplanation);
-        const commercialUnit = (isArabic ? line.unitNameAr : line.unitNameEn) || unitLabel(line.unitName, isArabic);
+        const commercialUnit = commercialUnitLabel(line, isArabic);
         return <li key={index}>
           <p className="font-semibold text-slate-100">{commercialLineName(line, isArabic)} · <bdi>{line.quantity ?? "?"} {line.requestedUnitText ? unitLabel(line.requestedUnitText, isArabic) : commercialUnit}</bdi></p>
           {line.requestedUnitText && line.unitName && line.requestedUnitText !== line.unitName && <p className="text-amber-200">{isArabic ? "وحدة البند التجاري مختلفة؛ أكد توافقها قبل الاعتماد: " : "Commercial unit differs; confirm compatibility before approval: "}{commercialUnit}</p>}

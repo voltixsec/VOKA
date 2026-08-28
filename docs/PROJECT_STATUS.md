@@ -2,7 +2,7 @@
 
 Current Product Frontier: **V1 Product Completion & Globalization**
 
-Feature checkpoint (2026-08-28): [Slice 2 professional quotation field ownership](product/changes/2026-08-28-professional-quotation-field-ownership.md), following Slice 1 field-aware completion.
+Feature checkpoint (2026-08-28): [Slice 2.1 professional quotation UX cleanup](product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-21--professional-quotation-ux-cleanup), following Slice 2 field ownership.
 Unmerged; manual CEO acceptance remains required. No release/deployment claim.
 
 Status: **IN PROGRESS / NOT RELEASE READY.** The Product Integrity regression

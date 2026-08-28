@@ -75,3 +75,59 @@ Existing build lint warnings and caught localization database warnings remain;
 the full suite used a non-production dummy database URL. No schema/dependency or
 generated-client changes were needed. The manual acceptance checks above remain
 pending; automated results are not a release/deployment approval.
+
+## Slice 2.1 — Professional quotation UX cleanup
+
+Starts from clean local/remote `70d813cef0272b06bb1edaa783038ad6182b5d48` on the
+same feature branch. No Commercial Brain, SmartSystemBuilder, pricing, drawing,
+schema, merge or deployment change.
+
+- **Default terms:** the explicit replacement action refreshes the existing
+  authenticated company-template endpoint and replaces the whole textarea with
+  the exact selected scope/locale template. It does not merge, translate or invent
+  clauses. It marks the form dirty and prevents submission during loading. Missing
+  defaults/network failures keep the current text with a localized message. Late
+  responses for another scope/locale are ignored. The button is no longer nested
+  inside the textarea's label; each control has its own accessible name.
+- **Attention:** a bounded application normalizer removes only leading greetings,
+  conversational addressing and attention wrappers; clean names/titles stay intact.
+  Canonical attention and persisted targeted answers carry the cleaned value.
+  Framing without a name remains incomplete. Original conversation text is retained.
+- **Terms formatting:** stored/approved text remains unchanged. Separate, clearly
+  labelled clauses get numbered presentation in the composer preview, quotation
+  detail and PDF. Existing numbering, bullets, continuation text and free-form legal
+  paragraphs keep their exact text and whitespace. No automatic sentence splitting
+  or clause renumbering. PDF terms height can grow within the existing cover's safe
+  space; this is not an unlimited legal-appendix/pagination redesign.
+- **Units:** the existing review labels now have one shared display helper used by
+  the composer, internal engineering review and PDF. Unit/Package/Roll/Set/Point
+  display as وحدة/حزمة/بكرة/طقم/نقطة in Arabic. English and technical tokens remain
+  intact. Legacy PCS placeholders no longer hide actual catalog unit labels.
+  Display does not rewrite canonical unit codes in the save payload.
+
+Regression coverage includes exact custom/empty-term replacement, fresh templates,
+scope switching, failed/missing defaults, clean attention across the 180-camera
+conversation, unchanged legal text, AR/EN units and unchanged submitted codes.
+The PDF skill's visual workflow was used to inspect all four pages of generated
+AR/EN 180-camera samples: five complete numbered clauses, clean attention, localized
+units, no clipping/overlap in those fixtures, and no internal engineering notice in
+customer-facing fields. Scratch artifacts are not part of the feature commit.
+
+Manual CEO retest remains: repeat the real 180-camera voice/text flow, check customer,
+project, clean attention, validity, subject/brief and blank-or-explicit Notes; replace
+terms after changing scope, verify exact approved wording, Arabic units and unknown
+price blocking; review the actual tenant PDF, especially long approved templates.
+Unrecognized conversational wrappers still need human review. Safe formatting does
+not reinterpret unstructured legal text, and existing fixed-page limits remain.
+
+Slice 2.1 final validation (2026-08-28): 273 focused tests passed in 31 files.
+The single full-suite run recorded 1,481 passed, two existing skips and one 5-second
+timeout in the unchanged quotation API test `updates a draft quotation inside the
+active company`. Its entire file then passed 10/10 in an isolated rerun without
+code changes or timeout relaxation. The full run is not claimed as wholly green;
+it was not repeated, following the owner's one-full-suite limit. Standalone
+typecheck, production build, Prisma validation and diff checks passed. Existing
+build lint warnings and caught localization database warnings remain. The full
+suite and targeted API rerun used a dummy non-production database URL. No schema,
+dependency or generated-client changes were needed. Live CEO acceptance remains
+pending; this checkpoint is not a release/deployment approval.

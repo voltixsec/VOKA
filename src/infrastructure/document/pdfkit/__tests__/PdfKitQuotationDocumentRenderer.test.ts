@@ -11,9 +11,38 @@ import type {
 import {
   PdfKitQuotationDocumentRenderer,
 } from "../PdfKitQuotationDocumentRenderer";
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const PNG_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+describe('professional terms and localized unit PDF presentation', () => {
+  it.each(['ar', 'en'] as const)('renders the 180-camera %s review fixture without changing approved text or unit codes', async (locale) => {
+    const data = snapshot(locale);
+    const quote = data.quotation;
+    quote.subjectAr = 'عرض سعر – توريد وتركيب نظام مراقبة بالكاميرات – 180 كاميرا';
+    quote.subjectEn = 'Quotation – Supply and installation CCTV system – 180 cameras';
+    quote.attentionNameAr = 'الأستاذ محمد خالد';
+    quote.attentionNameEn = 'Mr. Mohamed Khaled';
+    quote.notes = quote.notesAr = quote.notesEn = null;
+    quote.termsAndConditionsAr = 'شروط الدفع: 50% مقدم\nمدة التوريد: 14 يوم\nالضمان: سنة\nصلاحية العرض: 15 يوم\nالأعمال المستثناة: الأعمال المدنية';
+    quote.termsAndConditionsEn = 'Payment: 50% advance\nDelivery: 14 days\nWarranty: 1 year\nQuotation validity: 15 days\nExclusions: Civil works';
+    const row = quote.lines[0];
+    quote.lines = ['Unit', 'Package', 'Roll', 'Set', 'Point'].map((unitName, i) => ({ ...row, position: i + 1, itemNameAr: ['كاميرا IP', 'حزمة تخزين', 'كابلات CAT6', 'وصلات RJ45', 'خدمة تركيب'][i], itemNameEn: ['IP camera', 'Storage package', 'CAT6 cable', 'RJ45 connectors', 'Installation service'][i], description: null, descriptionAr: null, descriptionEn: null, unitName, unitNameAr: null, unitNameEn: null, quantity: i === 0 ? 180 : 1, unitPrice: 10, discountAmount: 0, taxAmount: 0, totalAmount: i === 0 ? 1800 : 10 }));
+    quote.discount = null;
+    quote.totals = { subtotal: 1840, discountAmount: 0, taxAmount: 0, totalAmount: 1840 };
+    const before = JSON.stringify(data);
+    const bytes = await new PdfKitQuotationDocumentRenderer().render(data);
+    expect(JSON.stringify(data)).toBe(before);
+    expect(Buffer.from(bytes).toString('latin1').match(/\/Type\s*\/Page\b/g)).toHaveLength(2);
+    // Opt-in local visual QA artifacts; no writes in normal CI/test runs.
+    if (process.env.VOKA_PDF_QA_DIR) {
+      mkdirSync(process.env.VOKA_PDF_QA_DIR, { recursive: true });
+      writeFileSync(join(process.env.VOKA_PDF_QA_DIR, `quotation-180-${locale}.pdf`), bytes);
+    }
+  });
+});
 
 function snapshot(
   locale: "ar" | "en",

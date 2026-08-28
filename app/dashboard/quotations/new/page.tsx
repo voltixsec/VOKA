@@ -29,6 +29,8 @@ import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
 import { EngineeringQuantityDetails, commercialLineName, engineeringReviewLines, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
+import { commercialUnitLabel } from '@/lib/i18n/unit-labels';
+import { QuotationTerms } from '@/components/quotations/QuotationTerms';
 import {
   QuotationCalculator,
   type QuotationLineType,
@@ -261,6 +263,10 @@ export default function NewQuotationPage() {
 
   const [terms, setTerms] =
     useState("");
+  const [replacingTerms, setReplacingTerms] = useState(false);
+  const [termsFeedback, setTermsFeedback] = useState('');
+  const termsContextRef = useRef({ scopeType, isArabic });
+  termsContextRef.current = { scopeType, isArabic };
 
   const [
     termsTemplates,
@@ -588,8 +594,8 @@ export default function NewQuotationPage() {
               descriptionAr: l.descriptionAr || "",
               descriptionEn: l.descriptionEn || "",
               unitName: l.unitName || "PCS",
-              unitNameAr: l.unitNameAr || "PCS",
-              unitNameEn: l.unitNameEn || "PCS",
+              unitNameAr: l.unitNameAr || null,
+              unitNameEn: l.unitNameEn || null,
               quantity: l.quantity ?? 1,
               unitPrice: l.unitPrice ?? null,
               taxRateId: l.taxRateId || null,
@@ -634,28 +640,33 @@ export default function NewQuotationPage() {
     termsTouched,
   ]);
 
-  function getDefaultTerms() {
-    if (!scopeType) {
-      return;
+  async function getDefaultTerms() {
+    if (!scopeType || replacingTerms) return;
+    const requested = { scopeType, isArabic };
+    const stillCurrent = () => termsContextRef.current.scopeType === requested.scopeType && termsContextRef.current.isArabic === requested.isArabic;
+    setReplacingTerms(true);
+    setTermsFeedback('');
+    // Explicit replacement reads the current approved source, not an opening-time
+    // cache. A late response must not apply another scope/language's template.
+    try {
+      const response = await fetch('/api/companies/current/quotation-terms', { cache: 'no-store', headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('TERMS_LOAD_FAILED');
+      const payload = await response.json();
+      const template = payload?.data?.templates?.find((item: { scopeType: string }) => item.scopeType === requested.scopeType);
+      const approved = requested.isArabic ? template?.termsAr : template?.termsEn;
+      if (!stillCurrent()) return;
+      if (typeof approved !== 'string' || !approved.trim()) {
+        setTermsFeedback(t('لا توجد شروط افتراضية معتمدة لهذا النطاق واللغة. لم يتغير النص الحالي.', 'No approved default terms for this scope and language. Current text was kept.'));
+        return;
+      }
+      setTerms(approved);
+      setTermsTouched(true);
+      setDirty(true);
+    } catch {
+      if (stillCurrent()) setTermsFeedback(t('تعذر تحميل الشروط المعتمدة. لم يتغير النص الحالي؛ حاول مجدداً.', 'Could not load approved terms. Current text was kept; please retry.'));
+    } finally {
+      setReplacingTerms(false);
     }
-
-    const template =
-      termsTemplates[
-        scopeType
-      ];
-
-    setTerms(
-      template
-        ? (
-            isArabic
-              ? template.termsAr
-              : template.termsEn
-          )
-        : "",
-    );
-
-    setTermsTouched(false);
-    setDirty(true);
   }
 
   const selectedCustomer =
@@ -892,7 +903,7 @@ export default function NewQuotationPage() {
 
     if (
       !selectedCustomer ||
-      lines.length === 0 || hasUnknownPrices
+      lines.length === 0 || hasUnknownPrices || replacingTerms
     ) {
       return;
     }
@@ -1454,7 +1465,7 @@ export default function NewQuotationPage() {
                   <Input
                     className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                     aria-label={`${t("الوحدة", "Unit")} ${index + 1}`}
-                    value={line.unitName}
+                    value={commercialUnitLabel(line, isArabic)}
                     onChange={(event) =>
                       changeLine(
                         index,
@@ -1646,33 +1657,36 @@ export default function NewQuotationPage() {
               />
             </label>
 
-            <label className="space-y-2">
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-slate-400">
+                <label htmlFor="quotation-terms" className="text-sm text-slate-400">
                   {t(
                     "\u0627\u0644\u0634\u0631\u0648\u0637 \u0648\u0627\u0644\u0623\u062d\u0643\u0627\u0645",
                     "Terms and conditions",
                   )}
-                </span>
+                </label>
 
                 {scopeType ? (
                   <button
                     type="button"
+                    disabled={replacingTerms}
                     onClick={() => {
-                      getDefaultTerms();
+                      void getDefaultTerms();
                     }}
                     className="text-xs font-medium text-sky-400 transition hover:text-sky-300"
                   >
                     {t(
-                      "\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0627\u0644\u0634\u0631\u0648\u0637 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a\u0629",
-                      "Use default terms",
+                      replacingTerms ? "جاري تحميل الشروط…" : "استبدال بالشروط الافتراضية",
+                      replacingTerms ? "Loading terms…" : "Replace with default terms",
                     )}
                   </button>
                 ) : null}
               </div>
 
               <textarea
+                id="quotation-terms"
                 value={terms}
+                readOnly={replacingTerms}
                 onChange={(event) => {
                   setTerms(
                     event.target.value,
@@ -1682,7 +1696,9 @@ export default function NewQuotationPage() {
                 }}
                 className="min-h-28 w-full rounded-xl border border-white/10 bg-slate-950 p-4"
               />
-            </label>
+              {termsFeedback && <p role="status" className="text-xs text-amber-300">{termsFeedback}</p>}
+              {terms && <details className="text-sm"><summary className="cursor-pointer text-sky-300">{t('معاينة تنسيق الشروط', 'Preview terms formatting')}</summary><div className="mt-2"><QuotationTerms text={terms} /></div></details>}
+            </div>
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
@@ -1726,7 +1742,7 @@ export default function NewQuotationPage() {
                 disabled={
                   saving ||
                   !customerId ||
-                  lines.length === 0 || hasUnknownPrices
+                  lines.length === 0 || hasUnknownPrices || replacingTerms
                 }
               >
                 {saving

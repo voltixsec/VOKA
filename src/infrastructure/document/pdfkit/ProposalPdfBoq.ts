@@ -1,3 +1,4 @@
+import { commercialUnitLabel } from '@/lib/i18n/unit-labels';
 import {
   PROPOSAL_COLOR,
   PROPOSAL_TEXT,
@@ -820,10 +821,7 @@ export function drawProposalBoq(
           ),
         );
 
-      const localizedUnitName =
-        locale === "ar"
-          ? line.unitNameAr || line.unitName
-          : line.unitNameEn || line.unitName;
+      const localizedUnitName = commercialUnitLabel(line, locale === 'ar');
 
       const values = [
         localizedUnitName || "-",

@@ -182,6 +182,21 @@ function fetchForCreate() {
 }
 
 describe('proposed customer in the real quotation composer', () => {
+  it.each([true, false])('shows localized units (%s) but preserves canonical unit values on save', async (arabic) => {
+    isArabic = arabic;
+    const units = ['Unit', 'Package', 'Roll', 'Set', 'Point', 'TB'];
+    sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({ customer: { id: 'customer-1' }, proposal: { scopeType: 'SUPPLY_ONLY', currencyCode: 'KWD' }, lines: units.map((unitName) => ({ itemName: 'NVR', unitName, unitNameAr: unitName, unitNameEn: unitName, quantity: 1, unitPrice: 10 })) }));
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    await screen.findByRole('spinbutton', { name: arabic ? 'سعر الوحدة 6' : 'Unit price 6' });
+    const expected = arabic ? ['وحدة', 'حزمة', 'بكرة', 'طقم', 'نقطة', 'TB'] : units;
+    expected.forEach((label, i) => expect(screen.getByRole('textbox', { name: `${arabic ? 'الوحدة' : 'Unit'} ${i + 1}` })).toHaveValue(label));
+    fireEvent.submit(screen.getByRole('spinbutton', { name: arabic ? 'سعر الوحدة 1' : 'Unit price 1' }).closest('form')!);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(true));
+    expect(postBody(fetchMock).lines.map((line: { unitName: string }) => line.unitName)).toEqual(units);
+  });
+
   it.each(['resolved', 'proposed'] as const)('receives the same %s customer and owned fields after four real clarification turns', async (state) => {
     isArabic = true;
     const { run } = quotationFieldFixture({ names: state === 'proposed' ? [] : [nationalCustomer] });
@@ -201,7 +216,7 @@ describe('proposed customer in the real quotation composer', () => {
     expect(screen.getByDisplayValue(draft.canonicalProposal!.proposal.expiryDate!)).toBeTruthy();
     expect(screen.getByDisplayValue(draft.canonicalProposal!.proposal.subject)).toBeTruthy();
     expect(screen.getByDisplayValue('التواصل قبل التسليم')).toBeTruthy();
-    expect(screen.getByText('الشروط والأحكام').closest('label')?.querySelector('textarea')).toHaveValue(draft.canonicalProposal!.termsAndConditions!);
+    expect(screen.getByRole('textbox', { name: 'الشروط والأحكام' })).toHaveValue(draft.canonicalProposal!.termsAndConditions!);
     expect(screen.getByRole('note')).toHaveTextContent('الحسابات الهندسية');
     expect(screen.queryAllByText(nationalCustomer).length + screen.queryAllByDisplayValue(nationalCustomer).length).toBeGreaterThan(0);
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
@@ -285,6 +300,76 @@ describe('proposed customer in the real quotation composer', () => {
     expect(saved).toMatchObject({ customerId: 'created-customer', projectName: 'CEO edited factory', attentionName: 'Engineer Khaled', subjectEn: 'CEO edited subject', lines: [{ quantity: 36, unitPrice: 10 }] });
     expect(saved.expiryDate).toContain('2030-09-27');
     expect(push).toHaveBeenCalledWith('/dashboard/quotations/quotation-1');
+  });
+});
+
+describe('approved default terms replacement', () => {
+  const templates = [
+    { scopeType: 'SUPPLY_ONLY', termsAr: 'شروط الدفع: نقداً\nمدة التوريد: 14 يوم', termsEn: 'Payment: cash\nDelivery: 14 days' },
+    { scopeType: 'SUPPLY_AND_INSTALLATION', termsAr: 'شروط الدفع: 50% مقدم\nالضمان: سنة', termsEn: 'Payment: 50% advance\nWarranty: 1 year' },
+  ];
+  const termsInput = () => screen.getByRole('textbox', { name: isArabic ? 'الشروط والأحكام' : 'Terms and conditions' }) as HTMLTextAreaElement;
+  const replaceButton = () => screen.getByRole('button', { name: isArabic ? 'استبدال بالشروط الافتراضية' : 'Replace with default terms' });
+  const scopeInput = () => selectFor(isArabic ? 'نوع نطاق العمل' : 'Scope type');
+
+  it.each([true, false])('exactly replaces custom and empty terms and uses the latest selected scope (%s)', async (arabic) => {
+    isArabic = arabic;
+    const fallback = fetchForCreate();
+    let requests = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/companies/current/quotation-terms') {
+        requests++;
+        return Promise.resolve(response({ templates: requests === 1 ? [] : templates }));
+      }
+      return fallback(url, init);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    await screen.findByText(arabic ? 'نوع نطاق العمل' : 'Scope type');
+    fireEvent.change(scopeInput(), { target: { value: 'SUPPLY_ONLY' } });
+    fireEvent.change(termsInput(), { target: { value: 'Custom stale terms that must disappear' } });
+    fireEvent.click(replaceButton());
+    const expected = arabic ? templates[0].termsAr : templates[0].termsEn;
+    await waitFor(() => expect(termsInput()).toHaveValue(expected));
+    fireEvent.change(termsInput(), { target: { value: '' } });
+    fireEvent.click(replaceButton());
+    await waitFor(() => expect(termsInput()).toHaveValue(expected));
+    fireEvent.change(scopeInput(), { target: { value: 'SUPPLY_AND_INSTALLATION' } });
+    fireEvent.click(replaceButton());
+    await waitFor(() => expect(termsInput()).toHaveValue(arabic ? templates[1].termsAr : templates[1].termsEn));
+    expect(termsInput().value).not.toMatch(/Custom|14/);
+    expect(requests).toBe(4);
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('ignores a late template for an old scope and preserves current terms on failure/missing defaults', async () => {
+    const fallback = fetchForCreate();
+    let finish: (value: unknown) => void = () => undefined;
+    let requests = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url !== '/api/companies/current/quotation-terms') return fallback(url, init);
+      requests++;
+      if (requests === 2) return new Promise((resolve) => { finish = resolve; });
+      if (requests === 3) return Promise.resolve({ ok: false });
+      return Promise.resolve(response({ templates: [] }));
+    }));
+    render(<NewQuotationPage />);
+    await screen.findByText('Scope type');
+    fireEvent.change(scopeInput(), { target: { value: 'SUPPLY_ONLY' } });
+    fireEvent.change(termsInput(), { target: { value: 'Keep this text' } });
+    fireEvent.click(replaceButton());
+    fireEvent.change(scopeInput(), { target: { value: 'SUPPLY_AND_INSTALLATION' } });
+    finish(response({ templates }));
+    await waitFor(() => expect(replaceButton()).not.toBeDisabled());
+    expect(termsInput()).toHaveValue('Keep this text');
+    fireEvent.click(replaceButton());
+    await screen.findByText('Could not load approved terms. Current text was kept; please retry.');
+    expect(termsInput()).toHaveValue('Keep this text');
+    fireEvent.click(replaceButton());
+    await screen.findByText('No approved default terms for this scope and language. Current text was kept.');
+    expect(termsInput()).toHaveValue('Keep this text');
   });
 });
 

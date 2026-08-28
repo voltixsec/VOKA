@@ -3,6 +3,11 @@
 
 Architecture decisions are recorded here.
 
+## 2026-08-28 — Slice 2.1 quotation UX cleanup
+
+- Exact approved-default replacement, clean recipient framing, non-mutating numbered terms presentation and display-only unit localization are documented in the [Slice 2.1 contract](product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-21--professional-quotation-ux-cleanup).
+- AR/EN two-page 180-camera PDF samples visually inspected. Live CEO/tenant acceptance remains pending; engine/BOM/pricing redesign and deployment remain out of scope.
+
 ## 2026-08-28 — Professional quotation field ownership
 
 - Canonical commercial fields, trusted Notes/Terms, company-local validity anchoring and async customer-picker hydration are specified in the [Slice 2 contract](product/changes/2026-08-28-professional-quotation-field-ownership.md).

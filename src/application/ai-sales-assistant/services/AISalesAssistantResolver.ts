@@ -25,6 +25,7 @@ import { cleanCustomerEntity } from "./customer-entity";
 import { customerMatchScore } from "@/features/customers/domain/customer-discovery";
 import { companyToday, readCommercialClauses, resolveExpiry } from "./commercial-field-values";
 import { customerLocaleText, professionalQuotationText } from "./quotation-customer-text";
+import { cleanAttentionName } from "./attention-name";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -183,6 +184,7 @@ export class AISalesAssistantResolver {
       : null;
 
     const { subject, brief } = professionalQuotationText(intent, canonicalLines, sourceLocale);
+    const attentionName = cleanAttentionName(intent.attentionName);
     const defaultPayment = customer.paymentTermDays != null ? (sourceLocale === "ar" ? `الدفع خلال ${customer.paymentTermDays} يوم` : `Payment within ${customer.paymentTermDays} days`) : null;
     const companyTerms = intent.scopeType ? await this.dependencies.terms?.find(companyId, intent.scopeType, sourceLocale) : null;
     const today = validityBaseDate && resolveExpiry(validityBaseDate, "0000-01-01") ? validityBaseDate : companyToday(company.timezone);
@@ -239,7 +241,7 @@ export class AISalesAssistantResolver {
       fieldDefaults: { ...defaults, paymentTerms: defaultPayment ?? defaults.paymentTerms },
       fieldProvenance: {
         projectName: intent.projectName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
-        attentionName: intent.attentionName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
+        attentionName: attentionName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
         expiryDate: !expiryDate ? "NEEDS_CONFIRMATION" : intent.expiryDate || userClauses.expiryDate ? "USER_PROVIDED" : "COMPANY_DEFAULT",
         paymentTerms: !paymentTerms ? "NEEDS_CONFIRMATION" : userPayment ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT",
         delivery: !delivery ? "NEEDS_CONFIRMATION" : userDelivery ? "USER_PROVIDED" : "COMPANY_DEFAULT",
@@ -258,7 +260,7 @@ export class AISalesAssistantResolver {
         briefAr: sourceLocale === "ar" ? brief : null,
         briefEn: sourceLocale === "en" ? brief : null,
         projectName: intent.projectName ?? null,
-        attentionName: intent.attentionName ?? null,
+        attentionName,
         expiryDate,
         validityBaseDate: today,
         scopeType: intent.scopeType ?? null,

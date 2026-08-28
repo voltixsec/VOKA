@@ -1,4 +1,5 @@
 "use client";
+import { QuotationTerms } from '@/components/quotations/QuotationTerms';
 
 import Link from "next/link";
 import {
@@ -1477,11 +1478,7 @@ export default function QuotationDetailsPage() {
             {t("الشروط والأحكام", "Terms and conditions")}
           </p>
 
-          <p className="mt-3 whitespace-pre-wrap">
-            {isArabic
-              ? quote.termsAndConditionsAr
-              : quote.termsAndConditionsEn}
-          </p>
+          <div className="mt-3"><QuotationTerms text={(isArabic ? quote.termsAndConditionsAr : quote.termsAndConditionsEn) || ''} /></div>
         </Card>
       )}
     </section>
