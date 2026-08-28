@@ -27,6 +27,7 @@ import { companyToday, readCommercialClauses, resolveExpiry } from "./commercial
 import { customerLocaleText, professionalQuotationText } from "./quotation-customer-text";
 import { cleanAttentionName } from "./attention-name";
 import { hasCommercialCatalogPolicy, resolveCommercialCatalog } from "./commercial-catalog";
+import { normalizePaymentTerms } from "./payment-terms";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -197,7 +198,8 @@ export class AISalesAssistantResolver {
     const safeCompanyTerms = (companyTerms ?? '').split(/[\n;؛]+/).map(localized).filter(Boolean).join('\n');
     const defaults = readCommercialClauses(safeCompanyTerms, today);
     const userClauses = readCommercialClauses(intent.commercialSourceText, today);
-    const userPayment = localized(intent.paymentTerms ?? userClauses.paymentTerms);
+    const normalizedPayment = normalizePaymentTerms(intent.paymentTerms ?? userClauses.paymentTerms, sourceLocale);
+    const userPayment = localized(normalizedPayment.text);
     const userDelivery = localized(intent.delivery ?? userClauses.delivery);
     const userWarranty = localized(intent.warranty ?? userClauses.warranty);
     const paymentTerms = intent.paymentTerms || userClauses.paymentTerms ? userPayment : defaultPayment ?? defaults.paymentTerms;
@@ -219,6 +221,7 @@ export class AISalesAssistantResolver {
       expiryDate && `${sourceLocale === "ar" ? "صلاحية العرض" : "Quotation validity"}: ${expiryDate}`])]
       .filter(Boolean).join("\n") || null;
     const reviewRequired =
+      Boolean(normalizedPayment.review) ||
       customer.reviewRequired ||
       canonicalLines.length === 0 ||
       canonicalLines.some((line) => line.reviewRequired);
@@ -238,13 +241,14 @@ export class AISalesAssistantResolver {
       : null;
 
     return {
+      paymentTermsReview: normalizedPayment.review,
       commercialTerms: { paymentTerms, delivery, warranty },
       fieldDefaults: { ...defaults, paymentTerms: defaultPayment ?? defaults.paymentTerms },
       fieldProvenance: {
         projectName: intent.projectName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
         attentionName: attentionName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
         expiryDate: !expiryDate ? "NEEDS_CONFIRMATION" : intent.expiryDate || userClauses.expiryDate ? "USER_PROVIDED" : "COMPANY_DEFAULT",
-        paymentTerms: !paymentTerms ? "NEEDS_CONFIRMATION" : userPayment ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT",
+        paymentTerms: !paymentTerms || normalizedPayment.review ? "NEEDS_CONFIRMATION" : userPayment ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT",
         delivery: !delivery ? "NEEDS_CONFIRMATION" : userDelivery ? "USER_PROVIDED" : "COMPANY_DEFAULT",
         warranty: !warranty ? "NEEDS_CONFIRMATION" : userWarranty ? "USER_PROVIDED" : "COMPANY_DEFAULT",
       },

@@ -10,6 +10,7 @@ import { SALES_ASSISTANT_PROMPT_MAX_LENGTH } from "../dto/AISalesAssistantDto";
 import { completeEstimatedPricing } from "./completeEstimatedPricing";
 import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
 import { explicitCustomerNote } from "./quotation-customer-text";
+import { explicitPaymentTerms } from "./payment-terms";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -48,6 +49,7 @@ export class AISalesAssistantService {
     for (const field of ["paymentTerms", "delivery", "warranty", "expiryDate"] as const) {
       if (intent[field] && !prompt.includes(intent[field]!)) intent[field] = null;
     }
+    intent.paymentTerms = request.answers?.paymentTerms ?? explicitPaymentTerms(prompt) ?? intent.paymentTerms;
     for (const key of ["currencyCode"] as const) {
       if (request.retainedContext?.[key]) intent[key] = request.retainedContext[key];
     }

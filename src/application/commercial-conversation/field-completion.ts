@@ -30,6 +30,13 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
   if (first) {
     const [ar, en] = questions[first.key] ?? [`يرجى تحديد: ${first.labelAr}.`, `Please provide: ${first.labelEn}.`];
     activeQuestion = { field: fieldTarget(first), ar, en, allowNotApplicable: ["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(first.key) };
+    const paymentReview = draft.canonicalProposal?.paymentTermsReview;
+    if (first.key === "paymentTerms" && paymentReview) {
+      activeQuestion = { ...activeQuestion,
+        ar: paymentReview.reason === 'TOTAL_NOT_100' ? `مجموع نسب الدفع المدخلة ${paymentReview.totalPercentage}% وليس 100%. ما جدول الدفع الكامل؟` : 'يرجى تحديد نسبة كل دفعة وموعدها بوضوح؛ لم يتم تعديل النسب أو استكمالها تلقائياً.',
+        en: paymentReview.reason === 'TOTAL_NOT_100' ? `The supplied payment percentages total ${paymentReview.totalPercentage}%, not 100%. What is the complete payment schedule?` : 'Please specify each payment percentage and milestone clearly; no percentages were changed or filled in automatically.',
+      };
+    }
     if (first.key === "systemInput" && first.sourceField === "accessDirection") activeQuestion.options = [
       { ar: "دخول فقط", en: "Entry only", value: "ENTRY_ONLY" },
       { ar: "دخول وخروج", en: "Entry and exit", value: "ENTRY_EXIT" },

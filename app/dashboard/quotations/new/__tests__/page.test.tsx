@@ -182,6 +182,30 @@ function fetchForCreate() {
 }
 
 describe('proposed customer in the real quotation composer', () => {
+  it.each([true, false])('receives canonical numeric payment stages and resolved validity after actual clarification (%s)', async (arabic) => {
+    isArabic = arabic;
+    const { run } = quotationFieldFixture({ locale: arabic ? 'ar' : 'en', terms: null });
+    let draft = await run(quotationPrompt);
+    draft = await run(arabic ? 'مصنع الشويخ' : 'Warehouse', draft);
+    draft = await run(arabic ? 'المهندس خالد' : 'Engineer Khaled', draft);
+    draft = await run('أسبوع من تاريخ العرض', draft, { replySource: 'VOICE' });
+    draft = await run('70% مقدم و30% عند التسليم', draft, { replySource: 'VOICE' });
+    draft = await run(arabic ? '14 يوم' : '14 days', draft);
+    draft = await run(arabic ? 'سنة' : '1 year', draft);
+    expect(draft.status).toBe('READY_FOR_REVIEW');
+    sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify(draft.canonicalProposal));
+    const fetchMock = fetchForCreate();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    const expiry = draft.canonicalProposal!.proposal.expiryDate!;
+    await screen.findByDisplayValue(expiry);
+    const terms = screen.getByRole('textbox', { name: arabic ? 'الشروط والأحكام' : 'Terms and conditions' });
+    expect(terms).toHaveValue(draft.canonicalProposal!.termsAndConditions!);
+    expect((terms as HTMLTextAreaElement).value).toContain(arabic ? '70% دفعة مقدمة، و30% عند التسليم' : '70% advance, 30% upon delivery');
+    expect((terms as HTMLTextAreaElement).value).not.toMatch(arabic ? /[a-z]/i : /[\u0600-\u06ff]/);
+    expect(screen.getByRole('button', { name: arabic ? 'إنشاء العرض' : 'Create proposal' })).toBeDisabled();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
   it('preserves matched HDD identity/code/count but excludes its internal allocation from the saved quotation', async () => {
     sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
       customer: { id: 'customer-1' }, proposal: { scopeType: 'SUPPLY_ONLY', currencyCode: 'KWD' },

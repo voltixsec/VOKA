@@ -3,6 +3,12 @@
 
 Architecture decisions are recorded here.
 
+## 2026-08-28 — Slice 2.2 payment/validity normalization
+
+- Explicit user percentages remain numeric and retain their supplied schedule. Invalid/incomplete splits request clarification; approved defaults and exact Terms replacement remain unchanged.
+- Week-based validity now resolves directly from the known quotation date; month durations retain calendar-month semantics. See [Slice 2.2 behavior and manual acceptance](product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-22--payment-percentages-and-validity).
+- SmartSystemBuilder, commercial BOM, pricing, drawing, schema, main and deployment are unchanged. Human approval remains mandatory.
+
 ## 2026-08-28 — Slice 3 engineering → commercial BOM
 
 - Added explicit commercial requirements between deterministic engineering and tenant catalog resolution. Bounded CCTV capacity/unit matching preserves real IDs, codes, trusted prices and ambiguity; storage quantities remain preliminary, never verified disk designs.

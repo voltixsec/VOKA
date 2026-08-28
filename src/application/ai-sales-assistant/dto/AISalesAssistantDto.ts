@@ -13,6 +13,7 @@ export interface CommercialSelection { customer?: { id: string; name: string }; 
 export type CommercialAnswerField = "customerMention" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty" | "notes" | "cameraCount" | "storageDays" | "bitrateMbps" | "cableMetersPerCamera";
 export type CommercialAnswers = Partial<Record<CommercialAnswerField, string>>;
 export type CommercialTerms = { paymentTerms: string | null; delivery: string | null; warranty: string | null };
+export type PaymentTermsReview = { reason: 'TOTAL_NOT_100' | 'MALFORMED' | 'UNTRANSLATED'; totalPercentage: number | null };
 export type SystemFieldAnswers = Record<string, NonNullable<SystemInputParameter["value"]>>;
 export type SalesItemIntent =
   | "PRODUCT"
@@ -171,6 +172,8 @@ export interface DraftProposalFinancials {
 }
 
 export interface SalesAssistantDraftProposal {
+  /** Internal clarification diagnostic; never inserted into customer-facing Terms. */
+  paymentTermsReview?: PaymentTermsReview;
   commercialTerms?: CommercialTerms;
   fieldDefaults?: { expiryDate: string | null; paymentTerms: string | null; delivery: string | null; warranty: string | null };
   fieldProvenance?: Partial<Record<CommercialAnswerField, CommercialProvenance>>;

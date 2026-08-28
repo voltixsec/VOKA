@@ -10,9 +10,13 @@ const validityLabel = /^(?:مدة\s+صلاحية(?:\s+العرض)?|صلاحية\
 
 /** Bounded, unambiguous durations; a month means a calendar month, not 30 days. */
 export function parseValidityDuration(value: string): ValidityDuration | null {
-  const text = latinDigits(value.trim()).replace(/[\u064B-\u065F\u0670]/g, '').replace(validityLabel, '').replace(/^(?:لمدة|خلال|for)\s*/i, '').replace(/\s+/g, ' ').trim();
+  const text = latinDigits(value.trim()).replace(/[\u064B-\u065F\u0670]/g, '').replace(validityLabel, '').replace(/^(?:لمدة|خلال|for)\s*/i, '').replace(/\s+/g, ' ').replace(/[.،,]+$/, '').trim()
+    .replace(/\s+(?:من\s+تاريخ\s+(?:العرض|عرض\s+السعر|إصدار\s+العرض|اصدار\s+العرض)|from\s+(?:the\s+)?(?:quotation|quote|issue)\s+date)$/i, '').trim();
+  if (/^(?:أسبوع|اسبوع|أسبوع واحد|اسبوع واحد|one week|1 week)$/i.test(text)) return { value: 7, unit: 'DAY' };
   if (/^(?:أسبوعين|اسبوعين|أسبوعان|اسبوعان|two weeks|2 weeks)$/i.test(text)) return { value: 14, unit: 'DAY' };
   if (/^(?:شهر|شهر واحد|one month|1 month)$/i.test(text)) return { value: 1, unit: 'MONTH' };
+  if (/^(?:شهرين|شهران|two months|2 months)$/i.test(text)) return { value: 2, unit: 'MONTH' };
+  if (/^(?:ثلاثين|ثلاثون) (?:يوم|يوما|أيام|ايام)$/.test(text)) return { value: 30, unit: 'DAY' };
   if (/^(?:خمستاشر|خمسة عشر|خمسه عشر) (?:يوم|يوما|أيام|ايام)$/.test(text)) return { value: 15, unit: 'DAY' };
   const days = text.match(/^(\d{1,4})(?:\s*(?:يوما?|أيام|ايام|days?))?$/i)?.[1];
   return days && Number(days) >= 1 && Number(days) <= 3650 ? { value: Number(days), unit: 'DAY' } : null;

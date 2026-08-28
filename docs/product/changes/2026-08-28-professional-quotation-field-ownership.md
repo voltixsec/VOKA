@@ -131,3 +131,60 @@ build lint warnings and caught localization database warnings remain. The full
 suite and targeted API rerun used a dummy non-production database URL. No schema,
 dependency or generated-client changes were needed. Live CEO acceptance remains
 pending; this checkpoint is not a release/deployment approval.
+
+## Slice 2.2 — Payment percentages and validity
+
+Narrow owner-authorized correction from feature HEAD
+`840668bfaa9444dcde07835dbe36247e78366c3e` (after Slice 3).
+
+- Actual user payment wording takes precedence over abbreviated/paraphrased
+  provider extraction. A deterministic application formatter preserves numeric
+  percentages and stage order: `70% دفعة مقدمة، و30% عند التسليم` / `70% advance,
+  30% upon delivery`. Arabic/Persian digits and percent glyphs normalize to numeric
+  percentages; no amount or missing stage is invented.
+- Complete two-/three-stage schedules and explicit 100% advance resolve directly.
+  Invalid totals, missing milestones and malformed splits carry an internal
+  `paymentTermsReview` diagnostic, remain in the payment clarification field and
+  cannot make the draft ready. Supplied amounts stay unchanged. An explicitly
+  supplied “balance” remains balance wording, never a guessed numeric percentage.
+- Only known milestone phrases are translated. Additional same-language
+  qualifications are preserved; unknown cross-language contractual wording needs
+  clarification. No percentage is added to cash/non-percentage terms.
+- This validation concerns explicit user payment schedules; approved company/
+  customer defaults and the exact default-Terms replacement flow are unchanged.
+  An invalid explicit answer never silently falls back to those defaults.
+- `أسبوع من تاريخ العرض` / `أسبوع` resolve to seven days; two weeks, 15 days,
+  Egyptian `خمستاشر يوم` and `ثلاثين يوم` resolve directly. The existing precise
+  calendar-month policy is retained and extended to `شهرين` (two calendar months),
+  with end-of-month clamping. Unknown anchors/ambiguous durations remain pending.
+- Existing field targeting writes these answers into canonical payment/expiry;
+  a resolved expiry is persisted as an absolute date against the known issue/base
+  date. Later replies do not re-ask or shift it. The actual AR/EN quotation composer
+  receives those canonical values without any form implementation change.
+
+SmartSystemBuilder, Engineering → Commercial BOM, pricing and drawing are unchanged.
+Regression coverage retains customer/project/attention, professional Subject/Brief,
+clean Notes, trusted Terms, unknown-price save blocking and human review. No schema,
+dependency, main, merge or deployment changes.
+
+Manual CEO retest:
+
+1. Answer active validity with `أسبوع من تاريخ العرض`; check expiry = issue date +
+   seven days and that validity is not asked again. Repeat with two weeks, 15 days
+   and one/two calendar months.
+2. Answer payment with 70/30, 50/50 and 30/40/30 milestone schedules in AR and EN;
+   confirm numeric percentages, concise wording and the next real missing field.
+3. Supply 70/20 or an incomplete stage; confirm review/clarification without any
+   silent adjustment. Correct the schedule and verify the review diagnostic clears.
+4. Open the quotation for human review; verify exact payment/expiry carryover,
+   unchanged customer/BOM/Notes/default-Terms replacement and unknown-price blocking.
+
+Slice 2.2 validation: 305 focused tests passed across 29 files, including the
+existing Slice 1/2/3 regressions. Standalone typecheck passed; an earlier result
+handle expired during a status interruption, so typecheck was rerun for a
+confirmed exit result. Prisma schema validation and `git diff --check` passed.
+The single full-suite run passed: 1,556 tests, two existing skips (230 passed files,
+one skipped). Known caught best-effort localization/database warnings remain.
+The single production build passed, including its type/lint checks; only existing
+hook-dependency and combobox ARIA warnings remain. No production code changed
+after these gates. Live CEO/browser acceptance remains pending.

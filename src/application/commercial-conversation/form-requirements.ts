@@ -51,7 +51,7 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
         requireDecision("attentionName", canonicalProposal?.proposal.attentionName, "بعناية", "Attention to");
       }
       if (operation === "QUOTATION") requireDecision("expiryDate", canonicalProposal?.proposal.expiryDate, "صلاحية العرض", "Quotation validity");
-      requireDecision("paymentTerms", canonicalProposal?.commercialTerms?.paymentTerms, "شروط الدفع", "Payment terms");
+      requireDecision("paymentTerms", canonicalProposal?.paymentTermsReview ? null : canonicalProposal?.commercialTerms?.paymentTerms, "شروط الدفع", "Payment terms");
       if (operation === "QUOTATION" || operation === "CONTRACT") {
         requireDecision("delivery", canonicalProposal?.commercialTerms?.delivery, "مدة التسليم", "Delivery timing");
         requireDecision("warranty", canonicalProposal?.commercialTerms?.warranty, "الضمان", "Warranty");

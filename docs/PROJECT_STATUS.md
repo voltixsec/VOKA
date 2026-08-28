@@ -2,7 +2,7 @@
 
 Current Product Frontier: **V1 Product Completion & Globalization**
 
-Feature checkpoint (2026-08-28): [Slice 3 engineering → commercial BOM](product/changes/2026-08-28-engineering-commercial-bom.md), preserving Slice 2/2.1 field ownership and review UX.
+Feature checkpoint (2026-08-28): [Slice 2.2 payment percentages and validity](product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-22--payment-percentages-and-validity), preserving Slice 3 commercial BOM and existing field ownership/review UX.
 Unmerged; manual CEO acceptance remains required. No release/deployment claim.
 
 Status: **IN PROGRESS / NOT RELEASE READY.** The Product Integrity regression
