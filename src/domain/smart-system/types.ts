@@ -25,6 +25,8 @@ export interface SystemComponent {
   unit: string;
   provenance: ProvenanceType;
   formulaExplanation?: string;
+  /** Arabic rendering of the same calculation; never a separate calculation. */
+  formulaExplanationAr?: string;
   category?: string;
 }
 

@@ -79,6 +79,8 @@ describe("Commercial Brain", () => {
     const derived = proposal.lines.filter((line) => line.quantitySource === "RULE_CALCULATED" || line.quantitySource === "AI_ESTIMATED");
     expect(derived.length).toBeGreaterThanOrEqual(5);
     expect(derived.every((line) => Boolean(line.formulaExplanation))).toBe(true);
+    expect(derived.every((line) => Boolean(line.formulaExplanationAr))).toBe(true);
+    expect(derived.every((line) => Boolean(line.itemNameAr && line.itemNameEn))).toBe(true);
     const byKey = (key: string) => proposal.lines.find((line) => line.componentKey === key)!;
     expect(byKey("NVR_RECORDER").formulaExplanation).toContain("64 channels");
     expect(byKey("POE_SWITCH").formulaExplanation).toContain("48 ports - 2 reserved uplink ports");
@@ -87,6 +89,7 @@ describe("Commercial Brain", () => {
     expect(byKey("RACK_CABINET")).toMatchObject({ quantitySource: "AI_ESTIMATED", quantity: 1 });
     expect(byKey("RACK_CABINET").formulaExplanation).toContain("single collection point");
     expect(byKey("CAT6_CABLING").formulaExplanation).toContain("305m roll");
+    expect(byKey("CAT6_CABLING").formulaExplanationAr).toContain("305 متر/بكرة");
     expect(proposal.estimateNotice).toBe(true);
   });
   it("retains 86 cameras and factory/area/coverage, uses deterministic multi-NVR rules with an empty catalog", async () => {

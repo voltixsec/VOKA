@@ -5,24 +5,25 @@ import { EngineeringQuantityDetails, type EngineeringReviewLine } from "../Engin
 import { EstimateNotice } from "../EstimateNotice";
 
 const lines: EngineeringReviewLine[] = [
-  { itemName: "Storage capacity", quantity: 94, unitName: "TB", quantitySource: "RULE_CALCULATED", formulaExplanation: "36 cameras × 8 Mbps × 30 days; capacity only, not a disk count." },
-  { itemName: "Cabinet", quantity: 1, unitName: "Unit", quantitySource: "AI_ESTIMATED", formulaExplanation: "Estimated one shared cabinet; dimensions and locations require review." },
+  { itemName: "Storage capacity", itemNameAr: "سعة التخزين", itemNameEn: "Storage capacity", quantity: 94, unitName: "TB", quantitySource: "RULE_CALCULATED", formulaExplanation: "36 cameras × 8 Mbps × 30 days; capacity only, not a disk count.", formulaExplanationAr: "36 كاميرا × 8 ميجابت/ثانية × 30 يوم؛ سعة فقط وليست عدد أقراص." },
+  { itemName: "Cabinet", itemNameAr: "كابينة", itemNameEn: "Cabinet", quantity: 1, unitName: "Unit", quantitySource: "AI_ESTIMATED", formulaExplanation: "Estimated one shared cabinet; dimensions and locations require review.", formulaExplanationAr: "كابينة مشتركة واحدة تقديرياً؛ تحتاج الأبعاد والمواقع إلى مراجعة." },
 ];
 
 describe("engineering quantity explanations", () => {
   it.each([false, true])("exposes original calculations/assumptions in closed details and preserves the notice (Arabic=%s)", (isArabic) => {
     const { container } = render(<><EstimateNotice isArabic={isArabic} /><EngineeringQuantityDetails lines={lines} isArabic={isArabic} /></>);
     expect(container.querySelector("details")?.open).toBe(false);
-    expect(screen.getByText(lines[0].formulaExplanation!)).toBeTruthy();
-    expect(screen.getByText(lines[1].formulaExplanation!)).toBeTruthy();
+    expect(screen.getByText((isArabic ? lines[0].formulaExplanationAr : lines[0].formulaExplanation)!)).toBeTruthy();
+    expect(screen.getByText((isArabic ? lines[1].formulaExplanationAr : lines[1].formulaExplanation)!)).toBeTruthy();
     expect(screen.getByText(isArabic ? "كمية تقديرية — تحتاج مراجعة" : "Estimated quantity — review required")).toBeTruthy();
     expect(screen.getByRole("note").textContent).toContain(isArabic ? "يلزم مراجعتها قبل الاعتماد" : "Review is required before approval");
     expect(container.textContent).toContain("94 TB");
+    expect(container.textContent?.replace(/TB/g, "")).not.toMatch(isArabic ? /[a-z]/i : /[\u0600-\u06ff]/);
   });
 
   it("does not invent an explanation when an older draft lacks one", () => {
     render(<EngineeringQuantityDetails lines={[{ ...lines[1], formulaExplanation: undefined }]} isArabic={false} />);
-    expect(screen.getByText("Calculation/assumption details were not supplied; human confirmation is required.")).toBeTruthy();
+    expect(screen.getByText("Calculation/assumption details are unavailable in English; human confirmation is required.")).toBeTruthy();
   });
 
   it("distinguishes engineering capacity units from a different catalog unit", () => {

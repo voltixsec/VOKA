@@ -47,7 +47,7 @@ describe("commercial conversational clarification", () => {
     await screen.findByText("Who is the customer?");
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Customer is Al Noor" } });
     fireEvent.click(screen.getByRole("button", { name: "Understand" }));
-    await screen.findByText("READY FOR REVIEW");
+    await screen.findByText("Draft ready for review");
     const body = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
     expect(body.draft.id).toBe("same-draft");
     expect(body.replySource).toBe("TEXT");

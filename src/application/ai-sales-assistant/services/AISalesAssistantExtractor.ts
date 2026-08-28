@@ -128,6 +128,8 @@ export class AISalesAssistantExtractor {
 
         const lines: ExtractedLineItem[] = calcResult.components.map((c) => ({
           text: sourceLocale === "ar" ? c.nameAr : c.nameEn,
+          itemNameAr: c.nameAr,
+          itemNameEn: c.nameEn,
           // Engineering audit detail remains separate from the commercial line
           // description and is not copied into the quotation composer.
           description: null,
@@ -137,6 +139,7 @@ export class AISalesAssistantExtractor {
           typeIntent: c.itemType === "SERVICE" ? "SERVICE" : "PRODUCT",
           provenance: c.provenance,
           formulaExplanation: c.formulaExplanation,
+          formulaExplanationAr: c.formulaExplanationAr,
           componentKey: c.componentKey,
         }));
 

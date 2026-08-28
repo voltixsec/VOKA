@@ -27,6 +27,8 @@ export interface AISalesAssistantRequest {
 
 export interface ExtractedLineItem {
   text: string;
+  itemNameAr?: string;
+  itemNameEn?: string;
   description?: string | null;
   quantity?: number | null;
   requestedUnitText?: string | null;
@@ -36,6 +38,7 @@ export interface ExtractedLineItem {
   warnings?: string[];
   provenance?: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
   formulaExplanation?: string;
+  formulaExplanationAr?: string;
   componentKey?: string;
 }
 
@@ -129,6 +132,7 @@ export interface ResolvedLineItem {
   reviewRequired: boolean;
   provenance?: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
   formulaExplanation?: string;
+  formulaExplanationAr?: string;
   componentKey?: string;
 }
 

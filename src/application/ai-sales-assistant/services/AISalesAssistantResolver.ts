@@ -456,6 +456,7 @@ export class AISalesAssistantResolver {
       reviewRequired: extracted.quantity == null,
       provenance: extracted.provenance,
       formulaExplanation: extracted.formulaExplanation,
+      formulaExplanationAr: extracted.formulaExplanationAr,
       componentKey: extracted.componentKey,
     };
   }
@@ -483,8 +484,8 @@ export class AISalesAssistantResolver {
       catalogItemId: null,
       catalogCandidates: candidates,
       itemName: extracted.text,
-      itemNameAr: sourceLocale === "ar" ? extracted.text : null,
-      itemNameEn: sourceLocale === "en" ? extracted.text : null,
+      itemNameAr: extracted.itemNameAr ?? (sourceLocale === "ar" ? extracted.text : null),
+      itemNameEn: extracted.itemNameEn ?? (sourceLocale === "en" ? extracted.text : null),
       description: extracted.description ?? null,
       descriptionAr:
         sourceLocale === "ar" ? extracted.description ?? null : null,
@@ -505,6 +506,7 @@ export class AISalesAssistantResolver {
       reviewRequired: true,
       provenance: extracted.provenance,
       formulaExplanation: extracted.formulaExplanation,
+      formulaExplanationAr: extracted.formulaExplanationAr,
       componentKey: extracted.componentKey,
     };
   }

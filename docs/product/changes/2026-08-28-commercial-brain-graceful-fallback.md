@@ -136,3 +136,42 @@ Drawing behavior, quotation revision rules, or estimate-notice copy changed.
 Acceptance-fix validation: 102 focused tests passed; full suite 1,329 passed /
 2 skipped. Typecheck, production build, Prisma validation and whitespace checks
 passed. Existing lint warnings remain. Live CEO retesting is still required.
+
+## Compact composer and locale-pure presentation
+
+The commercial assistant now renders controls, editable textarea and the current
+result in that DOM order inside one composition with an 8px gap. The extra
+controls card and its padding are removed; mobile selectors have stable half-row
+widths, labels above the fields and 44px touch targets. The header is shorter.
+The unused legacy proposal panel is removed; the canonical conversational result
+remains the only review surface.
+
+Document/build options, system status, transcription state, errors, sample
+prompts and suggestion/customer-chip replies use the active Arabic/English
+locale. Internal enums remain unchanged. Transcript readiness is presented as
+“النص جاهز للفهم” / “Transcript ready”, separate from
+“المسودة جاهزة للمراجعة” / “Draft ready for review”.
+User-entered text, customer identities and technical tokens are not rewritten.
+Existing Create/Create-and-edit form controls already select localized labels.
+
+Existing deterministic templates carry an Arabic explanation alongside the
+original English explanation, using the same numerical evidence. Both names and
+explanations survive extraction/resolution; the UI selects the requested locale.
+Legacy explanations unavailable in that locale receive an explicit localized
+notice, never an invented translation. Quantities, formulas, pricing, readiness,
+tenant resolution and the permanent estimate notice are unchanged.
+
+Regression coverage includes both locales across all voice states, accessible
+labels/options/placeholders, errors, samples, chips, required/optional fields,
+expanded engineering details, numerical explanation parity and responsive
+composition guards. An isolated visual fixture at
+`scripts/qa/commercial-assistant-preview` renders the real component with static
+responses and no database/AI/authentication access. Browser checks verified 8px
+control/input/result gaps and no horizontal overflow at desktop and narrow mobile
+widths in both directions. The fixture does not mount Next.js font loading;
+production Cairo loading and live microphone/customer scenarios remain manual
+CEO checks. No schema migration, provider, deployment or merge is included.
+
+Final validation: 115 focused tests passed; full suite 1,362 passed / 2 skipped.
+Typecheck, production build, Prisma validation and whitespace checks passed.
+Build reports only existing lint warnings outside this slice.

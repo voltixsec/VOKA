@@ -41,7 +41,7 @@ describe("SalesAssistantPage", () => {
     fireEvent.click(generateBtn);
 
     await waitFor(() => {
-      expect(screen.getByText("READY FOR REVIEW")).toBeTruthy();
+      expect(screen.getByText("Draft ready for review")).toBeTruthy();
     });
     expect(screen.getAllByText(/Kuwait National Telecom/).length).toBeGreaterThan(1);
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain("Kuwait National Telecom");
@@ -51,7 +51,7 @@ describe("SalesAssistantPage", () => {
     expect(requestBody).toMatchObject({ documentMode: "AUTO", buildMode: "AUTO" });
 
     fireEvent.change(textarea, { target: { value: "A changed request" } });
-    expect(screen.queryByText("READY FOR REVIEW")).toBeNull();
+    expect(screen.queryByText("Draft ready for review")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "New Request" }));
     expect((textarea as HTMLTextAreaElement).value).toBe("");
     expect(sessionStorage.getItem("voka_commercial_conversation_draft")).toBeNull();

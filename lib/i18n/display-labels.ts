@@ -1,6 +1,22 @@
 export type DisplayLocale = 'ar' | 'en';
 
 const labels: Record<string, Record<DisplayLocale, string>> = {
+  AUTO: { ar: 'تلقائي', en: 'Auto' },
+  CATALOG_ONLY: { ar: 'الكتالوج فقط', en: 'Catalog only' },
+  SUPPLY_INSTALL_SYSTEM: { ar: 'نظام توريد وتركيب', en: 'Supply and install system' },
+  DRAWING: { ar: 'مخطط', en: 'Drawing' },
+  DRAWING_TAKEOFF: { ar: 'حصر كميات المخطط', en: 'Drawing takeoff' },
+  TRANSCRIPT_READY: { ar: 'النص جاهز للفهم', en: 'Transcript ready' },
+  READY_FOR_REVIEW: { ar: 'المسودة جاهزة للمراجعة', en: 'Draft ready for review' },
+  NEEDS_CLARIFICATION: { ar: 'يحتاج معلومات', en: 'Needs information' },
+  RECORDING: { ar: 'جاري التسجيل', en: 'Recording' },
+  TRANSCRIBING: { ar: 'جاري التفريغ', en: 'Transcribing' },
+  LISTENING: { ar: 'جاري الاستماع', en: 'Listening' },
+  PROCESSING: { ar: 'جاري المعالجة', en: 'Processing' },
+  UNAVAILABLE: { ar: 'غير متاح', en: 'Unavailable' },
+  PERMISSION_DENIED: { ar: 'إذن الميكروفون مرفوض', en: 'Microphone permission denied' },
+  ERROR: { ar: 'حدث خطأ', en: 'Error' },
+  INVALID_INPUT: { ar: 'مدخلات غير صالحة', en: 'Invalid input' },
   REVIEW_REQUIRED: { ar: 'بحاجة إلى مراجعة', en: 'Review required' },
   CONFIRMED: { ar: 'مؤكد', en: 'Confirmed' },
   CONVERTED: { ar: 'تم إنشاء المستند', en: 'Document created' },

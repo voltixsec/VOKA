@@ -104,7 +104,7 @@ describe("Voice Input Transport Integration Tests", () => {
     expect(textarea).toBeTruthy();
 
     expect(screen.getByTitle(/not supported/i)).toBeTruthy();
-    expect(screen.getByText(/UNAVAILABLE/)).toBeTruthy();
+    expect(screen.getByText("Unavailable")).toBeTruthy();
 
     fireEvent.change(textarea, { target: { value: "Direct text input works fine" } });
     expect(textarea.value).toBe("Direct text input works fine");
@@ -298,16 +298,17 @@ describe("Voice Input Transport Integration Tests", () => {
       mockRecognizer.emitError("PERMISSION_DENIED", "Microphone permission denied.");
     });
 
-    expect(screen.getByText(/PERMISSION_DENIED/)).toBeTruthy();
-    expect(screen.getByText(/Microphone permission denied/i)).toBeTruthy();
+    expect(screen.getByText("Microphone permission denied")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Please allow microphone access");
 
     // Emit provider error
     act(() => {
       mockRecognizer.emitError("ERROR", "Network recognition error");
     });
 
-    expect(screen.getByText(/ERROR/)).toBeTruthy();
-    expect(screen.getByText(/Network recognition error/i)).toBeTruthy();
+    expect(screen.getByText("Error")).toBeTruthy();
+    expect(screen.getByText("An error occurred during voice recognition.")).toBeTruthy();
+    expect(screen.queryByText(/Network recognition error/i)).toBeNull();
   });
 
   it("privacy: leaving the page terminates the active recognition session", () => {
