@@ -6,6 +6,7 @@ import type {
   SalesAssistantSourceLocale,
   SalesItemIntent,
   CommercialAnswers,
+  SystemFieldAnswers,
 } from "../dto/AISalesAssistantDto";
 import { SALES_ASSISTANT_MAX_LINES } from "../dto/AISalesAssistantDto";
 import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesIntent";
@@ -30,6 +31,7 @@ export class AISalesAssistantExtractor {
     sourceLocale: SalesAssistantSourceLocale,
     buildMode: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM" = "AUTO",
     answers: CommercialAnswers = {},
+    systemAnswers: SystemFieldAnswers = {},
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
     let understood: ExtractedSalesIntent | null = null;
@@ -63,8 +65,13 @@ export class AISalesAssistantExtractor {
 
     // Engineering-system intent is always resolved by server-owned rules. The
     // untrusted AI provider must never get authority over component quantities.
-    if (allowSmartSystems && this.smartSystemBuilder.detectSystemIntent(effectivePrompt)) {
-      const parameters = { ...(cameraFact ? { cameraCount: Number(cameraFact.value) } : {}), ...Object.fromEntries(Object.entries(answers).filter(([key]) => ["cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"].includes(key)).map(([key, value]) => [key, Number(value)])) };
+    const detectedSystem = allowSmartSystems ? this.smartSystemBuilder.detectSystemIntent(effectivePrompt) : null;
+    if (detectedSystem) {
+      // The existing template declares valid input names and validates their
+      // values. Conversation state cannot introduce engineering parameters.
+      const declaredInputs = new Set(this.smartSystemBuilder.calculateSystem(detectedSystem.systemType, detectedSystem.extractedParameters)?.inputs.map((input) => input.name));
+      const targetedInputs = Object.fromEntries(Object.entries(systemAnswers).filter(([key, value]) => declaredInputs.has(key) && ["string", "number", "boolean"].includes(typeof value)));
+      const parameters = { ...(cameraFact ? { cameraCount: Number(cameraFact.value) } : {}), ...targetedInputs, ...Object.fromEntries(Object.entries(answers).filter(([key]) => ["cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"].includes(key)).map(([key, value]) => [key, Number(value)])) };
       const deterministic = this.heuristicExtract(effectivePrompt, sourceLocale, true, parameters);
       const intent = { ...understood, ...deterministic, customerMention, subject: understood?.subject ?? deterministic.subject, brief: understood?.brief ?? trimmed, paymentTerms: understood?.paymentTerms, warranty: understood?.warranty, projectName: understood?.projectName, documentType: understood?.documentType, facts };
       return {
@@ -107,7 +114,7 @@ export class AISalesAssistantExtractor {
     prompt: string,
     sourceLocale: SalesAssistantSourceLocale,
     allowSmartSystems = true,
-    parameters: Record<string, number> = {},
+    parameters: SystemFieldAnswers = {},
   ): ExtractedSalesIntent {
     const systemMatch = allowSmartSystems ? this.smartSystemBuilder.detectSystemIntent(prompt) : null;
 

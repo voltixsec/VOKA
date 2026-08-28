@@ -15,6 +15,7 @@ import type {
   SalesAssistantDraftProposal,
   SalesAssistantSourceLocale,
   CommercialSelection,
+  CommercialAnswerField,
 } from "../dto/AISalesAssistantDto";
 import {
   SALES_ASSISTANT_MAX_CANDIDATES,
@@ -22,6 +23,7 @@ import {
 import type { AISalesAssistantPricingPort } from "../ports/AISalesAssistantPricingPort";
 import { cleanCustomerEntity } from "./customer-entity";
 import { customerMatchScore } from "@/features/customers/domain/customer-discovery";
+import { companyToday, readCommercialClauses, resolveExpiry } from "./commercial-field-values";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -48,6 +50,7 @@ export class AISalesAssistantResolver {
     extractionMode: "provider" | "heuristic",
     extractionWarnings: string[] = [],
     selection?: CommercialSelection,
+    notApplicable: CommercialAnswerField[] = [],
   ): Promise<SalesAssistantDraftProposal> {
     const company = await this.dependencies.companies.findById(companyId);
     if (!company) {
@@ -181,10 +184,23 @@ export class AISalesAssistantResolver {
     const brief = intent.brief ?? intent.scopeOfWork ?? intent.lines.map((line) => `${line.quantity ?? "?"} × ${line.text}`).join("، ");
     const defaultPayment = customer.paymentTermDays != null ? (sourceLocale === "ar" ? `الدفع خلال ${customer.paymentTermDays} يوم` : `Payment within ${customer.paymentTermDays} days`) : null;
     const companyTerms = intent.scopeType ? await this.dependencies.terms?.find(companyId, intent.scopeType, sourceLocale) : null;
-    // Do not concatenate potentially conflicting payment policies. Explicit/user and customer terms win.
-    const terms = [intent.paymentTerms ?? defaultPayment ?? companyTerms, intent.warranty]
-      .filter((value): value is string => Boolean(value))
-      .join("\n") || null;
+    const today = companyToday(company.timezone);
+    const defaults = readCommercialClauses(companyTerms, today);
+    const userClauses = readCommercialClauses(intent.brief, today);
+    const paymentTerms = intent.paymentTerms ?? userClauses.paymentTerms ?? defaultPayment ?? defaults.paymentTerms;
+    const delivery = notApplicable.includes("delivery") ? null : intent.delivery ?? userClauses.delivery ?? defaults.delivery;
+    const warranty = notApplicable.includes("warranty") ? null : intent.warranty ?? defaults.warranty;
+    const expiryDate = notApplicable.includes("expiryDate") ? null : (intent.expiryDate ? resolveExpiry(intent.expiryDate, today) : userClauses.expiryDate ?? defaults.expiryDate);
+    // Keep unrelated company clauses, replacing only labelled policies overridden
+    // by explicit answers/customer defaults. Never concatenate conflicting policies.
+    const otherTerms = (companyTerms ?? "").split(/[\n;؛]+/).filter((part) => {
+      const parsed = readCommercialClauses(part, today);
+      return !Object.values(parsed).some(Boolean);
+    });
+    const terms = [...new Set([...otherTerms, paymentTerms,
+      delivery && `${sourceLocale === "ar" ? "التسليم" : "Delivery"}: ${delivery}`,
+      warranty && `${sourceLocale === "ar" ? "الضمان" : "Warranty"}: ${warranty}`])]
+      .filter(Boolean).join("\n") || null;
     const reviewRequired =
       customer.reviewRequired ||
       canonicalLines.length === 0 ||
@@ -204,6 +220,16 @@ export class AISalesAssistantResolver {
       : null;
 
     return {
+      commercialTerms: { paymentTerms, delivery, warranty },
+      fieldDefaults: { ...defaults, paymentTerms: defaultPayment ?? defaults.paymentTerms },
+      fieldProvenance: {
+        projectName: intent.projectName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
+        attentionName: intent.attentionName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
+        expiryDate: intent.expiryDate || userClauses.expiryDate ? "USER_PROVIDED" : defaults.expiryDate ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
+        paymentTerms: intent.paymentTerms || userClauses.paymentTerms ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : defaults.paymentTerms ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
+        delivery: intent.delivery || userClauses.delivery ? "USER_PROVIDED" : defaults.delivery ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
+        warranty: intent.warranty ? "USER_PROVIDED" : defaults.warranty ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
+      },
       documentType: intent.documentType,
       facts: intent.facts,
       completion: { subject: "AI_ESTIMATED", brief: "AI_ESTIMATED", currency: intent.currencyCode ? "USER_PROVIDED" : customer.preferredCurrency ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT", terms: intent.paymentTerms ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : companyTerms ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION", scope: intent.scopeType ? "USER_PROVIDED" : "NEEDS_CONFIRMATION" },
@@ -218,6 +244,7 @@ export class AISalesAssistantResolver {
         briefEn: sourceLocale === "en" ? brief : null,
         projectName: intent.projectName ?? null,
         attentionName: intent.attentionName ?? null,
+        expiryDate,
         scopeType: intent.scopeType ?? null,
         currencyCode,
         priceListId,

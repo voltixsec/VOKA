@@ -237,3 +237,5 @@ database warnings remain. Browser preview verified both locales, narrow mobile
 handoff, prefilling, in-place binding and preservation of edited quotation data.
 No schema/dependency changes, merge or deployment; the named experiment stash
 remains preserved.
+
+Follow-on bounded slice: [Field-aware conversational completion](2026-08-28-field-aware-conversational-completion.md).

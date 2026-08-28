@@ -5,6 +5,7 @@ import type { CustomerCandidate } from "./types";
 import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
 import { normalizeTechnicalSpeech } from "./technical-speech";
 import { cleanCustomerEntity } from "../ai-sales-assistant/services/customer-entity";
+import { completeFields } from "./field-completion";
 
 const SUPPORTED = new Set<ConversationalOperation>(["QUOTATION", "INVOICE", "CONTRACT", "SALES_ORDER", "DRAWING_TAKEOFF"]);
 
@@ -109,6 +110,7 @@ export class ConversationalDraftEngine {
     const requirements = evaluateFormRequirements(operation, fields, Boolean(attachment), contextText, canonicalProposal);
     const status = requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW";
     const draft: WorkingCommercialDraft = {
+      ...input.draft,
       id: input.draft?.id ?? crypto.randomUUID(), operation, locale: input.locale,
       documentMode: input.documentMode ?? input.draft?.documentMode ?? "AUTO",
       buildMode: input.buildMode ?? input.draft?.buildMode ?? "AUTO",
@@ -146,7 +148,7 @@ export function applyCustomerResolution(draft: WorkingCommercialDraft, candidate
     ar: `لم أجد العميل «${draft.fields.customerMention}» في قاعدة العملاء. راجع الاسم أو أنشئ العميل أولاً.`,
     en: `Customer “${draft.fields.customerMention}” was not found. Check the name or create the customer first.`, suggestions: [],
   };
-  return resolved;
+  return draft.completionVersion ? completeFields(resolved) : resolved;
 }
 
 export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, proposal: SalesAssistantDraftProposal): WorkingCommercialDraft {
@@ -187,5 +189,5 @@ export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, propos
     ar: `لم أجد العميل «${proposal.customer.mention}» في قاعدة العملاء. راجع الاسم أو أنشئ العميل أولاً.`,
     en: `Customer “${proposal.customer.mention}” was not found. Check the name or create the customer first.`, suggestions: [],
   };
-  return resolved;
+  return draft.completionVersion ? completeFields(resolved) : resolved;
 }

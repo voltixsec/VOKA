@@ -1,5 +1,6 @@
 import type { ConversationalOperation, DraftFields, MissingField, RecommendedField } from "./types";
 import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
+import type { CommercialAnswerField } from "../ai-sales-assistant/dto/AISalesAssistantDto";
 
 const missing = {
   customer: { key: "customer", required: true, labelAr: "العميل", labelEn: "Customer" },
@@ -15,7 +16,7 @@ const recommended = {
   scopeType: { key: "scopeType", labelAr: "نطاق التوريد أو الخدمة", labelEn: "Supply or service scope" },
 } satisfies Record<string, RecommendedField>;
 
-export function evaluateFormRequirements(operation: ConversationalOperation, fields: DraftFields, hasAttachment: boolean, contextText: string, canonicalProposal?: SalesAssistantDraftProposal | null) {
+export function evaluateFormRequirements(operation: ConversationalOperation, fields: DraftFields, hasAttachment: boolean, contextText: string, canonicalProposal?: SalesAssistantDraftProposal | null, completion?: { notApplicable?: CommercialAnswerField[] }) {
   const missingRequired: MissingField[] = [];
   if (operation === "SALES_ORDER") {
     if (!fields.sourceReference) missingRequired.push(missing.sourceReference);
@@ -33,16 +34,35 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
       if (line.quantity == null) missingRequired.push({ key: "quantity", sourceField: String(index), required: true, labelAr: `كمية ${line.itemNameAr || line.itemName}`, labelEn: `Quantity for ${line.itemNameEn || line.itemName}` });
     });
     if (!fields.lines.length && !(canonicalProposal?.smartSystem?.missingInputs.length)) missingRequired.push(missing.lines);
-    for (const name of canonicalProposal?.smartSystem?.missingInputs ?? []) {
+    const unresolvedSystemInputs = [...(canonicalProposal?.smartSystem?.missingInputs ?? [])].sort((a, b) =>
+      (canonicalProposal?.smartSystem?.inputs.findIndex((input) => input.name === a) ?? 0) - (canonicalProposal?.smartSystem?.inputs.findIndex((input) => input.name === b) ?? 0));
+    for (const name of unresolvedSystemInputs) {
       const input = canonicalProposal?.smartSystem?.inputs.find((candidate) => candidate.name === name);
       missingRequired.push({ key: "systemInput", required: true, sourceField: name, labelAr: input?.labelAr ?? name, labelEn: input?.labelEn ?? name });
+    }
+    // Professional review decisions use existing form/DTO fields, not a second
+    // persistence schema. Nullable form fields permit an explicit N/A decision.
+    if (completion) {
+      const requireDecision = (key: CommercialAnswerField & MissingField["key"], value: unknown, labelAr: string, labelEn: string) => {
+        if (!value && !completion.notApplicable?.includes(key)) missingRequired.push({ key, required: true, labelAr, labelEn });
+      };
+      if (operation === "QUOTATION" || operation === "CONTRACT") {
+        requireDecision("projectName", canonicalProposal?.proposal.projectName, "اسم المشروع", "Project name");
+        requireDecision("attentionName", canonicalProposal?.proposal.attentionName, "بعناية", "Attention to");
+      }
+      if (operation === "QUOTATION") requireDecision("expiryDate", canonicalProposal?.proposal.expiryDate, "صلاحية العرض", "Quotation validity");
+      requireDecision("paymentTerms", canonicalProposal?.commercialTerms?.paymentTerms, "شروط الدفع", "Payment terms");
+      if (operation === "QUOTATION" || operation === "CONTRACT") {
+        requireDecision("delivery", canonicalProposal?.commercialTerms?.delivery, "مدة التسليم", "Delivery timing");
+        requireDecision("warranty", canonicalProposal?.commercialTerms?.warranty, "الضمان", "Warranty");
+      }
     }
   }
 
   const optional: RecommendedField[] = [];
   if (operation !== "DRAWING_TAKEOFF" && operation !== "SALES_ORDER") {
     if (!fields.currencyCode) optional.push(recommended.currency);
-    if (!fields.paymentTerms) optional.push(recommended.paymentTerms);
+    if (!completion && !fields.paymentTerms) optional.push(recommended.paymentTerms);
     if (operation === "QUOTATION" && !fields.scopeType) optional.push(recommended.scopeType);
   }
   return { missingRequired, recommended: optional };

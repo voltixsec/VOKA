@@ -2,6 +2,9 @@
 
 Current Product Frontier: **V1 Product Completion & Globalization**
 
+Feature checkpoint (2026-08-28): [Slice 1 field-aware conversational completion](product/changes/2026-08-28-field-aware-conversational-completion.md).
+Unmerged; manual CEO acceptance remains required. No release/deployment claim.
+
 Status: **IN PROGRESS / NOT RELEASE READY.** The Product Integrity regression
 suite is an automated safety net only; it is not manual product acceptance and
 does not establish release or real-user-pilot readiness.

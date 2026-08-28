@@ -1,5 +1,15 @@
 # Resume Point
 
+## Active feature execution — 2026-08-28
+
+The current owner-authorized branch is `feature/pre-staging-product-coherence`.
+See [Slice 1 field-aware completion](../product/changes/2026-08-28-field-aware-conversational-completion.md)
+for its verified baseline, implementation boundaries and acceptance checks. This
+unmerged feature checkpoint supersedes the historical execution guidance below
+for this task only; it does not change main or establish release readiness.
+
+## Historical baseline
+
 Verified on: 2026-08-20 (Asia/Kuwait)
 
 ## Current Verified State

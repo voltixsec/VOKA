@@ -39,9 +39,30 @@ export class AISalesAssistantService {
       (/[\u0600-\u06FF]/.test(prompt) ? "ar" : "en");
 
     const { intent, extractionMode, warnings } =
-      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers);
+      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers, request.systemAnswers);
+    for (const key of ["subject", "brief", "currencyCode"] as const) {
+      if (request.retainedContext?.[key]) intent[key] = request.retainedContext[key];
+    }
+    if (request.retainedContext?.scopeType) intent.scopeType = request.retainedContext.scopeType;
     if (request.answers?.customerMention) intent.customerMention = cleanCustomerEntity(request.answers.customerMention) ?? fallbackCompanyEntity(request.answers.customerMention);
     if (request.answers?.projectName) intent.projectName = request.answers.projectName;
+    for (const field of ["attentionName", "expiryDate", "paymentTerms", "delivery", "warranty"] as const) {
+      if (request.answers?.[field]) intent[field] = request.answers[field];
+    }
+    for (const field of request.notApplicable ?? []) {
+      if (["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(field)) {
+        intent[field as "projectName" | "attentionName" | "expiryDate" | "delivery" | "warranty"] = null;
+      }
+    }
+    // Carry editable line intent through targeted replies, but always resolve IDs,
+    // units, prices and tax again. SmartSystem remains the only BOM authority.
+    if (!intent.smartSystem && request.retainedLines?.length) {
+      intent.lines = request.retainedLines.map((line) => ({
+        text: line.text, itemNameAr: line.itemNameAr, itemNameEn: line.itemNameEn,
+        quantity: line.quantity, description: line.description,
+        requestedUnitText: line.requestedUnitText, requestedPrice: line.requestedPrice, typeIntent: line.typeIntent,
+      }));
+    }
 
     const proposal = await this.resolver.resolveProposal(
       request.companyId,
@@ -50,6 +71,7 @@ export class AISalesAssistantService {
       extractionMode,
       warnings,
       request.selection,
+      request.notApplicable,
     );
     return completeEstimatedPricing(proposal, this.provider);
   }

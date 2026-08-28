@@ -193,6 +193,8 @@ export default function NewContractPage() {
       if (draft.fields.customerId && customers.some((customer) => customer.id === draft.fields.customerId)) setCustomerId(draft.fields.customerId);
       if (draft.fields.currencyCode) setCurrencyCode(draft.fields.currencyCode);
       if (draft.fields.paymentTerms) setTerms(draft.fields.paymentTerms);
+      if (draft.canonicalProposal?.proposal.projectName) setProjectName(draft.canonicalProposal.proposal.projectName);
+      if (draft.canonicalProposal?.proposal.attentionName) setAttentionName(draft.canonicalProposal.proposal.attentionName);
       if (draft.fields.scopeType && scopeOptions.some((option) => option.value === draft.fields.scopeType)) setScopeType(draft.fields.scopeType as ScopeType);
       if (draft.fields.lines.length) setLines(draft.fields.lines.map((line, index) => ({ editorKey: createLineKey(), position: index + 1, catalogItemId: "", type: "CUSTOM", itemCode: "", itemName: line.itemName, description: "", unitName: "PCS", quantity: line.quantity ?? 1, unitPrice: 0, taxRateId: null, taxPercentage: 0 })));
     } catch { /* Keep the normal empty form when stored context is invalid. */ }

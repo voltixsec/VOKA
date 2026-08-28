@@ -184,7 +184,7 @@ describe('proposed customer in the real quotation composer', () => {
   it.each(['Create', 'Create and edit'])('%s binds in place and preserves edited commercial data', async (action) => {
     sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
       customer: { id: null, proposedCustomerName: 'Horizon' }, estimateNotice: true,
-      proposal: { projectName: 'Factory', subjectEn: 'CCTV system', briefEn: 'Supply and install', scopeType: 'SUPPLY_AND_INSTALLATION', currencyCode: 'KWD' },
+      proposal: { projectName: 'Factory', attentionName: 'Engineer Khaled', expiryDate: '2030-09-27', subjectEn: 'CCTV system', briefEn: 'Supply and install', scopeType: 'SUPPLY_AND_INSTALLATION', currencyCode: 'KWD' },
       lines: [{ itemName: 'IP (commercial)', itemNameAr: 'كاميرا IP تجارية', itemNameEn: 'Commercial IP camera', quantity: 36, unitPrice: 10, quantitySource: 'RULE_CALCULATED', formulaExplanation: '36 requested cameras', formulaExplanationAr: '٣٦ كاميرا حسب الطلب', priceSource: 'AI_ESTIMATED' }],
     }));
     const fallback = fetchForCreate();
@@ -194,6 +194,9 @@ describe('proposed customer in the real quotation composer', () => {
     render(<NewQuotationPage />);
     await screen.findByText('Unregistered');
     expect(screen.getByRole('button', { name: 'Create proposal' })).toBeDisabled();
+    expect(inputFor('Project name').value).toBe('Factory');
+    expect(screen.getByDisplayValue('Engineer Khaled')).toBeTruthy();
+    expect(screen.getByDisplayValue('2030-09-27')).toBeTruthy();
     expect((screen.getByRole('combobox', { name: 'Item 1' }) as HTMLInputElement).value).toBe('Commercial IP camera');
     fireEvent.change(inputFor('Project name'), { target: { value: 'CEO edited factory' } });
     fireEvent.change(inputFor('Proposal subject'), { target: { value: 'CEO edited subject' } });
@@ -215,7 +218,8 @@ describe('proposed customer in the real quotation composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create proposal' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(true));
     const saved = JSON.parse(fetchMock.mock.calls.find(([url, init]) => url === '/api/quotations' && init?.method === 'POST')![1].body);
-    expect(saved).toMatchObject({ customerId: 'created-customer', projectName: 'CEO edited factory', subjectEn: 'CEO edited subject', lines: [{ quantity: 36, unitPrice: 10 }] });
+    expect(saved).toMatchObject({ customerId: 'created-customer', projectName: 'CEO edited factory', attentionName: 'Engineer Khaled', subjectEn: 'CEO edited subject', lines: [{ quantity: 36, unitPrice: 10 }] });
+    expect(saved.expiryDate).toContain('2030-09-27');
     expect(push).toHaveBeenCalledWith('/dashboard/quotations/quotation-1');
   });
 });

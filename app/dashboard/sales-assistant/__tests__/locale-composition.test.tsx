@@ -123,7 +123,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("NVR");
   });
 
-  it("localizes the request-update marker that may return in restored context", async () => {
+  it("preserves a bare reply without injecting a UI marker into field values", async () => {
     sessionStorage.setItem("voka_commercial_conversation_draft", JSON.stringify(draft()));
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: draft() }) });
     vi.stubGlobal("fetch", fetchMock);
@@ -131,6 +131,6 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "DVR" } });
     fireEvent.click(screen.getByRole("button", { name: isArabic ? "فهم العملية" : "Understand" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).reply).toBe(isArabic ? "تحديث الطلب: DVR" : "Updated request: DVR");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).reply).toBe("DVR");
   });
 });

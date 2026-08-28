@@ -7,11 +7,14 @@ import { useRecordedVoiceInput, useVoiceInput, type AudioTranscriber, type IRawA
 import { VoiceOrb } from "@/components/voice";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
+import { ActiveFieldQuestion } from "@/components/ai/ActiveFieldQuestion";
 import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
 import { bindDraftCustomer } from "@/src/application/commercial-conversation/bind-customer";
 import { EngineeringQuantityDetails, commercialLineName } from "@/components/ai/EngineeringQuantityDetails";
 import type { CommercialSelection } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
 import type { ConversationBuildMode, ConversationDocumentMode, ConversationReplySource, WorkingCommercialDraft } from "@/src/application/commercial-conversation";
+import type { FieldAnswer } from "@/src/application/commercial-conversation";
+import { commercialPhase, fieldTarget } from "@/src/application/commercial-conversation/field-completion";
 
 const CONVERSATION_STORAGE_KEY = "voka_commercial_conversation_draft";
 
@@ -114,10 +117,12 @@ export default function SalesAssistantPage(props: any) {
     voice.startListening(isArabic ? "ar-KW" : "en-US");
   };
 
-  const advanceConversation = async (explicitReply?: string, source = replySourceRef.current, selection?: CommercialSelection) => {
+  const advanceConversation = async (explicitReply?: string, source = replySourceRef.current, selection?: CommercialSelection, fieldAnswer?: FieldAnswer) => {
     const generation = ++analysisGeneration.current;
     const visibleBefore = prompt.trim();
-    const reply = explicitReply ?? (!workingDraft ? visibleBefore : visibleBefore.startsWith(lastAnalyzedTextRef.current) ? visibleBefore.slice(lastAnalyzedTextRef.current.length).trim() || visibleBefore : `${isArabic ? "تحديث الطلب" : "Updated request"}: ${visibleBefore}`);
+    const reply = explicitReply ?? (workingDraft && visibleBefore.startsWith(lastAnalyzedTextRef.current) ? visibleBefore.slice(lastAnalyzedTextRef.current.length).trim() || visibleBefore : visibleBefore);
+    const reanalyze = !explicitReply && Boolean(workingDraft) && visibleBefore === lastAnalyzedTextRef.current;
+    const target = answerTarget ?? workingDraft?.activeQuestion?.field;
     if (!reply.trim()) return;
 
     setIsGenerating(true);
@@ -137,7 +142,8 @@ export default function SalesAssistantPage(props: any) {
           documentMode,
           buildMode,
           selection,
-          answer: answerTarget && !selection ? { field: answerTarget, value: visibleBefore.startsWith(lastAnalyzedTextRef.current) ? visibleBefore.slice(lastAnalyzedTextRef.current.length).trim() : visibleBefore } : undefined,
+          reanalyze,
+          answer: fieldAnswer ?? (target && !selection && !reanalyze ? { field: target, value: reply } : undefined),
         }),
       });
       const json = await response.json();
@@ -259,7 +265,7 @@ export default function SalesAssistantPage(props: any) {
       </div>
 
       {/* Unified Attach + Text + Voice input */}
-      <div data-testid="commercial-composer" className="flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/70 p-3 shadow-soft sm:p-4">
+      <div data-testid="commercial-composer" data-commercial-state={commercialPhase(workingDraft, isGenerating, resultStale)} className="flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/70 p-3 shadow-soft sm:p-4">
         <div className="sr-only">
           <label htmlFor="sales-prompt-input" className="sr-only">
             {isArabic ? "طلب المبيعات (اللغة الطبيعية)" : "Sales Request Prompt (Natural Language)"}
@@ -307,18 +313,19 @@ export default function SalesAssistantPage(props: any) {
 
 
 
+        {workingDraft && resultStale && workingDraft.activeQuestion && <ActiveFieldQuestion draft={workingDraft} isArabic={isArabic} disabled={isGenerating} onAnswer={(answer) => void advanceConversation(answer.value, "CHIP", undefined, answer)} />}
         {workingDraft && !resultStale && (
           <div className="min-w-0 space-y-2 break-words rounded-xl border border-sky-400/20 bg-slate-950/80 p-3" data-testid="commercial-conversation">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}</p><p className="mt-1 text-xs text-slate-400">{isArabic ? "مسودة محادثة واحدة محفوظة — لن يتم إنشاء أي مستند تلقائياً." : "One saved conversational draft — no document will be created automatically."}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${workingDraft.status === "READY_FOR_REVIEW" ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>{workingDraft.status === "READY_FOR_REVIEW" ? displayLabel("READY_FOR_REVIEW", isArabic ? "ar" : "en") : (isArabic ? "يحتاج معلومات" : "Needs information")}</span></div>
             <p className="text-sm text-slate-200">{isArabic ? "فهمت أنك تريد" : "I understood"}: {displayLabel(workingDraft.operation, isArabic ? "ar" : "en")}{workingDraft.fields.lines.length ? ` — ${(workingDraft.canonicalProposal?.lines ?? workingDraft.fields.lines).map((line) => `${line.quantity ?? ""} ${commercialLineName(line, isArabic)}`.trim()).join(" + ")}` : ""}{workingDraft.fields.customerMention ? ` — ${workingDraft.fields.customerMention}` : ""}.</p>
             {workingDraft.canonicalProposal?.smartSystem && <p className="rounded-xl border border-violet-400/20 bg-violet-400/5 p-2 text-xs text-violet-200">{isArabic ? workingDraft.canonicalProposal.smartSystem.systemNameAr : workingDraft.canonicalProposal.smartSystem.systemNameEn} · {displayLabel(workingDraft.canonicalProposal.smartSystem.status, isArabic ? "ar" : "en")} · {isArabic ? "تم إنشاء بنود مبدئية، وبعض البنود تحتاج مراجعة." : "Preliminary lines are ready; some need review."}</p>}
-            {workingDraft.missingRequired.length > 0 && <div className="rounded-xl border-2 border-rose-400/50 bg-rose-500/10 p-3"><p className="text-sm font-bold text-rose-200">{isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:"}</p><div className="mt-2 flex flex-wrap gap-2">{workingDraft.missingRequired.map((field) => <button type="button" key={`${field.key}-${field.sourceField ?? ""}`} className="rounded-lg border border-rose-300/40 px-3 py-2 text-sm font-semibold text-white" onClick={() => { setAnswerTarget(field.key === "customer" ? "customerMention" : field.key === "systemInput" ? field.sourceField ?? null : null); document.getElementById("sales-prompt-input")?.focus(); }}>{isArabic ? field.labelAr : field.labelEn}</button>)}</div></div>}
+            {workingDraft.activeQuestion ? <ActiveFieldQuestion draft={workingDraft} isArabic={isArabic} disabled={isGenerating} onAnswer={(answer) => void advanceConversation(answer.value, "CHIP", undefined, answer)} /> : workingDraft.missingRequired.length > 0 && <div className="rounded-xl border-2 border-rose-400/50 bg-rose-500/10 p-3"><p className="text-sm font-bold text-rose-200">{isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:"}</p><div className="mt-2 flex flex-wrap gap-2">{workingDraft.missingRequired.map((field) => <button type="button" key={`${field.key}-${field.sourceField ?? ""}`} className="rounded-lg border border-rose-300/40 px-3 py-2 text-sm font-semibold text-white" onClick={() => { setAnswerTarget(fieldTarget(field)); document.getElementById("sales-prompt-input")?.focus(); }}>{isArabic ? field.labelAr : field.labelEn}</button>)}</div></div>}
             {workingDraft.canonicalProposal?.estimateNotice && <EstimateNotice isArabic={isArabic} />}
             {workingDraft.canonicalProposal && <EngineeringQuantityDetails lines={workingDraft.canonicalProposal.lines} isArabic={isArabic} />}
             <div className="flex flex-wrap gap-2">{workingDraft.customerResolution?.candidates.map((candidate) => <button type="button" key={candidate.id} disabled={isGenerating} onClick={() => advanceConversation(`${isArabic ? "العميل" : "Customer"} ${candidate.name}`, "CHIP", { ...workingDraft.selection, customer: { id: candidate.id, name: candidate.name } })} className="rounded-xl border border-sky-400/30 px-3 py-2 text-sm text-sky-200">{candidate.name}</button>)}</div>
             {workingDraft.canonicalProposal?.lines.filter((line) => line.resolutionStatus === "AMBIGUOUS").map((line) => <div key={line.componentKey ?? line.itemName} className="flex flex-wrap gap-2">{line.catalogCandidates.map((candidate) => <button key={candidate.id} type="button" disabled={isGenerating} onClick={() => advanceConversation(candidate.name, "CHIP", { ...workingDraft.selection, catalog: { ...workingDraft.selection?.catalog, [line.componentKey ?? line.itemName]: { id: candidate.id, name: candidate.name } } })} className="rounded-xl border border-sky-400/30 px-3 py-2 text-xs">{candidate.name}</button>)}</div>)}
             {workingDraft.canonicalProposal && <details className="text-xs text-slate-300"><summary>{isArabic ? "البنود ومصادر الأسعار — مراجعة مطلوبة" : "Lines and price sources — review required"}</summary>{workingDraft.canonicalProposal.lines.map((line, index) => <p key={index} className="mt-2">{commercialLineName(line, isArabic)} · {line.quantity ?? "?"} · {line.unitPrice ?? (isArabic ? "السعر يحتاج مراجعة" : "Price needs review")} {workingDraft.canonicalProposal?.proposal.currencyCode} · {line.priceSource === "AI_ESTIMATED" ? (isArabic ? "تقدير ذكاء اصطناعي غير مؤكد" : "Unverified AI estimate") : line.catalogItemId ? (isArabic ? "من الكتالوج" : "Catalog matched") : (isArabic ? "بند مخصص يحتاج مراجعة" : "Custom line — review required")}</p>)}</details>}
-            {workingDraft.clarification && workingDraft.customerResolution?.status !== "AMBIGUOUS" && <p className="text-sm text-white">{isArabic ? workingDraft.clarification.ar : workingDraft.clarification.en}</p>}
+            {!workingDraft.activeQuestion && workingDraft.clarification && workingDraft.customerResolution?.status !== "AMBIGUOUS" && <p className="text-sm text-white">{isArabic ? workingDraft.clarification.ar : workingDraft.clarification.en}</p>}
             {workingDraft.customerResolution?.status !== "AMBIGUOUS" && <div className="flex flex-wrap gap-2">{workingDraft.clarification?.suggestions.map((chip, index) => <button key={index} type="button" disabled={isGenerating} onClick={() => advanceConversation(isArabic ? chip.ar : chip.en, "CHIP")} className="rounded-xl border border-sky-400/30 px-3 py-2 text-xs">{isArabic ? chip.ar : chip.en}</button>)}</div>}
             {workingDraft.proposedCustomerName && workingDraft.operation === "QUOTATION" && <ProposedCustomer key={`${workingDraft.id}:${workingDraft.proposedCustomerName}`} name={workingDraft.proposedCustomerName} isArabic={isArabic} disabled={isGenerating}
               onContinue={workingDraft.status === "READY_FOR_REVIEW" ? () => void openForHumanReview() : undefined}

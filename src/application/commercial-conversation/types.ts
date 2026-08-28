@@ -1,6 +1,6 @@
 import type { CommercialOperation } from "../commercial-entry";
 import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
-import type { CommercialSelection, CommercialAnswers } from "../ai-sales-assistant/dto/AISalesAssistantDto";
+import type { CommercialSelection, CommercialAnswers, CommercialAnswerField, SystemFieldAnswers } from "../ai-sales-assistant/dto/AISalesAssistantDto";
 
 export type ConversationalOperation = Exclude<CommercialOperation, "PAYMENT">;
 export type ConversationReplySource = "TEXT" | "VOICE" | "CHIP";
@@ -38,9 +38,14 @@ export type CustomerResolution = {
 export type ConversationTurn = {
   source: ConversationReplySource;
   text: string;
+  target?: string;
 };
 
-export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput" | "catalogChoice" | "quantity";
+export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput" | "catalogChoice" | "quantity" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty";
+
+export type FieldAnswer = { field: string; value: string; action?: "VALUE" | "NOT_APPLICABLE" };
+export type FieldQuestion = { field: string; ar: string; en: string; allowNotApplicable: boolean; options?: Array<{ ar: string; en: string; value: string }> };
+export type CommercialPhase = "COMPOSING" | "ANALYZING" | "NEEDS_INFO" | "FIELD_ANSWER_PENDING" | "RECALCULATING" | "DRAFT_READY_FOR_REVIEW";
 
 export type MissingField = {
   key: MissingFieldKey;
@@ -57,6 +62,13 @@ export type RecommendedField = {
 };
 
 export type WorkingCommercialDraft = {
+  /** Versioned so previously persisted draft payloads can be upgraded on analysis. */
+  completionVersion?: 1;
+  phase?: CommercialPhase;
+  activeQuestion?: FieldQuestion | null;
+  notApplicable?: CommercialAnswerField[];
+  systemAnswers?: SystemFieldAnswers;
+  intelligenceText?: string;
   proposedCustomerName?: string | null;
   customerState?: "CUSTOMER_MISSING" | "CUSTOMER_PROPOSED_UNREGISTERED" | "CUSTOMER_AMBIGUOUS" | "CUSTOMER_RESOLVED";
   selection?: CommercialSelection;

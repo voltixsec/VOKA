@@ -1,5 +1,5 @@
 import type { QuotationScopeType } from "../../../domain/quotation/types/QuotationScopeType";
-import type { SystemCalculationResult } from "../../../domain/smart-system";
+import type { SystemCalculationResult, SystemInputParameter } from "../../../domain/smart-system";
 
 export const SALES_ASSISTANT_PROMPT_MAX_LENGTH = 4_000;
 export const SALES_ASSISTANT_MAX_LINES = 20;
@@ -9,7 +9,10 @@ export type SalesAssistantSourceLocale = "ar" | "en";
 export type CommercialProvenance = "USER_PROVIDED" | "COMPANY_DEFAULT" | "CUSTOMER_DEFAULT" | "CATALOG_MATCHED" | "RULE_CALCULATED" | "AI_ESTIMATED" | "NEEDS_CONFIRMATION";
 export interface CommercialFact { name: string; value: string; evidence: string; provenance?: "USER_PROVIDED"; }
 export interface CommercialSelection { customer?: { id: string; name: string }; catalog?: Record<string, { id: string; name: string }> }
-export type CommercialAnswers = Partial<Record<"customerMention" | "projectName" | "cameraCount" | "storageDays" | "bitrateMbps" | "cableMetersPerCamera", string>>;
+export type CommercialAnswerField = "customerMention" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty" | "cameraCount" | "storageDays" | "bitrateMbps" | "cableMetersPerCamera";
+export type CommercialAnswers = Partial<Record<CommercialAnswerField, string>>;
+export type CommercialTerms = { paymentTerms: string | null; delivery: string | null; warranty: string | null };
+export type SystemFieldAnswers = Record<string, NonNullable<SystemInputParameter["value"]>>;
 export type SalesItemIntent =
   | "PRODUCT"
   | "SERVICE"
@@ -23,6 +26,11 @@ export interface AISalesAssistantRequest {
   buildMode?: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM";
   selection?: CommercialSelection;
   answers?: CommercialAnswers;
+  systemAnswers?: SystemFieldAnswers;
+  notApplicable?: CommercialAnswerField[];
+  /** Editable line intent only; never authoritative IDs, prices, tax or engineering formulas. */
+  retainedLines?: ExtractedLineItem[];
+  retainedContext?: Pick<ExtractedSalesIntent, "subject" | "brief" | "scopeType" | "currencyCode">;
 }
 
 export interface ExtractedLineItem {
@@ -56,6 +64,8 @@ export interface ExtractedSalesIntent {
   scopeType?: QuotationScopeType | null;
   scopeOfWork?: string | null;
   warranty?: string | null;
+  delivery?: string | null;
+  expiryDate?: string | null;
   paymentTerms?: string | null;
   currencyCode?: string | null;
   lines: ExtractedLineItem[];
@@ -145,6 +155,9 @@ export interface DraftProposalFinancials {
 }
 
 export interface SalesAssistantDraftProposal {
+  commercialTerms?: CommercialTerms;
+  fieldDefaults?: { expiryDate: string | null; paymentTerms: string | null; delivery: string | null; warranty: string | null };
+  fieldProvenance?: Partial<Record<CommercialAnswerField, CommercialProvenance>>;
   documentType?: ExtractedSalesIntent["documentType"];
   facts?: CommercialFact[];
   completion?: { subject: CommercialProvenance; brief: CommercialProvenance; currency: CommercialProvenance; terms: CommercialProvenance; scope: CommercialProvenance };
@@ -159,6 +172,7 @@ export interface SalesAssistantDraftProposal {
     briefEn: string | null;
     projectName: string | null;
     attentionName: string | null;
+    expiryDate?: string | null;
     scopeType: QuotationScopeType | null;
     currencyCode: string;
     priceListId: string | null;

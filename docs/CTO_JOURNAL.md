@@ -3,6 +3,12 @@
 
 Architecture decisions are recorded here.
 
+## 2026-08-28 — Field-aware completion slice
+
+- Targeted answers are application state around the existing canonical intelligence, not a replacement engine or document schema.
+- Default precedence, nullable-field decisions and review boundaries are documented in the [slice contract](product/changes/2026-08-28-field-aware-conversational-completion.md).
+- Feature-branch only; no engineering BOM, pricing architecture, schema, merge or deployment changes. CEO acceptance remains pending.
+
 ## 2026-08-04
 
 - Adopted AI First as an approved architecture decision.

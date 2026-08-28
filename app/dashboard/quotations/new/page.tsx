@@ -568,6 +568,7 @@ export default function NewQuotationPage() {
           if (draft.proposal.briefEn) setBriefEn(draft.proposal.briefEn);
           if (draft.proposal.projectName) setProjectName(draft.proposal.projectName);
           if (draft.proposal.attentionName) setAttentionName(draft.proposal.attentionName);
+          if (draft.proposal.expiryDate) setExpiryDate(draft.proposal.expiryDate);
         }
         if (draft.estimateNotice) setNotes([draft.notes, isArabic ? ESTIMATE_NOTICE_AR : ESTIMATE_NOTICE_EN].filter(Boolean).join("\n"));
         else if (draft.notes) setNotes(draft.notes);
