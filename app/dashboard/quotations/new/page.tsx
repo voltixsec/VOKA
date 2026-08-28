@@ -29,7 +29,6 @@ import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import { EstimateNotice } from "@/components/ai/EstimateNotice";
 import { EngineeringQuantityDetails, commercialLineName, engineeringReviewLines, type EngineeringReviewLine } from "@/components/ai/EngineeringQuantityDetails";
-import { ESTIMATE_NOTICE_AR, ESTIMATE_NOTICE_EN } from "@/src/application/ai-sales-assistant/estimate-notice";
 import {
   QuotationCalculator,
   type QuotationLineType,
@@ -79,7 +78,7 @@ type Line = {
   unitNameAr?: string | null;
   unitNameEn?: string | null;
   quantity: number;
-  unitPrice: number;
+  unitPrice: number | null;
   taxRateId?: string | null;
   taxPercentage?: number;
   taxUnavailable?: boolean;
@@ -556,8 +555,8 @@ export default function NewQuotationPage() {
         if (draft.customer?.id) {
           setCustomerId(draft.customer.id);
           setCustomers((current) => current.some((customer) => customer.id === draft.customer.id) ? current : [...current, { id: draft.customer.id, name: draft.customer.name }]);
-        } else if (draft.customer?.proposedCustomerName) {
-          setProposedCustomerName(draft.customer.proposedCustomerName);
+        } else if (draft.customer?.status !== 'AMBIGUOUS' && (draft.customer?.proposedCustomerName || draft.customer?.mention)) {
+          setProposedCustomerName(draft.customer.proposedCustomerName || draft.customer.mention);
         }
         if (draft.proposal) {
           if (draft.proposal.currencyCode) setCurrencyCode(draft.proposal.currencyCode);
@@ -570,9 +569,10 @@ export default function NewQuotationPage() {
           if (draft.proposal.attentionName) setAttentionName(draft.proposal.attentionName);
           if (draft.proposal.expiryDate) setExpiryDate(draft.proposal.expiryDate);
         }
-        if (draft.estimateNotice) setNotes([draft.notes, isArabic ? ESTIMATE_NOTICE_AR : ESTIMATE_NOTICE_EN].filter(Boolean).join("\n"));
-        else if (draft.notes) setNotes(draft.notes);
-        if (draft.termsAndConditions) { setTerms(draft.termsAndConditions); setTermsTouched(true); }
+        // Customer text is the canonical commercial projection, not review metadata.
+        setNotes((isArabic ? draft.notesAr : draft.notesEn) ?? draft.notes ?? "");
+        setTerms((isArabic ? draft.termsAndConditionsAr : draft.termsAndConditionsEn) ?? draft.termsAndConditions ?? "");
+        setTermsTouched(true);
         if (Array.isArray(draft.lines) && draft.lines.length > 0) {
           setLines(
             draft.lines.map((l: any, idx: number) => ({
@@ -591,7 +591,7 @@ export default function NewQuotationPage() {
               unitNameAr: l.unitNameAr || "PCS",
               unitNameEn: l.unitNameEn || "PCS",
               quantity: l.quantity ?? 1,
-              unitPrice: l.unitPrice ?? 0,
+              unitPrice: l.unitPrice ?? null,
               taxRateId: l.taxRateId || null,
               taxPercentage: l.taxPercentage || 0,
             })),
@@ -664,6 +664,7 @@ export default function NewQuotationPage() {
         customer.id === customerId,
     );
 
+  const hasUnknownPrices = lines.some((line) => line.unitPrice == null || !Number.isFinite(line.unitPrice));
   const preview = useMemo(() => {
     if (lines.length === 0) {
       return {
@@ -673,7 +674,9 @@ export default function NewQuotationPage() {
     }
     try {
       return QuotationCalculator.calculate(
-        lines.map((line, index) => ({ ...line, position: index + 1 })),
+        // Scratch calculation only. Unresolved row/aggregate totals are masked
+        // below and submission is blocked until the human supplies each price.
+        lines.map((line, index) => ({ ...line, unitPrice: line.unitPrice ?? 0, position: index + 1 })),
         discountType ? { type: discountType, value: discountValue } : null,
       );
     } catch {
@@ -822,7 +825,7 @@ export default function NewQuotationPage() {
       | "itemName"
       | "unitName"
       | "description",
-    value: number | string,
+    value: number | string | null,
   ) {
     setDirty(true);
 
@@ -889,7 +892,7 @@ export default function NewQuotationPage() {
 
     if (
       !selectedCustomer ||
-      lines.length === 0
+      lines.length === 0 || hasUnknownPrices
     ) {
       return;
     }
@@ -1490,15 +1493,13 @@ export default function NewQuotationPage() {
                     type="number"
                     min="0"
                     step="0.001"
-                    value={line.unitPrice}
+                    value={line.unitPrice ?? ""}
+                    placeholder={t("السعر مطلوب", "Price required")}
                     onChange={(event) =>
                       changeLine(
                         index,
                         "unitPrice",
-                        Number(
-                          event.target
-                            .value,
-                        ),
+                        event.target.value === "" ? null : Number(event.target.value),
                       )
                     }
                   />
@@ -1506,7 +1507,7 @@ export default function NewQuotationPage() {
 
 
                   <div className="flex min-h-9 items-center rounded-lg border border-white/10 bg-white/[0.03] px-2 text-sm font-semibold text-emerald-300">
-                    {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
+                    {line.unitPrice == null ? t("السعر مطلوب", "Price required") : (preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                   </div>
 
                   <div className="flex min-h-9 items-center justify-center">
@@ -1686,6 +1687,7 @@ export default function NewQuotationPage() {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
             <div className="min-w-72 space-y-1 text-sm">
+              {hasUnknownPrices ? <p role="status" className="text-amber-300">{t("أدخل أسعار البنود غير المحددة لإظهار الإجمالي وحفظ العرض.", "Enter unresolved item prices to calculate totals and save the quotation.")}</p> : <>
               <div className="flex justify-between gap-6">
                 <span>{t("الإجمالي قبل الخصم والضريبة", "Subtotal")}</span>
                 <span>{preview.totals.subtotal.toFixed(3)} {currencyCode}</span>
@@ -1704,6 +1706,7 @@ export default function NewQuotationPage() {
                 <span>{t("الإجمالي النهائي", "Total")}</span>
                 <span>{preview.totals.totalAmount.toFixed(3)} {currencyCode}</span>
               </div>
+              </>}
             </div>
 
             <div className="flex gap-3">
@@ -1723,7 +1726,7 @@ export default function NewQuotationPage() {
                 disabled={
                   saving ||
                   !customerId ||
-                  lines.length === 0
+                  lines.length === 0 || hasUnknownPrices
                 }
               >
                 {saving

@@ -3,7 +3,7 @@
 ## Active feature execution — 2026-08-28
 
 The current owner-authorized branch is `feature/pre-staging-product-coherence`.
-See [Slice 1 field-aware completion](../product/changes/2026-08-28-field-aware-conversational-completion.md)
+See [Slice 2 professional quotation field ownership](../product/changes/2026-08-28-professional-quotation-field-ownership.md)
 for its verified baseline, implementation boundaries and acceptance checks. This
 unmerged feature checkpoint supersedes the historical execution guidance below
 for this task only; it does not change main or establish release readiness.

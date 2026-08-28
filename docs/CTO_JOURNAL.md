@@ -3,6 +3,12 @@
 
 Architecture decisions are recorded here.
 
+## 2026-08-28 — Professional quotation field ownership
+
+- Canonical commercial fields, trusted Notes/Terms, company-local validity anchoring and async customer-picker hydration are specified in the [Slice 2 contract](product/changes/2026-08-28-professional-quotation-field-ownership.md).
+- Internal estimate notices are not customer Notes. Unknown AI prices remain unresolved and block form save until human entry.
+- No engine/BOM redesign, schema, pricing architecture, main, merge or deployment change. Manual CEO acceptance remains pending.
+
 ## 2026-08-28 — Field-aware completion slice
 
 - Targeted answers are application state around the existing canonical intelligence, not a replacement engine or document schema.

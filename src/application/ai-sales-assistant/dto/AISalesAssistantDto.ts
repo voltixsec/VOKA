@@ -9,7 +9,7 @@ export type SalesAssistantSourceLocale = "ar" | "en";
 export type CommercialProvenance = "USER_PROVIDED" | "COMPANY_DEFAULT" | "CUSTOMER_DEFAULT" | "CATALOG_MATCHED" | "RULE_CALCULATED" | "AI_ESTIMATED" | "NEEDS_CONFIRMATION";
 export interface CommercialFact { name: string; value: string; evidence: string; provenance?: "USER_PROVIDED"; }
 export interface CommercialSelection { customer?: { id: string; name: string }; catalog?: Record<string, { id: string; name: string }> }
-export type CommercialAnswerField = "customerMention" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty" | "cameraCount" | "storageDays" | "bitrateMbps" | "cableMetersPerCamera";
+export type CommercialAnswerField = "customerMention" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty" | "notes" | "cameraCount" | "storageDays" | "bitrateMbps" | "cableMetersPerCamera";
 export type CommercialAnswers = Partial<Record<CommercialAnswerField, string>>;
 export type CommercialTerms = { paymentTerms: string | null; delivery: string | null; warranty: string | null };
 export type SystemFieldAnswers = Record<string, NonNullable<SystemInputParameter["value"]>>;
@@ -27,6 +27,8 @@ export interface AISalesAssistantRequest {
   selection?: CommercialSelection;
   answers?: CommercialAnswers;
   systemAnswers?: SystemFieldAnswers;
+  /** Calendar date anchoring validity while a working draft is being clarified. */
+  validityBaseDate?: string;
   notApplicable?: CommercialAnswerField[];
   /** Editable line intent only; never authoritative IDs, prices, tax or engineering formulas. */
   retainedLines?: ExtractedLineItem[];
@@ -53,6 +55,8 @@ export interface ExtractedLineItem {
 }
 
 export interface ExtractedSalesIntent {
+  /** Assigned by the application, never accepted from structured provider output. */
+  commercialSourceText?: string;
   documentType?: "QUOTATION" | "INVOICE" | "CONTRACT" | "SALES_ORDER" | "DRAWING_TAKEOFF" | null;
   facts?: CommercialFact[];
   sourceLocale?: SalesAssistantSourceLocale;
@@ -176,6 +180,7 @@ export interface SalesAssistantDraftProposal {
     projectName: string | null;
     attentionName: string | null;
     expiryDate?: string | null;
+    validityBaseDate?: string;
     scopeType: QuotationScopeType | null;
     currencyCode: string;
     priceListId: string | null;

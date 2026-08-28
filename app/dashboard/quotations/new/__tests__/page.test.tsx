@@ -18,6 +18,7 @@ import {
 } from "vitest";
 
 import NewQuotationPage from "../page";
+import { quotationFieldFixture, quotationPrompt, nationalCustomer } from '@/src/application/ai-sales-assistant/__tests__/quotation-field-fixture';
 
 const push = vi.fn();
 let isArabic = false;
@@ -181,6 +182,31 @@ function fetchForCreate() {
 }
 
 describe('proposed customer in the real quotation composer', () => {
+  it.each(['resolved', 'proposed'] as const)('receives the same %s customer and owned fields after four real clarification turns', async (state) => {
+    isArabic = true;
+    const { run } = quotationFieldFixture({ names: state === 'proposed' ? [] : [nationalCustomer] });
+    let draft = await run(quotationPrompt);
+    draft = await run('مصنع الشويخ', draft);
+    draft = await run('المهندس خالد', draft, { replySource: 'VOICE' });
+    draft = await run('خمستاشر يوم', draft, { replySource: 'VOICE' });
+    draft = await run('ملاحظة: التواصل قبل التسليم', draft);
+    expect(draft.status).toBe('READY_FOR_REVIEW');
+    sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify(draft.canonicalProposal));
+    const fallback = fetchForCreate();
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => url.startsWith('/api/customers') ? Promise.resolve(response({ customers: [{ id: 'customer-1', name: nationalCustomer }] })) : fallback(url, init));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<NewQuotationPage />);
+    await screen.findByDisplayValue('مصنع الشويخ');
+    expect(screen.getByDisplayValue('المهندس خالد')).toBeTruthy();
+    expect(screen.getByDisplayValue(draft.canonicalProposal!.proposal.expiryDate!)).toBeTruthy();
+    expect(screen.getByDisplayValue(draft.canonicalProposal!.proposal.subject)).toBeTruthy();
+    expect(screen.getByDisplayValue('التواصل قبل التسليم')).toBeTruthy();
+    expect(screen.getByText('الشروط والأحكام').closest('label')?.querySelector('textarea')).toHaveValue(draft.canonicalProposal!.termsAndConditions!);
+    expect(screen.getByRole('note')).toHaveTextContent('الحسابات الهندسية');
+    expect(screen.queryAllByText(nationalCustomer).length + screen.queryAllByDisplayValue(nationalCustomer).length).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
   it('hydrates and submits commercial rows only; engineering capacity remains in internal review', async () => {
     sessionStorage.setItem('voka_ai_proposal_draft', JSON.stringify({
       customer: { id: 'customer-1' }, estimateNotice: true,
@@ -194,6 +220,18 @@ describe('proposed customer in the real quotation composer', () => {
     await screen.findByText('Internal storage formula: 337 TB');
     expect(screen.getByRole('combobox', { name: 'Item 1' })).toHaveValue('Surveillance storage supply package');
     expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(false);
+    expect(screen.getByRole('spinbutton', { name: 'Unit price 1' })).toHaveValue(null);
+    expect(screen.getByRole('button', { name: 'Create proposal' })).toBeDisabled();
+    expect(screen.getByText('Enter unresolved item prices to calculate totals and save the quotation.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create proposal' }));
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(false);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Unit price 1' }), { target: { value: '120' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Unit price 1' }), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Create proposal' })).toBeDisabled();
+    // An explicitly entered zero is distinct from a missing price.
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Unit price 1' }), { target: { value: '0' } });
+    expect(screen.getByRole('button', { name: 'Create proposal' })).not.toBeDisabled();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Unit price 1' }), { target: { value: '120' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create proposal' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/quotations' && init?.method === 'POST')).toBe(true));
     const body = postBody(fetchMock);
@@ -201,6 +239,10 @@ describe('proposed customer in the real quotation composer', () => {
     expect(body.lines[0]).toMatchObject({ itemName: 'Surveillance storage supply package', quantity: 1, unitName: 'Package' });
     expect(JSON.stringify(body)).not.toMatch(/337|Required storage|Internal storage formula|formulaExplanation|requirements/);
     expect(body.lines[0].catalogItemId).toBeFalsy();
+    expect(body.lines[0].unitPrice).toBe(120);
+    expect(body.notes).toBe('');
+    expect(body.termsAndConditions).toBe('');
+    expect(screen.getByRole('note')).toHaveTextContent('engineering calculations are approximate');
   });
 
   it.each(['Create', 'Create and edit'])('%s binds in place and preserves edited commercial data', async (action) => {

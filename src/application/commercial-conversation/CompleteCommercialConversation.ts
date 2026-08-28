@@ -5,8 +5,9 @@ import { latinDigits } from "../ai-sales-assistant/services/commercial-field-val
 import { applyCanonicalIntelligence, ConversationalDraftEngine } from "./ConversationalDraftEngine";
 import { completeFields } from "./field-completion";
 import type { AdvanceConversationInput, FieldAnswer } from "./types";
+import { labelledFieldAnswer } from "./labelled-field-answer";
 
-const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
+const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
 const numericFields = new Set(["cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 
@@ -36,11 +37,13 @@ export class CompleteCommercialConversation {
     for (const key of ["paymentTerms", "delivery", "warranty"] as const) {
       if (!answers[key] && prior?.commercialTerms?.[key] && prior.fieldProvenance?.[key] === "USER_PROVIDED") answers[key] = prior.commercialTerms[key]!;
     }
-    if (!answers.customerMention && prior?.customer.mention) answers.customerMention = prior.customer.mention;
+    const retainedCustomer = prior?.customer.mention ?? prior?.customer.proposedCustomerName ?? prior?.customer.name ?? previous?.proposedCustomerName ?? previous?.fields.customerMention;
+    if (!answers.customerMention && retainedCustomer) answers.customerMention = retainedCustomer;
     if (!selection.customer && prior?.customer.id && prior.customer.name) selection.customer = { id: prior.customer.id, name: prior.customer.name };
 
     const active = previous ? completeFields(previous).activeQuestion : null;
-    const answer: FieldAnswer | undefined = input.answer ?? (!input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
+    const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
+    const answer: FieldAnswer | undefined = labelled ?? input.answer ?? (!input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
     const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field);
     if (answer && (typeof answer.value !== "string" || !answer.value.trim() || answer.value.length > 4000)) throw new Error("CONVERSATION_ANSWER_INVALID");
     if (answer?.action && !["VALUE", "NOT_APPLICABLE"].includes(answer.action)) throw new Error("CONVERSATION_ANSWER_INVALID");
@@ -87,6 +90,7 @@ export class CompleteCommercialConversation {
     }) : undefined;
     const proposal = operation === "SALES_ORDER" || operation === "DRAWING_TAKEOFF" ? null : await this.intelligence.generateDraftProposal({
       companyId: input.companyId, prompt: intelligenceText, sourceLocale: input.locale,
+      validityBaseDate: prior?.proposal.validityBaseDate,
       buildMode: buildMode === "DRAWING" ? "AUTO" : buildMode, selection, answers, systemAnswers, notApplicable: [...notApplicable], retainedLines,
       retainedContext: targeted && prior ? {
         subject: prior.proposal.subject, brief: prior.proposal.brief, scopeType: prior.proposal.scopeType,

@@ -24,6 +24,7 @@ import type { AISalesAssistantPricingPort } from "../ports/AISalesAssistantPrici
 import { cleanCustomerEntity } from "./customer-entity";
 import { customerMatchScore } from "@/features/customers/domain/customer-discovery";
 import { companyToday, readCommercialClauses, resolveExpiry } from "./commercial-field-values";
+import { customerLocaleText, professionalQuotationText } from "./quotation-customer-text";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -51,6 +52,7 @@ export class AISalesAssistantResolver {
     extractionWarnings: string[] = [],
     selection?: CommercialSelection,
     notApplicable: CommercialAnswerField[] = [],
+    validityBaseDate?: string,
   ): Promise<SalesAssistantDraftProposal> {
     const company = await this.dependencies.companies.findById(companyId);
     if (!company) {
@@ -180,26 +182,38 @@ export class AISalesAssistantResolver {
         ).totals
       : null;
 
-    const subject = intent.subject ?? (sourceLocale === "ar" ? "عرض تجاري — " : "Commercial proposal — ") + (intent.lines[0]?.text ?? "");
-    const brief = intent.brief ?? intent.scopeOfWork ?? intent.lines.map((line) => `${line.quantity ?? "?"} × ${line.text}`).join("، ");
+    const { subject, brief } = professionalQuotationText(intent, canonicalLines, sourceLocale);
     const defaultPayment = customer.paymentTermDays != null ? (sourceLocale === "ar" ? `الدفع خلال ${customer.paymentTermDays} يوم` : `Payment within ${customer.paymentTermDays} days`) : null;
     const companyTerms = intent.scopeType ? await this.dependencies.terms?.find(companyId, intent.scopeType, sourceLocale) : null;
-    const today = companyToday(company.timezone);
-    const defaults = readCommercialClauses(companyTerms, today);
-    const userClauses = readCommercialClauses(intent.brief, today);
-    const paymentTerms = intent.paymentTerms ?? userClauses.paymentTerms ?? defaultPayment ?? defaults.paymentTerms;
-    const delivery = notApplicable.includes("delivery") ? null : intent.delivery ?? userClauses.delivery ?? defaults.delivery;
-    const warranty = notApplicable.includes("warranty") ? null : intent.warranty ?? defaults.warranty;
+    const today = validityBaseDate && resolveExpiry(validityBaseDate, "0000-01-01") ? validityBaseDate : companyToday(company.timezone);
+    const localized = (value: string | null | undefined) => {
+      const text = customerLocaleText(value, sourceLocale);
+      if (value?.trim() && !text) warnings.push("Customer-facing content withheld: internal review text or untranslated prose requires human clarification.");
+      return text;
+    };
+    const safeCompanyTerms = (companyTerms ?? '').split(/[\n;؛]+/).map(localized).filter(Boolean).join('\n');
+    const defaults = readCommercialClauses(safeCompanyTerms, today);
+    const userClauses = readCommercialClauses(intent.commercialSourceText, today);
+    const userPayment = localized(intent.paymentTerms ?? userClauses.paymentTerms);
+    const userDelivery = localized(intent.delivery ?? userClauses.delivery);
+    const userWarranty = localized(intent.warranty ?? userClauses.warranty);
+    const paymentTerms = intent.paymentTerms || userClauses.paymentTerms ? userPayment : defaultPayment ?? defaults.paymentTerms;
+    const delivery = notApplicable.includes("delivery") ? null : intent.delivery || userClauses.delivery ? userDelivery : defaults.delivery;
+    const warranty = notApplicable.includes("warranty") ? null : intent.warranty || userClauses.warranty ? userWarranty : defaults.warranty;
     const expiryDate = notApplicable.includes("expiryDate") ? null : (intent.expiryDate ? resolveExpiry(intent.expiryDate, today) : userClauses.expiryDate ?? defaults.expiryDate);
+    const notes = localized(intent.notes);
     // Keep unrelated company clauses, replacing only labelled policies overridden
     // by explicit answers/customer defaults. Never concatenate conflicting policies.
-    const otherTerms = (companyTerms ?? "").split(/[\n;؛]+/).filter((part) => {
+    const otherTerms = safeCompanyTerms.split(/[\n;؛]+/).filter((part) => {
       const parsed = readCommercialClauses(part, today);
       return !Object.values(parsed).some(Boolean);
     });
-    const terms = [...new Set([...otherTerms, paymentTerms,
-      delivery && `${sourceLocale === "ar" ? "التسليم" : "Delivery"}: ${delivery}`,
-      warranty && `${sourceLocale === "ar" ? "الضمان" : "Warranty"}: ${warranty}`])]
+    const labelled = (value: string | null, ar: string, en: string, label: RegExp) => value ? `${sourceLocale === "ar" ? ar : en}: ${value.replace(label, '').trim()}` : null;
+    const terms = [...new Set([...otherTerms,
+      labelled(paymentTerms, "شروط الدفع", "Payment", /^(?:شروط\s+الدفع|الدفع|payment(?:\s+terms)?)\s*:?\s*/i),
+      labelled(delivery, "التسليم", "Delivery", /^(?:مدة\s+التسليم|التسليم|delivery)\s*:?\s*/i),
+      labelled(warranty, "الضمان", "Warranty", /^(?:مدة\s+الضمان|الضمان|warranty)\s*:?\s*/i),
+      expiryDate && `${sourceLocale === "ar" ? "صلاحية العرض" : "Quotation validity"}: ${expiryDate}`])]
       .filter(Boolean).join("\n") || null;
     const reviewRequired =
       customer.reviewRequired ||
@@ -226,14 +240,14 @@ export class AISalesAssistantResolver {
       fieldProvenance: {
         projectName: intent.projectName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
         attentionName: intent.attentionName ? "USER_PROVIDED" : "NEEDS_CONFIRMATION",
-        expiryDate: intent.expiryDate || userClauses.expiryDate ? "USER_PROVIDED" : defaults.expiryDate ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
-        paymentTerms: intent.paymentTerms || userClauses.paymentTerms ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : defaults.paymentTerms ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
-        delivery: intent.delivery || userClauses.delivery ? "USER_PROVIDED" : defaults.delivery ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
-        warranty: intent.warranty ? "USER_PROVIDED" : defaults.warranty ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION",
+        expiryDate: !expiryDate ? "NEEDS_CONFIRMATION" : intent.expiryDate || userClauses.expiryDate ? "USER_PROVIDED" : "COMPANY_DEFAULT",
+        paymentTerms: !paymentTerms ? "NEEDS_CONFIRMATION" : userPayment ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT",
+        delivery: !delivery ? "NEEDS_CONFIRMATION" : userDelivery ? "USER_PROVIDED" : "COMPANY_DEFAULT",
+        warranty: !warranty ? "NEEDS_CONFIRMATION" : userWarranty ? "USER_PROVIDED" : "COMPANY_DEFAULT",
       },
       documentType: intent.documentType,
       facts: intent.facts,
-      completion: { subject: "AI_ESTIMATED", brief: "AI_ESTIMATED", currency: intent.currencyCode ? "USER_PROVIDED" : customer.preferredCurrency ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT", terms: intent.paymentTerms ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : companyTerms ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION", scope: intent.scopeType ? "USER_PROVIDED" : "NEEDS_CONFIRMATION" },
+      completion: { subject: "RULE_CALCULATED", brief: "RULE_CALCULATED", currency: intent.currencyCode ? "USER_PROVIDED" : customer.preferredCurrency ? "CUSTOMER_DEFAULT" : "COMPANY_DEFAULT", terms: userPayment || userDelivery || userWarranty ? "USER_PROVIDED" : defaultPayment ? "CUSTOMER_DEFAULT" : safeCompanyTerms ? "COMPANY_DEFAULT" : "NEEDS_CONFIRMATION", scope: intent.scopeType ? "USER_PROVIDED" : "NEEDS_CONFIRMATION" },
       estimateNotice: Boolean(smartSystem) || canonicalLines.some((line) => line.catalogItemId === null),
       customer,
       proposal: {
@@ -246,15 +260,16 @@ export class AISalesAssistantResolver {
         projectName: intent.projectName ?? null,
         attentionName: intent.attentionName ?? null,
         expiryDate,
+        validityBaseDate: today,
         scopeType: intent.scopeType ?? null,
         currencyCode,
         priceListId,
       },
       lines: canonicalLines,
       financials,
-      notes: intent.notes ?? null,
-      notesAr: sourceLocale === "ar" ? intent.notes ?? null : null,
-      notesEn: sourceLocale === "en" ? intent.notes ?? null : null,
+      notes,
+      notesAr: sourceLocale === "ar" ? notes : null,
+      notesEn: sourceLocale === "en" ? notes : null,
       termsAndConditions: terms,
       termsAndConditionsAr: sourceLocale === "ar" ? terms : null,
       termsAndConditionsEn: sourceLocale === "en" ? terms : null,

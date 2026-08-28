@@ -9,6 +9,7 @@ import type {
 import { SALES_ASSISTANT_PROMPT_MAX_LENGTH } from "../dto/AISalesAssistantDto";
 import { completeEstimatedPricing } from "./completeEstimatedPricing";
 import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
+import { explicitCustomerNote } from "./quotation-customer-text";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -40,7 +41,14 @@ export class AISalesAssistantService {
 
     const { intent, extractionMode, warnings } =
       await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers, request.systemAnswers);
-    for (const key of ["subject", "brief", "currencyCode"] as const) {
+    // A provider may propose commercial text, but cannot invent customer notes or
+    // terms. Structured extraction must point back to actual user content.
+    intent.commercialSourceText = prompt;
+    intent.notes = request.answers?.notes ?? explicitCustomerNote(prompt);
+    for (const field of ["paymentTerms", "delivery", "warranty", "expiryDate"] as const) {
+      if (intent[field] && !prompt.includes(intent[field]!)) intent[field] = null;
+    }
+    for (const key of ["currencyCode"] as const) {
       if (request.retainedContext?.[key]) intent[key] = request.retainedContext[key];
     }
     if (request.retainedContext?.scopeType) intent.scopeType = request.retainedContext.scopeType;
@@ -72,6 +80,7 @@ export class AISalesAssistantService {
       warnings,
       request.selection,
       request.notApplicable,
+      request.validityBaseDate,
     );
     return completeEstimatedPricing(proposal, this.provider);
   }

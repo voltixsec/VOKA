@@ -11,7 +11,7 @@ export function cleanCustomerEntity(value: unknown): string | null {
 
 /** Used only when structured entity extraction is unavailable or unusable. */
 export function fallbackCompanyEntity(prompt: string): string | null {
-  const matches = [...prompt.matchAll(/(?:^|\s)((?:شركة|شركه)\s+[^\n،,;:]+?)(?=\s+(?:[\d٠-٩]+|توريد|تركيب)|[\n،,;:]|$)/gu)];
+  const matches = [...prompt.matchAll(/(?:^|\s)((?:ال)?(?:شركة|شركه)\s+[^\n،,;:]+?)(?=\s+(?:[\d٠-٩]+|توريد|تركيب)|[\n،,;:]|$)/gu)];
   if (matches.length !== 1) return null;
   return cleanCustomerEntity(matches[0][1]);
 }

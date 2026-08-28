@@ -66,7 +66,7 @@ describe("field-aware canonical completion", () => {
     const next = await run("مصنع الشويخ الجديد", first, "VOICE", { buildMode: "CATALOG_ONLY" });
     expect(next.canonicalProposal?.lines[0]).toMatchObject({ itemName: "NVR", quantity: 2, requestedPrice: 120 });
     expect(next.canonicalProposal?.smartSystem).toBeNull();
-    expect(next.canonicalProposal?.proposal).toMatchObject({ currencyCode: "SAR", subject: "NVR supply", scopeType: "SUPPLY_ONLY" });
+    expect(next.canonicalProposal?.proposal).toMatchObject({ currencyCode: "SAR", subject: "عرض سعر – توريد NVR", scopeType: "SUPPLY_ONLY" });
     expect(next.fields.customerId).toBe(first.fields.customerId);
     expect(catalog.mock.calls.every(([filter]) => filter.companyId === "tenant")).toBe(true);
   });
