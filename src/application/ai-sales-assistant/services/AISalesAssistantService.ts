@@ -14,6 +14,13 @@ import { explicitPaymentTerms } from "./payment-terms";
 import { AgenticSystemReasoner, type CommercialSystemResearchPort } from "../../agentic-commercial-intelligence";
 import { cleanAttentionName, cleanProjectName } from "./attention-name";
 
+export type SalesAssistantProposalRuntime = {
+  /** Validated again at the extractor boundary; never treated as canonical state. */
+  preinterpretedIntent?: unknown;
+  researchRequired?: boolean;
+  onResearchLatency?: (milliseconds: number) => void;
+};
+
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
   private readonly resolver: AISalesAssistantResolver;
@@ -40,6 +47,7 @@ export class AISalesAssistantService {
 
   async generateDraftProposal(
     request: AISalesAssistantRequest,
+    runtime: SalesAssistantProposalRuntime = {},
   ): Promise<SalesAssistantDraftProposal> {
     const prompt = request.prompt?.trim() ?? "";
     if (!prompt) {
@@ -55,7 +63,7 @@ export class AISalesAssistantService {
       (/[\u0600-\u06FF]/.test(prompt) ? "ar" : "en");
 
     const { intent, extractionMode, warnings } =
-      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers, request.systemAnswers);
+      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers, request.systemAnswers, runtime.preinterpretedIntent);
     // A provider may propose commercial text, but cannot invent customer notes or
     // terms. Structured extraction must point back to actual user content.
     intent.commercialSourceText = prompt;
@@ -64,14 +72,18 @@ export class AISalesAssistantService {
       if (intent[field] && !prompt.includes(intent[field]!)) intent[field] = null;
     }
     intent.paymentTerms = request.answers?.paymentTerms ?? explicitPaymentTerms(prompt) ?? intent.paymentTerms;
-    const agenticState = await this.agenticReasoner.resolve({
+    const agenticStatePromise = this.agenticReasoner.resolve({
       companyId: request.companyId, prompt, locale: sourceLocale, knownSystem: intent.smartSystem,
       retained: request.retainedAgentState, answers: request.systemAnswers,
       currentTurn: request.currentTurn,
+      researchRequired: runtime.researchRequired,
+      onResearchLatency: runtime.onResearchLatency,
     });
     // Unknown system prose is not a quantity source. In particular, model names
     // such as FM-200 must never become 200 sale units.
-    if (agenticState && agenticState.route !== "VERIFIED_PROFILE") intent.lines = [];
+    // Resolve tenant-owned commercial data while independent governed research is
+    // in flight. The provisional system result is still observed before pricing
+    // and before anything is committed.
     for (const key of ["currencyCode"] as const) {
       if (request.retainedContext?.[key]) intent[key] = request.retainedContext[key];
     }
@@ -96,7 +108,7 @@ export class AISalesAssistantService {
       }));
     }
 
-    const proposal = await this.resolver.resolveProposal(
+    const proposalPromise = this.resolver.resolveProposal(
       request.companyId,
       intent,
       sourceLocale,
@@ -106,6 +118,8 @@ export class AISalesAssistantService {
       request.notApplicable,
       request.validityBaseDate,
     );
+    const [agenticState, proposal] = await Promise.all([agenticStatePromise, proposalPromise]);
+    if (agenticState && agenticState.route !== "VERIFIED_PROFILE") proposal.lines = [];
     return completeEstimatedPricing({ ...proposal, agenticState }, this.provider);
   }
 }

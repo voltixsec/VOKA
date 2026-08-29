@@ -13,7 +13,7 @@ const authority: Record<FactSource, number> = {
   USER_CORRECTION: 900, USER_EXPLICIT: 800, VERIFIED_DOCUMENT: 700, VERIFIED_DATABASE: 650,
   TRUSTED_PROFILE: 600, DETERMINISTIC_DERIVATION: 550, RESEARCHED: 300, AI_INFERRED: 200, DEFAULT: 100,
 };
-const ownedFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "paymentSchedule", "delivery", "warranty", "currencyCode", "scopeType"]);
+const ownedFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "validity", "paymentTerms", "paymentSchedule", "delivery", "warranty", "currencyCode", "scopeType"]);
 
 function valid(field: string, value: unknown) {
   if (field.startsWith("system.")) return typeof value === "string" ? Boolean(value.trim()) : typeof value === "number" ? Number.isFinite(value) : typeof value === "boolean";

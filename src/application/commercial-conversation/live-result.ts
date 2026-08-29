@@ -8,24 +8,84 @@ function sourceStatus(source: string): LiveResultStatus {
 }
 
 const labels: Record<string, [string, string]> = {
-  customerMention: ["العميل", "Customer"], projectName: ["المشروع", "Project"], paymentTerms: ["الدفع", "Payment"],
+  "system.identity": ["النظام", "System"], "system.jurisdiction": ["الدولة", "Country / jurisdiction"],
+  "system.elevatorQuantity": ["عدد المصاعد", "Elevators"], "system.numberOfStops": ["الطوابق", "Floors / stops"],
+  "system.capacity": ["الحمولة", "Capacity"], "system.vehicleClass": ["نوع المركبات", "Vehicle class"],
+  customerMention: ["العميل", "Customer"], projectName: ["المشروع", "Project"], attentionName: ["إلى عناية", "Attention"], paymentTerms: ["الدفع", "Payment"],
   delivery: ["التسليم", "Delivery"], warranty: ["الضمان", "Warranty"], expiryDate: ["الصلاحية", "Validity"],
-  currencyCode: ["العملة", "Currency"], scopeType: ["النطاق", "Scope"],
+  validity: ["صلاحية العرض", "Validity"], currencyCode: ["العملة", "Currency"], scopeType: ["النطاق", "Scope"],
 };
+
+const summaryOrder = ["system.identity", "system.jurisdiction", "scopeType", "system.elevatorQuantity", "system.numberOfStops", "system.capacity", "system.vehicleClass", "customerMention", "projectName", "attentionName", "validity", "expiryDate"];
+const pendingCommercial: Record<string, [string, string]> = {
+  paymentTerms: ["الدفع", "Payment"], delivery: ["التسليم", "Delivery"], warranty: ["الضمان", "Warranty"], expiryDate: ["صلاحية العرض", "Validity"],
+};
+
+function displayValues(key: string, value: unknown) {
+  const raw = String(value);
+  if (key === "system.identity" && /vehicle|car\s*(?:elevator|lift)|مصعد\s*(?:سيارات|عربيات)/i.test(raw)) return { value: raw, valueAr: "نظام مصعد سيارات", valueEn: "Vehicle Elevator" };
+  if (key === "system.identity" && /CCTV|surveillance|كاميرات\s*مراقبة/i.test(raw)) return { value: raw, valueAr: "نظام كاميرات مراقبة", valueEn: "CCTV security system" };
+  if (key === "system.jurisdiction" && /kuwait|الكويت/i.test(raw)) return { value: raw, valueAr: "الكويت", valueEn: "Kuwait" };
+  if (key === "scopeType") {
+    const scopes: Record<string, [string, string]> = {
+      SUPPLY_AND_INSTALLATION: ["توريد وتركيب", "Supply and installation"], SUPPLY_ONLY: ["توريد فقط", "Supply only"], INSTALLATION_ONLY: ["تركيب فقط", "Installation only"],
+      MAINTENANCE: ["صيانة", "Maintenance"], CONSULTATION: ["استشارة", "Consultation"], SERVICE: ["خدمة", "Service"],
+    };
+    const scope = scopes[raw];
+    if (scope) return { value: raw, valueAr: scope[0], valueEn: scope[1] };
+  }
+  if (key === "system.vehicleClass" && raw === "SUV") return { value: raw, valueAr: "سيارات SUV", valueEn: "SUV" };
+  return { value: raw, valueAr: raw, valueEn: raw };
+}
 
 export function projectStructuredResult(draft: WorkingCommercialDraft): StructuredLiveResult {
   const facts: LiveResultItem[] = [];
-  for (const [key, fact] of Object.entries(draft.transactionalState?.ledger.facts ?? {})) {
-    const [ar, en] = labels[key] ?? (key.startsWith("system.") ? [key.slice(7), key.slice(7)] : [key, key]);
-    facts.push({ key, labelAr: ar, labelEn: en, value: fact.value === "DEFERRED" ? "DEFERRED" : typeof fact.value === "object" ? JSON.stringify(fact.value) : String(fact.value), status: fact.value === "DEFERRED" ? "DEFERRED" : sourceStatus(fact.source) });
+  const ledgerFacts = draft.transactionalState?.ledger.facts ?? {};
+  for (const [key, fact] of Object.entries(ledgerFacts)) {
+    const label = labels[key];
+    if (!label || typeof fact.value === "object") continue;
+    const values = displayValues(key, fact.value === "DEFERRED" ? "DEFERRED" : fact.value);
+    facts.push({ key, labelAr: label[0], labelEn: label[1], ...values, status: fact.value === "DEFERRED" ? "DEFERRED" : sourceStatus(fact.source) });
+  }
+  // Compatibility for drafts created before the transactional ledger was
+  // introduced. The UI still consumes this one projection, never raw fields.
+  if (!Object.keys(ledgerFacts).length) {
+    const proposal = draft.canonicalProposal;
+    const legacyValues: Record<string, unknown> = {
+      "system.identity": proposal?.smartSystem?.systemNameEn ?? proposal?.agenticState?.systemName,
+      "system.jurisdiction": proposal?.agenticState?.provisionalSystem?.jurisdiction,
+      customerMention: proposal?.customer?.mention ?? proposal?.customer?.name ?? draft.fields.customerMention,
+      projectName: proposal?.proposal?.projectName,
+      attentionName: proposal?.proposal?.attentionName,
+      expiryDate: proposal?.proposal?.expiryDate,
+      scopeType: proposal?.proposal?.scopeType ?? draft.fields.scopeType,
+    };
+    for (const [key, raw] of Object.entries(legacyValues)) {
+      const label = labels[key];
+      if (raw == null || !label) continue;
+      facts.push({ key, labelAr: label[0], labelEn: label[1], ...displayValues(key, raw), status: "CONFIRMED" });
+    }
   }
   for (const [index, line] of (draft.canonicalProposal?.lines ?? []).entries()) {
     facts.push({ key: `line.${index}`, labelAr: line.itemNameAr ?? line.itemName, labelEn: line.itemNameEn ?? line.itemName, value: line.quantity == null ? "?" : String(line.quantity), status: line.unitPrice == null ? "PRICE_REQUIRED" : line.catalogItemId ? "VERIFIED" : "PROVISIONAL" });
   }
-  for (const missing of draft.missingRequired) {
-    const key = missing.sourceField ? `pending.${missing.sourceField}` : `pending.${missing.key}`;
-    if (!facts.some((item) => item.key === key)) facts.push({ key, labelAr: missing.labelAr, labelEn: missing.labelEn, value: missing.state === "DEFERRED" ? "DEFERRED" : "PENDING", status: missing.state === "DEFERRED" ? "DEFERRED" : "NEEDS_CONFIRMATION" });
-  }
   const evidence = draft.canonicalProposal?.agenticState?.provisionalSystem?.evidence.map(({ title, url, publisher }) => ({ title, url, publisher })) ?? [];
-  return { facts, evidence, readiness: draft.readinessStage ?? "CONVERSATION_UNDERSTOOD" };
+  const byKey = new Map(facts.map((fact) => [fact.key, fact]));
+  const summary = summaryOrder.flatMap((key) => {
+    if (key === "expiryDate" && byKey.has("validity")) return [];
+    const fact = byKey.get(key);
+    return fact ? [fact] : [];
+  });
+  const stillNeeded = draft.missingRequired.flatMap((missing) => {
+    const field = missing.sourceField ?? missing.key;
+    const label = pendingCommercial[field];
+    if (!label || missing.state === "DEFERRED" || (field === "expiryDate" && byKey.has("validity")) || byKey.has(field)) return [];
+    return [{ key: field, labelAr: label[0], labelEn: label[1] }];
+  }).filter((item, index, all) => all.findIndex((candidate) => candidate.key === item.key) === index);
+  const lines = draft.canonicalProposal?.lines ?? [];
+  return {
+    summary, stillNeeded,
+    commercial: { lineCount: lines.length, priceRequiredCount: lines.filter((line) => line.unitPrice == null).length, draftReady: draft.status === "READY_FOR_REVIEW" },
+    facts, evidence, readiness: draft.readinessStage ?? "CONVERSATION_UNDERSTOOD",
+  };
 }

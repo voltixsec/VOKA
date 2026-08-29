@@ -1,7 +1,7 @@
 import { classifyCommercialOperation } from "../commercial-entry";
 import type { AISalesAssistantService } from "../ai-sales-assistant/services/AISalesAssistantService";
 import type { CommercialAnswerField, CommercialAnswers, CommercialSelection } from "../ai-sales-assistant/dto/AISalesAssistantDto";
-import { latinDigits } from "../ai-sales-assistant/services/commercial-field-values";
+import { latinDigits, parseValidityDuration } from "../ai-sales-assistant/services/commercial-field-values";
 import { applyCanonicalIntelligence, ConversationalDraftEngine } from "./ConversationalDraftEngine";
 import { completeFields } from "./field-completion";
 import type { AdvanceConversationInput, FieldAnswer } from "./types";
@@ -24,15 +24,38 @@ export type CompleteConversationInput = AdvanceConversationInput & {
   reanalyze?: boolean;
 };
 
+export type SalesAssistantTurnTiming = {
+  semanticProviderMs: number;
+  researchMs: number;
+  deterministicToolsMs: number;
+  naturalResponseMs: number;
+  totalMs: number;
+  researchInvoked: boolean;
+};
+
+export type CompleteConversationOptions = {
+  onTiming?: (timing: SalesAssistantTurnTiming) => void;
+};
+
 /** Application orchestration: targeted answers -> existing intelligence -> one next field. */
 export class CompleteCommercialConversation {
-  constructor(private readonly intelligence: Pick<AISalesAssistantService, "generateDraftProposal"> & Partial<Pick<AISalesAssistantService, "generateConversationResponse" | "reasonConversation">>) {}
+  constructor(
+    private readonly intelligence: Pick<AISalesAssistantService, "generateDraftProposal"> & Partial<Pick<AISalesAssistantService, "generateConversationResponse" | "reasonConversation">>,
+    private readonly options: CompleteConversationOptions = {},
+  ) {}
 
   async execute(input: CompleteConversationInput) {
+    const turnStarted = performance.now();
+    let semanticProviderMs = 0;
+    let researchMs = 0;
     const previous = input.draft;
     let semanticMode: string | null = null;
     let semanticDeferPayment = false;
+    let semanticTargetField: string | null = null;
+    let semanticIntent: unknown;
+    let researchRequired: boolean | undefined;
     if (this.intelligence.reasonConversation) {
+      const semanticStarted = performance.now();
       try {
         const raw = await this.intelligence.reasonConversation({
           locale: input.locale, currentTurn: input.reply,
@@ -41,11 +64,26 @@ export class CompleteCommercialConversation {
           activeQuestion: previous?.activeQuestion?.field ?? null,
           activeSystem: previous?.systemWorkingPlan?.systemIdentity ?? null,
           documentIntent: previous?.operation ?? input.operation ?? null,
-        }) as { mode?: unknown; deferPayment?: unknown } | undefined;
+        }) as { mode?: unknown; deferPayment?: unknown; targetField?: unknown; intent?: unknown; researchRequired?: unknown } | undefined;
         if (typeof raw?.mode === "string" && ["CONTINUE", "PROVIDE_FACTS", "CORRECTION", "QUESTION", "RECOMMENDATION", "UNKNOWN", "DEFER"].includes(raw.mode)) semanticMode = raw.mode;
         semanticDeferPayment = raw?.deferPayment === true;
+        semanticTargetField = typeof raw?.targetField === "string" ? raw.targetField : null;
+        semanticIntent = raw?.intent;
+        researchRequired = typeof raw?.researchRequired === "boolean" ? raw.researchRequired : undefined;
       } catch { /* Conservative local interpretation remains available. */ }
+      semanticProviderMs = performance.now() - semanticStarted;
     }
+    const implicitQuotationValidity = (previous?.operation === "QUOTATION" || input.operation === "QUOTATION" || input.documentMode === "QUOTATION")
+      && previous?.missingRequired.some((field) => field.key === "expiryDate")
+      && /(?:من\s+تاريخ\s+(?:الاعتماد|الموافقة|العرض|إصدار\s+العرض)|from\s+(?:the\s+)?(?:approval|quotation|quote|issue)\s+date)/i.test(input.reply)
+      && !/(?:تسليم|توريد|ضمان|دفع|delivery|supply|warranty|payment)/i.test(input.reply);
+    if (implicitQuotationValidity) {
+      semanticTargetField = "expiryDate";
+      if (semanticIntent && typeof semanticIntent === "object" && !Array.isArray(semanticIntent)) {
+        semanticIntent = { ...semanticIntent as Record<string, unknown>, expiryDate: input.reply.trim(), delivery: null };
+      }
+    }
+    const deterministicStarted = performance.now();
     const answers: CommercialAnswers = { ...previous?.answers };
     const systemAnswers = { ...previous?.systemAnswers };
     const notApplicable = new Set(previous?.notApplicable?.filter((field) => nullableFields.has(field)) ?? []);
@@ -103,8 +141,10 @@ export class CompleteCommercialConversation {
     const conversationalControl = ["CONTINUE", "QUESTION", "RECOMMENDATION", "UNKNOWN"].includes(semanticMode ?? "") || /^(?:كمل|كمّل|تابع|استمر|continue|go on|خلينا|دعنا|let'?s)|مش\s*عارف|ما\s*أعرف|i\s*(?:do not|don't)\s*know|(?:إيه|ايه|what).*?(?:الأفضل|الأنسب|best)|اختارلي|recommend/i.test(input.reply.trim());
     const contextualAnswer = active && !conversationalControl && !isDeferIntent && !input.reanalyze && !input.selection
       ? { field: active.field, value: input.reply } : undefined;
+    const semanticAnswer = semanticTargetField && (answerFields.has(semanticTargetField) || provisionalInputs.some((field) => field.name === semanticTargetField))
+      ? { field: semanticTargetField, value: input.reply } : undefined;
     const submittedAnswer = input.answer?.action || !conversationalControl ? input.answer : undefined;
-    answer ??= patchedSystemFields.length ? undefined : labelled ?? (conversationalPayment ? { field: "paymentTerms", value: conversationalPayment } : undefined) ?? submittedAnswer ?? contextualAnswer;
+    answer ??= patchedSystemFields.length ? undefined : labelled ?? (conversationalPayment ? { field: "paymentTerms", value: conversationalPayment } : undefined) ?? semanticAnswer ?? submittedAnswer ?? contextualAnswer;
     const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field)
       ?? prior?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === answer?.field);
     if (answer && (typeof answer.value !== "string" || !answer.value.trim() || answer.value.length > 4000)) throw new Error("CONVERSATION_ANSWER_INVALID");
@@ -167,6 +207,10 @@ export class CompleteCommercialConversation {
         currencyCode: prior.completion?.currency === "USER_PROVIDED" ? prior.proposal.currencyCode : undefined,
       } : undefined,
       retainedAgentState: prior?.agenticState,
+    }, {
+      preinterpretedIntent: semanticIntent,
+      researchRequired,
+      onResearchLatency: (milliseconds) => { researchMs += milliseconds; },
     });
     operation ??= proposal?.documentType ?? null;
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });
@@ -191,6 +235,16 @@ export class CompleteCommercialConversation {
         correctionFields.add(answer.field);
       }
       const systemFacts = proposal.smartSystem?.inputs ?? proposal.agenticState?.provisionalSystem?.inputs ?? [];
+      const systemIdentity = proposal.smartSystem?.systemNameEn ?? proposal.agenticState?.systemName;
+      if (systemIdentity) decision.patches.push({ field: "system.identity", operation: previous?.transactionalState?.ledger.facts["system.identity"] ? "REPLACE" : "SET", value: systemIdentity,
+        provenance: proposal.smartSystem ? "DETERMINISTIC_DERIVATION" : proposal.agenticState?.provisionalSystem?.provenance === "RESEARCHED" ? "RESEARCHED" : "AI_INFERRED", evidence: "Validated canonical system identity." });
+      const systemJurisdiction = proposal.agenticState?.provisionalSystem?.jurisdiction;
+      if (systemJurisdiction) decision.patches.push({ field: "system.jurisdiction", operation: previous?.transactionalState?.ledger.facts["system.jurisdiction"] ? "REPLACE" : "SET", value: systemJurisdiction, provenance: "DETERMINISTIC_DERIVATION", evidence: "Jurisdiction derived from explicit request context." });
+      const hasRelativeValidityAnchor = answer?.field === "expiryDate" && /(?:من\s+تاريخ\s+(?:الاعتماد|الموافقة|العرض|إصدار\s+العرض)|from\s+(?:the\s+)?(?:approval|quotation|quote|issue)\s+date)/i.test(answer.value);
+      if (answer?.field === "expiryDate" && (parseValidityDuration(answer.value) || hasRelativeValidityAnchor)) {
+        decision.patches.push({ field: "validity", operation: previous?.transactionalState?.ledger.facts.validity ? "REPLACE" : "SET", value: answer.value.trim(), provenance: previous?.transactionalState?.ledger.facts.validity ? "USER_CORRECTION" : "USER_EXPLICIT", evidence: "User-supplied quotation validity wording." });
+        correctionFields.add("validity");
+      }
       for (const fact of systemFacts) {
         if (fact.value == null) continue;
         const field = `system.${fact.name}`;
@@ -243,7 +297,10 @@ export class CompleteCommercialConversation {
         suggestions: [{ ar: "إرفاق مخطط", en: "Attach drawing", reply: "أرفق ملف الرسم" }],
       };
     }
+    const deterministicToolsMs = Math.max(0, performance.now() - deterministicStarted - researchMs);
+    const responseStarted = performance.now();
     const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply, provider: this.intelligence });
+    const naturalResponseMs = performance.now() - responseStarted;
     const priorMessages = previous?.conversationMessages ?? previous?.turns.map((turn) => ({ role: turn.role ?? "USER" as const, source: turn.source, text: turn.text })) ?? [];
     const withResponse = {
       ...completed,
@@ -255,6 +312,15 @@ export class CompleteCommercialConversation {
         { role: "ASSISTANT" as const, source: "TEXT" as const, text: input.locale === "ar" ? assistantResponse.ar : assistantResponse.en },
       ],
     };
-    return { ...withResponse, structuredResult: projectStructuredResult(withResponse) };
+    const result = { ...withResponse, structuredResult: projectStructuredResult(withResponse) };
+    this.options.onTiming?.({
+      semanticProviderMs: Math.round(semanticProviderMs),
+      researchMs: Math.round(researchMs),
+      deterministicToolsMs: Math.round(deterministicToolsMs),
+      naturalResponseMs: Math.round(naturalResponseMs),
+      totalMs: Math.round(performance.now() - turnStarted),
+      researchInvoked: researchMs > 0,
+    });
+    return result;
   }
 }

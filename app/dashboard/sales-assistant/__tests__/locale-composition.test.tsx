@@ -63,8 +63,9 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     fireEvent.click(screen.getByRole("button", { name: isArabic ? "ابدأ الطلب" : "Start Request" }));
     await screen.findByTestId("commercial-conversation");
     expectLocale(container);
-    expect(screen.getByText(isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:")).toBeTruthy();
-    expect(screen.getByText(isArabic ? /اختياري\/موصى به/ : /Optional\/recommended/)).toBeTruthy();
+    expect(screen.queryByText(isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:")).toBeNull();
+    expect(screen.queryByText(isArabic ? /اختياري\/موصى به/ : /Optional\/recommended/)).toBeNull();
+    expect(screen.getByText(isArabic ? "عرض التفاصيل" : "View details")).toBeTruthy();
     expect(screen.queryByRole("button", { name: isArabic ? "فتح للمراجعة البشرية" : "Open for human review" })).toBeNull();
     const ready = { ...first, status: "READY_FOR_REVIEW", missingRequired: [], clarification: null };
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: ready }) });
@@ -96,11 +97,13 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     const composer = screen.getByTestId("commercial-composer");
     const controls = screen.getByTestId("commercial-composer-controls");
     const input = screen.getByTestId("commercial-composer-input");
+    const actions = screen.getByTestId("compact-conversation-actions");
     const result = screen.getByTestId("commercial-conversation");
     expect(composer.classList.contains("gap-2")).toBe(true);
     expect(composer.classList.contains("p-3")).toBe(true);
     expect(controls.nextElementSibling).toBe(input);
-    expect(input.nextElementSibling).toBe(result);
+    expect(input.nextElementSibling).toBe(actions);
+    expect(actions.nextElementSibling).toBe(result);
     expect(controls.parentElement).toBe(composer);
     expect(controls.classList.contains("flex-wrap")).toBe(true);
     expect(controls.className).not.toMatch(/\bp-\d|\bmt-\d|\bmb-\d|\bborder\b/);

@@ -27,7 +27,10 @@ describe("POST /api/ai/commercial-conversation intelligence fusion", () => {
     const response = await POST(request);
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(mocks.generateDraftProposal).toHaveBeenCalledWith(expect.objectContaining({ companyId: "tenant-1", buildMode: "AUTO" }));
+    expect(mocks.generateDraftProposal).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: "tenant-1", buildMode: "AUTO" }),
+      expect.objectContaining({ preinterpretedIntent: undefined, researchRequired: undefined, onResearchLatency: expect.any(Function) }),
+    );
     expect(body.data.canonicalProposal.smartSystem.systemType).toBe("CCTV");
     expect(body.data.missingRequired.map((field: { key: string }) => field.key)).toEqual(["customer", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty"]);
     expect(body.data.activeQuestion.field).toBe("customerMention");

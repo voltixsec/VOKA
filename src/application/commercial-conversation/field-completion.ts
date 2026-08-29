@@ -48,7 +48,10 @@ export function fieldTarget(field: MissingField): string {
 
 /** All readiness/next-question projections are derived together, never toggled independently. */
 export function completeFields(draft: WorkingCommercialDraft): WorkingCommercialDraft {
-  const requirements = evaluateFormRequirements(draft.operation, draft.fields, Boolean(draft.attachment), draft.contextText, draft.canonicalProposal, { notApplicable: draft.notApplicable });
+  const requirements = evaluateFormRequirements(draft.operation, draft.fields, Boolean(draft.attachment), draft.contextText, draft.canonicalProposal, {
+    notApplicable: draft.notApplicable,
+    validity: typeof draft.transactionalState?.ledger.facts.validity?.value === "string" ? draft.transactionalState.ledger.facts.validity.value : null,
+  });
   const deferredSet = new Set(draft.deferredFields ?? []);
 
   // Update missingRequired state based on whether fields are deferred

@@ -153,4 +153,61 @@ describe("Chat-First CEO Golden Scenarios", () => {
     const { run } = fixture(); const draft = await run("عايز مصعد سيارات في الكويت");
     expect(draft.readinessStage).not.toBe("READY_FOR_DRAFT"); expect(draft.status).toBe("NEEDS_CLARIFICATION"); expect(draft.internalIterations).toBeLessThanOrEqual(4);
   });
+
+  it("26. keeps the exact CEO chat and compact summary coherent without repeating provider interpretation", async () => {
+    const research = { researchSystem: vi.fn() };
+    const provider = {
+      reasonConversation: vi.fn(async ({ currentTurn }: { currentTurn: string }) => {
+        const targetField = /طوابق/.test(currentTurn) ? "numberOfStops"
+          : currentTurn === "الشركة الوطنية" || /العميل الشركة/.test(currentTurn) ? "customerMention"
+          : /هيلتون/.test(currentTurn) ? "projectName"
+          : /مهندس/.test(currentTurn) ? "attentionName"
+          : /أسبوع/.test(currentTurn) ? "delivery" : null;
+        return {
+          mode: /العميل الشركة/.test(currentTurn) ? "CORRECTION" : "PROVIDE_FACTS",
+          targetField, deferPayment: false, researchRequired: /search|ابحث|دور على/i.test(currentTurn),
+          intent: {
+            documentType: "QUOTATION", scopeType: "SUPPLY_AND_INSTALLATION", lines: [], facts: [],
+            customerMention: currentTurn === "الشركة الوطنية" ? "الشركة الوطنية" : /العميل الشركة الوطنية للاتصالات/.test(currentTurn) ? "الشركة الوطنية للاتصالات" : null,
+            projectName: /هيلتون/.test(currentTurn) ? "هيلتون السالمية" : null,
+            attentionName: /مهندس/.test(currentTurn) ? "مهندس أحمد الخولي" : null,
+            delivery: /أسبوع/.test(currentTurn) ? "أسبوع من تاريخ الاعتماد" : null,
+            expiryDate: null,
+          },
+        };
+      }),
+      extractIntent: vi.fn().mockRejectedValue(new Error("duplicate interpretation must not run")),
+    };
+    const service = new AISalesAssistantService({
+      companies: { findById: vi.fn().mockResolvedValue({ defaultCurrency: "KWD", timezone: "Asia/Kuwait" }) },
+      customers: { findAll: vi.fn().mockResolvedValue([]) }, catalogItems: { findAll: vi.fn().mockResolvedValue([]) },
+      units: { findById: vi.fn(), findBySymbol: vi.fn() }, quotationReferences: { resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()) },
+      pricing: { resolvePriceListId: vi.fn().mockResolvedValue(null), resolveUnitPrice: vi.fn() }, terms: { find: vi.fn().mockResolvedValue(null) },
+    } as any, provider, research);
+    const conversation = new CompleteCommercialConversation(service);
+    const messages = [
+      "عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت.", "ستة طوابق بالضبط.", "الشركة الوطنية",
+      "العميل الشركة الوطنية للاتصالات", "هيلتون السالمية", "مهندس أحمد الخولي", "أسبوع من تاريخ الاعتماد",
+    ];
+    let draft: WorkingCommercialDraft | undefined;
+    for (const reply of messages) {
+      draft = await conversation.execute({ companyId: "tenant-a", reply, draft, replySource: "TEXT", locale: "ar", documentMode: "QUOTATION" });
+      for (const fact of draft.structuredResult?.summary ?? []) {
+        expect(String(draft.transactionalState?.ledger.facts[fact.key]?.value)).toEqual(fact.value);
+      }
+    }
+    const summary = Object.fromEntries(draft!.structuredResult!.summary.map((fact) => [fact.key, fact.valueAr ?? fact.value]));
+    expect(summary).toMatchObject({
+      "system.identity": "نظام مصعد سيارات", "system.jurisdiction": "الكويت", scopeType: "توريد وتركيب",
+      "system.numberOfStops": "6", customerMention: "الشركة الوطنية للاتصالات", projectName: "هيلتون السالمية",
+      attentionName: "مهندس أحمد الخولي", validity: "أسبوع من تاريخ الاعتماد",
+    });
+    expect(draft!.structuredResult!.stillNeeded.map((field) => field.key)).toEqual(expect.arrayContaining(["paymentTerms", "delivery", "warranty"]));
+    expect(draft!.structuredResult!.stillNeeded.map((field) => field.key)).not.toContain("expiryDate");
+    expect(draft!.structuredResult!.summary.map((fact) => fact.labelAr).join(" ")).not.toMatch(/projectConfiguration|attentionName|systemProfileId|engineeringRequirement|[a-z]+[A-Z]/);
+    expect(provider.extractIntent).not.toHaveBeenCalled();
+    expect(research.researchSystem).not.toHaveBeenCalled();
+    await conversation.execute({ companyId: "tenant-a", reply: "اعمل search على النظام", draft, replySource: "TEXT", locale: "ar", documentMode: "QUOTATION" });
+    expect(research.researchSystem).toHaveBeenCalledTimes(1);
+  });
 });

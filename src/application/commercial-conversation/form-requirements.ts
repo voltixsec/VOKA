@@ -22,7 +22,7 @@ export function evaluateFormRequirements(
   hasAttachment: boolean,
   contextText: string,
   canonicalProposal?: SalesAssistantDraftProposal | null,
-  completion?: { notApplicable?: CommercialAnswerField[] }
+  completion?: { notApplicable?: CommercialAnswerField[]; validity?: string | null }
 ) {
   const missingRequired: MissingField[] = [];
   if (operation === "SALES_ORDER") {
@@ -73,7 +73,7 @@ export function evaluateFormRequirements(
       }
 
       // 3. PAYMENT / VALIDITY / OTHER COMMERCIAL TERMS
-      if (operation === "QUOTATION") requireDecision("expiryDate", canonicalProposal?.proposal.expiryDate, "صلاحية العرض", "Quotation validity");
+      if (operation === "QUOTATION") requireDecision("expiryDate", canonicalProposal?.proposal.expiryDate ?? completion.validity, "صلاحية العرض", "Quotation validity");
       requireDecision("paymentTerms", canonicalProposal?.paymentTermsReview ? null : canonicalProposal?.commercialTerms?.paymentTerms, "شروط الدفع", "Payment terms");
       if (operation === "QUOTATION" || operation === "CONTRACT") {
         requireDecision("delivery", canonicalProposal?.commercialTerms?.delivery, "مدة التسليم", "Delivery timing");

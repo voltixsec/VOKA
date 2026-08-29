@@ -33,10 +33,11 @@ export class AISalesAssistantExtractor {
     buildMode: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM" = "AUTO",
     answers: CommercialAnswers = {},
     systemAnswers: SystemFieldAnswers = {},
+    preinterpretedIntent?: unknown,
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
-    let understood: ExtractedSalesIntent | null = null;
-    if (this.provider) {
+    let understood: ExtractedSalesIntent | null = validateExtractedSalesIntent(preinterpretedIntent);
+    if (!understood && this.provider) {
       try { understood = validateExtractedSalesIntent(await this.provider.extractIntent(trimmed, sourceLocale)); } catch { /* deterministic fallback */ }
     }
     let customerMention = cleanCustomerEntity(understood?.customerMention);

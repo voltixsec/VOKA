@@ -45,8 +45,13 @@ export type ConversationTurn = {
 export type ConversationMessage = { role: "USER" | "ASSISTANT"; source: ConversationReplySource; text: string };
 
 export type LiveResultStatus = "CONFIRMED" | "PROVISIONAL" | "DEFERRED" | "NEEDS_CONFIRMATION" | "PRICE_REQUIRED" | "VERIFIED";
-export type LiveResultItem = { key: string; labelAr: string; labelEn: string; value: string; status: LiveResultStatus };
+export type LiveResultItem = { key: string; labelAr: string; labelEn: string; value: string; valueAr?: string; valueEn?: string; status: LiveResultStatus };
 export type StructuredLiveResult = {
+  /** Passive, user-facing projection. Keys are never rendered directly. */
+  summary: LiveResultItem[];
+  stillNeeded: Array<{ key: string; labelAr: string; labelEn: string }>;
+  commercial: { lineCount: number; priceRequiredCount: number; draftReady: boolean };
+  /** Detailed committed facts remain available behind one optional disclosure. */
   facts: LiveResultItem[];
   evidence: Array<{ title: string; url: string; publisher: string }>;
   readiness: CommercialReadiness;

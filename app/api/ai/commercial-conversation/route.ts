@@ -1,6 +1,7 @@
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
 import { CompleteCommercialConversation, type CompleteConversationInput } from "@/src/application/commercial-conversation/CompleteCommercialConversation";
 import { createAISalesAssistantService } from "@/src/infrastructure/ai/createAISalesAssistantService";
+import { salesAssistantTurnTimingOptions } from "@/src/infrastructure/ai/salesAssistantTurnTiming";
 
 const choices = {
   locale: ["ar", "en"], replySource: ["TEXT", "VOICE", "CHIP"],
@@ -19,7 +20,7 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
   const selectedCustomer = input.selection?.customer ?? input.draft?.selection?.customer;
   if (selectedCustomer && (typeof selectedCustomer.id !== "string" || typeof selectedCustomer.name !== "string" || selectedCustomer.name.length > 300)) throw ApiError.badRequest("SELECTION_INVALID", "Invalid customer selection.");
   try {
-    const draft = await new CompleteCommercialConversation(createAISalesAssistantService()).execute({ ...input, companyId: company.companyId });
+    const draft = await new CompleteCommercialConversation(createAISalesAssistantService(), salesAssistantTurnTimingOptions()).execute({ ...input, companyId: company.companyId });
     return apiSuccess(draft, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof Error && error.message === "CONVERSATION_OPERATION_REQUIRED") throw ApiError.badRequest(error.message, "A supported commercial operation is required.");

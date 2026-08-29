@@ -67,7 +67,7 @@ function applyAnswers(model: ProvisionalSystemModel, answers: SystemFieldAnswers
 export class AgenticSystemReasoner {
   constructor(private readonly research?: CommercialSystemResearchPort | null) {}
 
-  async resolve(input: { companyId: string; prompt: string; currentTurn?: string; locale: "ar" | "en"; knownSystem?: SystemCalculationResult | null; retained?: AgenticCommercialState | null; answers?: SystemFieldAnswers }): Promise<AgenticCommercialState | null> {
+  async resolve(input: { companyId: string; prompt: string; currentTurn?: string; locale: "ar" | "en"; knownSystem?: SystemCalculationResult | null; retained?: AgenticCommercialState | null; answers?: SystemFieldAnswers; researchRequired?: boolean; onResearchLatency?: (milliseconds: number) => void }): Promise<AgenticCommercialState | null> {
     if (input.knownSystem) return {
       route: "VERIFIED_PROFILE", systemName: input.locale === "ar" ? input.knownSystem.systemNameAr : input.knownSystem.systemNameEn,
       profileId: input.knownSystem.systemType, profileVersion: input.knownSystem.templateVersion, provisionalSystem: null,
@@ -81,11 +81,16 @@ export class AgenticSystemReasoner {
     const query = retained?.researchQuery ?? generalizedSystemQuery(researchPrompt, input.locale);
     let model = retained?.provisionalSystem ?? null;
     let researchStatus: AgenticCommercialState["researchStatus"] = retained?.researchStatus ?? "UNAVAILABLE";
-    if (!model && this.research) {
+    const research = this.research;
+    const shouldResearch = Boolean(research && input.researchRequired !== false && (!model || (input.researchRequired === true && model.provenance !== "RESEARCHED")));
+    if (shouldResearch && research) {
+      const researchStarted = performance.now();
       try {
-        model = await this.research.researchSystem({ companyId: input.companyId, query, locale: input.locale, jurisdiction: jurisdiction(researchPrompt) });
+        model = await research.researchSystem({ companyId: input.companyId, query, locale: input.locale, jurisdiction: jurisdiction(researchPrompt) });
       } catch {
         model = null;
+      } finally {
+        input.onResearchLatency?.(performance.now() - researchStarted);
       }
       researchStatus = model ? "COMPLETED" : "UNAVAILABLE";
     }
