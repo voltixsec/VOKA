@@ -26,15 +26,17 @@ describe("Voice V2 recorded transcription", () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: { message: "test stop" } }) });
     vi.stubGlobal("fetch", fetchSpy);
     render(<SalesAssistantPage customAudioRecorder={recorder} customTranscribe={transcribe} />);
+    expect(screen.getAllByTestId("primary-voice-action")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Tell VOKA|Record voice/i })).toBeNull();
 
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    fireEvent.click(screen.getByRole("button", { name: "Tell VOKA" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
     expect(recorder.startCount).toBe(1);
     expect(textarea.value).toBe("");
     expect(screen.getByLabelText("Audio recording waveform")).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop microphone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop and Send" }));
     expect(recorder.stopCount).toBe(1);
     await waitFor(() => expect(textarea.value).toBe("12 cameras NVR PoE RJ45 4MP"));
     expect(transcribe).toHaveBeenCalledTimes(1);
@@ -50,8 +52,8 @@ describe("Voice V2 recorded transcription", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     render(<SalesAssistantPage customAudioRecorder={recorder} customTranscribe={vi.fn().mockResolvedValue(" ")} />);
-    fireEvent.click(screen.getByRole("button", { name: "Tell VOKA" }));
-    fireEvent.click(screen.getByRole("button", { name: "Stop microphone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop and Send" }));
     await screen.findByText("Audio recording or transcription failed. Try again or type your request.");
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
     expect(fetchSpy).not.toHaveBeenCalled();

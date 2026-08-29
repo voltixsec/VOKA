@@ -24,9 +24,9 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
     if (!hasAttachment) missingRequired.push(missing.attachment);
     if (!contextText.trim()) missingRequired.push(missing.userIntent);
   } else {
-    // Review is not persistence: only quotations can carry a server-discovered
-    // unregistered name. The existing save use case still requires a real ID.
-    const proposed = operation === "QUOTATION" && canonicalProposal?.customer.status === "MISSING"
+    // Draft review preserves a clearly stated customer even when master data is
+    // absent. Target document approval/persistence remains the strict boundary.
+    const proposed = canonicalProposal?.customer.status === "MISSING"
       && canonicalProposal.customer.proposedCustomerName?.trim();
     if (!fields.customerId && !proposed) missingRequired.push(missing.customer);
     canonicalProposal?.lines.forEach((line, index) => {

@@ -137,17 +137,18 @@ export function applyCustomerResolution(draft: WorkingCommercialDraft, candidate
   });
   const status = plausible.length === 1 ? "MATCHED" : plausible.length > 1 ? "AMBIGUOUS" : "NOT_FOUND";
   const fields = { ...draft.fields, customerId: status === "MATCHED" ? plausible[0].id : null };
-  const requirements = evaluateFormRequirements(draft.operation, fields, Boolean(draft.attachment), draft.contextText, draft.canonicalProposal);
-  const resolved: WorkingCommercialDraft = { ...draft, fields, customerResolution: { status, candidates: plausible.slice(0, 5) }, ...requirements, status: requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW" };
+  const evaluated = evaluateFormRequirements(draft.operation, fields, Boolean(draft.attachment), draft.contextText, draft.canonicalProposal);
+  const requirements = status === "NOT_FOUND" ? { ...evaluated, missingRequired: evaluated.missingRequired.filter((field) => field.key !== "customer") } : evaluated;
+  const resolved: WorkingCommercialDraft = { ...draft, fields, customerResolution: { status, candidates: plausible.slice(0, 5) }, ...requirements,
+    proposedCustomerName: status === "NOT_FOUND" ? draft.fields.customerMention : draft.proposedCustomerName,
+    customerState: status === "MATCHED" ? "CUSTOMER_RESOLVED" : status === "AMBIGUOUS" ? "CUSTOMER_AMBIGUOUS" : "CUSTOMER_PROPOSED_UNREGISTERED",
+    status: requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW" };
   resolved.clarification = clarification(resolved.missingRequired);
   if (status === "AMBIGUOUS") resolved.clarification = {
     ar: "وجدت أكثر من عميل مطابق. اختر العميل الصحيح.", en: "I found more than one matching customer. Choose the correct customer.",
     suggestions: plausible.slice(0, 5).map((candidate) => ({ ar: candidate.name, en: candidate.name, reply: `العميل ${candidate.name}` })),
   };
-  if (status === "NOT_FOUND") resolved.clarification = {
-    ar: `لم أجد العميل «${draft.fields.customerMention}» في قاعدة العملاء. راجع الاسم أو أنشئ العميل أولاً.`,
-    en: `Customer “${draft.fields.customerMention}” was not found. Check the name or create the customer first.`, suggestions: [],
-  };
+  if (status === "NOT_FOUND") resolved.clarification = null;
   return draft.completionVersion ? completeFields(resolved) : resolved;
 }
 
@@ -185,9 +186,6 @@ export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, propos
     en: customerResolution.candidates.length === 1 ? "I found a similar customer. Confirm this is the intended customer." : "I found more than one matching customer. Choose the correct customer.",
     suggestions: customerResolution.candidates.map((candidate) => ({ ar: candidate.name, en: candidate.name, reply: `العميل ${candidate.name}` })),
   };
-  if (customerStatus === "NOT_FOUND" && proposal.customer.mention && draft.operation !== "QUOTATION") resolved.clarification = {
-    ar: `لم أجد العميل «${proposal.customer.mention}» في قاعدة العملاء. راجع الاسم أو أنشئ العميل أولاً.`,
-    en: `Customer “${proposal.customer.mention}” was not found. Check the name or create the customer first.`, suggestions: [],
-  };
+  if (customerStatus === "NOT_FOUND" && proposal.customer.mention) resolved.clarification = null;
   return draft.completionVersion ? completeFields(resolved) : resolved;
 }

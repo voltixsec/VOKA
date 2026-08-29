@@ -109,6 +109,21 @@ describe("field-aware canonical completion", () => {
     expect(catalog).toHaveBeenCalled();
   });
 
+  it("applies explicit quantity and customer corrections ahead of the pending question", async () => {
+    const { run, findAll } = setup({ names: ["الوطنية", "زين"] });
+    const first = await run(prompt);
+    expect(first.activeQuestion?.field).toBe("projectName");
+    const quantity = await run("خليهم 200 بدل 180", first);
+    expect(quantity.answers?.cameraCount).toBe("200");
+    expect(quantity.canonicalProposal?.lines.find((line) => line.componentKey === "CCTV_CAMERAS")?.quantity).toBe(200);
+    expect(quantity.activeQuestion?.field).toBe("projectName");
+    const customer = await run("لا، الشركة الوطنية مش العميل، العميل زين", quantity);
+    expect(customer.answers?.customerMention).toBe("زين");
+    expect(customer.canonicalProposal?.customer).toMatchObject({ id: "c1", name: "زين", status: "MATCHED" });
+    expect(customer.activeQuestion?.field).toBe("projectName");
+    expect(findAll.mock.calls.every(([filter]) => filter.companyId === "tenant")).toBe(true);
+  });
+
   it("customer ambiguity chip targets customer, then project; selected ID survives reanalysis", async () => {
     const { run, findAll } = setup({ names: ["الوطنية للسكر", "الوطنية للغاز"] });
     const first = await run(prompt);

@@ -29,7 +29,9 @@ describe('proposed customer review boundary', () => {
     expect(draft.recommended.some((field) => field.key === 'paymentTerms')).toBe(true);
     expect(draft.canonicalProposal?.smartSystem?.status).toBe('COMPLETE');
     for (const operation of ['INVOICE', 'CONTRACT'] as const) {
-      expect(applyCanonicalIntelligence(initial(operation), proposal).missingRequired.map((field) => field.key)).toContain('customer');
+      const documentDraft = applyCanonicalIntelligence(initial(operation), proposal);
+      expect(documentDraft.missingRequired.map((field) => field.key)).not.toContain('customer');
+      expect(documentDraft).toMatchObject({ proposedCustomerName: 'شركة الأفق', customerState: 'CUSTOMER_PROPOSED_UNREGISTERED' });
     }
     const noName = applyCanonicalIntelligence(initial(), { ...proposal, customer: { ...proposal.customer, mention: null, proposedCustomerName: null } });
     expect(noName.customerState).toBe('CUSTOMER_MISSING');

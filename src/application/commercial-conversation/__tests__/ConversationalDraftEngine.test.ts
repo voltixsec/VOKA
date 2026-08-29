@@ -86,11 +86,12 @@ describe("ConversationalDraftEngine", () => {
     expect(resolved.status).toBe("NEEDS_CLARIFICATION");
   });
 
-  it("keeps customer required and reports not found without creating one", () => {
+  it("preserves a stated unknown customer as proposed without creating one", () => {
     const draft = start("فاتورة للعميل عميل غير موجود 2 أجهزة", "INVOICE");
     const resolved = applyCustomerResolution(draft, []);
     expect(resolved.customerResolution.status).toBe("NOT_FOUND");
-    expect(resolved.missingRequired.map((field) => field.key)).toContain("customer");
+    expect(resolved.missingRequired.map((field) => field.key)).not.toContain("customer");
+    expect(resolved).toMatchObject({ proposedCustomerName: "عميل غير موجود", customerState: "CUSTOMER_PROPOSED_UNREGISTERED", status: "READY_FOR_REVIEW" });
     expect(resolved.executed).toBe(false);
   });
 });

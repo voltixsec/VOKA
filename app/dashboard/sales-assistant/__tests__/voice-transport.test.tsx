@@ -109,7 +109,7 @@ describe("Voice Input Transport Integration Tests", () => {
     fireEvent.change(textarea, { target: { value: "Direct text input works fine" } });
     expect(textarea.value).toBe("Direct text input works fine");
 
-    const voiceButton = screen.getByRole("button", { name: /Tell VOKA/i });
+    const voiceButton = screen.getByRole("button", { name: /Start by Voice/i });
     expect((voiceButton as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -124,7 +124,7 @@ describe("Voice Input Transport Integration Tests", () => {
     fireEvent.change(textarea, { target: { value: "Base" } });
 
     // First voice session
-    const startBtn1 = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtn1 = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtn1);
 
     act(() => {
@@ -135,7 +135,7 @@ describe("Voice Input Transport Integration Tests", () => {
     expect(textarea.value).toBe("Base First");
 
     // Second explicit voice session
-    const startBtn2 = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtn2 = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtn2);
 
     act(() => {
@@ -158,12 +158,12 @@ describe("Voice Input Transport Integration Tests", () => {
 
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
-    const startBtn = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtn = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtn);
 
     expect(mockRecognizer.startCount).toBe(1);
     expect(mockRecognizer.lastOptions?.continuous).toBe(true);
-    const stopBtn = screen.getByRole("button", { name: /Stop microphone/i });
+    const stopBtn = screen.getByRole("button", { name: /Stop and Send/i });
     fireEvent.click(stopBtn);
 
     expect(mockRecognizer.stopCount).toBe(1);
@@ -174,16 +174,16 @@ describe("Voice Input Transport Integration Tests", () => {
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
 
-    fireEvent.click(screen.getByRole("button", { name: /Tell VOKA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Start by Voice/i }));
     act(() => mockRecognizer.emitTranscript("deleted words"));
     expect(textarea.value).toBe("deleted words");
     fireEvent.change(textarea, { target: { value: "kept" } });
     act(() => mockRecognizer.emitTranscript("deleted words new words"));
     expect(textarea.value).toBe("kept new words");
 
-    fireEvent.click(screen.getByRole("button", { name: /Stop microphone/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Stop and Send/i }));
     fireEvent.change(textarea, { target: { value: "current textarea" } });
-    fireEvent.click(screen.getByRole("button", { name: /Tell VOKA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Start by Voice/i }));
     act(() => mockRecognizer.emitTranscript("fresh voice"));
     expect(textarea.value).toBe("current textarea fresh voice");
     expect(textarea.value).not.toContain("deleted words");
@@ -195,8 +195,8 @@ describe("Voice Input Transport Integration Tests", () => {
 
     expect(screen.getByLabelText("Attach commercial file")).toBeTruthy();
     expect(screen.getByRole("textbox")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Tell VOKA" }));
-    expect(screen.getByRole("button", { name: "Stop microphone" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
+    expect(screen.getByRole("button", { name: "Stop and Send" })).toBeTruthy();
   });
 
   it("Requirement 4 & 5: configures correct recognition locale for Arabic and English", () => {
@@ -206,7 +206,7 @@ describe("Voice Input Transport Integration Tests", () => {
     mockIsArabic = true;
     const { unmount } = render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
-    const startBtnAr = screen.getByRole("button", { name: /قلها لـ VOKA/i });
+    const startBtnAr = screen.getByRole("button", { name: /ابدأ الطلب صوتيًا/i });
     fireEvent.click(startBtnAr);
 
     expect(mockRecognizer.lastOptions?.lang).toBe("ar-KW");
@@ -218,7 +218,7 @@ describe("Voice Input Transport Integration Tests", () => {
     mockIsArabic = false;
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
-    const startBtnEn = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtnEn = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtnEn);
 
     expect(mockRecognizer.lastOptions?.lang).toBe("en-US");
@@ -235,7 +235,7 @@ describe("Voice Input Transport Integration Tests", () => {
     fireEvent.change(textarea, { target: { value: "Existing prompt text" } });
 
     // Start voice
-    const startBtn = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtn = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtn);
 
     // Emit final transcript
@@ -265,7 +265,7 @@ describe("Voice Input Transport Integration Tests", () => {
 
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
-    const startBtn = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtn = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtn);
 
     // Emit interim result
@@ -290,7 +290,7 @@ describe("Voice Input Transport Integration Tests", () => {
 
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
-    const startBtn = screen.getByRole("button", { name: /Tell VOKA/i });
+    const startBtn = screen.getByRole("button", { name: /Start by Voice/i });
     fireEvent.click(startBtn);
 
     // Emit permission denial
@@ -317,7 +317,7 @@ describe("Voice Input Transport Integration Tests", () => {
     vi.stubGlobal("fetch", fetchSpy);
     const view = render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Tell VOKA/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Start by Voice/i }));
     expect(mockRecognizer.state).toBe("LISTENING");
     view.unmount();
 

@@ -68,8 +68,8 @@ describe("one active conversational field", () => {
     fireEvent.change(textarea, { target: { value: "CCTV" } });
     fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     await screen.findByText("What is the project name?");
-    fireEvent.click(screen.getByRole("button", { name: "Tell VOKA" }));
-    fireEvent.click(screen.getByRole("button", { name: "Stop microphone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop and Send" }));
     await waitFor(() => expect(textarea.value).toBe("CCTV مصنع الشويخ الجديد"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Draft ready for review")).toBeNull();
