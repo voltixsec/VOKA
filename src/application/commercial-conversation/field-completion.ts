@@ -66,7 +66,20 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
       activeQuestion = { ...activeQuestion, ar: draft.clarification.ar, en: draft.clarification.en };
     }
   }
+  const materializationBlocked = !first && draft.systemWorkingPlan?.commercializationStatus === "PENDING";
+  if (materializationBlocked) {
+    return { ...draft, ...requirements, completionVersion: 1, activeQuestion: null,
+      readinessStage: "SYSTEM_PLANNED", phase: "NEEDS_INFO", status: "NEEDS_CLARIFICATION",
+      clarification: {
+        ar: "اكتمل فهم النظام، لكن يلزم استكمال المراجعة الهندسية وتحويل المتطلبات إلى بنود تجارية قبل إنشاء المسودة.",
+        en: "The system is understood, but engineering review and commercial materialization must be completed before creating the draft.",
+        suggestions: [],
+      },
+      requiresHumanReview: true, executed: false,
+    };
+  }
   return { ...draft, ...requirements, completionVersion: 1, activeQuestion,
+    readinessStage: first ? "NEEDS_INFORMATION" : "READY_FOR_DRAFT",
     phase: first ? "FIELD_ANSWER_PENDING" : "DRAFT_READY_FOR_REVIEW",
     status: first ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW",
     clarification: activeQuestion ? { ar: activeQuestion.ar, en: activeQuestion.en, suggestions: [] } : null,

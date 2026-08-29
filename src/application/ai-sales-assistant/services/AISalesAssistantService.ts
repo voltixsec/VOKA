@@ -12,6 +12,7 @@ import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
 import { explicitCustomerNote } from "./quotation-customer-text";
 import { explicitPaymentTerms } from "./payment-terms";
 import { AgenticSystemReasoner, type CommercialSystemResearchPort } from "../../agentic-commercial-intelligence";
+import { cleanAttentionName, cleanProjectName } from "./attention-name";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -68,9 +69,9 @@ export class AISalesAssistantService {
     }
     if (request.retainedContext?.scopeType) intent.scopeType = request.retainedContext.scopeType;
     if (request.answers?.customerMention) intent.customerMention = cleanCustomerEntity(request.answers.customerMention) ?? fallbackCompanyEntity(request.answers.customerMention);
-    if (request.answers?.projectName) intent.projectName = request.answers.projectName;
+    if (request.answers?.projectName) intent.projectName = cleanProjectName(request.answers.projectName);
     for (const field of ["attentionName", "expiryDate", "paymentTerms", "delivery", "warranty"] as const) {
-      if (request.answers?.[field]) intent[field] = request.answers[field];
+      if (request.answers?.[field]) intent[field] = field === "attentionName" ? cleanAttentionName(request.answers[field]) : request.answers[field];
     }
     for (const field of request.notApplicable ?? []) {
       if (["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(field)) {

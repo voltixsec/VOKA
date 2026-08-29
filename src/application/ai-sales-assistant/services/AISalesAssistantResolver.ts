@@ -25,9 +25,9 @@ import { cleanCustomerEntity } from "./customer-entity";
 import { customerMatchScore } from "@/features/customers/domain/customer-discovery";
 import { companyToday, readCommercialClauses, resolveExpiry } from "./commercial-field-values";
 import { customerLocaleText, professionalQuotationText } from "./quotation-customer-text";
-import { cleanAttentionName } from "./attention-name";
+import { cleanAttentionName, cleanProjectName } from "./attention-name";
 import { hasCommercialCatalogPolicy, resolveCommercialCatalog } from "./commercial-catalog";
-import { normalizePaymentTerms } from "./payment-terms";
+import { normalizePaymentTerms, parsePaymentSchedule, renderPaymentSchedule } from "./payment-terms";
 
 export interface AISalesAssistantResolverDependencies {
   terms?: { find(companyId: string, scopeType: NonNullable<ExtractedSalesIntent["scopeType"]>, locale: SalesAssistantSourceLocale): Promise<string | null> };
@@ -198,8 +198,10 @@ export class AISalesAssistantResolver {
     const safeCompanyTerms = (companyTerms ?? '').split(/[\n;؛]+/).map(localized).filter(Boolean).join('\n');
     const defaults = readCommercialClauses(safeCompanyTerms, today);
     const userClauses = readCommercialClauses(intent.commercialSourceText, today);
-    const normalizedPayment = normalizePaymentTerms(intent.paymentTerms ?? userClauses.paymentTerms, sourceLocale);
-    const userPayment = localized(normalizedPayment.text);
+    const explicitPaymentValue = intent.paymentTerms ?? userClauses.paymentTerms;
+    const normalizedPayment = normalizePaymentTerms(explicitPaymentValue, sourceLocale);
+    const paymentSchedule = parsePaymentSchedule(explicitPaymentValue);
+    const userPayment = localized(renderPaymentSchedule(paymentSchedule, sourceLocale) ?? normalizedPayment.text);
     const userDelivery = localized(intent.delivery ?? userClauses.delivery);
     const userWarranty = localized(intent.warranty ?? userClauses.warranty);
     const paymentTerms = intent.paymentTerms || userClauses.paymentTerms ? userPayment : defaultPayment ?? defaults.paymentTerms;
@@ -244,6 +246,7 @@ export class AISalesAssistantResolver {
 
     return {
       paymentTermsReview: normalizedPayment.review,
+      paymentSchedule: paymentSchedule?.complete ? paymentSchedule : null,
       commercialTerms: { paymentTerms, delivery, warranty },
       fieldDefaults: { ...defaults, paymentTerms: defaultPayment ?? defaults.paymentTerms },
       fieldProvenance: {
@@ -266,7 +269,7 @@ export class AISalesAssistantResolver {
         brief,
         briefAr: sourceLocale === "ar" ? brief : null,
         briefEn: sourceLocale === "en" ? brief : null,
-        projectName: intent.projectName ?? null,
+        projectName: cleanProjectName(intent.projectName),
         attentionName,
         expiryDate,
         validityBaseDate: today,

@@ -15,6 +15,9 @@ export type CommercialAnswerField = "customerMention" | "projectName" | "attenti
 export type CommercialAnswers = Partial<Record<CommercialAnswerField, string>>;
 export type CommercialTerms = { paymentTerms: string | null; delivery: string | null; warranty: string | null };
 export type PaymentTermsReview = { reason: 'TOTAL_NOT_100' | 'MALFORMED' | 'UNTRANSLATED'; totalPercentage: number | null };
+export type PaymentTiming = "ADVANCE" | "UPON_DELIVERY" | "AFTER_DELIVERY" | "AFTER_SUPPLY" | "AFTER_INSTALLATION" | "UPON_INSTALLATION" | "AFTER_TESTING" | "UPON_SIGNING" | "CUSTOM";
+export type PaymentMilestone = { percentage: number; timing: PaymentTiming; timingTextAr: string; timingTextEn: string };
+export type PaymentSchedule = { milestones: PaymentMilestone[]; totalPercentage: number; complete: boolean };
 export type SystemFieldAnswers = Record<string, NonNullable<SystemInputParameter["value"]>>;
 export type SalesItemIntent =
   | "PRODUCT"
@@ -181,6 +184,8 @@ export interface SalesAssistantDraftProposal {
   agenticState?: AgenticCommercialState | null;
   /** Internal clarification diagnostic; never inserted into customer-facing Terms. */
   paymentTermsReview?: PaymentTermsReview;
+  /** Canonical payment data. Rendered payment text is only a projection. */
+  paymentSchedule?: PaymentSchedule | null;
   commercialTerms?: CommercialTerms;
   fieldDefaults?: { expiryDate: string | null; paymentTerms: string | null; delivery: string | null; warranty: string | null };
   fieldProvenance?: Partial<Record<CommercialAnswerField, CommercialProvenance>>;

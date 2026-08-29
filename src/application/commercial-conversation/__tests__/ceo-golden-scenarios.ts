@@ -1,0 +1,15 @@
+export const CEO_GOLDEN_SCENARIOS = [
+  { id: "CCTV_CANONICAL_AR", invariant: "180 IP cameras, 4MP, 90 days, 70/30, seven-day validity, clean entities" },
+  { id: "UNKNOWN_CUSTOMER_NON_BLOCKING", invariant: "Unknown customer remains proposed and does not fabricate an ID" },
+  { id: "PROJECT_ATTENTION_SEPARATION", invariant: "Project and attention store clean distinct values" },
+  { id: "GYPSUM_SYSTEM", invariant: "Gypsum follows deterministic commercial-system inputs" },
+  { id: "FM200_NOT_QUANTITY", invariant: "FM-200 never becomes 200 units or CCTV terms" },
+  { id: "VEHICLE_ELEVATOR_CONTINUITY", invariant: "Research and Kuwait context survive one elevator and six floors" },
+  { id: "PAYMENT_50_50", invariant: "50% advance and 50% after supply is structured canonical data" },
+  { id: "PAYMENT_CORRECTION_40_60", invariant: "Explicit 40/60 correction replaces prior 50/50" },
+  { id: "ARABIC_100_PERCENT", invariant: "مية في المية normalizes without changing meaning" },
+  { id: "ENGLISH_EQUIVALENT", invariant: "English flow preserves the same canonical semantics" },
+  { id: "NEW_REQUEST_ISOLATION", invariant: "A new request inherits no prior facts or research" },
+  { id: "NO_EMPTY_DRAFT", invariant: "Unmaterialized system requirements block Draft readiness" },
+  { id: "TERMS_NO_WRITEBACK", invariant: "Rendered/default Terms never overwrite explicit payment" },
+] as const;

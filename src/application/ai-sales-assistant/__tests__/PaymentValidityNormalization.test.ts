@@ -68,6 +68,17 @@ describe('direct validity duration resolution', () => {
 });
 
 describe('canonical field completion and handoff', () => {
+  it('commits an explicit payment correction over the prior user schedule and re-renders Terms', async () => {
+    const { run } = quotationFieldFixture({ terms: null });
+    const first = await run(`${quotationPrompt} والدفع 50% مقدم و50% بعد التوريد`);
+    expect(first.canonicalProposal?.paymentSchedule?.milestones.map((item) => [item.percentage, item.timing])).toEqual([[50, 'ADVANCE'], [50, 'AFTER_SUPPLY']]);
+    const corrected = await run('الدفع: 40% مقدم و60% بعد التوريد', first);
+    expect(corrected.canonicalProposal?.paymentSchedule?.milestones.map((item) => [item.percentage, item.timing])).toEqual([[40, 'ADVANCE'], [60, 'AFTER_SUPPLY']]);
+    expect(corrected.transactionalState?.ledger.facts.paymentSchedule.source).toBe('USER_CORRECTION');
+    expect(corrected.canonicalProposal?.termsAndConditions).toContain('40%');
+    expect(corrected.canonicalProposal?.termsAndConditions).not.toContain('50%');
+  });
+
   it.each(['ar', 'en'] as const)('takes complete raw percentages over provider abbreviation or prose (%s)', async (locale) => {
     const { service, extractIntent } = quotationFieldFixture({ locale });
     extractIntent.mockResolvedValue({ customerMention: nationalCustomer, lines: [], paymentTerms: 'مقدم' });

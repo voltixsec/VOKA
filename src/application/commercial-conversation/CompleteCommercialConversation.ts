@@ -7,6 +7,8 @@ import { completeFields } from "./field-completion";
 import type { AdvanceConversationInput, FieldAnswer } from "./types";
 import { labelledFieldAnswer } from "./labelled-field-answer";
 import { systemTurnValues } from "./system-turn-values";
+import { renderPaymentSchedule } from "../ai-sales-assistant/services/payment-terms";
+import { commitTurnDecision, projectFactLedger, proposalDecision, type CommercialReadiness } from "./transactional-state";
 
 const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
@@ -96,7 +98,7 @@ export class CompleteCommercialConversation {
       if (quantityReply != null && (!Number.isFinite(quantityReply) || quantityReply <= 0)) throw new Error("CONVERSATION_ANSWER_INVALID");
       return { text: line.itemName, itemNameAr: line.itemNameAr ?? undefined, itemNameEn: line.itemNameEn ?? undefined, quantity: quantityReply, description: line.description, requestedUnitText: line.requestedUnitText, requestedPrice: line.requestedPrice, typeIntent: line.type };
     }) : undefined;
-    const proposal = operation === "SALES_ORDER" || operation === "DRAWING_TAKEOFF" ? null : await this.intelligence.generateDraftProposal({
+    let proposal = operation === "SALES_ORDER" || operation === "DRAWING_TAKEOFF" ? null : await this.intelligence.generateDraftProposal({
       companyId: input.companyId, prompt: intelligenceText, sourceLocale: input.locale,
       currentTurn: input.reply,
       validityBaseDate: prior?.proposal.validityBaseDate,
@@ -115,6 +117,47 @@ export class CompleteCommercialConversation {
     if (input.selection) draft.turns[draft.turns.length - 1].target = input.selection.customer ? "customerMention" : "catalogChoice";
     if (answer?.field === "sourceReference") draft.fields.sourceReference = answer.value.trim();
     if (proposal) {
+      const systemMissing = proposal.smartSystem?.missingInputs.length ?? proposal.agenticState?.missingInputs.length ?? 0;
+      const meaningfulLines = proposal.lines.filter((line) => Boolean(line.itemName.trim()) && line.quantity != null && line.quantity > 0);
+      const readiness: CommercialReadiness = systemMissing ? "NEEDS_INFORMATION" : proposal.agenticState && !meaningfulLines.length ? "SYSTEM_PLANNED" : meaningfulLines.length ? "COMMERCIAL_MATERIALIZED" : "CONVERSATION_UNDERSTOOD";
+      const correctionFields = new Set<string>();
+      const explicitField = answer?.field;
+      if (explicitField) correctionFields.add(explicitField);
+      if (explicitField === "paymentTerms") correctionFields.add("paymentSchedule");
+      const decision = proposalDecision({ requestId: draft.id, turn: draft.turns.length, proposal, correctionFields, readiness });
+      const systemFacts = proposal.smartSystem?.inputs ?? proposal.agenticState?.provisionalSystem?.inputs ?? [];
+      for (const fact of systemFacts) {
+        if (fact.value == null) continue;
+        const field = `system.${fact.name}`;
+        const corrected = previous?.systemAnswers?.[fact.name] != null && systemAnswers[fact.name] !== previous.systemAnswers[fact.name];
+        decision.patches.push({ field, operation: corrected ? "REPLACE" : "SET", value: fact.value,
+          provenance: corrected ? "USER_CORRECTION" : fact.provenance === "USER_PROVIDED" ? "USER_EXPLICIT" : fact.provenance === "RESEARCHED" ? "RESEARCHED" : "TRUSTED_PROFILE",
+          evidence: "Validated system working input." });
+        if (corrected || patchedSystemFields.includes(fact.name) || answer?.field === fact.name) correctionFields.add(field);
+      }
+      const allFields = new Set(decision.patches.map((patch) => patch.field));
+      const permitted = !previous || input.reanalyze ? allFields : new Set([
+        ...correctionFields,
+        ...decision.patches.filter((patch) => !previous.transactionalState?.ledger.facts[patch.field]).map((patch) => patch.field),
+      ]);
+      const committed = commitTurnDecision(previous?.transactionalState?.ledger, decision, permitted);
+      proposal = projectFactLedger(proposal, committed.ledger, input.locale, renderPaymentSchedule);
+      draft = { ...draft, transactionalState: committed, readinessStage: committed.readiness,
+        systemWorkingPlan: proposal.smartSystem ? {
+          systemIdentity: proposal.smartSystem.systemNameEn,
+          knownInputs: Object.fromEntries(proposal.smartSystem.inputs.filter((item) => item.value != null).map((item) => [item.name, item.value!])),
+          missingInputs: proposal.smartSystem.missingInputs,
+          componentRequirements: (proposal.smartSystem.requirements ?? []).map((item) => item.componentKey),
+          engineeringVerificationRequired: proposal.smartSystem.status !== "COMPLETE",
+          commercializationStatus: meaningfulLines.length ? "MATERIALIZED" : "PENDING",
+        } : proposal.agenticState?.provisionalSystem ? {
+          systemIdentity: proposal.agenticState.systemName,
+          knownInputs: Object.fromEntries(proposal.agenticState.provisionalSystem.inputs.filter((item) => item.value != null).map((item) => [item.name, item.value!])),
+          missingInputs: proposal.agenticState.missingInputs,
+          componentRequirements: proposal.agenticState.provisionalSystem.componentCategories,
+          engineeringVerificationRequired: true,
+          commercializationStatus: meaningfulLines.length ? "MATERIALIZED" : "PENDING",
+        } : null };
       draft = applyCanonicalIntelligence(draft, proposal);
       // Store an absolute date, not a duration that drifts on every later turn.
       if (answers.expiryDate && proposal.proposal.expiryDate) draft.answers = { ...answers, expiryDate: proposal.proposal.expiryDate };

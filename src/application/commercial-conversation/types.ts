@@ -1,6 +1,7 @@
 import type { CommercialOperation } from "../commercial-entry";
 import type { SalesAssistantDraftProposal } from "../ai-sales-assistant";
 import type { CommercialSelection, CommercialAnswers, CommercialAnswerField, SystemFieldAnswers } from "../ai-sales-assistant/dto/AISalesAssistantDto";
+import type { TransactionCommit, CommercialReadiness } from "./transactional-state";
 
 export type ConversationalOperation = Exclude<CommercialOperation, "PAYMENT">;
 export type ConversationReplySource = "TEXT" | "VOICE" | "CHIP";
@@ -62,6 +63,17 @@ export type RecommendedField = {
 };
 
 export type WorkingCommercialDraft = {
+  /** Request-scoped committed facts and safe diagnostics; never model chain-of-thought. */
+  transactionalState?: TransactionCommit;
+  readinessStage?: CommercialReadiness;
+  systemWorkingPlan?: {
+    systemIdentity: string;
+    knownInputs: Record<string, string | number | boolean>;
+    missingInputs: string[];
+    componentRequirements: string[];
+    engineeringVerificationRequired: boolean;
+    commercializationStatus: "PENDING" | "MATERIALIZED";
+  } | null;
   /** Versioned so previously persisted draft payloads can be upgraded on analysis. */
   completionVersion?: 1;
   phase?: CommercialPhase;

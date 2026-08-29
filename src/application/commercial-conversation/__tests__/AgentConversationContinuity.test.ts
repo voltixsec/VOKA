@@ -49,6 +49,10 @@ describe("agent conversation continuity lock", () => {
     expect(next.activeQuestion?.ar).not.toMatch(/بيانات التكوين الأساسية|يرجى تحديد/);
     expect(next.clarification?.ar).not.toMatch(/ما المنتج أو الخدمة/);
     expect(next.turns.at(-1)?.target).toBe("elevatorQuantity,numberOfStops");
+    expect(next.transactionalState?.ledger.facts).toMatchObject({
+      "system.elevatorQuantity": { value: 1, source: "USER_EXPLICIT" },
+      "system.numberOfStops": { value: 6, source: "USER_EXPLICIT" },
+    });
     expect(research.researchSystem).toHaveBeenCalledTimes(1);
   });
 
@@ -60,6 +64,16 @@ describe("agent conversation continuity lock", () => {
     expect(draft.canonicalProposal?.agenticState?.missingInputs).toEqual([]);
     expect(draft.missingRequired.some((field) => field.key === "lines")).toBe(false);
     expect(draft.activeQuestion?.ar).not.toMatch(/ما المنتج أو الخدمة/);
+    draft = await run("شركة الأفق", draft);
+    draft = await run("مشروع الشويخ", draft);
+    draft = await run("المهندس أحمد", draft);
+    draft = await run("أسبوع", draft);
+    draft = await run("50% مقدم و50% بعد التوريد", draft);
+    draft = await run("أسبوعين", draft);
+    draft = await run("سنة", draft);
+    expect(draft).toMatchObject({ readinessStage: "SYSTEM_PLANNED", status: "NEEDS_CLARIFICATION", phase: "NEEDS_INFO" });
+    expect(draft.systemWorkingPlan).toMatchObject({ systemIdentity: "Vehicle Elevator", commercializationStatus: "PENDING", engineeringVerificationRequired: true });
+    expect(draft.clarification?.ar).toContain("تحويل المتطلبات إلى بنود تجارية");
   });
 
   it("starts a deliberate new request with fresh state", async () => {
