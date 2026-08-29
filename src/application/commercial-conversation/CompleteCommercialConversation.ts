@@ -6,6 +6,7 @@ import { applyCanonicalIntelligence, ConversationalDraftEngine } from "./Convers
 import { completeFields } from "./field-completion";
 import type { AdvanceConversationInput, FieldAnswer } from "./types";
 import { labelledFieldAnswer } from "./labelled-field-answer";
+import { systemTurnValues } from "./system-turn-values";
 
 const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
@@ -42,8 +43,14 @@ export class CompleteCommercialConversation {
     if (!selection.customer && prior?.customer.id && prior.customer.name) selection.customer = { id: prior.customer.id, name: prior.customer.name };
 
     const active = previous ? completeFields(previous).activeQuestion : null;
+    const provisionalInputs = prior?.agenticState?.provisionalSystem?.inputs ?? [];
+    const systemPatch = previous && !input.reanalyze && !input.selection && !input.answer?.action
+      ? systemTurnValues(input.answer?.value ?? input.reply, provisionalInputs)
+      : {};
+    Object.assign(systemAnswers, systemPatch);
+    const patchedSystemFields = Object.keys(systemPatch);
     const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
-    const answer: FieldAnswer | undefined = labelled ?? input.answer ?? (!input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
+    const answer: FieldAnswer | undefined = patchedSystemFields.length ? undefined : labelled ?? input.answer ?? (!input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
     const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field)
       ?? prior?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === answer?.field);
     if (answer && (typeof answer.value !== "string" || !answer.value.trim() || answer.value.length > 4000)) throw new Error("CONVERSATION_ANSWER_INVALID");
@@ -81,7 +88,7 @@ export class CompleteCommercialConversation {
     const buildMode = input.buildMode ?? previous?.buildMode ?? "AUTO";
     let operation = buildMode === "DRAWING" ? "DRAWING_TAKEOFF" as const : documentMode === "AUTO" ? previous?.operation ?? input.operation ?? classifyCommercialOperation(input.reply).operation : documentMode;
     if (previous && operation && previous.operation !== operation) throw new Error("CONVERSATION_OPERATION_IMMUTABLE");
-    const targeted = Boolean((answer && !["lines", "userIntent"].includes(answer.field)) || input.selection || input.reanalyze);
+    const targeted = Boolean(patchedSystemFields.length || (answer && !["lines", "userIntent"].includes(answer.field)) || input.selection || input.reanalyze);
     const previousIntelligence = previous?.intelligenceText ?? previous?.turns.filter((turn) => !turn.target).map((turn) => turn.text).join("\n");
     const intelligenceText = targeted && previousIntelligence ? previousIntelligence : [previousIntelligence, input.reply].filter(Boolean).join("\n");
     const retainedLines = targeted ? prior?.lines.map((line, index) => {
@@ -104,6 +111,7 @@ export class CompleteCommercialConversation {
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });
     draft = { ...draft, completionVersion: 1, answers, systemAnswers, selection, notApplicable: [...notApplicable], intelligenceText };
     if (answer) draft.turns[draft.turns.length - 1].target = answer.field;
+    if (patchedSystemFields.length) draft.turns[draft.turns.length - 1].target = patchedSystemFields.join(",");
     if (input.selection) draft.turns[draft.turns.length - 1].target = input.selection.customer ? "customerMention" : "catalogChoice";
     if (answer?.field === "sourceReference") draft.fields.sourceReference = answer.value.trim();
     if (proposal) {

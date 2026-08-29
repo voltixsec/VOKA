@@ -15,6 +15,25 @@ const questions: Partial<Record<MissingField["key"], [string, string]>> = {
   userIntent: ["ما المطلوب من الرسم؟", "What is needed from the drawing?"],
 };
 
+const systemQuestions: Record<string, [string, string]> = {
+  elevatorQuantity: ["كم عدد المصاعد المطلوبة؟", "How many elevators are required?"],
+  numberOfElevators: ["كم عدد المصاعد المطلوبة؟", "How many elevators are required?"],
+  numberOfStops: ["كم عدد الطوابق أو الوقفات التي سيخدمها المصعد؟", "How many floors or stops will the elevator serve?"],
+  floors: ["كم عدد الطوابق التي سيخدمها المصعد؟", "How many floors will the elevator serve?"],
+  capacity: ["ما الحمولة المطلوبة للمصعد؟", "What elevator capacity is required?"],
+  loadCapacity: ["ما الحمولة المطلوبة للمصعد؟", "What elevator capacity is required?"],
+  projectConfiguration: ["ما أهم متطلبات تشغيل النظام في هذا المشروع؟", "What are the system's main operating requirements for this project?"],
+};
+
+function systemQuestion(field: MissingField): [string, string] {
+  const explicit = systemQuestions[field.sourceField ?? ""];
+  if (explicit) return explicit;
+  if (/configuration|تكوين|بيانات/i.test(`${field.sourceField} ${field.labelAr} ${field.labelEn}`)) {
+    return ["ما أهم متطلبات تشغيل النظام في هذا المشروع؟", "What are the system's main operating requirements for this project?"];
+  }
+  return [`ما القيمة المطلوبة لـ ${field.labelAr}؟`, `What is the required ${field.labelEn}?`];
+}
+
 export function fieldTarget(field: MissingField): string {
   if (field.key === "customer") return "customerMention";
   if (field.key === "systemInput") return field.sourceField ?? "systemInput";
@@ -28,7 +47,9 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
   const first = requirements.missingRequired[0];
   let activeQuestion: FieldQuestion | null = null;
   if (first) {
-    const [ar, en] = questions[first.key] ?? [`يرجى تحديد: ${first.labelAr}.`, `Please provide: ${first.labelEn}.`];
+    const [ar, en] = first.key === "systemInput"
+      ? systemQuestion(first)
+      : questions[first.key] ?? [`يرجى تحديد: ${first.labelAr}.`, `Please provide: ${first.labelEn}.`];
     activeQuestion = { field: fieldTarget(first), ar, en, allowNotApplicable: ["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(first.key) };
     const paymentReview = draft.canonicalProposal?.paymentTermsReview;
     if (first.key === "paymentTerms" && paymentReview) {

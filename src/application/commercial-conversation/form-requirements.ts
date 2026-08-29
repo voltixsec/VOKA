@@ -24,17 +24,7 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
     if (!hasAttachment) missingRequired.push(missing.attachment);
     if (!contextText.trim()) missingRequired.push(missing.userIntent);
   } else {
-    // Draft review preserves a clearly stated customer even when master data is
-    // absent. Target document approval/persistence remains the strict boundary.
-    const proposed = canonicalProposal?.customer.status === "MISSING"
-      && canonicalProposal.customer.proposedCustomerName?.trim();
-    if (!fields.customerId && !proposed) missingRequired.push(missing.customer);
-    canonicalProposal?.lines.forEach((line, index) => {
-      if (line.resolutionStatus === "AMBIGUOUS") missingRequired.push({ key: "catalogChoice", sourceField: String(index), required: true, labelAr: `اختر البند: ${line.itemNameAr || line.itemName}`, labelEn: `Choose item: ${line.itemNameEn || line.itemName}` });
-      if (line.quantity == null) missingRequired.push({ key: "quantity", sourceField: String(index), required: true, labelAr: `كمية ${line.itemNameAr || line.itemName}`, labelEn: `Quantity for ${line.itemNameEn || line.itemName}` });
-    });
     const agentMissingInputs = canonicalProposal?.agenticState?.missingInputs ?? [];
-    if (!fields.lines.length && !(canonicalProposal?.smartSystem?.missingInputs.length) && !agentMissingInputs.length) missingRequired.push(missing.lines);
     const unresolvedSystemInputs = [...(canonicalProposal?.smartSystem?.missingInputs ?? [])].sort((a, b) =>
       (canonicalProposal?.smartSystem?.inputs.findIndex((input) => input.name === a) ?? 0) - (canonicalProposal?.smartSystem?.inputs.findIndex((input) => input.name === b) ?? 0));
     for (const name of unresolvedSystemInputs) {
@@ -45,6 +35,16 @@ export function evaluateFormRequirements(operation: ConversationalOperation, fie
       const input = canonicalProposal?.agenticState?.provisionalSystem?.inputs.find((candidate) => candidate.name === name);
       missingRequired.push({ key: "systemInput", required: true, sourceField: name, labelAr: input?.labelAr ?? name, labelEn: input?.labelEn ?? name });
     }
+    // Draft review preserves a clearly stated customer even when master data is
+    // absent. Target document approval/persistence remains the strict boundary.
+    const proposed = canonicalProposal?.customer.status === "MISSING"
+      && canonicalProposal.customer.proposedCustomerName?.trim();
+    if (!fields.customerId && !proposed) missingRequired.push(missing.customer);
+    canonicalProposal?.lines.forEach((line, index) => {
+      if (line.resolutionStatus === "AMBIGUOUS") missingRequired.push({ key: "catalogChoice", sourceField: String(index), required: true, labelAr: `اختر البند: ${line.itemNameAr || line.itemName}`, labelEn: `Choose item: ${line.itemNameEn || line.itemName}` });
+      if (line.quantity == null) missingRequired.push({ key: "quantity", sourceField: String(index), required: true, labelAr: `كمية ${line.itemNameAr || line.itemName}`, labelEn: `Quantity for ${line.itemNameEn || line.itemName}` });
+    });
+    if (!fields.lines.length && !unresolvedSystemInputs.length && !agentMissingInputs.length && !canonicalProposal?.agenticState) missingRequired.push(missing.lines);
     // Professional review decisions use existing form/DTO fields, not a second
     // persistence schema. Nullable form fields permit an explicit N/A decision.
     if (completion) {
