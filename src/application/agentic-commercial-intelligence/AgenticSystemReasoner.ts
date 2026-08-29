@@ -22,10 +22,19 @@ export function generalizedSystemQuery(prompt: string, locale: "ar" | "en") {
 function interpretedModel(prompt: string, locale: "ar" | "en"): ProvisionalSystemModel {
   const query = generalizedSystemQuery(prompt, locale);
   const systemName = query.replace(/ technical components required design inputs(?: Kuwait)?$/i, "");
+  const isElevator = /elevator|lift|مصعد/i.test(`${prompt} ${systemName}`);
+  const inputs: ProvisionalSystemModel["inputs"] = isElevator
+    ? [
+        { name: "elevatorQuantity", labelAr: "عدد المصاعد المطلوبة", labelEn: "Number of elevators required", value: null, required: true, provenance: "NEEDS_CONFIRMATION" },
+        { name: "numberOfStops", labelAr: "عدد الطوابق أو الوقفات", labelEn: "Number of stops or floors", value: null, required: true, provenance: "NEEDS_CONFIRMATION" },
+        { name: "capacity", labelAr: "الحمولة المطلوبة", labelEn: "Load capacity", value: null, required: true, provenance: "NEEDS_CONFIRMATION" },
+      ]
+    : [{ name: "projectConfiguration", labelAr: "متطلبات مواصفات النظام", labelEn: "System configuration requirements", value: null, required: true, provenance: "NEEDS_CONFIRMATION" }];
+
   return {
     systemName, aliases: [], purpose: locale === "ar" ? "نظام مطلوب يحتاج تحققاً هندسياً" : "Requested system requiring engineering verification",
     componentCategories: [],
-    inputs: [{ name: "projectConfiguration", labelAr: "بيانات التكوين الأساسية للمشروع", labelEn: "Basic project configuration", value: null, required: true, provenance: "NEEDS_CONFIRMATION" }],
+    inputs,
     limitations: ["Research capability unavailable; no engineering quantities or compliance claims were created."],
     confidence: 0.35, jurisdiction: jurisdiction(prompt), evidence: [], provenance: "AI_INTERPRETED", requiresEngineeringVerification: true,
   };

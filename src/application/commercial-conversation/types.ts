@@ -44,8 +44,18 @@ export type ConversationTurn = {
 
 export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput" | "catalogChoice" | "quantity" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty";
 
-export type FieldAnswer = { field: string; value: string; action?: "VALUE" | "NOT_APPLICABLE" };
-export type FieldQuestion = { field: string; ar: string; en: string; allowNotApplicable: boolean; options?: Array<{ ar: string; en: string; value: string }> };
+export type FieldAnswer = { field: string; value: string; action?: "VALUE" | "NOT_APPLICABLE" | "DEFER" | "SKIP" };
+export type FieldQuestion = {
+  field: string;
+  ar: string;
+  en: string;
+  allowNotApplicable: boolean;
+  allowDefer?: boolean;
+  deferLabelAr?: string;
+  deferLabelEn?: string;
+  nonDeferrableNotice?: { ar: string; en: string } | null;
+  options?: Array<{ ar: string; en: string; value: string }>;
+};
 export type CommercialPhase = "COMPOSING" | "ANALYZING" | "NEEDS_INFO" | "FIELD_ANSWER_PENDING" | "RECALCULATING" | "DRAFT_READY_FOR_REVIEW";
 
 export type MissingField = {
@@ -54,6 +64,8 @@ export type MissingField = {
   labelAr: string;
   labelEn: string;
   sourceField?: string;
+  deferPolicy: "DEFER_ALLOWED" | "DEFER_NOT_ALLOWED";
+  state?: "UNRESOLVED" | "DEFERRED" | "PROPOSED" | "AMBIGUOUS" | "RESOLVED";
 };
 
 export type RecommendedField = {
@@ -79,6 +91,7 @@ export type WorkingCommercialDraft = {
   phase?: CommercialPhase;
   activeQuestion?: FieldQuestion | null;
   notApplicable?: CommercialAnswerField[];
+  deferredFields?: string[];
   systemAnswers?: SystemFieldAnswers;
   intelligenceText?: string;
   proposedCustomerName?: string | null;

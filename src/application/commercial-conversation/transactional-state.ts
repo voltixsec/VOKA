@@ -73,7 +73,10 @@ export function proposalDecision(input: { requestId: string; turn: number; propo
 }
 
 export function projectFactLedger(proposal: SalesAssistantDraftProposal, ledger: CanonicalFactLedger, locale: "ar" | "en", renderPayment: (schedule: PaymentSchedule, locale: "ar" | "en") => string | null): SalesAssistantDraftProposal {
-  const fact = (field: string) => ledger.facts[field]?.value;
+  const fact = (field: string) => {
+    const val = ledger.facts[field]?.value;
+    return val === "DEFERRED" ? undefined : val;
+  };
   const schedule = fact("paymentSchedule") as PaymentSchedule | undefined;
   const paymentTerms = schedule ? renderPayment(schedule, locale) : fact("paymentTerms") as string | undefined;
   const commercialTerms = { paymentTerms: paymentTerms ?? proposal.commercialTerms?.paymentTerms ?? null, delivery: fact("delivery") as string ?? proposal.commercialTerms?.delivery ?? null, warranty: fact("warranty") as string ?? proposal.commercialTerms?.warranty ?? null };

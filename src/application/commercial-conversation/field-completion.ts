@@ -22,16 +22,21 @@ const systemQuestions: Record<string, [string, string]> = {
   floors: ["كم عدد الطوابق التي سيخدمها المصعد؟", "How many floors will the elevator serve?"],
   capacity: ["ما الحمولة المطلوبة للمصعد؟", "What elevator capacity is required?"],
   loadCapacity: ["ما الحمولة المطلوبة للمصعد؟", "What elevator capacity is required?"],
-  projectConfiguration: ["ما أهم متطلبات تشغيل النظام في هذا المشروع؟", "What are the system's main operating requirements for this project?"],
+  projectConfiguration: ["المصعد هيخدم كام دور أو وقفة؟", "How many floors or stops will the elevator serve?"],
 };
 
 function systemQuestion(field: MissingField): [string, string] {
   const explicit = systemQuestions[field.sourceField ?? ""];
   if (explicit) return explicit;
-  if (/configuration|تكوين|بيانات/i.test(`${field.sourceField} ${field.labelAr} ${field.labelEn}`)) {
-    return ["ما أهم متطلبات تشغيل النظام في هذا المشروع؟", "What are the system's main operating requirements for this project?"];
+  if (/elevator|lift|مصعد/i.test(`${field.sourceField} ${field.labelAr} ${field.labelEn}`)) {
+    return ["المصعد هيخدم كام دور أو وقفة؟", "How many floors or stops will the elevator serve?"];
   }
-  return [`ما القيمة المطلوبة لـ ${field.labelAr}؟`, `What is the required ${field.labelEn}?`];
+  if (/configuration|تكوين|بيانات/i.test(`${field.sourceField} ${field.labelAr} ${field.labelEn}`)) {
+    return ["ما تفاصيل وتكوين النظام المطلوب للمشروع؟", "What are the required system configuration details for this project?"];
+  }
+  const cleanLabelAr = field.labelAr.replace(/بيانات التكوين الأساسية للمشروع|بيانات التكوين الأساسية|تكوين/g, "متطلبات النظام").trim();
+  const cleanLabelEn = field.labelEn.replace(/Basic project configuration|configuration/gi, "system requirements").trim();
+  return [`ما القيمة المطلوبة لـ ${cleanLabelAr}؟`, `What is the required ${cleanLabelEn}?`];
 }
 
 export function fieldTarget(field: MissingField): string {
@@ -44,13 +49,27 @@ export function fieldTarget(field: MissingField): string {
 /** All readiness/next-question projections are derived together, never toggled independently. */
 export function completeFields(draft: WorkingCommercialDraft): WorkingCommercialDraft {
   const requirements = evaluateFormRequirements(draft.operation, draft.fields, Boolean(draft.attachment), draft.contextText, draft.canonicalProposal, { notApplicable: draft.notApplicable });
-  const first = requirements.missingRequired[0];
+  const deferredSet = new Set(draft.deferredFields ?? []);
+
+  // Update missingRequired state based on whether fields are deferred
+  const missingWithState = requirements.missingRequired.map((field) => ({
+    ...field,
+    state: deferredSet.has(fieldTarget(field)) ? ("DEFERRED" as const) : ("UNRESOLVED" as const),
+  }));
+
+  const first = missingWithState.find((field) => !deferredSet.has(fieldTarget(field)));
   let activeQuestion: FieldQuestion | null = null;
   if (first) {
     const [ar, en] = first.key === "systemInput"
       ? systemQuestion(first)
       : questions[first.key] ?? [`يرجى تحديد: ${first.labelAr}.`, `Please provide: ${first.labelEn}.`];
-    activeQuestion = { field: fieldTarget(first), ar, en, allowNotApplicable: ["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(first.key) };
+    activeQuestion = {
+      field: fieldTarget(first), ar, en,
+      allowNotApplicable: ["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(first.key),
+      allowDefer: first.deferPolicy === "DEFER_ALLOWED",
+      deferLabelAr: first.deferPolicy === "DEFER_ALLOWED" ? "تجاوز الآن" : undefined,
+      deferLabelEn: first.deferPolicy === "DEFER_ALLOWED" ? "Skip for now" : undefined,
+    };
     const paymentReview = draft.canonicalProposal?.paymentTermsReview;
     if (first.key === "paymentTerms" && paymentReview) {
       activeQuestion = { ...activeQuestion,
@@ -66,9 +85,10 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
       activeQuestion = { ...activeQuestion, ar: draft.clarification.ar, en: draft.clarification.en };
     }
   }
+
   const materializationBlocked = !first && draft.systemWorkingPlan?.commercializationStatus === "PENDING";
   if (materializationBlocked) {
-    return { ...draft, ...requirements, completionVersion: 1, activeQuestion: null,
+    return { ...draft, missingRequired: missingWithState, recommended: requirements.recommended, completionVersion: 1, activeQuestion: null,
       readinessStage: "SYSTEM_PLANNED", phase: "NEEDS_INFO", status: "NEEDS_CLARIFICATION",
       clarification: {
         ar: "اكتمل فهم النظام، لكن يلزم استكمال المراجعة الهندسية وتحويل المتطلبات إلى بنود تجارية قبل إنشاء المسودة.",
@@ -78,10 +98,21 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
       requiresHumanReview: true, executed: false,
     };
   }
-  return { ...draft, ...requirements, completionVersion: 1, activeQuestion,
-    readinessStage: first ? "NEEDS_INFORMATION" : "READY_FOR_DRAFT",
-    phase: first ? "FIELD_ANSWER_PENDING" : "DRAFT_READY_FOR_REVIEW",
-    status: first ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW",
+
+  const hasUnresolvedSystem = missingWithState.some((f) => f.key === "systemInput");
+  const hasDeferredGaps = missingWithState.some((f) => deferredSet.has(fieldTarget(f)));
+  const readinessStage = first
+    ? "NEEDS_INFORMATION"
+    : hasUnresolvedSystem || draft.systemWorkingPlan?.commercializationStatus === "PENDING"
+      ? "SYSTEM_PLANNED"
+      : hasDeferredGaps
+        ? "COMMERCIAL_MATERIALIZED"
+        : "READY_FOR_DRAFT";
+
+  return { ...draft, missingRequired: missingWithState, recommended: requirements.recommended, completionVersion: 1, activeQuestion,
+    readinessStage,
+    phase: first ? "FIELD_ANSWER_PENDING" : hasDeferredGaps ? "NEEDS_INFO" : "DRAFT_READY_FOR_REVIEW",
+    status: first || hasDeferredGaps ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW",
     clarification: activeQuestion ? { ar: activeQuestion.ar, en: activeQuestion.en, suggestions: [] } : null,
     requiresHumanReview: true, executed: false,
   };

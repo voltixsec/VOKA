@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ActiveFieldQuestion } from '../ActiveFieldQuestion';
 import { quotationFieldFixture, quotationPrompt } from '@/src/application/ai-sales-assistant/__tests__/quotation-field-fixture';
@@ -19,8 +19,10 @@ describe('localized payment clarification', () => {
     expect(question.textContent).toContain('100%');
     expect(question.textContent).not.toMatch(isArabic ? /[a-z]/i : /[\u0600-\u06ff]/);
     expect(question.textContent).not.toContain('TOTAL_NOT_100');
-    expect(container.querySelector('button')).toBeNull();
-    expect(onAnswer).not.toHaveBeenCalled();
+    const skip = container.querySelector('button');
+    expect(skip?.textContent).toBe(isArabic ? 'تجاوز الآن' : 'Skip for now');
+    fireEvent.click(skip!);
+    expect(onAnswer).toHaveBeenCalledWith({ field: 'paymentTerms', value: 'DEFERRED', action: 'DEFER' });
     expect(draft.activeQuestion?.field).toBe('paymentTerms');
     expect(draft.missingRequired.some((field) => field.key === 'expiryDate')).toBe(false);
   });

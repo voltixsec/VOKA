@@ -31,6 +31,7 @@ export class CompleteCommercialConversation {
     const answers: CommercialAnswers = { ...previous?.answers };
     const systemAnswers = { ...previous?.systemAnswers };
     const notApplicable = new Set(previous?.notApplicable?.filter((field) => nullableFields.has(field)) ?? []);
+    const deferredFields = new Set(previous?.deferredFields ?? []);
     const selection: CommercialSelection = { ...previous?.selection, ...input.selection };
     const prior = previous?.canonicalProposal;
     // Preserve extracted user values, not customer/company defaults masquerading as user answers.
@@ -41,27 +42,50 @@ export class CompleteCommercialConversation {
       if (!answers[key] && prior?.commercialTerms?.[key] && prior.fieldProvenance?.[key] === "USER_PROVIDED") answers[key] = prior.commercialTerms[key]!;
     }
     const retainedCustomer = prior?.customer.mention ?? prior?.customer.proposedCustomerName ?? prior?.customer.name ?? previous?.proposedCustomerName ?? previous?.fields.customerMention;
-    if (!answers.customerMention && retainedCustomer) answers.customerMention = retainedCustomer;
+    if (!answers.customerMention && retainedCustomer && !deferredFields.has("customerMention")) answers.customerMention = retainedCustomer;
     if (!selection.customer && prior?.customer.id && prior.customer.name) selection.customer = { id: prior.customer.id, name: prior.customer.name };
 
     const active = previous ? completeFields(previous).activeQuestion : null;
     const provisionalInputs = prior?.agenticState?.provisionalSystem?.inputs ?? [];
-    const systemPatch = previous && !input.reanalyze && !input.selection && !input.answer?.action
+    const isDeferIntent = Boolean(
+      input.answer?.action === "DEFER" ||
+      input.answer?.action === "SKIP" ||
+      (active && !input.reanalyze && !input.selection && /^(?:تجاوز\s*الآن|تجاوز|تخطي|skip\s*for\s*now|skip)$/i.test(input.reply.trim()))
+    );
+
+    const activeMissingField = previous?.missingRequired.find((f) => f.sourceField === active?.field || f.key === active?.field || (f.key === "customer" && active?.field === "customerMention"));
+    const deferAllowed = activeMissingField ? activeMissingField.deferPolicy === "DEFER_ALLOWED" : active?.allowDefer ?? false;
+    let nonDeferrableAttempt = false;
+
+    let answer: FieldAnswer | undefined;
+    if (isDeferIntent && active) {
+      if (deferAllowed) {
+        deferredFields.add(active.field);
+        delete answers[active.field as CommercialAnswerField];
+        answer = { field: active.field, value: "DEFERRED", action: "DEFER" };
+      } else {
+        nonDeferrableAttempt = true;
+      }
+    }
+
+    const systemPatch = previous && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent
       ? systemTurnValues(input.answer?.value ?? input.reply, provisionalInputs)
       : {};
     Object.assign(systemAnswers, systemPatch);
     const patchedSystemFields = Object.keys(systemPatch);
-    const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
-    const answer: FieldAnswer | undefined = patchedSystemFields.length ? undefined : labelled ?? input.answer ?? (!input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
+    const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
+    answer ??= patchedSystemFields.length ? undefined : labelled ?? input.answer ?? (!isDeferIntent && !input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
     const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field)
       ?? prior?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === answer?.field);
     if (answer && (typeof answer.value !== "string" || !answer.value.trim() || answer.value.length > 4000)) throw new Error("CONVERSATION_ANSWER_INVALID");
-    if (answer?.action && !["VALUE", "NOT_APPLICABLE"].includes(answer.action)) throw new Error("CONVERSATION_ANSWER_INVALID");
+    if (answer?.action && !["VALUE", "NOT_APPLICABLE", "DEFER", "SKIP"].includes(answer.action)) throw new Error("CONVERSATION_ANSWER_INVALID");
     if (answer && !systemInput && !answerFields.has(answer.field) && !["sourceReference", "lines", "userIntent", "attachment"].includes(answer.field) && !/^(quantity|catalogChoice):\d+$/.test(answer.field)) throw new Error("CONVERSATION_ANSWER_INVALID");
     if (answer?.action === "NOT_APPLICABLE") {
       if (!nullableFields.has(answer.field)) throw new Error("CONVERSATION_ANSWER_INVALID");
       notApplicable.add(answer.field as CommercialAnswerField);
       delete answers[answer.field as CommercialAnswerField];
+    } else if (answer && answer.action === "DEFER") {
+      // Defer action handled via deferredFields
     } else if (answer && answerFields.has(answer.field)) {
       let value = answer.value.trim();
       if (numericFields.has(answer.field)) {
@@ -70,6 +94,7 @@ export class CompleteCommercialConversation {
       }
       answers[answer.field as CommercialAnswerField] = value;
       notApplicable.delete(answer.field as CommercialAnswerField);
+      deferredFields.delete(answer.field);
       if (answer.field === "customerMention") delete selection.customer;
     } else if (answer && systemInput) {
       const value = latinDigits(answer.value.trim());
@@ -84,13 +109,17 @@ export class CompleteCommercialConversation {
           ? /^(دخول فقط|entry only)$/i.test(value) ? "ENTRY_ONLY" : /^(دخول وخروج|entry and exit)$/i.test(value) ? "ENTRY_EXIT" : value
           : value;
       }
+      deferredFields.delete(answer.field);
     }
-    if (input.selection?.customer) answers.customerMention = input.selection.customer.name;
+    if (input.selection?.customer) {
+      answers.customerMention = input.selection.customer.name;
+      deferredFields.delete("customerMention");
+    }
     const documentMode = input.documentMode ?? previous?.documentMode ?? "AUTO";
     const buildMode = input.buildMode ?? previous?.buildMode ?? "AUTO";
     let operation = buildMode === "DRAWING" ? "DRAWING_TAKEOFF" as const : documentMode === "AUTO" ? previous?.operation ?? input.operation ?? classifyCommercialOperation(input.reply).operation : documentMode;
     if (previous && operation && previous.operation !== operation) throw new Error("CONVERSATION_OPERATION_IMMUTABLE");
-    const targeted = Boolean(patchedSystemFields.length || (answer && !["lines", "userIntent"].includes(answer.field)) || input.selection || input.reanalyze);
+    const targeted = Boolean(patchedSystemFields.length || (answer && !["lines", "userIntent"].includes(answer.field)) || input.selection || input.reanalyze || isDeferIntent);
     const previousIntelligence = previous?.intelligenceText ?? previous?.turns.filter((turn) => !turn.target).map((turn) => turn.text).join("\n");
     const intelligenceText = targeted && previousIntelligence ? previousIntelligence : [previousIntelligence, input.reply].filter(Boolean).join("\n");
     const retainedLines = targeted ? prior?.lines.map((line, index) => {
@@ -111,7 +140,7 @@ export class CompleteCommercialConversation {
     });
     operation ??= proposal?.documentType ?? null;
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });
-    draft = { ...draft, completionVersion: 1, answers, systemAnswers, selection, notApplicable: [...notApplicable], intelligenceText };
+    draft = { ...draft, completionVersion: 1, answers, systemAnswers, selection, notApplicable: [...notApplicable], deferredFields: [...deferredFields], intelligenceText };
     if (answer) draft.turns[draft.turns.length - 1].target = answer.field;
     if (patchedSystemFields.length) draft.turns[draft.turns.length - 1].target = patchedSystemFields.join(",");
     if (input.selection) draft.turns[draft.turns.length - 1].target = input.selection.customer ? "customerMention" : "catalogChoice";
@@ -125,6 +154,9 @@ export class CompleteCommercialConversation {
       if (explicitField) correctionFields.add(explicitField);
       if (explicitField === "paymentTerms") correctionFields.add("paymentSchedule");
       const decision = proposalDecision({ requestId: draft.id, turn: draft.turns.length, proposal, correctionFields, readiness });
+      if (answer?.action === "DEFER") {
+        decision.patches.push({ field: answer.field, operation: "SET", value: "DEFERRED", provenance: "USER_EXPLICIT", evidence: "User selected Skip for now." });
+      }
       const systemFacts = proposal.smartSystem?.inputs ?? proposal.agenticState?.provisionalSystem?.inputs ?? [];
       for (const fact of systemFacts) {
         if (fact.value == null) continue;
@@ -163,6 +195,21 @@ export class CompleteCommercialConversation {
       if (answers.expiryDate && proposal.proposal.expiryDate) draft.answers = { ...answers, expiryDate: proposal.proposal.expiryDate };
       if (answers.attentionName) draft.answers = { ...draft.answers, attentionName: proposal.proposal.attentionName ?? '' };
     }
-    return completeFields(draft);
+    const completed = completeFields(draft);
+    if (nonDeferrableAttempt && completed.activeQuestion) {
+      completed.activeQuestion = {
+        ...completed.activeQuestion,
+        nonDeferrableNotice: {
+          ar: "المعلومة دي لازمة علشان نكوّن النظام بشكل صحيح. تقدر تدخلها أو ترفق مخطط/BOQ لو موجود.",
+          en: "This information is required to configure the system properly. You can enter it or attach a drawing/BOQ if available.",
+        },
+      };
+      completed.clarification = {
+        ar: "المعلومة دي لازمة علشان نكوّن النظام بشكل صحيح. تقدر تدخلها أو ترفق مخطط/BOQ لو موجود.",
+        en: "This information is required to configure the system properly. You can enter it or attach a drawing/BOQ if available.",
+        suggestions: [{ ar: "إرفاق مخطط", en: "Attach drawing", reply: "أرفق ملف الرسم" }],
+      };
+    }
+    return completed;
   }
 }

@@ -172,9 +172,15 @@ export function applyCanonicalIntelligence(draft: WorkingCommercialDraft, propos
     status: customerStatus,
     candidates: proposal.customer.candidates.map((candidate) => ({ id: candidate.id, name: candidate.name })),
   } as WorkingCommercialDraft["customerResolution"];
+  const deferredFields = draft.deferredFields ? [...draft.deferredFields] : undefined;
+  if (deferredFields && (proposal.customer.id || (proposal.customer.mention && customerStatus !== "AMBIGUOUS"))) {
+    const idx = deferredFields.indexOf("customerMention");
+    if (idx !== -1) deferredFields.splice(idx, 1);
+  }
   const requirements = evaluateFormRequirements(draft.operation, fields, Boolean(draft.attachment), draft.contextText, proposal);
   const resolved: WorkingCommercialDraft = {
     ...draft, fields, customerResolution, canonicalProposal: proposal, ...requirements,
+    deferredFields,
     proposedCustomerName,
     customerState: customerStatus === "MATCHED" ? "CUSTOMER_RESOLVED" : customerStatus === "AMBIGUOUS" ? "CUSTOMER_AMBIGUOUS" : proposedCustomerName ? "CUSTOMER_PROPOSED_UNREGISTERED" : "CUSTOMER_MISSING",
     status: requirements.missingRequired.length ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW",

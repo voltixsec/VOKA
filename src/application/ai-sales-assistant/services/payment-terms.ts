@@ -23,6 +23,9 @@ const arabicPercentWords: Array<[RegExp, string]> = [
   [/سبع(?:ون|ين)\s*(?:في\s*الم(?:ائة|ئة|يه|ية)|بالم(?:ائة|ئة|يه|ية))/gi, '70%'],
   [/ثلاث(?:ون|ين)\s*(?:في\s*الم(?:ائة|ئة|يه|ية)|بالم(?:ائة|ئة|يه|ية))/gi, '30%'],
   [/عشر(?:ون|ين)\s*(?:في\s*الم(?:ائة|ئة|يه|ية)|بالم(?:ائة|ئة|يه|ية))/gi, '20%'],
+  [/\b50\/50\b\s*[,،]?\s*(?:النص|نصف)?\s*/gi, '50% '],
+  [/(?:و)?(?:النص|نصف)\b/gi, ' و50%'],
+  [/\b(\d{1,3})\s+(?=(?:مقدم|دفعة\s+مقدم|عند\s+(?:التسليم|التوقيع|التركيب)|بعد\s+(?:التوريد|التسليم|التركيب|الاختبار)))/gi, '$1% '],
 ];
 
 function numericPercentWords(value: string) {
@@ -94,7 +97,12 @@ export function normalizePaymentTerms(value: string | null | undefined, locale: 
 }
 
 function timing(raw: string): Omit<PaymentMilestone, "percentage"> | null {
-  const clean = raw.trim().replace(/^[,،;؛+\/\s]+|[,،;؛+\/\s.]+$/g, '').replace(/^(?:و|and)\s+/i, '').replace(/\s+(?:و|and)$/i, '').trim();
+  const clean = raw.trim()
+    .replace(/^[,،;؛+\/\s]+|[,،;؛+\/\s.]+$/g, '')
+    .replace(/^(?:و|and)\s+/i, '')
+    .replace(/\s+(?:و|and)$/i, '')
+    .replace(/^[,،;؛+\/\s]+|[,،;؛+\/\s.]+$/g, '')
+    .trim();
   const rules: Array<[RegExp, PaymentTiming, string, string]> = [
     [/^(?:مقدم(?:ا)?|دفعة\s+مقدم[ةه]|advance|in advance|upfront|down payment)$/i, "ADVANCE", "دفعة مقدمة", "advance"],
     [/^(?:عند\s+التسليم|(?:on|upon) delivery)$/i, "UPON_DELIVERY", "عند التسليم", "upon delivery"],
