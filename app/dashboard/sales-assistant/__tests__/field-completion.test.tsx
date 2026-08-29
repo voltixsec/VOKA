@@ -42,6 +42,7 @@ describe("one active conversational field", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "CCTV" } });
     fireEvent.click(screen.getByRole("button", { name: ar ? "ابدأ الطلب" : "Start Request" }));
     const question = await screen.findByTestId("active-field-question");
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
     expect(question.textContent).toContain(ar ? "ما اسم المشروع؟" : "What is the project name?");
     expect(question.textContent).not.toMatch(ar ? /project|Not applicable|Understand|READY/ : /[\u0600-\u06FF]/);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "new answer" } });
@@ -68,17 +69,16 @@ describe("one active conversational field", () => {
     fireEvent.change(textarea, { target: { value: "CCTV" } });
     fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
     await screen.findByText("What is the project name?");
-    fireEvent.change(textarea, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue by Voice" }));
     fireEvent.click(screen.getByRole("button", { name: "Stop & Send" }));
-    await waitFor(() => expect(textarea.value).toBe("مصنع الشويخ الجديد"));
+    await waitFor(() => expect(textarea.value).toBe(""));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Draft ready for review")).toBeNull();
     await screen.findByText("Who should the document be addressed to?");
     const voiceBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(voiceBody).toMatchObject({ replySource: "VOICE", reply: "مصنع الشويخ الجديد", answer: { field: "projectName", value: "مصنع الشويخ الجديد" } });
     fireEvent.change(textarea, { target: { value: "المهندس محمد خالد" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue Request" }));
     await screen.findByText("Draft ready for review");
     const textBody = JSON.parse(fetchMock.mock.calls[2][1].body);
     expect(textBody).toMatchObject({ replySource: "TEXT", answer: { field: "attentionName", value: "المهندس محمد خالد" }, draft: { id: "same-draft" } });
@@ -89,16 +89,19 @@ describe("one active conversational field", () => {
     expect(screen.getByTestId("commercial-composer").getAttribute("data-commercial-state")).toBe("COMPOSING");
   });
 
-  it("restores the target and reanalyzes unchanged text without storing it as a project answer", async () => {
+  it("restores the target with an empty current turn and never resubmits historical context", async () => {
     mocks.isArabic = false;
     sessionStorage.setItem("voka_commercial_conversation_draft", JSON.stringify(draft()));
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: draft() }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     await screen.findByText("What is the project name?");
-    fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
+    expect(screen.getByRole("button", { name: "Continue by Voice" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "مخزن الشويخ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue Request" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ reanalyze: true, draft: { id: "same-draft" } });
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).answer).toBeUndefined();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ reply: "مخزن الشويخ", reanalyze: false, draft: { id: "same-draft" }, answer: { field: "projectName", value: "مخزن الشويخ" } });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).reply).not.toContain("CCTV");
   });
 });

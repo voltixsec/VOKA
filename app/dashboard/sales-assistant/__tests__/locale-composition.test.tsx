@@ -73,7 +73,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     expectLocale(container);
     const request = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(request).toMatchObject({ draft: { id: "same-draft" }, replySource: "CHIP", reply: isArabic ? "أريد إضافة خدمة" : "I need a service" });
-    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain(request.reply);
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
     expect(request.draft.executed).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

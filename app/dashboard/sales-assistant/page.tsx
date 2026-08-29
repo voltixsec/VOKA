@@ -48,7 +48,6 @@ export default function SalesAssistantPage(props: any) {
   const [resultStale, setResultStale] = useState(false);
 
   const replySourceRef = useRef<ConversationReplySource>("TEXT");
-  const lastAnalyzedTextRef = useRef("");
   const analysisGeneration = useRef(0);
   const [answerTarget, setAnswerTarget] = useState<string | null>(null);
   useEffect(() => () => { analysisGeneration.current++; }, []);
@@ -83,7 +82,7 @@ export default function SalesAssistantPage(props: any) {
       const stored = sessionStorage.getItem(CONVERSATION_STORAGE_KEY);
       if (stored) {
         const draft = JSON.parse(stored) as WorkingCommercialDraft;
-        setWorkingDraft(draft); setPrompt(draft.contextText); lastAnalyzedTextRef.current = draft.contextText;
+        setWorkingDraft(draft); setPrompt("");
         setDocumentMode(draft.documentMode ?? "AUTO"); setBuildMode(draft.buildMode ?? "AUTO");
       }
     } catch {
@@ -114,13 +113,18 @@ export default function SalesAssistantPage(props: any) {
   const isVoiceProcessing = voiceCapabilityKnown && (recorded.isSupported ? recorded.state === "TRANSCRIBING" : voice.state === "PROCESSING");
   const voiceUnavailable = voiceCapabilityKnown && !recorded.isSupported && !voice.isSupported;
   const hasTextToProcess = Boolean(prompt.trim());
+  const awaitingClarification = Boolean(workingDraft?.activeQuestion);
   const primaryActionLabel = isGenerating || isVoiceProcessing
     ? (isArabic ? "جارٍ الفهم..." : "Understanding...")
     : isListening
       ? (isArabic ? "إيقاف وإرسال" : "Stop & Send")
-      : hasTextToProcess
-        ? (isArabic ? "ابدأ الطلب" : "Start Request")
-        : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice");
+      : awaitingClarification
+        ? hasTextToProcess
+          ? (isArabic ? "أكمل الطلب" : "Continue Request")
+          : (isArabic ? "أكمل صوتيًا" : "Continue by Voice")
+        : hasTextToProcess
+          ? (isArabic ? "ابدأ الطلب" : "Start Request")
+          : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice");
 
   const handlePrimaryAction = () => {
     if (isGenerating || isVoiceProcessing) return;
@@ -132,8 +136,8 @@ export default function SalesAssistantPage(props: any) {
   const advanceConversation = async (explicitReply?: string, source = replySourceRef.current, selection?: CommercialSelection, fieldAnswer?: FieldAnswer) => {
     const generation = ++analysisGeneration.current;
     const visibleBefore = prompt.trim();
-    const reply = explicitReply ?? (workingDraft && visibleBefore.startsWith(lastAnalyzedTextRef.current) ? visibleBefore.slice(lastAnalyzedTextRef.current.length).trim() || visibleBefore : visibleBefore);
-    const reanalyze = !explicitReply && Boolean(workingDraft) && visibleBefore === lastAnalyzedTextRef.current;
+    const reply = explicitReply ?? visibleBefore;
+    const reanalyze = false;
     const target = answerTarget ?? workingDraft?.activeQuestion?.field;
     if (!reply.trim()) return;
 
@@ -162,9 +166,7 @@ export default function SalesAssistantPage(props: any) {
       if (generation !== analysisGeneration.current) return;
       if (!response.ok) throw new Error(json.error?.message || "Unable to continue the conversation.");
       setWorkingDraft(json.data);
-      const nextVisible = explicitReply && source === "CHIP" ? `${visibleBefore}${visibleBefore ? "\n" : ""}${explicitReply}` : visibleBefore;
-      if (source === "CHIP") setPrompt(nextVisible);
-      lastAnalyzedTextRef.current = nextVisible;
+      setPrompt("");
       setResultStale(false);
       replySourceRef.current = "TEXT";
       setAnswerTarget(null);
@@ -187,14 +189,14 @@ export default function SalesAssistantPage(props: any) {
   const invalidateSelection = (nextDocument: ConversationDocumentMode, nextBuild: ConversationBuildMode) => {
     analysisGeneration.current++; setIsGenerating(false);
     setDocumentMode(nextDocument); setBuildMode(nextBuild); setWorkingDraft(null); setResultStale(false);
-    lastAnalyzedTextRef.current = ""; sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
+    sessionStorage.removeItem(CONVERSATION_STORAGE_KEY);
   };
 
   const newRequest = () => {
     setAnswerTarget(null);
     analysisGeneration.current++; setIsGenerating(false); recorded.resetRecording(); voice.resetVoiceInput();
     setPrompt(""); setWorkingDraft(null); setAttachment(null); setError(null); setResultStale(false);
-    setDocumentMode("AUTO"); setBuildMode("AUTO"); lastAnalyzedTextRef.current = ""; replySourceRef.current = "TEXT";
+    setDocumentMode("AUTO"); setBuildMode("AUTO"); replySourceRef.current = "TEXT";
     sessionStorage.removeItem(CONVERSATION_STORAGE_KEY); sessionStorage.removeItem("voka_commercial_entry_prompt"); sessionStorage.removeItem("voka_ai_proposal_draft");
   };
 
