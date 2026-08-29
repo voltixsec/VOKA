@@ -94,7 +94,7 @@ afterEach(() => {
 });
 
 describe("Voice Input Transport Integration Tests", () => {
-  it("Blocker 1 Regression: real unsupported browser (no SpeechRecognition) exposes UNAVAILABLE and leaves text input usable", () => {
+  it("Blocker 1 Regression: real unsupported browser exposes UNAVAILABLE after mount and leaves text input usable", async () => {
     delete (window as any).SpeechRecognition;
     delete (window as any).webkitSpeechRecognition;
 
@@ -103,14 +103,14 @@ describe("Voice Input Transport Integration Tests", () => {
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
     expect(textarea).toBeTruthy();
 
-    expect(screen.getByTitle(/not supported/i)).toBeTruthy();
+    expect(await screen.findByTitle(/not supported/i)).toBeTruthy();
     expect(screen.getByText("Unavailable")).toBeTruthy();
 
     fireEvent.change(textarea, { target: { value: "Direct text input works fine" } });
     expect(textarea.value).toBe("Direct text input works fine");
 
-    const voiceButton = screen.getByRole("button", { name: /Start by Voice/i });
-    expect((voiceButton as HTMLButtonElement).disabled).toBe(true);
+    const textButton = screen.getByRole("button", { name: /Start Request/i });
+    expect((textButton as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("Blocker 2 Regression: repeated voice sessions do NOT duplicate previous speech transcripts", () => {
@@ -119,9 +119,6 @@ describe("Voice Input Transport Integration Tests", () => {
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-
-    // Initial prompt = "Base"
-    fireEvent.change(textarea, { target: { value: "Base" } });
 
     // First voice session
     const startBtn1 = screen.getByRole("button", { name: /Start by Voice/i });
@@ -132,7 +129,10 @@ describe("Voice Input Transport Integration Tests", () => {
       mockRecognizer.stop();
     });
 
-    expect(textarea.value).toBe("Base First");
+    expect(textarea.value).toBe("First");
+
+    // Clear the completed fallback transcript to start another voice session.
+    fireEvent.change(textarea, { target: { value: "" } });
 
     // Second explicit voice session
     const startBtn2 = screen.getByRole("button", { name: /Start by Voice/i });
@@ -143,13 +143,12 @@ describe("Voice Input Transport Integration Tests", () => {
       mockRecognizer.stop();
     });
 
-    // Resulting prompt must contain exactly "Base First Second"
-    expect(textarea.value).toBe("Base First Second");
+    expect(textarea.value).toBe("Second");
 
     const matchesFirst = (textarea.value.match(/First/g) || []).length;
     const matchesSecond = (textarea.value.match(/Second/g) || []).length;
 
-    expect(matchesFirst).toBe(1);
+    expect(matchesFirst).toBe(0);
     expect(matchesSecond).toBe(1);
   });
 
@@ -163,7 +162,7 @@ describe("Voice Input Transport Integration Tests", () => {
 
     expect(mockRecognizer.startCount).toBe(1);
     expect(mockRecognizer.lastOptions?.continuous).toBe(true);
-    const stopBtn = screen.getByRole("button", { name: /Stop and Send/i });
+    const stopBtn = screen.getByRole("button", { name: /Stop & Send/i });
     fireEvent.click(stopBtn);
 
     expect(mockRecognizer.stopCount).toBe(1);
@@ -181,11 +180,11 @@ describe("Voice Input Transport Integration Tests", () => {
     act(() => mockRecognizer.emitTranscript("deleted words new words"));
     expect(textarea.value).toBe("kept new words");
 
-    fireEvent.click(screen.getByRole("button", { name: /Stop and Send/i }));
-    fireEvent.change(textarea, { target: { value: "current textarea" } });
+    fireEvent.click(screen.getByRole("button", { name: /Stop & Send/i }));
+    fireEvent.change(textarea, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /Start by Voice/i }));
     act(() => mockRecognizer.emitTranscript("fresh voice"));
-    expect(textarea.value).toBe("current textarea fresh voice");
+    expect(textarea.value).toBe("fresh voice");
     expect(textarea.value).not.toContain("deleted words");
   });
 
@@ -196,7 +195,7 @@ describe("Voice Input Transport Integration Tests", () => {
     expect(screen.getByLabelText("Attach commercial file")).toBeTruthy();
     expect(screen.getByRole("textbox")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
-    expect(screen.getByRole("button", { name: "Stop and Send" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop & Send" })).toBeTruthy();
   });
 
   it("Requirement 4 & 5: configures correct recognition locale for Arabic and English", () => {
@@ -224,15 +223,12 @@ describe("Voice Input Transport Integration Tests", () => {
     expect(mockRecognizer.lastOptions?.lang).toBe("en-US");
   });
 
-  it("Requirement 6, 7 & 14: final transcript extends existing prompt, prompt remains editable, and survives provider failure", () => {
+  it("Requirement 6, 7 & 14: final transcript remains editable and survives provider failure", () => {
     const mockRecognizer = new MockVoiceRecognizer();
 
     render(createElement(SalesAssistantPage, { customRecognizer: mockRecognizer }));
 
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-
-    // Type pre-existing prompt
-    fireEvent.change(textarea, { target: { value: "Existing prompt text" } });
 
     // Start voice
     const startBtn = screen.getByRole("button", { name: /Start by Voice/i });
@@ -243,11 +239,11 @@ describe("Voice Input Transport Integration Tests", () => {
       mockRecognizer.emitTranscript("with appended spoken audio text");
     });
 
-    expect(textarea.value).toBe("Existing prompt text with appended spoken audio text");
+    expect(textarea.value).toBe("with appended spoken audio text");
 
     // Can still edit text manually afterwards
-    fireEvent.change(textarea, { target: { value: "Existing prompt text with appended spoken audio text (manually edited)" } });
-    expect(textarea.value).toBe("Existing prompt text with appended spoken audio text (manually edited)");
+    fireEvent.change(textarea, { target: { value: "spoken audio text (manually edited)" } });
+    expect(textarea.value).toBe("spoken audio text (manually edited)");
 
     // Provider error occurs
     act(() => {
@@ -255,7 +251,7 @@ describe("Voice Input Transport Integration Tests", () => {
     });
 
     // Prompt content is preserved intact!
-    expect(textarea.value).toBe("Existing prompt text with appended spoken audio text (manually edited)");
+    expect(textarea.value).toBe("spoken audio text (manually edited)");
   });
 
   it("Requirement 8, 9, 10, 11: interim and final transcripts do NOT trigger AI proposal generation, /api/quotations, or Apply", () => {

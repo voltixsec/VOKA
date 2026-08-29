@@ -13,6 +13,7 @@ export interface UseVoiceInputOptions {
 
 export interface UseVoiceInputReturn {
   isSupported: boolean;
+  capabilityKnown: boolean;
   state: VoiceInputState;
   transcript: VoiceTranscript;
   errorMessage: string | null;
@@ -42,6 +43,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   const recognizer = recognizerRef.current;
 
   const [isSupported, setIsSupported] = useState<boolean>(false);
+  const [capabilityKnown, setCapabilityKnown] = useState(false);
   const [state, setState] = useState<VoiceInputState>("IDLE");
   const [transcript, setTranscript] = useState<VoiceTranscript>({ interim: "", final: "" });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
   useEffect(() => {
     const supported = recognizer.isSupported();
     setIsSupported(supported);
+    setCapabilityKnown(true);
     setState(supported ? recognizer.getState() : "UNAVAILABLE");
     return () => {
       recognizer.reset();
@@ -92,6 +95,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
 
   return {
     isSupported,
+    capabilityKnown,
     state,
     transcript,
     errorMessage,

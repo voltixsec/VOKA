@@ -36,7 +36,7 @@ describe("Voice V2 recorded transcription", () => {
     expect(screen.getByLabelText("Audio recording waveform")).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop and Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop & Send" }));
     expect(recorder.stopCount).toBe(1);
     await waitFor(() => expect(textarea.value).toBe("12 cameras NVR PoE RJ45 4MP"));
     expect(transcribe).toHaveBeenCalledTimes(1);
@@ -53,9 +53,22 @@ describe("Voice V2 recorded transcription", () => {
     vi.stubGlobal("fetch", fetchSpy);
     render(<SalesAssistantPage customAudioRecorder={recorder} customTranscribe={vi.fn().mockResolvedValue(" ")} />);
     fireEvent.click(screen.getByRole("button", { name: "Start by Voice" }));
-    fireEvent.click(screen.getByRole("button", { name: "Stop and Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop & Send" }));
     await screen.findByText("Audio recording or transcription failed. Try again or type your request.");
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses the same primary action for pasted text and renders no separate Understand button", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: { message: "stop" } }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<SalesAssistantPage customAudioRecorder={new MockRawAudioRecorder()} />);
+    const action = screen.getByTestId("primary-voice-action");
+    expect(action.textContent).toBe("Start by Voice");
+    expect(screen.queryByRole("button", { name: "Understand" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Create quotation for 4 cameras" } });
+    expect(action.textContent).toBe("Start Request");
+    fireEvent.click(action);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
   });
 });

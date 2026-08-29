@@ -60,7 +60,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
       expect(text.replace(/IP|4K|KWD|NVR/g, "")).not.toMatch(isArabic ? /[a-z]/i : /[\u0600-\u06ff]/);
     }
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "CCTV NVR PoE RJ45 4MP" } });
-    fireEvent.click(screen.getByRole("button", { name: isArabic ? "فهم العملية" : "Understand" }));
+    fireEvent.click(screen.getByRole("button", { name: isArabic ? "ابدأ الطلب" : "Start Request" }));
     await screen.findByTestId("commercial-conversation");
     expectLocale(container);
     expect(screen.getByText(isArabic ? "مطلوب للإكمال:" : "REQUIRED TO COMPLETE:")).toBeTruthy();
@@ -117,7 +117,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: { message: isArabic ? "English server error" : "خطأ الخادم" } }) }));
     const { container } = render(<SalesAssistantPage />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "NVR" } });
-    fireEvent.click(screen.getByRole("button", { name: isArabic ? "فهم العملية" : "Understand" }));
+    fireEvent.click(screen.getByRole("button", { name: isArabic ? "ابدأ الطلب" : "Start Request" }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expectLocale(container);
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("NVR");
@@ -129,7 +129,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "DVR" } });
-    fireEvent.click(screen.getByRole("button", { name: isArabic ? "فهم العملية" : "Understand" }));
+    fireEvent.click(screen.getByRole("button", { name: isArabic ? "ابدأ الطلب" : "Start Request" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).reply).toBe("DVR");
   });

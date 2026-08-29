@@ -20,13 +20,21 @@ export function useRecordedVoiceInput(options: { recorder?: IRawAudioRecorder; t
   if (!recorderRef.current) recorderRef.current = options.recorder ?? new BrowserRawAudioRecorder();
   const recorder = recorderRef.current;
   const transcriber = options.transcribe ?? defaultTranscriber;
-  const [state, setState] = useState<RecordedVoiceState>(recorder.isSupported() ? "IDLE" : "UNAVAILABLE");
+  // Capability is browser-only. Keep SSR and the first client render neutral,
+  // then detect support after mount to avoid hydration attribute drift.
+  const [isSupported, setIsSupported] = useState(false);
+  const [capabilityKnown, setCapabilityKnown] = useState(false);
+  const [state, setState] = useState<RecordedVoiceState>("IDLE");
   const [waveform, setWaveform] = useState<number[]>(() => Array(9).fill(0.08));
   const [transcript, setTranscript] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const generation = useRef(0);
 
-  useEffect(() => () => { generation.current++; recorder.reset(); }, [recorder]);
+  useEffect(() => {
+    const supported = recorder.isSupported();
+    setIsSupported(supported); setCapabilityKnown(true); setState(supported ? "IDLE" : "UNAVAILABLE");
+    return () => { generation.current++; recorder.reset(); };
+  }, [recorder]);
 
   const startRecording = useCallback(async () => {
     const current = ++generation.current;
@@ -48,6 +56,6 @@ export function useRecordedVoiceInput(options: { recorder?: IRawAudioRecorder; t
     });
   }, [recorder, transcriber, options.contextHints, options.onTranscript]);
 
-  const resetRecording = () => { generation.current++; recorder.reset(); setTranscript(""); setErrorMessage(null); setState(recorder.isSupported() ? "IDLE" : "UNAVAILABLE"); };
-  return { isSupported: recorder.isSupported(), state, waveform, transcript, errorMessage, startRecording, resetRecording, stopRecording: () => recorder.stop() };
+  const resetRecording = () => { generation.current++; recorder.reset(); setTranscript(""); setErrorMessage(null); setState(isSupported ? "IDLE" : capabilityKnown ? "UNAVAILABLE" : "IDLE"); };
+  return { isSupported, capabilityKnown, state, waveform, transcript, errorMessage, startRecording, resetRecording, stopRecording: () => recorder.stop() };
 }

@@ -109,6 +109,26 @@ export default function SalesAssistantPage(props: any) {
     voice.startListening(isArabic ? "ar-KW" : "en-US");
   };
 
+  const voiceCapabilityKnown = Boolean(recorded.capabilityKnown && voice.capabilityKnown);
+  const isListening = voiceCapabilityKnown && (recorded.isSupported ? recorded.state === "RECORDING" : voice.state === "LISTENING");
+  const isVoiceProcessing = voiceCapabilityKnown && (recorded.isSupported ? recorded.state === "TRANSCRIBING" : voice.state === "PROCESSING");
+  const voiceUnavailable = voiceCapabilityKnown && !recorded.isSupported && !voice.isSupported;
+  const hasTextToProcess = Boolean(prompt.trim());
+  const primaryActionLabel = isGenerating || isVoiceProcessing
+    ? (isArabic ? "جارٍ الفهم..." : "Understanding...")
+    : isListening
+      ? (isArabic ? "إيقاف وإرسال" : "Stop & Send")
+      : hasTextToProcess
+        ? (isArabic ? "ابدأ الطلب" : "Start Request")
+        : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice");
+
+  const handlePrimaryAction = () => {
+    if (isGenerating || isVoiceProcessing) return;
+    if (isListening || !hasTextToProcess) { handleVoiceToggle(); return; }
+    replySourceRef.current = "TEXT";
+    void advanceConversation();
+  };
+
   const advanceConversation = async (explicitReply?: string, source = replySourceRef.current, selection?: CommercialSelection, fieldAnswer?: FieldAnswer) => {
     const generation = ++analysisGeneration.current;
     const visibleBefore = prompt.trim();
@@ -281,10 +301,9 @@ export default function SalesAssistantPage(props: any) {
           </label>
           <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
           {attachment ? <div className="flex w-full min-w-0 items-center gap-2 text-sm sm:w-auto sm:flex-1"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="shrink-0 text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : null}
-          <button type="button" data-testid="primary-voice-action" title={!recorded.isSupported && !voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} aria-label={recorded.isSupported && recorded.state === "RECORDING" || !recorded.isSupported && voice.state === "LISTENING" ? (isArabic ? "إيقاف وإرسال" : "Stop and Send") : isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice"} disabled={recorded.isSupported ? recorded.state === "TRANSCRIBING" : !voice.isSupported || voice.state === "PROCESSING"} onClick={handleVoiceToggle} className="min-h-11 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-950/30 disabled:cursor-wait disabled:opacity-60">
-            {recorded.isSupported && recorded.state === "TRANSCRIBING" || !recorded.isSupported && voice.state === "PROCESSING" ? (isArabic ? "جارٍ الفهم..." : "Understanding…") : recorded.isSupported && recorded.state === "RECORDING" || !recorded.isSupported && voice.state === "LISTENING" ? (isArabic ? "إيقاف وإرسال" : "Stop and Send") : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice")}
+          <button type="button" data-testid="primary-voice-action" title={voiceUnavailable ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} aria-label={primaryActionLabel} disabled={isGenerating || isVoiceProcessing || (voiceUnavailable && !hasTextToProcess)} onClick={handlePrimaryAction} className="min-h-11 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-950/30 disabled:cursor-wait disabled:opacity-60">
+            {primaryActionLabel}
           </button>
-          <button type="button" onClick={() => advanceConversation()} disabled={isGenerating || !prompt.trim()} className="min-h-11 rounded-xl bg-sky-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50">{isGenerating ? (isArabic ? "جاري الفهم..." : "Understanding…") : (isArabic ? "فهم العملية" : "Understand")}</button>
           <button type="button" onClick={newRequest} className="min-h-11 rounded-lg px-1 py-2 text-xs font-semibold text-slate-300 underline-offset-4 hover:underline">{isArabic ? "طلب جديد" : "New Request"}</button>
         </div>
 
