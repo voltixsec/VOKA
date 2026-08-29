@@ -48,7 +48,9 @@ export function resolveExpiry(value: string, today: string): string | null {
 export function readCommercialClauses(text: string | null | undefined, today: string): CommercialTerms & { expiryDate: string | null } {
   const clauses = (text ?? '').split(/[\n;؛]+/).map((part) => part.trim().replace(/^(?:[-•*]|[0-9٠-٩]+[.)-])\s*/, '')).filter(Boolean);
   const clause = (pattern: RegExp) => clauses.find((part) => pattern.test(part)) ?? null;
-  const validity = clause(/^(?:مدة\s+صلاحية|صلاحية\s+العرض|مدة\s+العرض|العرض\s+صالح|quotation\s+validity|validity|valid\s+for)(?=\s|:|$)/i);
+  const validity = clause(/^(?:مدة\s+صلاحية|صلاحية\s+العرض|مدة\s+العرض|العرض\s+صالح|quotation\s+validity|validity|valid\s+for)(?=\s|:|$)/i)
+    ?? (text ?? '').match(/(?:^|[،,;؛]\s*و?\s*|\s+و)(صلاحية\s+العرض\s*:?\s*[^،,;؛.]+)(?=[،,;؛.]|$)/i)?.[1]
+    ?? null;
   return {
     paymentTerms: clause(/^(?:شروط\s+الدفع|الدفع|payment|payable|net\s+\d)/i),
     delivery: clause(/^(?:مدة\s+التسليم|التسليم|التوريد\s+خلال|delivery|deliver\s+within)/i),

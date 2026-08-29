@@ -27,7 +27,7 @@ export function explicitPaymentTerms(prompt: string): string | null {
   // A different explicitly labelled field ends payment ownership. Semicolons
   // between payment stages do not truncate the schedule.
   return text.slice(start).split(/(?:\n|[;؛])(?!\s*(?:\d+(?:\.\d+)?\s*%|(?:و)?الباقي|(?:and\s+)?(?:the\s+)?(?:balance|remainder)))\s*/i)[0]
-    .split(/(?:[،,]\s*|\s+و)(?:صلاحية العرض|مدة التسليم|الضمان|validity|delivery|warranty)\s*:/i)[0].trim() || null;
+    .split(/(?:[،,]\s*و?\s*|\s+و)(?:صلاحية العرض|مدة التسليم|الضمان|validity|delivery|warranty)\s*:?/i)[0].trim() || null;
 }
 
 /** Deterministic wording only: preserve amounts, stages and order; never fill a missing percentage. */

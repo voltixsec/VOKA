@@ -71,6 +71,8 @@ export class SmartSystemBuilderService {
       /(?:سيستم|نظام)\s+(?:مراقبة|كاميرات?)/.test(prompt);
     if (explicitCctvSystem || (cameraMatch && this.requestsInstallation(prompt))) {
 
+      const storageMatch = prompt.match(/(?:التسجيل\s+لمدة|مدة\s+التسجيل|retention(?:\s+for)?|recording\s+for)\s*(\d{1,3})\s*(?:يوم|يوماً|days?)/i);
+
       let projectContext: string | null = null;
       if (
         lower.includes("commercial") ||
@@ -99,6 +101,7 @@ export class SmartSystemBuilderService {
         confidence: 0.95,
         extractedParameters: {
           cameraCount: cameraMatch ? Number(cameraMatch[1]) : null,
+          storageDays: storageMatch ? Number(storageMatch[1]) : null,
           projectContext,
           jurisdiction: /\bkuwait\b/i.test(prompt) || prompt.includes("الكويت") ? "Kuwait" : null,
           includeInstallation: this.requestsInstallation(prompt),

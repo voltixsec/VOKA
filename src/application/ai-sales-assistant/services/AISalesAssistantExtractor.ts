@@ -12,7 +12,7 @@ import { SALES_ASSISTANT_MAX_LINES } from "../dto/AISalesAssistantDto";
 import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesIntent";
 import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
 import { SmartSystemBuilderService } from "../../smart-system/services/SmartSystemBuilderService";
-import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
+import { cleanCustomerEntity, extractArabicRelationalEntities, fallbackCompanyEntity } from "./customer-entity";
 import { commercializeSystemComponent } from "./commercialize-system-component";
 
 const FALLBACK_WARNING =
@@ -48,6 +48,7 @@ export class AISalesAssistantExtractor {
       } catch { /* Keep commercial intelligence usable if focused extraction fails. */ }
     }
     customerMention ??= fallbackCustomer;
+    const relationalEntities = sourceLocale === "ar" ? extractArabicRelationalEntities(trimmed) : { projectName: null, attentionName: null };
     // Evidence must occur in the user's context; provider assertions alone are not user facts.
     const facts = (understood?.facts ?? []).filter((fact) => trimmed.includes(fact.evidence)).map((fact) => ({ ...fact, provenance: "USER_PROVIDED" as const }));
     for (const [name, pattern] of [
@@ -74,7 +75,7 @@ export class AISalesAssistantExtractor {
       const targetedInputs = Object.fromEntries(Object.entries(systemAnswers).filter(([key, value]) => declaredInputs.has(key) && ["string", "number", "boolean"].includes(typeof value)));
       const parameters = { ...(cameraFact ? { cameraCount: Number(cameraFact.value) } : {}), ...targetedInputs, ...Object.fromEntries(Object.entries(answers).filter(([key]) => ["cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"].includes(key)).map(([key, value]) => [key, Number(value)])) };
       const deterministic = this.heuristicExtract(effectivePrompt, sourceLocale, true, parameters);
-      const intent = { ...understood, ...deterministic, customerMention, subject: understood?.subject ?? deterministic.subject, brief: understood?.brief ?? trimmed, paymentTerms: understood?.paymentTerms, warranty: understood?.warranty, projectName: understood?.projectName, documentType: understood?.documentType, facts };
+      const intent = { ...understood, ...deterministic, customerMention, subject: understood?.subject ?? deterministic.subject, brief: understood?.brief ?? trimmed, paymentTerms: understood?.paymentTerms, warranty: understood?.warranty, projectName: relationalEntities.projectName ?? understood?.projectName, attentionName: relationalEntities.attentionName ?? understood?.attentionName, documentType: understood?.documentType, facts };
       return {
         intent,
         extractionMode: understood ? "provider" : "heuristic",
@@ -91,6 +92,8 @@ export class AISalesAssistantExtractor {
             intent: {
               ...intent,
               sourceLocale, facts, customerMention,
+              projectName: relationalEntities.projectName ?? intent.projectName,
+              attentionName: relationalEntities.attentionName ?? intent.attentionName,
             },
             extractionMode: "provider",
             warnings: intent.warnings ?? [],
@@ -104,6 +107,8 @@ export class AISalesAssistantExtractor {
     const intent = this.heuristicExtract(trimmed, sourceLocale, allowSmartSystems);
     intent.facts = facts;
     intent.customerMention = customerMention;
+    intent.projectName = relationalEntities.projectName;
+    intent.attentionName = relationalEntities.attentionName;
     return {
       intent,
       extractionMode: "heuristic",
