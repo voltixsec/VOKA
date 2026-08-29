@@ -12,9 +12,11 @@ function jurisdiction(prompt: string) {
 /** Removes commercial identities before a query leaves the tenant boundary. */
 export function generalizedSystemQuery(prompt: string, locale: "ar" | "en") {
   const named = prompt.match(/(?:for|نظام|سيستم)\s+(?:a\s+|an\s+)?([^,،.]{2,100}?(?:system|نظام|سيستم|elevator|مصعد|fm[-\s]?200))/i)?.[1];
-  const known = prompt.match(/(?:fm[-\s]?200|electronic passenger elevator|passenger elevator|نظام\s+[^,،.]{2,80}|سيستم\s+[^,،.]{2,80})/i)?.[0];
+  const known = prompt.match(/(?:fm[-\s]?200|electronic passenger elevator|passenger elevator|hydraulic goods lift|goods lift|نظام\s+[^,،.]{2,80}|سيستم\s+[^,،.]{2,80}|مصعد\s+[^,،.]{2,80})/i)?.[0];
   const system = (named ?? known ?? (locale === "ar" ? "النظام المطلوب" : "requested system")).trim();
-  return `${system} technical components required design inputs${jurisdiction(prompt) ? " Kuwait" : ""}`.slice(0, 240);
+  const reference = prompt.match(/(?:similar to|supplied by|manufacturer|brand|مشابه(?:ة)? لـ?|مورد من|من شركة)\s+([\p{L}\p{N}][\p{L}\p{N} .&-]{1,48})/iu)?.[1]
+    ?.replace(/\b(?:for|at|in)\b.*$/i, "").trim();
+  return `${reference ? `${reference} ` : ""}${system} technical components required design inputs${jurisdiction(prompt) ? " Kuwait" : ""}`.slice(0, 240);
 }
 
 function interpretedModel(prompt: string, locale: "ar" | "en"): ProvisionalSystemModel {
@@ -36,7 +38,7 @@ function applyAnswers(model: ProvisionalSystemModel, answers: SystemFieldAnswers
 export class AgenticSystemReasoner {
   constructor(private readonly research?: CommercialSystemResearchPort | null) {}
 
-  async resolve(input: { companyId: string; prompt: string; locale: "ar" | "en"; knownSystem?: SystemCalculationResult | null; retained?: AgenticCommercialState | null; answers?: SystemFieldAnswers }): Promise<AgenticCommercialState | null> {
+  async resolve(input: { companyId: string; prompt: string; currentTurn?: string; locale: "ar" | "en"; knownSystem?: SystemCalculationResult | null; retained?: AgenticCommercialState | null; answers?: SystemFieldAnswers }): Promise<AgenticCommercialState | null> {
     if (input.knownSystem) return {
       route: "VERIFIED_PROFILE", systemName: input.locale === "ar" ? input.knownSystem.systemNameAr : input.knownSystem.systemNameEn,
       profileId: input.knownSystem.systemType, profileVersion: input.knownSystem.templateVersion, provisionalSystem: null,
@@ -44,19 +46,22 @@ export class AgenticSystemReasoner {
       readiness: input.knownSystem.missingInputs.length ? "NEEDS_CLARIFICATION" : "VERIFIED_CALCULATION", requiresHumanReview: true,
     };
     if (!input.retained && !systemRequest.test(input.prompt)) return null;
-    const query = input.retained?.researchQuery ?? generalizedSystemQuery(input.prompt, input.locale);
-    let model = input.retained?.provisionalSystem ?? null;
-    let researchStatus: AgenticCommercialState["researchStatus"] = input.retained?.researchStatus ?? "UNAVAILABLE";
+    const correction = Boolean(input.retained && input.currentTurn && /\b(?:actually|instead|not .* but|i mean)\b|(?:في الواقع|بدلاً|أقصد|مش .* لكن)/i.test(input.currentTurn) && systemRequest.test(input.currentTurn));
+    const researchPrompt = correction ? input.currentTurn! : input.prompt;
+    const retained = correction ? null : input.retained;
+    const query = retained?.researchQuery ?? generalizedSystemQuery(researchPrompt, input.locale);
+    let model = retained?.provisionalSystem ?? null;
+    let researchStatus: AgenticCommercialState["researchStatus"] = retained?.researchStatus ?? "UNAVAILABLE";
     if (!model && this.research) {
       try {
-        model = await this.research.researchSystem({ companyId: input.companyId, query, locale: input.locale, jurisdiction: jurisdiction(input.prompt) });
+        model = await this.research.researchSystem({ companyId: input.companyId, query, locale: input.locale, jurisdiction: jurisdiction(researchPrompt) });
       } catch {
         model = null;
       }
       researchStatus = model ? "COMPLETED" : "UNAVAILABLE";
     }
-    model ??= interpretedModel(input.prompt, input.locale);
-    model = applyAnswers(model, input.answers ?? {});
+    model ??= interpretedModel(researchPrompt, input.locale);
+    model = applyAnswers(model, correction ? {} : input.answers ?? {});
     const missingInputs = model.inputs.filter((field) => field.required && field.value == null).map((field) => field.name);
     return {
       route: model.provenance === "RESEARCHED" ? "PROVISIONAL_RESEARCH" : "PROVISIONAL_INTERPRETATION",

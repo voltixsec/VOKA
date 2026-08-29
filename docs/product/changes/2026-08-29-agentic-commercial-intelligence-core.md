@@ -44,9 +44,13 @@ VOKA projects one active question from unresolved canonical state rather than pr
 
 When commercial state is sufficiently complete, existing handoff stores the canonical proposal for the real VOKA draft. Unknown customers remain proposed, unknown catalog items remain truthful temporary lines, absent SKUs are never fabricated, missing prices remain review blockers, and every output remains subject to human review and approval.
 
+## Production research adapter
+
+The production OpenAI Responses/web-search implementation, privacy query plan, evidence validation, ranking, budget, cache, failure and prompt-injection boundaries are documented in [Production Commercial System Research](2026-08-29-production-commercial-system-research.md).
+
 ## Current limitations
 
-- The research port is implemented and deterministically tested with mock evidence; no production web-search adapter is enabled in this slice.
+- External research requires server-side OpenAI configuration and a model/account with Responses web-search support; unavailable capability falls back safely.
 - Provisional unknown-system models do not perform engineering sizing or generate authoritative component quantities.
 - Governed promotion from a provisional model into a verified System Profile remains a later administrative workflow.
 - The attachment port is architectural only; detailed BOQ/drawing/specification parsing is deferred.

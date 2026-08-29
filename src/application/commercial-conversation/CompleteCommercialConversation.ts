@@ -91,6 +91,7 @@ export class CompleteCommercialConversation {
     }) : undefined;
     const proposal = operation === "SALES_ORDER" || operation === "DRAWING_TAKEOFF" ? null : await this.intelligence.generateDraftProposal({
       companyId: input.companyId, prompt: intelligenceText, sourceLocale: input.locale,
+      currentTurn: input.reply,
       validityBaseDate: prior?.proposal.validityBaseDate,
       buildMode: buildMode === "DRAWING" ? "AUTO" : buildMode, selection, answers, systemAnswers, notApplicable: [...notApplicable], retainedLines,
       retainedContext: targeted && prior ? {

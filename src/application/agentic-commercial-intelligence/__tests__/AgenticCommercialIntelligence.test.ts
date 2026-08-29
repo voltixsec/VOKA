@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AISalesAssistantService } from "../../ai-sales-assistant/services/AISalesAssistantService";
 import { CompleteCommercialConversation } from "../../commercial-conversation/CompleteCommercialConversation";
-import type { CommercialSystemResearchPort, ProvisionalSystemModel } from "..";
+import { AgenticSystemReasoner, generalizedSystemQuery, type CommercialSystemResearchPort, type ProvisionalSystemModel } from "..";
 import { cleanCustomerEntity } from "../../ai-sales-assistant/services/customer-entity";
 
 const fmPrompt = "Please prepare a quotation for Al Watania Contracting Company for the Kuwait City Data Center project, attention Eng. Ahmed Al-Salem, for a complete FM-200 fire suppression system for the server room according to Kuwait requirements. Payment 50% advance and 50% upon completion. Validity 30 days.";
@@ -31,6 +31,24 @@ function fixture(research?: CommercialSystemResearchPort) {
 }
 
 describe("bounded agentic commercial intelligence", () => {
+  it("generalizes private commercial requests while retaining a material manufacturer reference", () => {
+    const query = generalizedSystemQuery("Prepare a passenger elevator similar to Marafie for Al X customer at secret Project Y with price 99 KWD in Kuwait", "en");
+    expect(query).toMatch(/Marafie.*passenger elevator.*Kuwait/i);
+    expect(query).not.toMatch(/Al X|secret|Project Y|99|KWD|customer/i);
+  });
+
+  it("reuses research for clarification but re-researches an explicit material system correction", async () => {
+    const research = { researchSystem: vi.fn().mockImplementation(async ({ query }) => model(query.includes("hydraulic goods") ? "Hydraulic goods lift" : "Passenger traction elevator", ["numberOfStops"])) };
+    const reasoner = new AgenticSystemReasoner(research);
+    const first = await reasoner.resolve({ companyId: "tenant-a", prompt: "Passenger elevator system in Kuwait", currentTurn: "Passenger elevator system in Kuwait", locale: "en" });
+    const clarification = await reasoner.resolve({ companyId: "tenant-a", prompt: "Passenger elevator system in Kuwait", currentTurn: "12 stops", locale: "en", retained: first, answers: { numberOfStops: 12 } });
+    expect(research.researchSystem).toHaveBeenCalledTimes(1);
+    expect(clarification?.provisionalSystem?.inputs[0]).toMatchObject({ value: 12, provenance: "USER_PROVIDED" });
+    const changed = await reasoner.resolve({ companyId: "tenant-a", prompt: "Passenger elevator system in Kuwait", currentTurn: "Actually I mean a hydraulic goods lift, not a passenger traction elevator.", locale: "en", retained: clarification, answers: { numberOfStops: 12 } });
+    expect(research.researchSystem).toHaveBeenCalledTimes(2);
+    expect(changed?.systemName).toBe("Hydraulic goods lift");
+    expect(changed?.provisionalSystem?.inputs[0].value).toBeNull();
+  });
   it("keeps known CCTV on verified deterministic profiles without research", async () => {
     const research = { researchSystem: vi.fn() };
     const { service } = fixture(research);

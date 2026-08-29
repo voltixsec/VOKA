@@ -37,6 +37,14 @@ describe("createSalesAssistantPort — environment routing", () => {
     expect(port).toHaveProperty("extractIntent");
   });
 
+  it("exposes research capability only on the configured OpenAI adapter", async () => {
+    vi.stubEnv("VOKA_AI_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "test-only");
+    vi.stubEnv("VOKA_SALES_AI_MODEL", "configured-openai-model");
+    const { createSalesAssistantPort } = await import("../createSalesAssistantPort");
+    expect(createSalesAssistantPort()).toHaveProperty("researchSystem");
+  });
+
   it("returns adapter for legacy VOKA_AI_PROVIDER=ollama", async () => {
     vi.stubEnv("VOKA_SALES_AI_MODEL", "");
     vi.stubEnv("VOKA_AI_PROVIDER", "ollama");

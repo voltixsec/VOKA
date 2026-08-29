@@ -38,7 +38,18 @@ function resolveTimeoutMs(raw: string | undefined, fallback: number): number {
  */
 export function createSalesAssistantPort(): AISalesAssistantPort | null {
   if ((process.env.VOKA_AI_PROVIDER?.toLowerCase() === "openai" || !process.env.VOKA_AI_PROVIDER) && process.env.OPENAI_API_KEY && process.env.VOKA_SALES_AI_MODEL) {
-    return new OpenAISalesAssistantAdapter(process.env.OPENAI_API_KEY, process.env.VOKA_SALES_AI_MODEL, process.env.OPENAI_BASE_URL);
+    return new OpenAISalesAssistantAdapter(process.env.OPENAI_API_KEY, process.env.VOKA_SALES_AI_MODEL, process.env.OPENAI_BASE_URL, {
+      enabled: process.env.VOKA_COMMERCIAL_RESEARCH_ENABLED !== "false",
+      model: process.env.VOKA_COMMERCIAL_RESEARCH_MODEL?.trim() || undefined,
+      timeoutMs: resolveTimeoutMs(process.env.VOKA_COMMERCIAL_RESEARCH_TIMEOUT_MS, 20_000),
+      cacheTtlMs: Number(process.env.VOKA_COMMERCIAL_RESEARCH_CACHE_TTL_MS) || 3_600_000,
+      maxSources: Number(process.env.VOKA_COMMERCIAL_RESEARCH_MAX_SOURCES) || 6,
+      maxToolCalls: Number(process.env.VOKA_COMMERCIAL_RESEARCH_MAX_CALLS) || 2,
+      preferredDomains: process.env.VOKA_COMMERCIAL_RESEARCH_PREFERRED_DOMAINS?.split(",").map((value) => value.trim()).filter(Boolean),
+      blockedDomains: process.env.VOKA_COMMERCIAL_RESEARCH_BLOCKED_DOMAINS?.split(",").map((value) => value.trim()).filter(Boolean),
+      minimumEvidence: Number(process.env.VOKA_COMMERCIAL_RESEARCH_MIN_EVIDENCE) || 1,
+      telemetry: (event) => console.info("[CommercialSystemResearch]", event),
+    });
   }
   if (process.env.VOKA_AI_PROVIDER?.toLowerCase() === "openai") return null;
   const baseUrl =

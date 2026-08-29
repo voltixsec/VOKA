@@ -58,6 +58,7 @@ export class AISalesAssistantService {
     const agenticState = await this.agenticReasoner.resolve({
       companyId: request.companyId, prompt, locale: sourceLocale, knownSystem: intent.smartSystem,
       retained: request.retainedAgentState, answers: request.systemAnswers,
+      currentTurn: request.currentTurn,
     });
     // Unknown system prose is not a quantity source. In particular, model names
     // such as FM-200 must never become 200 sale units.

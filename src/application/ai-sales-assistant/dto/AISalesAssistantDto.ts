@@ -25,6 +25,8 @@ export type SalesItemIntent =
 export interface AISalesAssistantRequest {
   companyId: string;
   prompt: string;
+  /** The current conversational turn, separate from retained request intelligence. */
+  currentTurn?: string;
   sourceLocale?: SalesAssistantSourceLocale;
   buildMode?: "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM";
   selection?: CommercialSelection;

@@ -9,6 +9,7 @@ import { PrismaAISalesAssistantPricingAdapter } from "./PrismaAISalesAssistantPr
 import { createSalesAssistantPort } from "./createSalesAssistantPort";
 
 export function createAISalesAssistantService() {
+  const provider = createSalesAssistantPort();
   return new AISalesAssistantService({
     terms: { async find(companyId, scopeType, locale) {
       const template = await prisma.companyQuotationTermsTemplate.findUnique({ where: { companyId_scopeType: { companyId, scopeType } }, select: { termsAr: true, termsEn: true } });
@@ -20,5 +21,5 @@ export function createAISalesAssistantService() {
     units: new PrismaUnitRepository(prisma),
     quotationReferences: new PrismaQuotationReferenceValidator(),
     pricing: new PrismaAISalesAssistantPricingAdapter(prisma),
-  }, createSalesAssistantPort());
+  }, provider, provider && "researchSystem" in provider ? provider as import("@/src/application/agentic-commercial-intelligence").CommercialSystemResearchPort : null);
 }

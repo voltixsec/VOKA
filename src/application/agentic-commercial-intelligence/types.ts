@@ -12,8 +12,19 @@ export type ResearchEvidence = {
   title: string;
   url: string;
   publisher: string;
+  sourceType?: ResearchSourceType;
+  claimSupport?: string[];
+  qualityScore?: number;
   provenance: "RESEARCHED";
 };
+
+export type ResearchSourceType =
+  | "GOVERNMENT_AUTHORITY"
+  | "MANUFACTURER_TECHNICAL"
+  | "MANUFACTURER_PRODUCT"
+  | "STANDARDS_ORGANIZATION"
+  | "SPECIALIST_TECHNICAL"
+  | "OTHER";
 
 export type ProvisionalSystemInput = {
   name: string;
