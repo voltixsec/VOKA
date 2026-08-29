@@ -18,7 +18,7 @@ describe("localized engineering explanations preserve the same numerical evidenc
       const numbers = (value: string) => value.match(/\d+(?:\.\d+)?/g) ?? [];
       expect(numbers(component.formulaExplanationAr!)).toEqual(numbers(component.formulaExplanation!));
       expect(component.nameEn).not.toMatch(/[\u0600-\u06ff]/);
-      expect(component.nameAr.replace(/CCTV|NVR|IP|PoE|RJ45|Cat6/g, "")).not.toMatch(/[a-z]/i);
+      expect(component.nameAr.replace(/CCTV|NVR|IP|PoE|RJ45|Cat6|\d+MP|H\.265|PTZ/g, "")).not.toMatch(/[a-z]/i);
     }
   });
 });

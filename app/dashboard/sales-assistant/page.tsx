@@ -60,7 +60,10 @@ export default function SalesAssistantPage(props: any) {
     locale: isArabic ? "ar" : "en",
     recognizer: customRecognizer,
   });
-  const recorded = useRecordedVoiceInput({ recorder: customAudioRecorder, transcribe: customTranscribe });
+  const recordedTranscriptHandlerRef = useRef<(text: string) => void>(() => undefined);
+  const previousRecordingTranscriptRef = useRef("");
+  const transcriptionHints = [workingDraft?.activeQuestion ? (isArabic ? workingDraft.activeQuestion.ar : workingDraft.activeQuestion.en) : "", "IP NVR DVR PoE RJ45 CAT6 4MP 8MP H.265 PTZ"];
+  const recorded = useRecordedVoiceInput({ recorder: customAudioRecorder, transcribe: customTranscribe, contextHints: transcriptionHints, onTranscript: (text) => recordedTranscriptHandlerRef.current(text) });
 
   // Keep track of the transcript final result and merge into prompt
   const prevFinalRef = useRef<string>("");
@@ -77,15 +80,6 @@ export default function SalesAssistantPage(props: any) {
       prevFinalRef.current = voice.transcript.final;
     }
   }, [recorded.isSupported, voice.transcript.final]);
-
-  const previousRecordingTranscriptRef = useRef("");
-  useEffect(() => {
-    if (!recorded.transcript || recorded.transcript === previousRecordingTranscriptRef.current) return;
-    setPrompt((visible) => visible.trim() ? `${visible.trim()} ${recorded.transcript}` : recorded.transcript);
-    setResultStale(true);
-    replySourceRef.current = "VOICE";
-    previousRecordingTranscriptRef.current = recorded.transcript;
-  }, [recorded.transcript]);
 
   useEffect(() => {
     try {
@@ -164,6 +158,14 @@ export default function SalesAssistantPage(props: any) {
       if (generation === analysisGeneration.current) setIsGenerating(false);
     }
   };
+  recordedTranscriptHandlerRef.current = (text) => {
+    if (!text || text === previousRecordingTranscriptRef.current) return;
+    setPrompt((visible) => visible.trim() ? `${visible.trim()} ${text}` : text);
+    setResultStale(true);
+    replySourceRef.current = "VOICE";
+    previousRecordingTranscriptRef.current = text;
+    void advanceConversation(text, "VOICE");
+  };
 
   const invalidateSelection = (nextDocument: ConversationDocumentMode, nextBuild: ConversationBuildMode) => {
     analysisGeneration.current++; setIsGenerating(false);
@@ -212,7 +214,7 @@ export default function SalesAssistantPage(props: any) {
     if (recorded.isSupported) {
       if (recorded.state === "RECORDING") return isArabic ? "جاري تسجيل الصوت... اضغط الميكروفون للإيقاف." : "Recording audio… Press the microphone to stop.";
       if (recorded.state === "TRANSCRIBING") return isArabic ? "جاري تفريغ التسجيل كاملاً..." : "Transcribing the complete recording…";
-      if (recorded.state === "READY") return isArabic ? "اكتمل التفريغ. راجع النص وعدّله ثم اضغط فهم العملية." : "Transcription complete. Edit the text, then press Understand.";
+      if (recorded.state === "READY") return isArabic ? "اكتمل التفريغ والفهم. يمكنك مراجعة النص وتعديله." : "Transcription and understanding complete. You can review and edit the text.";
       if (recorded.state === "PERMISSION_DENIED") return isArabic ? "يرجى السماح بالوصول إلى الميكروفون في إعدادات المتصفح." : "Please allow microphone access in browser settings.";
       if (recorded.state === "ERROR") return isArabic ? "تعذر تسجيل الصوت أو تفريغه. حاول مرة أخرى أو اكتب طلبك." : "Audio recording or transcription failed. Try again or type your request.";
       return null;
@@ -282,7 +284,7 @@ export default function SalesAssistantPage(props: any) {
           </label>
           <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} className="sr-only" />
           {attachment ? <div className="flex w-full min-w-0 items-center gap-2 text-sm sm:w-auto sm:flex-1"><span className="truncate text-slate-300">{attachment.name}</span><button type="button" onClick={() => setAttachment(null)} className="shrink-0 text-rose-300">{isArabic ? "إزالة" : "Remove"}</button></div> : null}
-          <VoiceOrb state={(recorded.isSupported && recorded.state === "RECORDING") || (!recorded.isSupported && voice.state === "LISTENING") ? "LISTENING" : (recorded.isSupported && recorded.state === "TRANSCRIBING") || (!recorded.isSupported && voice.state === "PROCESSING") ? "PROCESSING" : "IDLE"} label={(recorded.isSupported ? recorded.state === "RECORDING" : voice.state === "LISTENING" || voice.state === "PROCESSING") ? (isArabic ? "إيقاف الميكروفون" : "Stop microphone") : recorded.isSupported ? (isArabic ? "بدء تسجيل الصوت" : "Record voice") : (isArabic ? "بدء الإدخال الصوتي" : "Voice Input")} title={!recorded.isSupported && !voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={recorded.isSupported ? recorded.state === "TRANSCRIBING" : !voice.isSupported} onClick={handleVoiceToggle} />
+          <VoiceOrb state={(recorded.isSupported && recorded.state === "RECORDING") || (!recorded.isSupported && voice.state === "LISTENING") ? "LISTENING" : (recorded.isSupported && recorded.state === "TRANSCRIBING") || (!recorded.isSupported && voice.state === "PROCESSING") ? "PROCESSING" : "IDLE"} label={(recorded.isSupported ? recorded.state === "RECORDING" : voice.state === "LISTENING" || voice.state === "PROCESSING") ? (isArabic ? "إيقاف الميكروفون" : "Stop microphone") : (isArabic ? "قلها لـ VOKA" : "Tell VOKA")} title={!recorded.isSupported && !voice.isSupported ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} disabled={recorded.isSupported ? recorded.state === "TRANSCRIBING" : !voice.isSupported} onClick={handleVoiceToggle} />
           <button type="button" onClick={() => advanceConversation()} disabled={isGenerating || !prompt.trim()} className="min-h-11 rounded-xl bg-sky-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50">{isGenerating ? (isArabic ? "جاري الفهم..." : "Understanding…") : (isArabic ? "فهم العملية" : "Understand")}</button>
           <button type="button" onClick={newRequest} className="min-h-11 rounded-lg px-1 py-2 text-xs font-semibold text-slate-300 underline-offset-4 hover:underline">{isArabic ? "طلب جديد" : "New Request"}</button>
         </div>

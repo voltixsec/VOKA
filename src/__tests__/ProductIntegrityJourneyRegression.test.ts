@@ -38,7 +38,7 @@ describe("V1 Product Integrity - Core Commercial Journey Regression", () => {
       expect(intent.lines.find((line) => line.componentKey === "RACK_CABINET"))
         .toMatchObject({ quantity: 1, provenance: "SUGGESTED" });
       expect(intent.lines.find((line) => line.componentKey === "INSTALLATION_COMMISSIONING"))
-        .toMatchObject({ quantity: 8, provenance: "CALCULATED" });
+        .toMatchObject({ quantity: 1, provenance: "SUGGESTED", requestedUnitText: "Package" });
     });
   });
 

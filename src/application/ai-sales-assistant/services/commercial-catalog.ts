@@ -78,10 +78,27 @@ function commercialChoice(extracted: ExtractedLineItem, item: CatalogItem, unit:
     case "CAT6_CABLING":
       if (!/\bcat6\b/.test(name) || capacity(name, "m|met(?:er|re)s?|متر") !== 305) return null;
       break;
-    case "CCTV_CAMERAS": if (!/\bip\b/.test(name) || !/camera|كامير/.test(name)) return null; break;
+    case "CCTV_CAMERAS": {
+      const requiredMp = Number(spec.resolutionMp);
+      const catalogMp = capacity(name, "mp|megapixels?|ميجا\\s*بكسل");
+      if (!/\bip\b/.test(name) || !/camera|كامير/.test(name) || !Number.isFinite(requiredMp) || requiredMp <= 0 || catalogMp !== requiredMp) return null;
+      selectedSpecification.catalogResolutionMp = catalogMp;
+      break;
+    }
     case "RACK_CABINET": if (!/cabinet|rack|كابين/.test(name)) return null; break;
     case "CONNECTORS_AND_ACCESSORIES": if (!/\brj45\b/.test(name)) return null; break;
-    case "INSTALLATION_COMMISSIONING": if (!/installation|تركيب/.test(name)) return null; break;
+    case "INSTALLATION_COMMISSIONING": {
+      if (!/installation|تركيب/.test(name)) return null;
+      const requiredPoints = Number(spec.requiredPoints);
+      if (unitKind(unit) === unitKind("Point") && Number.isFinite(requiredPoints) && requiredPoints > 0) {
+        quantity = requiredPoints;
+        expectedUnit = unit;
+      } else if (["package", "system", "service", "lot", "حزمة", "نظام", "خدمة"].includes(unitKind(unit))) {
+        quantity = 1;
+        expectedUnit = unit;
+      } else return null;
+      break;
+    }
     default: return null;
   }
   // No implicit pack conversion, TB-as-disk, metre-as-roll, or Point-as-Lot conversion.

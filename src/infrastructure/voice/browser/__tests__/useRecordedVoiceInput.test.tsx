@@ -37,4 +37,14 @@ describe("useRecordedVoiceInput", () => {
     expect(result.current.transcript).toBe("final mixed transcript NVR");
     expect(transcribe).toHaveBeenCalledTimes(1);
   });
+  it("passes bounded context to the transcriber and invokes the action only for clear speech", async () => {
+    const recorder = new Recorder();
+    const transcribe = vi.fn().mockResolvedValue("180 cameras 4MP");
+    const onTranscript = vi.fn();
+    const { result } = renderHook(() => useRecordedVoiceInput({ recorder, transcribe, contextHints: ["catalog camera"], onTranscript }));
+    await act(async () => result.current.startRecording());
+    act(() => result.current.stopRecording());
+    await waitFor(() => expect(onTranscript).toHaveBeenCalledWith("180 cameras 4MP"));
+    expect(transcribe).toHaveBeenCalledWith(expect.any(Blob), ["catalog camera"]);
+  });
 });

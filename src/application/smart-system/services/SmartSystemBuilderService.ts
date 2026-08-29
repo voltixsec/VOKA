@@ -72,6 +72,7 @@ export class SmartSystemBuilderService {
     if (explicitCctvSystem || (cameraMatch && this.requestsInstallation(prompt))) {
 
       const storageMatch = prompt.match(/(?:التسجيل\s+لمدة|مدة\s+التسجيل|retention(?:\s+for)?|recording\s+for)\s*(\d{1,3})\s*(?:يوم|يوماً|days?)/i);
+      const resolutionMatch = prompt.match(/(\d{1,2})\s*(?:MP|M\s*P|ميجا\s*بكسل)/i);
 
       let projectContext: string | null = null;
       if (
@@ -102,6 +103,7 @@ export class SmartSystemBuilderService {
         extractedParameters: {
           cameraCount: cameraMatch ? Number(cameraMatch[1]) : null,
           storageDays: storageMatch ? Number(storageMatch[1]) : null,
+          resolutionMp: resolutionMatch ? Number(resolutionMatch[1]) : null,
           projectContext,
           jurisdiction: /\bkuwait\b/i.test(prompt) || prompt.includes("الكويت") ? "Kuwait" : null,
           includeInstallation: this.requestsInstallation(prompt),

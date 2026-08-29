@@ -15,6 +15,7 @@ export interface CctvInputs {
   includeInstallation?: boolean | null;
   bitrateMbps?: number | null;
   cableMetersPerCamera?: number | null;
+  resolutionMp?: number | null;
 }
 
 export class CctvSystemTemplate implements ISystemTemplate {
@@ -62,6 +63,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       ...(typeof storageDaysProvided === "number" && storageDaysProvided > 0 ? { retentionDays: storageDaysProvided } : {}),
       ...(typeof rawInputs.bitrateMbps === "number" ? { bitrateMbps: rawInputs.bitrateMbps } : {}),
       ...(typeof rawInputs.cableMetersPerCamera === "number" ? { cableMetersPerCamera: rawInputs.cableMetersPerCamera } : {}),
+      ...(typeof rawInputs.resolutionMp === "number" ? { resolutionMp: rawInputs.resolutionMp } : {}),
     } });
     const storageDays =
       typeof storageDaysProvided === "number" && storageDaysProvided > 0
@@ -139,6 +141,15 @@ export class CctvSystemTemplate implements ISystemTemplate {
         isDefault: bitrateProvided == null,
       },
       {
+        name: "resolutionMp",
+        labelAr: "دقة الكاميرا",
+        labelEn: "Camera Resolution",
+        value: rules.snapshot.values.resolutionMp,
+        unit: "MP",
+        provenance: typeof rawInputs.resolutionMp === "number" ? "USER_PROVIDED" : "SUGGESTED",
+        isDefault: typeof rawInputs.resolutionMp !== "number",
+      },
+      {
         name: "includeInstallation",
         labelAr: "يشمل التركيب",
         labelEn: "Include Installation",
@@ -199,10 +210,10 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const components: SystemComponent[] = [
       {
         componentKey: "CCTV_CAMERAS",
-        specification: { cameraCount: count, technology: "IP" },
-        name: `كاميرات مراقبة شبكية IP (${projectContext})`,
-        nameAr: "كاميرات مراقبة شبكية IP",
-        nameEn: "IP CCTV Surveillance Cameras",
+        specification: { cameraCount: count, technology: "IP", resolutionMp: rules.snapshot.values.resolutionMp },
+        name: `كاميرات مراقبة شبكية IP بدقة ${rules.snapshot.values.resolutionMp}MP (${projectContext})`,
+        nameAr: `كاميرات مراقبة شبكية IP بدقة ${rules.snapshot.values.resolutionMp}MP`,
+        nameEn: `${rules.snapshot.values.resolutionMp}MP IP CCTV Surveillance Cameras`,
         itemType: "PRODUCT",
         quantity: count,
         unit: "Unit",

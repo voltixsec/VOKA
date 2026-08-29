@@ -58,7 +58,7 @@ describe("one active conversational field", () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
-  it("Voice V2 transcript is not readiness; Understand sends only the bare field reply and next typed answer shares context", async () => {
+  it("Voice V2 Stop answers the active field immediately and the next typed answer shares context", async () => {
     mocks.isArabic = false;
     const recorder = new Recorder();
     const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ data: draft() }) }).mockResolvedValueOnce({ ok: true, json: async () => ({ data: draft("attentionName") }) }).mockResolvedValueOnce({ ok: true, json: async () => ({ data: draft(null) }) });
@@ -68,13 +68,11 @@ describe("one active conversational field", () => {
     fireEvent.change(textarea, { target: { value: "CCTV" } });
     fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     await screen.findByText("What is the project name?");
-    fireEvent.click(screen.getByRole("button", { name: "Record voice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tell VOKA" }));
     fireEvent.click(screen.getByRole("button", { name: "Stop microphone" }));
     await waitFor(() => expect(textarea.value).toBe("CCTV مصنع الشويخ الجديد"));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Draft ready for review")).toBeNull();
-    expect(screen.getByTestId("active-field-question")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Understand" }));
     await screen.findByText("Who should the document be addressed to?");
     const voiceBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(voiceBody).toMatchObject({ replySource: "VOICE", reply: "مصنع الشويخ الجديد", answer: { field: "projectName", value: "مصنع الشويخ الجديد" } });

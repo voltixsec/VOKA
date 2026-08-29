@@ -30,4 +30,24 @@ describe("POST /api/ai/transcription", () => {
     expect(response.status).toBe(400);
     expect(upstream).not.toHaveBeenCalled();
   });
+
+  it("keeps bounded hints request-local", async () => {
+    const prompts: string[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (_url, init) => {
+      prompts.push(String((init.body as FormData).get("prompt")));
+      return { ok: true, json: async () => ({ text: "4MP 90 days" }) };
+    }));
+    const request = async (hint: string) => {
+      const form = new FormData();
+      form.set("audio", new File(["audio"], "recording.webm", { type: "audio/webm" }));
+      form.set("hints", JSON.stringify([hint, ...Array.from({ length: 20 }, (_, index) => `extra-${index}`)]));
+      return POST(new Request("http://localhost/api/ai/transcription", { method: "POST", body: form }));
+    };
+    await request("tenant-one-private-camera");
+    await request("tenant-two-private-camera");
+    expect(prompts[0]).toContain("tenant-one-private-camera");
+    expect(prompts[1]).not.toContain("tenant-one-private-camera");
+    expect(prompts[1]).toContain("tenant-two-private-camera");
+    expect(prompts[0].match(/extra-/g)?.length).toBe(11);
+  });
 });

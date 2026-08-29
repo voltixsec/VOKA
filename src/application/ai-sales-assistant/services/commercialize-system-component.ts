@@ -36,5 +36,15 @@ export function commercializeSystemComponent(component: SystemComponent, locale:
     const en = `CAT6 network cable ${meters}m roll`;
     return { ...line, text: locale === "ar" ? ar : en, itemNameAr: ar, itemNameEn: en };
   }
+  if (component.componentKey === "INSTALLATION_COMMISSIONING") {
+    const ar = "خدمة تركيب وبرمجة واختبار نظام المراقبة";
+    const en = "CCTV installation, configuration and commissioning service";
+    return { ...line, text: locale === "ar" ? ar : en, itemNameAr: ar, itemNameEn: en,
+      commercialRequirement: { ...line.commercialRequirement!, quantity: 1, unit: "Package", specification: { ...line.commercialRequirement!.specification, requiredPoints: component.quantity } },
+      quantity: 1, requestedUnitText: "Package", typeIntent: "CUSTOM", provenance: "SUGGESTED", commercializationPending: true,
+      formulaExplanation: "One temporary installation service package. Per-point quantity is used only when a trusted catalog service explicitly uses a point unit.",
+      formulaExplanationAr: "حزمة خدمة تركيب مؤقتة واحدة. لا تستخدم كمية النقاط إلا إذا كانت خدمة موثوقة في الكتالوج مسعرة صراحةً بوحدة النقطة.",
+    };
+  }
   return line;
 }

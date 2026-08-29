@@ -48,7 +48,7 @@ describe("CCTV engineering → commercial BOM", () => {
       expect(line.description).toBeNull();
       expect(line.commercialRequirement).toMatchObject({ category: line.componentKey, reviewRequired: true, source: { ruleVersion: "1.2.0", requirement: { componentKey: line.componentKey } } });
       expect(line.commercialRequirement?.source.inputs.find((input) => input.name === "cameraCount")?.value).toBe(180);
-      expect(line.itemName.replace(/IP|CCTV|NVR|PoE|CAT6|RJ45/gi, '')).not.toMatch(sourceLocale === 'ar' ? /[a-z]/i : /[\u0600-\u06ff]/);
+      expect(line.itemName.replace(/IP|CCTV|NVR|PoE|CAT6|RJ45|\d+MP|H\.265|PTZ/gi, '')).not.toMatch(sourceLocale === 'ar' ? /[a-z]/i : /[\u0600-\u06ff]/);
     }
     expect(proposal.lines.find((line) => line.componentKey === "NVR_RECORDER")).toMatchObject({ quantity: 3, unitName: "Unit" });
     expect(proposal.lines.find((line) => line.componentKey === "POE_SWITCH")).toMatchObject({ quantity: 4, unitName: "Unit" });
@@ -140,7 +140,7 @@ describe("CCTV engineering → commercial BOM", () => {
 
   it("preserves product/service separation and actual accessory/service sale units", async () => {
     const { service } = bomFixture([
-      catalogProduct("CAM", "IP Surveillance Camera"), catalogProduct("RACK", "Network Rack Cabinet"),
+      catalogProduct("CAM", "4MP IP Surveillance Camera"), catalogProduct("RACK", "Network Rack Cabinet"),
       catalogProduct("SET", "RJ45 Connectors and Junction Boxes Set", "Set"),
       catalogProduct("INSTALL", "Installation, programming and commissioning", "Point", { type: "SERVICE" }),
     ]);
@@ -149,5 +149,31 @@ describe("CCTV engineering → commercial BOM", () => {
     expect(proposal.lines.find((line) => line.componentKey === "RACK_CABINET")).toMatchObject({ catalogItemId: "RACK", quantity: 1, quantitySource: "AI_ESTIMATED", reviewRequired: true });
     expect(proposal.lines.find((line) => line.componentKey === "CONNECTORS_AND_ACCESSORIES")).toMatchObject({ catalogItemId: "SET", quantity: 180, unitName: "Set" });
     expect(proposal.lines.find((line) => line.componentKey === "INSTALLATION_COMMISSIONING")).toMatchObject({ catalogItemId: "INSTALL", quantity: 180, unitName: "Point", type: "SERVICE" });
+  });
+
+  it("matches only one trusted camera with the explicit required resolution", async () => {
+    const { service } = bomFixture([catalogProduct("CAM4", "4MP IP Camera"), catalogProduct("CAM2", "2MP IP Camera"), catalogProduct("GENERIC", "IP Camera")]);
+    const line = (await service.generateDraftProposal({ companyId: "tenant", prompt: bomPrompt })).lines.find((row) => row.componentKey === "CCTV_CAMERAS")!;
+    expect(line).toMatchObject({ catalogItemId: "CAM4", itemCode: "CAM4", quantity: 180, unitName: "Unit", unitPrice: 125 });
+  });
+
+  it("keeps a truthful temporary 4MP line when matching is absent or ambiguous", async () => {
+    for (const items of [
+      [catalogProduct("CAM2", "2MP IP Camera"), catalogProduct("GENERIC", "IP Camera")],
+      [catalogProduct("CAM4A", "4MP IP Camera A"), catalogProduct("CAM4B", "4MP IP Camera B")],
+    ]) {
+      const { service } = bomFixture(items);
+      const line = (await service.generateDraftProposal({ companyId: "tenant", prompt: bomPrompt })).lines.find((row) => row.componentKey === "CCTV_CAMERAS")!;
+      expect(line.itemName).toContain("4MP");
+      expect(line).toMatchObject({ catalogItemId: null, itemCode: null, unitPrice: null, reviewRequired: true });
+    }
+  });
+
+  it("uses trusted installation sale units and never infers point quantity for a temporary service", async () => {
+    const temporary = (await bomFixture().service.generateDraftProposal({ companyId: "tenant", prompt: bomPrompt })).lines.find((row) => row.componentKey === "INSTALLATION_COMMISSIONING")!;
+    expect(temporary).toMatchObject({ catalogItemId: null, quantity: 1, unitName: "Package", unitPrice: null });
+    const packageService = catalogProduct("INSTALL-PACKAGE", "Installation, programming and commissioning", "Package", { type: "SERVICE" });
+    const packaged = (await bomFixture([packageService]).service.generateDraftProposal({ companyId: "tenant", prompt: bomPrompt })).lines.find((row) => row.componentKey === "INSTALLATION_COMMISSIONING")!;
+    expect(packaged).toMatchObject({ catalogItemId: "INSTALL-PACKAGE", quantity: 1, unitName: "Package" });
   });
 });

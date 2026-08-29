@@ -15,7 +15,7 @@ vi.mock("@/src/infrastructure/voice/browser", () => ({
 function expectLocale(container: HTMLElement) {
   // Inspect expanded/collapsed content AND accessible names/placeholders/options.
   const content = [container.textContent, ...Array.from(container.querySelectorAll("[aria-label], [title], [placeholder]")).map((node) => ["aria-label", "title", "placeholder"].map((attr) => node.getAttribute(attr)).join(" "))].join(" ");
-  const withoutTechnical = content.replace(/\b(?:CCTV|NVR|DVR|PoE|RJ45|IP|4K|4MP|Cat6|TB|KWD)\b/g, "");
+  const withoutTechnical = content.replace(/\b(?:VOKA|CCTV|NVR|DVR|PoE|RJ45|IP|4K|4MP|Cat6|TB|KWD)\b/g, "");
   expect(withoutTechnical).not.toMatch(ui.isArabic ? /[a-z]/i : /[\u0600-\u06ff]/);
   expect(content).not.toMatch(/AUTO|TRANSCRIPT_READY|READY_FOR_REVIEW|NEEDS_CONFIRMATION|RULE_CALCULATED|AI_ESTIMATED/);
 }
@@ -82,7 +82,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     ui.state = state;
     const { container } = render(<SalesAssistantPage />);
     expectLocale(container);
-    if (state === "READY") expect(screen.getByText(isArabic ? "النص جاهز للفهم" : "Transcript ready")).toBeTruthy();
+    if (state === "READY") expect(screen.getByText(isArabic ? "اكتمل التفريغ والفهم. يمكنك مراجعة النص وتعديله." : "Transcription and understanding complete. You can review and edit the text.")).toBeTruthy();
   });
 
   it.each(["LISTENING", "PROCESSING", "READY", "UNAVAILABLE", "ERROR", "PERMISSION_DENIED"])("localizes browser fallback state %s", (state) => {

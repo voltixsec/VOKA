@@ -107,7 +107,7 @@ describe("Smart System Builder adversarial intent boundary", () => {
 
       const installationLine = intent.lines.find(l => l.componentKey === "INSTALLATION_COMMISSIONING");
       expect(installationLine).toBeDefined();
-      expect(installationLine?.quantity).toBe(8);
+      expect(installationLine).toMatchObject({ quantity: 1, requestedUnitText: "Package" });
     });
 
     it("Case 2: Flow B - Gypsum Board Facade 2000m² request", () => {

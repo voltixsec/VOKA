@@ -19,9 +19,14 @@ export class BrowserRawAudioRecorder implements IRawAudioRecorder {
     this.discardOnStop = false;
     if (!this.isSupported()) { options.onStateChange?.("UNAVAILABLE"); return; }
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      const supported = navigator.mediaDevices.getSupportedConstraints?.() ?? {};
+      const speechConstraints: MediaTrackConstraints = {};
+      if (supported.echoCancellation) speechConstraints.echoCancellation = true;
+      if (supported.noiseSuppression) speechConstraints.noiseSuppression = true;
+      if (supported.autoGainControl) speechConstraints.autoGainControl = true;
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: speechConstraints });
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
-      this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
+      this.recorder = new MediaRecorder(this.stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 128_000 });
       this.recorder.ondataavailable = (event) => { if (event.data.size) this.chunks.push(event.data); };
       this.recorder.onstop = () => {
         const type = this.recorder?.mimeType || this.chunks[0]?.type || "audio/webm";
@@ -41,7 +46,12 @@ export class BrowserRawAudioRecorder implements IRawAudioRecorder {
   }
 
   stop() {
-    if (this.recorder?.state === "recording") this.recorder.stop();
+    if (this.recorder?.state === "recording") {
+      // Request the final buffered frame before authoritative manual stop so the
+      // last spoken word is not needlessly left in the encoder buffer.
+      this.recorder.requestData?.();
+      this.recorder.stop();
+    }
   }
 
   reset() {
