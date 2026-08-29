@@ -37,9 +37,19 @@ export type CustomerResolution = {
 };
 
 export type ConversationTurn = {
+  role?: "USER" | "ASSISTANT";
   source: ConversationReplySource;
   text: string;
   target?: string;
+};
+export type ConversationMessage = { role: "USER" | "ASSISTANT"; source: ConversationReplySource; text: string };
+
+export type LiveResultStatus = "CONFIRMED" | "PROVISIONAL" | "DEFERRED" | "NEEDS_CONFIRMATION" | "PRICE_REQUIRED" | "VERIFIED";
+export type LiveResultItem = { key: string; labelAr: string; labelEn: string; value: string; status: LiveResultStatus };
+export type StructuredLiveResult = {
+  facts: LiveResultItem[];
+  evidence: Array<{ title: string; url: string; publisher: string }>;
+  readiness: CommercialReadiness;
 };
 
 export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attachment" | "userIntent" | "systemInput" | "catalogChoice" | "quantity" | "projectName" | "attentionName" | "expiryDate" | "paymentTerms" | "delivery" | "warranty";
@@ -86,6 +96,11 @@ export type WorkingCommercialDraft = {
     engineeringVerificationRequired: boolean;
     commercializationStatus: "PENDING" | "MATERIALIZED";
   } | null;
+  /** Natural response is a projection of committed truth, never its authority. */
+  assistantResponse?: { ar: string; en: string } | null;
+  conversationMessages?: ConversationMessage[];
+  structuredResult?: StructuredLiveResult;
+  internalIterations?: number;
   /** Versioned so previously persisted draft payloads can be upgraded on analysis. */
   completionVersion?: 1;
   phase?: CommercialPhase;

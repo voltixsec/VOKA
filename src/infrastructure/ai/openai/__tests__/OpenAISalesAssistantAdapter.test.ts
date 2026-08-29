@@ -29,3 +29,15 @@ it("rejects incomplete/refused output rather than treating it as an empty succes
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "incomplete", output: [] }) }));
   await expect(new OpenAISalesAssistantAdapter("test-key", "configured-model").extractIntent("request", "en")).rejects.toThrow("COMMERCIAL_BRAIN_INCOMPLETE");
 });
+it("uses a proposal-only semantic conversation decision before field targeting", async () => {
+  const decision = { mode: "RECOMMENDATION", targetField: null, deferPayment: false };
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "completed", output: [{ content: [{ type: "output_text", text: JSON.stringify(decision) }] }] }) });
+  vi.stubGlobal("fetch", fetchMock);
+  const adapter = new OpenAISalesAssistantAdapter("test-key", "configured-model");
+  await expect(adapter.reasonConversation({ locale: "ar", currentTurn: "طب إيه الأفضل؟", history: [{ role: "USER", text: "عايز مصعد سيارات" }], committedFacts: { "system.vehicleClass": "SUV" }, activeQuestion: "capacity", activeSystem: "Vehicle Elevator", documentIntent: "QUOTATION" })).resolves.toEqual(decision);
+  const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+  expect(body.text.format.name).toBe("commercial_conversation_decision");
+  expect(body.tools).toBeUndefined();
+  expect(body.instructions).toContain("Resolve pronouns");
+  expect(body.store).toBe(false);
+});

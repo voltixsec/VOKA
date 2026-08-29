@@ -4,6 +4,7 @@ import type { SystemFieldAnswers } from "../ai-sales-assistant/dto/AISalesAssist
 
 const quantityNames = /^(?:elevatorQuantity|numberOfElevators|liftQuantity|systemQuantity|quantity)$/i;
 const stopsNames = /^(?:numberOfStops|stops|floors|numberOfFloors|servedFloors)$/i;
+const capacityNames = /^(?:capacity|loadCapacity|ratedLoad)$/i;
 
 function numberFrom(text: string, pattern: RegExp) {
   const match = latinDigits(text).match(pattern);
@@ -25,11 +26,14 @@ export function systemTurnValues(text: string, inputs: ProvisionalSystemInput[])
     ?? smallArabicNumber(latinDigits(text).match(/(?:مصعد|مصاعد)(?:\s+سيارات)?\s+(\d+|واحد|واحدة|اثنان|اثنين|اتنين|اثنتان)/i)?.[1]);
   const stops = numberFrom(text, /(?:يخدم|تخدم|serv(?:e|es|ing))\s*(\d+)\s*(?:طوابق|طابق|أدوار|دور|وقفات|وقفة|floors?|stops?)/i)
     ?? numberFrom(text, /(\d+)\s*(?:طوابق|طابق|أدوار|دور|وقفات|وقفة|floors?|stops?)/i);
+  const capacity = numberFrom(text, /(\d+(?:\.\d+)?)\s*(?:كجم|كغ|kg|kilograms?)/i);
+  const vehicleClass = /\bSUV\b|دفع\s*رباعي|سيارات\s*كبيرة/i.test(text) ? "SUV" : /سيارات\s*عادية|passenger\s*cars?/i.test(text) ? "PASSENGER_CAR" : null;
 
   for (const input of inputs) {
-    if (input.value != null) continue;
     if (elevatorQuantity != null && quantityNames.test(input.name)) patch[input.name] = elevatorQuantity;
     if (stops != null && stopsNames.test(input.name)) patch[input.name] = stops;
+    if (capacity != null && capacityNames.test(input.name)) patch[input.name] = capacity;
+    if (vehicleClass && input.name === "vehicleClass") patch[input.name] = vehicleClass;
   }
   return patch;
 }

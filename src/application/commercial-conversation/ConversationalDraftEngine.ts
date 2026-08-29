@@ -100,8 +100,8 @@ export class ConversationalDraftEngine {
     if (!operation) throw new Error("CONVERSATION_OPERATION_REQUIRED");
     if (input.draft && input.operation && input.operation !== input.draft.operation) throw new Error("CONVERSATION_OPERATION_IMMUTABLE");
 
-    const turns = [...(input.draft?.turns ?? []), { source: input.replySource, text: reply }];
-    const contextText = turns.map((turn) => turn.text).join("\n");
+    const turns = [...(input.draft?.turns ?? []), { role: "USER" as const, source: input.replySource, text: reply }];
+    const contextText = turns.filter((turn) => (turn.role ?? "USER") === "USER").map((turn) => turn.text).join("\n");
     const fields = mergeFields(input.draft?.fields ?? {
       customerId: null, customerMention: null, currencyCode: null, paymentTerms: null, scopeType: null, sourceReference: null, lines: [],
     }, reply);

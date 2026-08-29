@@ -91,8 +91,8 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
     return { ...draft, missingRequired: missingWithState, recommended: requirements.recommended, completionVersion: 1, activeQuestion: null,
       readinessStage: "SYSTEM_PLANNED", phase: "NEEDS_INFO", status: "NEEDS_CLARIFICATION",
       clarification: {
-        ar: "اكتمل فهم النظام، لكن يلزم استكمال المراجعة الهندسية وتحويل المتطلبات إلى بنود تجارية قبل إنشاء المسودة.",
-        en: "The system is understood, but engineering review and commercial materialization must be completed before creating the draft.",
+        ar: "التكوين المبدئي جاهز في الملخص. سأكمل ترتيب مكونات النظام عندما تتوفر المدخلات الموثوقة اللازمة.",
+        en: "The preliminary configuration is ready in the summary. I can continue arranging the system components when the necessary trusted inputs are available.",
         suggestions: [],
       },
       requiresHumanReview: true, executed: false,

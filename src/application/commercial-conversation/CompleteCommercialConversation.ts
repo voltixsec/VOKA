@@ -7,8 +7,10 @@ import { completeFields } from "./field-completion";
 import type { AdvanceConversationInput, FieldAnswer } from "./types";
 import { labelledFieldAnswer } from "./labelled-field-answer";
 import { systemTurnValues } from "./system-turn-values";
-import { renderPaymentSchedule } from "../ai-sales-assistant/services/payment-terms";
+import { explicitPaymentTerms, renderPaymentSchedule } from "../ai-sales-assistant/services/payment-terms";
 import { commitTurnDecision, projectFactLedger, proposalDecision, type CommercialReadiness } from "./transactional-state";
+import { generateGroundedResponse } from "./chat-first-response";
+import { projectStructuredResult } from "./live-result";
 
 const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
@@ -24,10 +26,26 @@ export type CompleteConversationInput = AdvanceConversationInput & {
 
 /** Application orchestration: targeted answers -> existing intelligence -> one next field. */
 export class CompleteCommercialConversation {
-  constructor(private readonly intelligence: Pick<AISalesAssistantService, "generateDraftProposal">) {}
+  constructor(private readonly intelligence: Pick<AISalesAssistantService, "generateDraftProposal"> & Partial<Pick<AISalesAssistantService, "generateConversationResponse" | "reasonConversation">>) {}
 
   async execute(input: CompleteConversationInput) {
     const previous = input.draft;
+    let semanticMode: string | null = null;
+    let semanticDeferPayment = false;
+    if (this.intelligence.reasonConversation) {
+      try {
+        const raw = await this.intelligence.reasonConversation({
+          locale: input.locale, currentTurn: input.reply,
+          history: (previous?.conversationMessages ?? previous?.turns.map((turn) => ({ role: turn.role ?? "USER" as const, text: turn.text, source: turn.source })) ?? []).slice(-12).map(({ role, text }) => ({ role, text })),
+          committedFacts: Object.fromEntries(Object.entries(previous?.transactionalState?.ledger.facts ?? {}).map(([key, fact]) => [key, fact.value])),
+          activeQuestion: previous?.activeQuestion?.field ?? null,
+          activeSystem: previous?.systemWorkingPlan?.systemIdentity ?? null,
+          documentIntent: previous?.operation ?? input.operation ?? null,
+        }) as { mode?: unknown; deferPayment?: unknown } | undefined;
+        if (typeof raw?.mode === "string" && ["CONTINUE", "PROVIDE_FACTS", "CORRECTION", "QUESTION", "RECOMMENDATION", "UNKNOWN", "DEFER"].includes(raw.mode)) semanticMode = raw.mode;
+        semanticDeferPayment = raw?.deferPayment === true;
+      } catch { /* Conservative local interpretation remains available. */ }
+    }
     const answers: CommercialAnswers = { ...previous?.answers };
     const systemAnswers = { ...previous?.systemAnswers };
     const notApplicable = new Set(previous?.notApplicable?.filter((field) => nullableFields.has(field)) ?? []);
@@ -52,12 +70,18 @@ export class CompleteCommercialConversation {
       input.answer?.action === "SKIP" ||
       (active && !input.reanalyze && !input.selection && /^(?:تجاوز\s*الآن|تجاوز|تخطي|skip\s*for\s*now|skip)$/i.test(input.reply.trim()))
     );
+    const deferPaymentIntent = semanticDeferPayment || /(?:سيب|أجل|اجل|تجاوز)\s*(?:شروط\s*)?الدفع|خل(?:ي|يه)\s*(?:شروط\s*)?الدفع\s*(?:دلوقتي|حاليًا|حاليا|لبعدين|لوقت\s+لاحق)|defer\s+(?:the\s+)?payment|leave\s+(?:the\s+)?payment\s+(?:for\s+)?(?:now|later)/i.test(input.reply);
 
     const activeMissingField = previous?.missingRequired.find((f) => f.sourceField === active?.field || f.key === active?.field || (f.key === "customer" && active?.field === "customerMention"));
     const deferAllowed = activeMissingField ? activeMissingField.deferPolicy === "DEFER_ALLOWED" : active?.allowDefer ?? false;
     let nonDeferrableAttempt = false;
 
     let answer: FieldAnswer | undefined;
+    if (deferPaymentIntent) {
+      deferredFields.add("paymentTerms");
+      delete answers.paymentTerms;
+      answer = { field: "paymentTerms", value: "DEFERRED", action: "DEFER" };
+    }
     if (isDeferIntent && active) {
       if (deferAllowed) {
         deferredFields.add(active.field);
@@ -74,7 +98,13 @@ export class CompleteCommercialConversation {
     Object.assign(systemAnswers, systemPatch);
     const patchedSystemFields = Object.keys(systemPatch);
     const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
-    answer ??= patchedSystemFields.length ? undefined : labelled ?? input.answer ?? (!isDeferIntent && !input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
+    const firstPaymentPercentage = input.reply.search(/[٠-٩\d]+(?:[.,٫]\d+)?\s*(?:%|٪|percent\b|بالمئة|في المئة)/i);
+    const conversationalPayment = explicitPaymentTerms(input.reply) ?? (firstPaymentPercentage >= 0 && /الدفع|payment/i.test(input.reply) ? input.reply.slice(firstPaymentPercentage) : null);
+    const conversationalControl = ["CONTINUE", "QUESTION", "RECOMMENDATION", "UNKNOWN"].includes(semanticMode ?? "") || /^(?:كمل|كمّل|تابع|استمر|continue|go on|خلينا|دعنا|let'?s)|مش\s*عارف|ما\s*أعرف|i\s*(?:do not|don't)\s*know|(?:إيه|ايه|what).*?(?:الأفضل|الأنسب|best)|اختارلي|recommend/i.test(input.reply.trim());
+    const contextualAnswer = active && !conversationalControl && !isDeferIntent && !input.reanalyze && !input.selection
+      ? { field: active.field, value: input.reply } : undefined;
+    const submittedAnswer = input.answer?.action || !conversationalControl ? input.answer : undefined;
+    answer ??= patchedSystemFields.length ? undefined : labelled ?? (conversationalPayment ? { field: "paymentTerms", value: conversationalPayment } : undefined) ?? submittedAnswer ?? contextualAnswer;
     const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field)
       ?? prior?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === answer?.field);
     if (answer && (typeof answer.value !== "string" || !answer.value.trim() || answer.value.length > 4000)) throw new Error("CONVERSATION_ANSWER_INVALID");
@@ -132,11 +162,11 @@ export class CompleteCommercialConversation {
       currentTurn: input.reply,
       validityBaseDate: prior?.proposal.validityBaseDate,
       buildMode: buildMode === "DRAWING" ? "AUTO" : buildMode, selection, answers, systemAnswers, notApplicable: [...notApplicable], retainedLines,
-      retainedContext: targeted && prior ? {
+      retainedContext: prior ? {
         subject: prior.proposal.subject, brief: prior.proposal.brief, scopeType: prior.proposal.scopeType,
         currencyCode: prior.completion?.currency === "USER_PROVIDED" ? prior.proposal.currencyCode : undefined,
       } : undefined,
-      retainedAgentState: targeted ? prior?.agenticState : undefined,
+      retainedAgentState: prior?.agenticState,
     });
     operation ??= proposal?.documentType ?? null;
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });
@@ -153,9 +183,12 @@ export class CompleteCommercialConversation {
       const explicitField = answer?.field;
       if (explicitField) correctionFields.add(explicitField);
       if (explicitField === "paymentTerms") correctionFields.add("paymentSchedule");
-      const decision = proposalDecision({ requestId: draft.id, turn: draft.turns.length, proposal, correctionFields, readiness });
+      const userTurn = draft.turns.filter((turn) => (turn.role ?? "USER") === "USER").length;
+      const decision = proposalDecision({ requestId: draft.id, turn: userTurn, proposal, correctionFields, readiness });
       if (answer?.action === "DEFER") {
-        decision.patches.push({ field: answer.field, operation: "SET", value: "DEFERRED", provenance: "USER_EXPLICIT", evidence: "User selected Skip for now." });
+        const replacing = Boolean(previous?.transactionalState?.ledger.facts[answer.field]);
+        decision.patches.push({ field: answer.field, operation: replacing ? "REPLACE" : "SET", value: "DEFERRED", provenance: replacing ? "USER_CORRECTION" : "USER_EXPLICIT", evidence: "User explicitly deferred this field." });
+        correctionFields.add(answer.field);
       }
       const systemFacts = proposal.smartSystem?.inputs ?? proposal.agenticState?.provisionalSystem?.inputs ?? [];
       for (const fact of systemFacts) {
@@ -210,6 +243,18 @@ export class CompleteCommercialConversation {
         suggestions: [{ ar: "إرفاق مخطط", en: "Attach drawing", reply: "أرفق ملف الرسم" }],
       };
     }
-    return completed;
+    const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply, provider: this.intelligence });
+    const priorMessages = previous?.conversationMessages ?? previous?.turns.map((turn) => ({ role: turn.role ?? "USER" as const, source: turn.source, text: turn.text })) ?? [];
+    const withResponse = {
+      ...completed,
+      assistantResponse,
+      internalIterations: proposal?.agenticState?.researchStatus === "COMPLETED" ? 4 : 3,
+      conversationMessages: [
+        ...priorMessages,
+        { role: "USER" as const, source: input.replySource, text: input.reply.trim() },
+        { role: "ASSISTANT" as const, source: "TEXT" as const, text: input.locale === "ar" ? assistantResponse.ar : assistantResponse.en },
+      ],
+    };
+    return { ...withResponse, structuredResult: projectStructuredResult(withResponse) };
   }
 }

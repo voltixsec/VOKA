@@ -30,6 +30,14 @@ export class AISalesAssistantService {
 
   private readonly agenticReasoner: AgenticSystemReasoner;
 
+  async reasonConversation(input: Parameters<NonNullable<AISalesAssistantPort["reasonConversation"]>>[0]): Promise<unknown> {
+    return this.provider?.reasonConversation?.(input);
+  }
+
+  async generateConversationResponse(input: Parameters<NonNullable<AISalesAssistantPort["generateConversationResponse"]>>[0]): Promise<unknown> {
+    return this.provider?.generateConversationResponse?.(input);
+  }
+
   async generateDraftProposal(
     request: AISalesAssistantRequest,
   ): Promise<SalesAssistantDraftProposal> {

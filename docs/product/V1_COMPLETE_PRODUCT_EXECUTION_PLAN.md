@@ -163,6 +163,11 @@ Voice must not obtain special authority over:
 - history;
 - document immutability.
 
+The approved [Chat-First Conversational Shell change](changes/2026-08-30-chat-first-conversational-shell.md)
+governs the shared text/voice Sales Assistant interaction: conversation is the
+interface while transactional commercial state remains the hidden authority.
+This reference strengthens Workstreams 3, 4 and 6 and does not reorder them.
+
 ---
 
 # 5. Governing Intelligence Rule

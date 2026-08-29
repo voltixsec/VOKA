@@ -23,12 +23,19 @@ function interpretedModel(prompt: string, locale: "ar" | "en"): ProvisionalSyste
   const query = generalizedSystemQuery(prompt, locale);
   const systemName = query.replace(/ technical components required design inputs(?: Kuwait)?$/i, "");
   const isElevator = /elevator|lift|مصعد/i.test(`${prompt} ${systemName}`);
+  const isFm200 = /fm[-\s]?200|إطفاء|غاز/i.test(`${prompt} ${systemName}`);
   const inputs: ProvisionalSystemModel["inputs"] = isElevator
     ? [
         { name: "elevatorQuantity", labelAr: "عدد المصاعد المطلوبة", labelEn: "Number of elevators required", value: null, required: true, provenance: "NEEDS_CONFIRMATION" },
         { name: "numberOfStops", labelAr: "عدد الطوابق أو الوقفات", labelEn: "Number of stops or floors", value: null, required: true, provenance: "NEEDS_CONFIRMATION" },
         { name: "capacity", labelAr: "الحمولة المطلوبة", labelEn: "Load capacity", value: null, required: true, provenance: "NEEDS_CONFIRMATION" },
+        { name: "vehicleClass", labelAr: "نوع المركبات", labelEn: "Vehicle class", value: null, required: false, provenance: "NEEDS_CONFIRMATION" },
       ]
+    : isFm200
+      ? [
+          { name: "protectedVolume", labelAr: "حجم الحيز المحمي", labelEn: "Protected enclosure volume", value: null, unit: "m3", required: true, provenance: "NEEDS_CONFIRMATION" },
+          { name: "drawingAvailable", labelAr: "توفر مخطط وأبعاد الحيز", labelEn: "Drawing and enclosure dimensions available", value: null, required: false, provenance: "NEEDS_CONFIRMATION" },
+        ]
     : [{ name: "projectConfiguration", labelAr: "متطلبات مواصفات النظام", labelEn: "System configuration requirements", value: null, required: true, provenance: "NEEDS_CONFIRMATION" }];
 
   return {
@@ -38,6 +45,19 @@ function interpretedModel(prompt: string, locale: "ar" | "en"): ProvisionalSyste
     limitations: ["Research capability unavailable; no engineering quantities or compliance claims were created."],
     confidence: 0.35, jurisdiction: jurisdiction(prompt), evidence: [], provenance: "AI_INTERPRETED", requiresEngineeringVerification: true,
   };
+}
+
+function enrichSafeInputs(model: ProvisionalSystemModel): ProvisionalSystemModel {
+  const names = new Set(model.inputs.map((item) => item.name));
+  const inputs = [...model.inputs];
+  if (/vehicle|car\s*lift|مصعد سيارات/i.test(`${model.systemName} ${model.aliases.join(" ")}`) && !names.has("vehicleClass")) {
+    inputs.push({ name: "vehicleClass", labelAr: "نوع المركبات", labelEn: "Vehicle class", value: null, required: false, provenance: "NEEDS_CONFIRMATION" });
+  }
+  const hasSizingGeometry = [...names].some((name) => /volume|dimension|area|حجم|أبعاد/i.test(name));
+  if (/fm[-\s]?200|fire suppression|إطفاء/i.test(`${model.systemName} ${model.aliases.join(" ")}`) && !hasSizingGeometry) {
+    inputs.push({ name: "protectedVolume", labelAr: "حجم الحيز المحمي", labelEn: "Protected enclosure volume", value: null, unit: "m3", required: true, provenance: "NEEDS_CONFIRMATION" });
+  }
+  return { ...model, inputs };
 }
 
 function applyAnswers(model: ProvisionalSystemModel, answers: SystemFieldAnswers): ProvisionalSystemModel {
@@ -70,6 +90,7 @@ export class AgenticSystemReasoner {
       researchStatus = model ? "COMPLETED" : "UNAVAILABLE";
     }
     model ??= interpretedModel(researchPrompt, input.locale);
+    model = enrichSafeInputs(model);
     model = applyAnswers(model, correction ? {} : input.answers ?? {});
     const missingInputs = model.inputs.filter((field) => field.required && field.value == null).map((field) => field.name);
     return {
