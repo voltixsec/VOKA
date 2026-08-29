@@ -44,7 +44,8 @@ export class CompleteCommercialConversation {
     const active = previous ? completeFields(previous).activeQuestion : null;
     const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
     const answer: FieldAnswer | undefined = labelled ?? input.answer ?? (!input.reanalyze && !input.selection && active ? { field: active.field, value: input.reply } : undefined);
-    const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field);
+    const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field)
+      ?? prior?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === answer?.field);
     if (answer && (typeof answer.value !== "string" || !answer.value.trim() || answer.value.length > 4000)) throw new Error("CONVERSATION_ANSWER_INVALID");
     if (answer?.action && !["VALUE", "NOT_APPLICABLE"].includes(answer.action)) throw new Error("CONVERSATION_ANSWER_INVALID");
     if (answer && !systemInput && !answerFields.has(answer.field) && !["sourceReference", "lines", "userIntent", "attachment"].includes(answer.field) && !/^(quantity|catalogChoice):\d+$/.test(answer.field)) throw new Error("CONVERSATION_ANSWER_INVALID");
@@ -96,6 +97,7 @@ export class CompleteCommercialConversation {
         subject: prior.proposal.subject, brief: prior.proposal.brief, scopeType: prior.proposal.scopeType,
         currencyCode: prior.completion?.currency === "USER_PROVIDED" ? prior.proposal.currencyCode : undefined,
       } : undefined,
+      retainedAgentState: targeted ? prior?.agenticState : undefined,
     });
     operation ??= proposal?.documentType ?? null;
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });

@@ -11,6 +11,7 @@ import { completeEstimatedPricing } from "./completeEstimatedPricing";
 import { cleanCustomerEntity, fallbackCompanyEntity } from "./customer-entity";
 import { explicitCustomerNote } from "./quotation-customer-text";
 import { explicitPaymentTerms } from "./payment-terms";
+import { AgenticSystemReasoner, type CommercialSystemResearchPort } from "../../agentic-commercial-intelligence";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -19,10 +20,14 @@ export class AISalesAssistantService {
   constructor(
     dependencies: AISalesAssistantResolverDependencies,
     private readonly provider?: AISalesAssistantPort | null,
+    research?: CommercialSystemResearchPort | null,
   ) {
     this.extractor = new AISalesAssistantExtractor(provider);
     this.resolver = new AISalesAssistantResolver(dependencies);
+    this.agenticReasoner = new AgenticSystemReasoner(research);
   }
+
+  private readonly agenticReasoner: AgenticSystemReasoner;
 
   async generateDraftProposal(
     request: AISalesAssistantRequest,
@@ -50,6 +55,13 @@ export class AISalesAssistantService {
       if (intent[field] && !prompt.includes(intent[field]!)) intent[field] = null;
     }
     intent.paymentTerms = request.answers?.paymentTerms ?? explicitPaymentTerms(prompt) ?? intent.paymentTerms;
+    const agenticState = await this.agenticReasoner.resolve({
+      companyId: request.companyId, prompt, locale: sourceLocale, knownSystem: intent.smartSystem,
+      retained: request.retainedAgentState, answers: request.systemAnswers,
+    });
+    // Unknown system prose is not a quantity source. In particular, model names
+    // such as FM-200 must never become 200 sale units.
+    if (agenticState && agenticState.route !== "VERIFIED_PROFILE") intent.lines = [];
     for (const key of ["currencyCode"] as const) {
       if (request.retainedContext?.[key]) intent[key] = request.retainedContext[key];
     }
@@ -84,6 +96,6 @@ export class AISalesAssistantService {
       request.notApplicable,
       request.validityBaseDate,
     );
-    return completeEstimatedPricing(proposal, this.provider);
+    return completeEstimatedPricing({ ...proposal, agenticState }, this.provider);
   }
 }

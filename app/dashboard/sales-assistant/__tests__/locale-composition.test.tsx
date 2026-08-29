@@ -129,7 +129,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "DVR" } });
-    fireEvent.click(screen.getByRole("button", { name: isArabic ? "ابدأ الطلب" : "Start Request" }));
+    fireEvent.click(screen.getByRole("button", { name: isArabic ? "أكمل الطلب" : "Continue Request" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).reply).toBe("DVR");
   });

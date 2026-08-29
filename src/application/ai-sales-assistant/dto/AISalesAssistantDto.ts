@@ -1,6 +1,7 @@
 import type { QuotationScopeType } from "../../../domain/quotation/types/QuotationScopeType";
 import type { CommercialRequirement } from "./CommercialRequirement";
 import type { SystemCalculationResult, SystemInputParameter, SystemComponent } from "../../../domain/smart-system";
+import type { AgenticCommercialState } from "../../agentic-commercial-intelligence";
 
 export const SALES_ASSISTANT_PROMPT_MAX_LENGTH = 4_000;
 export const SALES_ASSISTANT_MAX_LINES = 20;
@@ -35,6 +36,8 @@ export interface AISalesAssistantRequest {
   /** Editable line intent only; never authoritative IDs, prices, tax or engineering formulas. */
   retainedLines?: ExtractedLineItem[];
   retainedContext?: Pick<ExtractedSalesIntent, "subject" | "brief" | "scopeType" | "currencyCode">;
+  /** Request-scoped agent state retained across clarification turns. */
+  retainedAgentState?: AgenticCommercialState | null;
 }
 
 export interface ExtractedLineItem {
@@ -172,6 +175,8 @@ export interface DraftProposalFinancials {
 }
 
 export interface SalesAssistantDraftProposal {
+  /** Internal reasoning/tool decisions; excluded from customer-facing documents. */
+  agenticState?: AgenticCommercialState | null;
   /** Internal clarification diagnostic; never inserted into customer-facing Terms. */
   paymentTermsReview?: PaymentTermsReview;
   commercialTerms?: CommercialTerms;

@@ -1,5 +1,7 @@
 # VOKA Post-UI Major Workstreams
 
+Current architecture notes: [Agentic Commercial Intelligence Core](product/changes/2026-08-29-agentic-commercial-intelligence-core.md) and the separate [deferred Project BOQ Procurement Workspace](product/changes/2026-08-29-project-boq-procurement-workspace-deferred.md). These links record direction without reordering the workstreams below.
+
 Status: **APPROVED FOR FUTURE DELIVERY — NOT CODE-COMPLETE**
 
 This register prevents pre-staging UI closure from being confused with completion of external activation, commercial knowledge population, or engineering intelligence. Each workstream requires its own architecture review, acceptance evidence, and release decision.

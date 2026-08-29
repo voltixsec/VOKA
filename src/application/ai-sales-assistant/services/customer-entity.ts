@@ -4,10 +4,14 @@ function boundedArabicEntity(value: string) {
   return value.split(arabicRelationalBoundary, 1)[0].replace(/[.،,؛;:]+$/g, "").trim();
 }
 
+function boundedCustomerEntity(value: string) {
+  return boundedArabicEntity(value).split(/\s+(?=(?:for\s+(?:the\s+)?[^,.]{1,100}\s+project\b|attention\b|attn\b|to\s+supply\b|for\s+(?:(?:a|an|the)\s+)?[^,.]{1,100}\bsystem\b|for\s+(?:a\s+)?complete\b))/i, 1)[0].trim();
+}
+
 /** Guards entity extraction, not commercial intent parsing. */
 export function cleanCustomerEntity(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const mention = boundedArabicEntity(value.trim().replace(/^["«“]+|["»”.،,]+$/g, "").trim());
+  const mention = boundedCustomerEntity(value.trim().replace(/^["«“]+|["»”.،,]+$/g, "").trim());
   if (!mention || mention.length > 300) return null;
   if (/^(?:شركة|شركه|العميل|customer|client|company)$/i.test(mention)) return null;
   if (/^(?:عايز|عاوز|أريد|اريد|اعمل|أعمل|انشئ|أنشئ|please\b|create\b|prepare\b|make\b)/i.test(mention)) return null;
@@ -35,4 +39,15 @@ export function extractArabicRelationalEntities(prompt: string): { projectName: 
     projectName: projectName ? boundedArabicEntity(projectName) : null,
     attentionName: attentionName ? boundedArabicEntity(attentionName) : null,
   };
+}
+
+/** Deterministic English relational ownership; semantic wrappers are not values. */
+export function extractEnglishRelationalEntities(prompt: string): { projectName: string | null; attentionName: string | null } {
+  const projectMatches = [...prompt.matchAll(/\bfor\s+(?:the\s+)?((?:(?!\bfor\b).)+?)\s+project\b(?=\s*[,;:]|\s+(?:attention|attn|for|to)\b|$)/gi)];
+  const projectName = projectMatches.at(-1)?.[1]
+    ?? prompt.match(/\bproject\s*[:=-]?\s*(.+?)(?=\s*[,;:]|\s+(?:attention|attn|for|to)\b|$)/i)?.[1]
+    ?? null;
+  const attentionName = prompt.match(/\b(?:attention|attn\.?|attention\s+to)\s*[:=-]?\s*(.+?)(?=\s*[,;:]|\s+(?:for|to)\s+(?:a\s+)?(?:complete|supply|installation)|$)/i)?.[1] ?? null;
+  const clean = (value: string | null) => value?.replace(/^["“]+|["”.;,]+$/g, "").trim() || null;
+  return { projectName: clean(projectName), attentionName: clean(attentionName) };
 }

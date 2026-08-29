@@ -12,7 +12,7 @@ import { SALES_ASSISTANT_MAX_LINES } from "../dto/AISalesAssistantDto";
 import { validateExtractedSalesIntent } from "../dto/validateExtractedSalesIntent";
 import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
 import { SmartSystemBuilderService } from "../../smart-system/services/SmartSystemBuilderService";
-import { cleanCustomerEntity, extractArabicRelationalEntities, fallbackCompanyEntity } from "./customer-entity";
+import { cleanCustomerEntity, extractArabicRelationalEntities, extractEnglishRelationalEntities, fallbackCompanyEntity } from "./customer-entity";
 import { commercializeSystemComponent } from "./commercialize-system-component";
 
 const FALLBACK_WARNING =
@@ -48,7 +48,7 @@ export class AISalesAssistantExtractor {
       } catch { /* Keep commercial intelligence usable if focused extraction fails. */ }
     }
     customerMention ??= fallbackCustomer;
-    const relationalEntities = sourceLocale === "ar" ? extractArabicRelationalEntities(trimmed) : { projectName: null, attentionName: null };
+    const relationalEntities = sourceLocale === "ar" ? extractArabicRelationalEntities(trimmed) : extractEnglishRelationalEntities(trimmed);
     // Evidence must occur in the user's context; provider assertions alone are not user facts.
     const facts = (understood?.facts ?? []).filter((fact) => trimmed.includes(fact.evidence)).map((fact) => ({ ...fact, provenance: "USER_PROVIDED" as const }));
     for (const [name, pattern] of [

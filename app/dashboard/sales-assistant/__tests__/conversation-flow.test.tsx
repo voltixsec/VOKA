@@ -22,6 +22,26 @@ describe("commercial conversational clarification", () => {
     expect(sessionStorage.getItem("voka_commercial_conversation_draft")).toBeNull();
   });
 
+  it("New Request removes prior customer, project and system context before submission", async () => {
+    sessionStorage.setItem("voka_commercial_conversation_draft", JSON.stringify({
+      ...base, fields: { ...base.fields, customerMention: "Old Customer" }, id: "prior", operation: "QUOTATION", documentMode: "QUOTATION", buildMode: "AUTO", turns: [{ source: "TEXT", text: "Prior CCTV request" }], contextText: "Prior CCTV request",
+      status: "NEEDS_CLARIFICATION", missingRequired: [{ key: "projectName", required: true, labelAr: "المشروع", labelEn: "Project" }], customerResolution: { status: "MATCHED", candidates: [] },
+      canonicalProposal: { customer: { id: "old-customer", mention: "Old Customer", candidates: [], status: "MATCHED" }, proposal: { projectName: "Old Project", currencyCode: "KWD" }, lines: [], agenticState: { route: "VERIFIED_PROFILE", systemName: "CCTV" } },
+    }));
+    const fresh = { ...base, id: "fresh", operation: "QUOTATION", turns: [], contextText: "Prepare a laptop quotation", status: "READY_FOR_REVIEW", missingRequired: [], customerResolution: { status: "NOT_FOUND", candidates: [] } };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: fresh }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SalesAssistantPage />);
+    await screen.findByText(/Old Customer/);
+    fireEvent.click(screen.getByRole("button", { name: "New Request" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Prepare a laptop quotation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.draft).toBeNull();
+    expect(JSON.stringify(body)).not.toMatch(/Old Customer|Old Project|CCTV/);
+  });
+
   it("customer candidate chip sends canonical identity with the same draft", async () => {
     const draft = { ...base, id: "same", operation: "QUOTATION", turns: [], contextText: "Quotation", status: "NEEDS_CLARIFICATION", missingRequired: [{ key: "customer", labelEn: "Customer" }], customerResolution: { status: "AMBIGUOUS", candidates: [{ id: "tenant-customer", name: "Al Noor" }] } };
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: draft }) });
@@ -46,7 +66,7 @@ describe("commercial conversational clarification", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
     await screen.findByText("Who is the customer?");
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Customer is Al Noor" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue Request" }));
     await screen.findByText("Draft ready for review");
     const body = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
     expect(body.draft.id).toBe("same-draft");
