@@ -234,6 +234,7 @@ export interface SalesAssistantDraftProposal {
       unit?: string | null;
       provenance: "USER_PROVIDED" | "CALCULATED" | "SUGGESTED";
       isDefault?: boolean;
+      guidance?: SystemInputParameter["guidance"];
     }>;
     missingInputs: string[];
     warnings: string[];

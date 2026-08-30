@@ -71,10 +71,9 @@ describe("agent conversation continuity lock", () => {
     draft = await run("50% مقدم و50% بعد التوريد", draft);
     draft = await run("أسبوعين", draft);
     draft = await run("سنة", draft);
-    expect(draft).toMatchObject({ readinessStage: "SYSTEM_PLANNED", status: "NEEDS_CLARIFICATION", phase: "NEEDS_INFO" });
+    expect(draft).toMatchObject({ readinessStage: "SYSTEM_PLANNED", status: "READY_FOR_REVIEW", phase: "DRAFT_READY_FOR_REVIEW", activeQuestion: null, missingRequired: [] });
     expect(draft.systemWorkingPlan).toMatchObject({ systemIdentity: "Vehicle Elevator", commercializationStatus: "PENDING", engineeringVerificationRequired: true });
-    expect(draft.clarification?.ar).toContain("التكوين المبدئي جاهز");
-    expect(draft.clarification?.ar).not.toMatch(/تحويل المتطلبات|المراجعة الهندسية|materializ/i);
+    expect(draft.clarification).toBeNull();
   });
 
   it("starts a deliberate new request with fresh state", async () => {
