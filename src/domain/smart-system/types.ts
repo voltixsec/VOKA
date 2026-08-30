@@ -40,6 +40,21 @@ export interface EngineeringRuleSnapshot extends EngineeringRuleProfile {
   overriddenFields: string[];
 }
 
+export type SystemInputGuidance = {
+  options: Array<{
+    value: string | number | boolean;
+    labelAr: string;
+    labelEn: string;
+    explanationAr?: string | null;
+    explanationEn?: string | null;
+  }>;
+  recommendedValue?: string | number | boolean | null;
+  rationaleAr?: string | null;
+  rationaleEn?: string | null;
+  requiresConfirmation: boolean;
+  provenance: "VERIFIED_PROFILE" | "RESEARCHED" | "SUGGESTED";
+};
+
 export interface SystemInputParameter {
   name: string;
   labelAr: string;
@@ -48,6 +63,7 @@ export interface SystemInputParameter {
   unit?: string | null;
   provenance: ProvenanceType;
   isDefault?: boolean;
+  guidance?: SystemInputGuidance;
 }
 
 export interface SystemComponent {

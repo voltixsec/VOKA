@@ -28,8 +28,33 @@ function systemModel(kind: "elevator" | "fm200"): ProvisionalSystemModel {
   };
 }
 
-function fixture(options: { generatedResponse?: string; onTiming?: (timing: any) => void } = {}) {
-  const research = { researchSystem: vi.fn().mockImplementation(async ({ query, onProviderCall }: { query: string; onProviderCall?: () => void }) => { onProviderCall?.(); return systemModel(/fm[-\s]?200|suppression/i.test(query) ? "fm200" : "elevator"); }) };
+function fixture(options: { generatedResponse?: string; onTiming?: (timing: any) => void; withGuidance?: boolean } = {}) {
+  const research = { researchSystem: vi.fn().mockImplementation(async ({ query, onProviderCall }: { query: string; onProviderCall?: () => void }) => {
+    onProviderCall?.();
+    const model = systemModel(/fm[-\s]?200|suppression/i.test(query) ? "fm200" : "elevator");
+    if (options.withGuidance && model.systemName === "Vehicle Elevator") {
+      model.inputs.push({
+        name: "driveType",
+        labelAr: "نوع نظام الحركة",
+        labelEn: "Drive type",
+        value: null,
+        required: true,
+        provenance: "NEEDS_CONFIRMATION",
+        guidance: {
+          options: [
+            { value: "traction", labelAr: "نظام جر", labelEn: "Traction", explanationAr: "مناسب عادةً للحركة المتكررة وعدد الوقفات الأكبر.", explanationEn: "Typically suited to repeated operation and higher stop counts." },
+            { value: "hydraulic", labelAr: "نظام هيدروليكي", labelEn: "Hydraulic", explanationAr: "قد يناسب التطبيقات ذات ظروف التشغيل المختلفة.", explanationEn: "May suit applications with different operating conditions." },
+          ],
+          recommendedValue: "traction",
+          rationaleAr: "ترشيح مبدئي مبني على المعرفة الفنية المتاحة ويحتاج تأكيد بيانات المشروع.",
+          rationaleEn: "A preliminary recommendation based on available technical knowledge and requiring project confirmation.",
+          requiresConfirmation: true,
+          provenance: "RESEARCHED",
+        },
+      });
+    }
+    return model;
+  }) };
   const provider = {
     extractIntent: vi.fn().mockImplementation(async (prompt: string) => ({
       documentType: "QUOTATION",
@@ -50,6 +75,14 @@ function fixture(options: { generatedResponse?: string; onTiming?: (timing: any)
     companyId: "tenant-a", reply, draft, replySource: source, locale: "ar", documentMode: "QUOTATION", ...extra,
   });
   return { run, research, provider };
+}
+
+async function reachDriveGuidance() {
+  const setup = fixture({ withGuidance: true });
+  let draft = await setup.run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات إلكتروني داخل دولة الكويت");
+  draft = await setup.run("مصعد واحد يخدم 6 طوابق", draft);
+  draft = await setup.run("أنا مش فاهم قوي في المصاعد إنت شوف الأنسب أو اديني اختيارات", draft);
+  return { ...setup, draft };
 }
 
 describe("Chat-First CEO Golden Scenarios", () => {
@@ -119,6 +152,115 @@ describe("Chat-First CEO Golden Scenarios", () => {
     const { run } = fixture(); let draft = await run("عايز مصعد سيارات في الكويت"); draft = await run("خليه يشيل SUV", draft); draft = await run("طب إيه الأفضل؟", draft);
     expect(draft.assistantResponse?.ar).toContain("SUV"); expect(draft.assistantResponse?.ar).toMatch(/الحمولة|الأبعاد/);
   });
+  it("17b. keeps recommendation turns inside engineering guidance instead of jumping to commercial fields", async () => {
+    const { run } = fixture({ withGuidance: true });
+    let draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات إلكتروني داخل دولة الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    draft = await run("أنا مش فاهم قوي في المصاعد إنت شوف الأنسب أو اديني اختيارات", draft);
+
+    expect(draft.activeQuestion?.field).not.toBe("customerMention");
+    expect(draft.activeQuestion?.field).not.toBe("projectName");
+    expect(draft.activeQuestion?.field).not.toBe("paymentTerms");
+    expect(draft.assistantResponse?.ar).toContain("نظام جر");
+    expect(draft.assistantResponse?.ar).toContain("نظام هيدروليكي");
+    expect(draft.assistantResponse?.ar).toMatch(/ترشيحي المبدئي|ترشيح مبدئي/);
+    expect(draft.assistantResponse?.ar).toMatch(/من غير تأكيدك|يحتاج تأكيد/);
+    expect(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === "driveType")?.value).toBeNull();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => String(fact.value).includes("مش فاهم قوي"))).toBe(false);
+
+    const repeated = await run("مش فاهم", draft);
+    expect(repeated.activeQuestion?.field).toBe("driveType");
+    expect(repeated.assistantResponse?.ar).toContain("نظام جر");
+    expect(repeated.systemAnswers?.driveType).toBeUndefined();
+  });
+
+  it("17c. commits a confirmed recommendation only as the selected engineering input", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const draft = await run("موافق", guided);
+
+    expect(draft.systemAnswers?.driveType).toBe("traction");
+    expect(draft.transactionalState?.ledger.facts["system.driveType"]).toMatchObject({ value: "traction", source: "USER_EXPLICIT" });
+    expect(draft.answers).not.toMatchObject({ customerMention: expect.anything(), projectName: expect.anything(), paymentTerms: expect.anything() });
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+  });
+
+  it("17d. commits the first bounded option from an ordinal selection", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const draft = await run("اختار الأول", guided);
+    expect(draft.systemAnswers?.driveType).toBe("traction");
+    expect(draft.transactionalState?.ledger.facts["system.driveType"].source).toBe("USER_EXPLICIT");
+  });
+
+  it("17e. commits an exact Arabic option label and nothing outside the option set", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const draft = await run("خليه هيدروليكي", guided);
+    expect(draft.systemAnswers?.driveType).toBe("hydraulic");
+    expect(["traction", "hydraulic"]).toContain(draft.systemAnswers?.driveType);
+  });
+
+  it("17f. rejects an unavailable ordinal and remains in the same guidance state", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const draft = await run("اختار الخيار الثالث", guided);
+    expect(draft.systemAnswers?.driveType).toBeUndefined();
+    expect(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === "driveType")?.value).toBeNull();
+    expect(draft.activeQuestion).toMatchObject({ field: "driveType" });
+    expect(draft.activeQuestion?.options?.map((option) => option.value)).toEqual(["traction", "hydraulic"]);
+    expect(draft.assistantResponse?.ar).toMatch(/مش ضمن الخيارات|غير متاح/);
+  });
+
+  it("17g. never assigns a guidance sentence or confirmation to capacity", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    expect(guided.systemAnswers?.capacity).toBeUndefined();
+    const confirmed = await run("تمام اختار ده", guided);
+    expect(confirmed.systemAnswers).toMatchObject({ driveType: "traction" });
+    expect(confirmed.systemAnswers?.capacity).toBeUndefined();
+    expect(confirmed.transactionalState?.ledger.facts["system.capacity"]).toBeUndefined();
+  });
+
+  it("17h. continues to the next unresolved engineering input after confirmation", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const draft = await run("امشي على ترشيحك", guided);
+    expect(draft.activeQuestion?.field).toBe("capacity");
+    expect(draft.activeQuestion?.field).not.toMatch(/customerMention|projectName|paymentTerms/);
+    expect(draft.canonicalProposal?.agenticState?.missingInputs).toEqual(["capacity"]);
+  });
+
+  it("17i. promotes a later bounded change through USER_CORRECTION precedence", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const confirmed = await run("موافق", guided);
+    const corrected = await run("لا خليه hydraulic بدل traction", confirmed);
+    expect(corrected.systemAnswers?.driveType).toBe("hydraulic");
+    expect(corrected.transactionalState?.ledger.facts["system.driveType"]).toMatchObject({ value: "hydraulic", source: "USER_CORRECTION" });
+  });
+
+  it("17j. keeps researched advice RESEARCHED while the selected project fact becomes USER_EXPLICIT", async () => {
+    const { run, draft: guided } = await reachDriveGuidance();
+    const draft = await run("use your recommendation", guided);
+    const input = draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === "driveType");
+    expect(input).toMatchObject({ value: "traction", provenance: "USER_PROVIDED", guidance: { provenance: "RESEARCHED" } });
+    expect(draft.transactionalState?.ledger.facts["system.driveType"].source).toBe("USER_EXPLICIT");
+  });
+
+  it("17k. does not fabricate FM-200 guidance or sizing when bounded advice is absent", async () => {
+    const { run } = fixture({ withGuidance: true });
+    const first = await run("عايز نظام FM-200 كامل طبقًا لمتطلبات الكويت");
+    const draft = await run("اختارلي", first);
+    expect(draft.activeQuestion?.field).toBe("protectedVolume");
+    expect(draft.systemAnswers?.protectedVolume).toBeUndefined();
+    expect(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs.every((field) => !field.guidance)).toBe(true);
+    expect(draft.canonicalProposal?.lines).toEqual([]);
+  });
+
+  it("17l. resolves the same guided confirmation through text and voice", async () => {
+    const textFlow = await reachDriveGuidance();
+    const voiceFlow = await reachDriveGuidance();
+    const text = await textFlow.run("موافق", textFlow.draft, "TEXT");
+    const voice = await voiceFlow.run("موافق", voiceFlow.draft, "VOICE");
+    expect(text.systemAnswers?.driveType).toBe("traction");
+    expect(voice.systemAnswers?.driveType).toBe(text.systemAnswers?.driveType);
+    expect(voice.conversationMessages?.at(-2)).toMatchObject({ role: "USER", source: "VOICE", text: "موافق" });
+  });
+
   it("18. keeps FM-200 sizing safety-critical and provisional", async () => {
     const { run } = fixture(); const draft = await run("عايز نظام FM-200 كامل طبقًا لمتطلبات الكويت");
     expect(draft.canonicalProposal?.lines).toEqual([]); expect(draft.activeQuestion?.field).toBe("protectedVolume"); expect(draft.canonicalProposal?.agenticState?.provisionalSystem?.limitations.join(" ")).toMatch(/quantity|sizing/i);

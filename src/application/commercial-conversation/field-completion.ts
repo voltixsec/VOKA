@@ -89,19 +89,6 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
     }
   }
 
-  const materializationBlocked = !first && draft.systemWorkingPlan?.commercializationStatus === "PENDING";
-  if (materializationBlocked) {
-    return { ...draft, missingRequired: missingWithState, recommended: requirements.recommended, completionVersion: 1, activeQuestion: null,
-      readinessStage: "SYSTEM_PLANNED", phase: "NEEDS_INFO", status: "NEEDS_CLARIFICATION",
-      clarification: {
-        ar: "التكوين المبدئي جاهز في الملخص. سأكمل ترتيب مكونات النظام عندما تتوفر المدخلات الموثوقة اللازمة.",
-        en: "The preliminary configuration is ready in the summary. I can continue arranging the system components when the necessary trusted inputs are available.",
-        suggestions: [],
-      },
-      requiresHumanReview: true, executed: false,
-    };
-  }
-
   const hasUnresolvedSystem = missingWithState.some((f) => f.key === "systemInput");
   const hasDeferredGaps = missingWithState.some((f) => deferredSet.has(fieldTarget(f)));
   const readinessStage = first

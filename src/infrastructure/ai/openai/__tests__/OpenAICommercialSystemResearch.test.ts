@@ -66,6 +66,65 @@ describe("production commercial system research adapter", () => {
     expect(result?.evidence.map((source) => source.title)).toEqual(["Authority"]);
   });
 
+  it("maps researched guidance as provisional advice without confirming the project input", async () => {
+    const payload = response({
+      typicalRequiredInputs: [{
+        name: "driveType",
+        labelAr: "نوع نظام الحركة",
+        labelEn: "Drive type",
+        unit: null,
+        guidance: {
+          options: [
+            { value: "traction", labelAr: "جر", labelEn: "Traction", explanationAr: "خيار شائع للمباني متعددة الوقفات.", explanationEn: "A common option for multi-stop buildings." },
+            { value: "hydraulic", labelAr: "هيدروليكي", labelEn: "Hydraulic", explanationAr: "قد يناسب تطبيقات محددة.", explanationEn: "May suit specific applications." },
+          ],
+          recommendedValue: "traction",
+          rationaleAr: "ترشيح مبدئي فقط بناءً على المصادر الفنية المتاحة.",
+          rationaleEn: "A preliminary recommendation based only on the available technical sources.",
+          requiresConfirmation: false,
+        },
+      }],
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+
+    const result = await adapter().researchSystem(input(" guidance-contract"));
+    const field = result?.inputs.find((item) => item.name === "driveType");
+
+    expect(field?.value).toBeNull();
+    expect(field?.provenance).toBe("NEEDS_CONFIRMATION");
+    expect(field?.guidance).toMatchObject({
+      recommendedValue: "traction",
+      requiresConfirmation: true,
+      provenance: "RESEARCHED",
+    });
+    expect(field?.guidance?.options.map((option) => option.value)).toEqual(["traction", "hydraulic"]);
+  });
+
+  it("drops a researched recommendation when its value is not one of the bounded options", async () => {
+    const payload = response({
+      typicalRequiredInputs: [{
+        name: "driveType",
+        labelAr: "نوع نظام الحركة",
+        labelEn: "Drive type",
+        unit: null,
+        guidance: {
+          options: [{ value: "traction", labelAr: "جر", labelEn: "Traction", explanationAr: null, explanationEn: null }],
+          recommendedValue: "unsupported-value",
+          rationaleAr: null,
+          rationaleEn: null,
+          requiresConfirmation: true,
+        },
+      }],
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+
+    const result = await adapter().researchSystem(input(" invalid-guidance"));
+    const field = result?.inputs.find((item) => item.name === "driveType");
+
+    expect(field?.value).toBeNull();
+    expect(field?.guidance).toBeUndefined();
+  });
+
   it("returns null for provider failure, incomplete output, and malformed structured output", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("no", { status: 503 }))

@@ -1,0 +1,170 @@
+import type { SystemInputGuidance } from "../../domain/smart-system/types";
+import type { FieldQuestion, WorkingCommercialDraft } from "./types";
+
+type GuidanceOption = SystemInputGuidance["options"][number];
+
+export type GuidedSystemInput = {
+  name: string;
+  labelAr: string;
+  labelEn: string;
+  value: string | number | boolean | null;
+  guidance: SystemInputGuidance;
+};
+
+export type GuidanceSelection =
+  | { status: "NONE" }
+  | { status: "INVALID"; input: GuidedSystemInput }
+  | { status: "SELECTED"; input: GuidedSystemInput; option: GuidanceOption };
+
+const arabicMarks = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g;
+const fillerWords = new Set([
+  "نظام", "الخيار", "خيار", "الاختيار", "اختيار", "رقم", "خليه", "خلي", "اختار", "اختر", "اعتمد", "ده", "دا", "هذا", "هو",
+  "option", "choice", "select", "choose", "use", "pick", "the", "one", "go", "with", "make", "it",
+]);
+
+function normalize(text: string) {
+  return text
+    .normalize("NFKC")
+    .replace(arabicMarks, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .toLocaleLowerCase("en")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function meaningful(text: string) {
+  return normalize(text).split(/\s+/)
+    .filter((word) => word && !fillerWords.has(word))
+    .map((word) => word.startsWith("ال") && word.length > 3 ? word.slice(2) : word)
+    .join(" ");
+}
+
+function includesPhrase(text: string, phrase: string) {
+  if (!phrase) return false;
+  return (" " + text + " ").includes(" " + phrase + " ");
+}
+
+function sameValue(left: unknown, right: unknown) {
+  return typeof left === typeof right && left === right;
+}
+
+function guidedInputs(draft: WorkingCommercialDraft | null | undefined): GuidedSystemInput[] {
+  if (!draft) return [];
+  const inputs = [
+    ...(draft.canonicalProposal?.smartSystem?.inputs ?? []),
+    ...(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs ?? []),
+  ];
+  const seen = new Set<string>();
+  return inputs.filter((input): input is typeof input & { guidance: SystemInputGuidance } => {
+    if (seen.has(input.name) || !input.guidance?.options.length) return false;
+    seen.add(input.name);
+    return true;
+  });
+}
+
+function optionMatches(option: GuidanceOption, text: string) {
+  const raw = normalize(text);
+  const focused = meaningful(text);
+  const candidates = [option.labelAr, option.labelEn, String(option.value)]
+    .flatMap((candidate) => [normalize(candidate), meaningful(candidate)])
+    .filter(Boolean);
+  return candidates.some((candidate) => includesPhrase(raw, candidate) || includesPhrase(focused, candidate));
+}
+
+function explicitlySelectedOption(input: GuidedSystemInput, text: string) {
+  const preferredText = text.split(/\b(?:instead\s+of|rather\s+than)\b|بدل(?:اً|ا)?(?:\s+من)?/iu)[0] ?? text;
+  const matches = input.guidance.options.filter((option) => optionMatches(option, preferredText));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function ordinal(text: string) {
+  const normalized = normalize(text);
+  const wordOrdinals: Array<[RegExp, number]> = [
+    [/(?:^| )(?:الاول|اول|first)(?: |$)/i, 1],
+    [/(?:^| )(?:الثاني|التاني|ثاني|تاني|second)(?: |$)/i, 2],
+    [/(?:^| )(?:الثالث|التالت|ثالث|تالت|third)(?: |$)/i, 3],
+    [/(?:^| )(?:الرابع|رابع|fourth)(?: |$)/i, 4],
+  ];
+  for (const [pattern, value] of wordOrdinals) if (pattern.test(normalized)) return value;
+  const numbered = normalized.match(/(?:^|(?:option|choice|الخيار|خيار|اختيار|اختار|اختر|رقم)\s+)(\d+)(?:\s|$)/i);
+  return numbered ? Number(numbered[1]) : null;
+}
+
+function confirmsRecommendation(text: string) {
+  return /^(?:موافق|نعم|ايو[ه]?|أيو[ه]?|تمام(?:\s+(?:اختار|اعتمد|خلي|خليه)\s*(?:ده|دا|هذا))?|امش[يى]\s+على\s+(?:ترشيحك|اختيارك)|اعتمد\s+(?:الاختيار|الخيار|ترشيحك)(?:\s+(?:ده|دا|هذا))?|yes|okay|ok|go\s+with\s+(?:that|your\s+recommendation)|use\s+your\s+recommendation|accept\s+(?:that|your\s+recommendation))[.!؟\s]*$/iu.test(text.trim());
+}
+
+export function isGuidanceRequest(text: string) {
+  if (confirmsRecommendation(text)) return false;
+  return /مش\s*(?:عارف|فاهم)|ما\s*أعرف|لا\s*أعلم|i\s*(?:do\s+not|don't)\s*know|not\s+sure|(?:إيه|ايه|ما|وش|what).*?(?:الأفضل|الأنسب|best)|اختارلي|رشحلي|recommend|choose\s+for\s+me/iu.test(text.trim());
+}
+
+export function relevantGuidanceInput(draft: WorkingCommercialDraft | null | undefined) {
+  const inputs = guidedInputs(draft);
+  const active = inputs.find((input) => input.name === draft?.activeQuestion?.field && input.value == null);
+  return active ?? inputs.find((input) => input.value == null) ?? null;
+}
+
+/** Resolves only bounded guidance values. Recommendation/ordinal references require an active guided question. */
+export function resolveGuidanceSelection(
+  draft: WorkingCommercialDraft | null | undefined,
+  text: string,
+  targetField?: string,
+): GuidanceSelection {
+  const inputs = guidedInputs(draft);
+  if (!inputs.length) return { status: "NONE" };
+  const active = inputs.find((input) => input.name === (targetField ?? draft?.activeQuestion?.field));
+  const explicitMatches = inputs.flatMap((input) => {
+    const option = explicitlySelectedOption(input, text);
+    return option ? [{ input, option }] : [];
+  });
+
+  if (active) {
+    const explicit = explicitlySelectedOption(active, text);
+    if (explicit) return { status: "SELECTED", input: active, option: explicit };
+
+    const position = ordinal(text);
+    if (position != null) {
+      const option = active.guidance.options[position - 1];
+      return option ? { status: "SELECTED", input: active, option } : { status: "INVALID", input: active };
+    }
+
+    if (confirmsRecommendation(text)) {
+      const option = active.guidance.options.find((candidate) => sameValue(candidate.value, active.guidance.recommendedValue));
+      return option ? { status: "SELECTED", input: active, option } : { status: "INVALID", input: active };
+    }
+
+    if (explicitMatches.length === 1) return { status: "SELECTED", ...explicitMatches[0] };
+
+    // Once a bounded guidance question is active (or explicitly targeted by a chip),
+    // arbitrary text cannot bypass its option set.
+    return { status: "INVALID", input: active };
+  }
+
+  if (explicitMatches.length === 1) return { status: "SELECTED", ...explicitMatches[0] };
+  if (explicitMatches.length > 1) {
+    return { status: "INVALID", input: inputs.find((input) => input.value == null) ?? inputs[0] };
+  }
+  return { status: "NONE" };
+}
+
+export function guidanceQuestion(input: GuidedSystemInput, invalid = false): FieldQuestion {
+  return {
+    field: input.name,
+    ar: invalid
+      ? "الاختيار المطلوب غير متاح. اختر أحد الخيارات المحددة لـ" + input.labelAr + "."
+      : "أي خيار تريد اعتماده لـ" + input.labelAr + "؟",
+    en: invalid
+      ? "That choice is unavailable. Select one of the bounded options for " + input.labelEn + "."
+      : "Which option should be confirmed for " + input.labelEn + "?",
+    allowNotApplicable: false,
+    allowDefer: false,
+    options: input.guidance.options.map((option) => ({
+      ar: option.labelAr,
+      en: option.labelEn,
+      value: String(option.value),
+    })),
+  };
+}

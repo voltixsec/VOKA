@@ -1,3 +1,5 @@
+import type { SystemInputGuidance } from "../../domain/smart-system/types";
+
 export type AgentKnowledgeProvenance =
   | "VERIFIED_PROFILE"
   | "USER_PROVIDED"
@@ -34,6 +36,7 @@ export type ProvisionalSystemInput = {
   unit?: string | null;
   required: boolean;
   provenance: AgentKnowledgeProvenance;
+  guidance?: SystemInputGuidance;
 };
 
 export type ProvisionalSystemModel = {

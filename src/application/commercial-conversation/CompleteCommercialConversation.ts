@@ -12,6 +12,7 @@ import { commitTurnDecision, projectFactLedger, proposalDecision, type Commercia
 import { generateGroundedResponse } from "./chat-first-response";
 import { projectStructuredResult } from "./live-result";
 import type { SalesAssistantProviderCallKind } from "../ai-sales-assistant/services/AISalesAssistantService";
+import { guidanceQuestion, isGuidanceRequest, relevantGuidanceInput, resolveGuidanceSelection } from "./engineering-guidance";
 
 const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
@@ -56,6 +57,11 @@ export class CompleteCommercialConversation {
     };
     const onProviderCall = (kind: SalesAssistantProviderCallKind) => { providerCallBreakdown[kind] += 1; };
     const previous = input.draft;
+    const guidanceTurn = isGuidanceRequest(input.reply);
+    const guidanceSelection = guidanceTurn
+      ? { status: "NONE" as const }
+      : resolveGuidanceSelection(previous, input.answer?.value ?? input.reply, input.answer?.field);
+    const guidanceControl = guidanceTurn || guidanceSelection.status !== "NONE";
     let semanticMode: string | null = null;
     let semanticDeferPayment = false;
     let semanticTargetField: string | null = null;
@@ -79,6 +85,12 @@ export class CompleteCommercialConversation {
         researchRequired = typeof raw?.researchRequired === "boolean" ? raw.researchRequired : undefined;
       } catch { /* Conservative local interpretation remains available. */ }
       semanticProviderMs = performance.now() - semanticStarted;
+    }
+    if (guidanceControl) {
+      // A guidance/confirmation utterance is control input, never new commercial intelligence.
+      semanticIntent = undefined;
+      semanticTargetField = null;
+      semanticDeferPayment = false;
     }
     const implicitQuotationValidity = (previous?.operation === "QUOTATION" || input.operation === "QUOTATION" || input.documentMode === "QUOTATION")
       && previous?.missingRequired.some((field) => field.key === "expiryDate")
@@ -121,7 +133,9 @@ export class CompleteCommercialConversation {
     const deferAllowed = activeMissingField ? activeMissingField.deferPolicy === "DEFER_ALLOWED" : active?.allowDefer ?? false;
     let nonDeferrableAttempt = false;
 
-    let answer: FieldAnswer | undefined;
+    let answer: FieldAnswer | undefined = guidanceSelection.status === "SELECTED"
+      ? { field: guidanceSelection.input.name, value: String(guidanceSelection.option.value) }
+      : undefined;
     if (deferPaymentIntent) {
       deferredFields.add("paymentTerms");
       delete answers.paymentTerms;
@@ -137,20 +151,20 @@ export class CompleteCommercialConversation {
       }
     }
 
-    const systemPatch = previous && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent
+    const systemPatch = previous && !guidanceControl && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent
       ? systemTurnValues(input.answer?.value ?? input.reply, provisionalInputs)
       : {};
     Object.assign(systemAnswers, systemPatch);
     const patchedSystemFields = Object.keys(systemPatch);
-    const labelled = previous && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
+    const labelled = previous && !guidanceControl && !input.reanalyze && !input.selection && !input.answer?.action && !isDeferIntent ? labelledFieldAnswer(input.answer?.value ?? input.reply) : undefined;
     const firstPaymentPercentage = input.reply.search(/[٠-٩\d]+(?:[.,٫]\d+)?\s*(?:%|٪|percent\b|بالمئة|في المئة)/i);
     const conversationalPayment = explicitPaymentTerms(input.reply) ?? (firstPaymentPercentage >= 0 && /الدفع|payment/i.test(input.reply) ? input.reply.slice(firstPaymentPercentage) : null);
-    const conversationalControl = ["CONTINUE", "QUESTION", "RECOMMENDATION", "UNKNOWN"].includes(semanticMode ?? "") || /^(?:كمل|كمّل|تابع|استمر|continue|go on|خلينا|دعنا|let'?s)|مش\s*عارف|ما\s*أعرف|i\s*(?:do not|don't)\s*know|(?:إيه|ايه|what).*?(?:الأفضل|الأنسب|best)|اختارلي|recommend/i.test(input.reply.trim());
+    const conversationalControl = guidanceControl || ["CONTINUE", "QUESTION", "RECOMMENDATION", "UNKNOWN"].includes(semanticMode ?? "") || /^(?:كمل|كمّل|تابع|استمر|continue|go on|خلينا|دعنا|let'?s)|مش\s*(?:عارف|فاهم)|ما\s*أعرف|i\s*(?:do not|don't)\s*know|(?:إيه|ايه|what).*?(?:الأفضل|الأنسب|best)|اختارلي|recommend/i.test(input.reply.trim());
     const contextualAnswer = active && !conversationalControl && !isDeferIntent && !input.reanalyze && !input.selection
       ? { field: active.field, value: input.reply } : undefined;
-    const semanticAnswer = semanticTargetField && (answerFields.has(semanticTargetField) || provisionalInputs.some((field) => field.name === semanticTargetField))
+    const semanticAnswer = !guidanceControl && semanticTargetField && (answerFields.has(semanticTargetField) || provisionalInputs.some((field) => field.name === semanticTargetField))
       ? { field: semanticTargetField, value: input.reply } : undefined;
-    const submittedAnswer = input.answer?.action || !conversationalControl ? input.answer : undefined;
+    const submittedAnswer = guidanceSelection.status === "INVALID" ? undefined : input.answer?.action || !conversationalControl ? input.answer : undefined;
     answer ??= patchedSystemFields.length ? undefined : labelled ?? (conversationalPayment ? { field: "paymentTerms", value: conversationalPayment } : undefined) ?? semanticAnswer ?? submittedAnswer ?? contextualAnswer;
     const systemInput = prior?.smartSystem?.inputs.find((field) => field.name === answer?.field)
       ?? prior?.agenticState?.provisionalSystem?.inputs.find((field) => field.name === answer?.field);
@@ -174,19 +188,24 @@ export class CompleteCommercialConversation {
       deferredFields.delete(answer.field);
       if (answer.field === "customerMention") delete selection.customer;
     } else if (answer && systemInput) {
-      const value = latinDigits(answer.value.trim());
-      if (typeof systemInput.value === "boolean") {
-        if (!/^(true|false|yes|no|نعم|لا)$/i.test(value)) throw new Error("CONVERSATION_ANSWER_INVALID");
-        systemAnswers[answer.field] = /^(true|yes|نعم)$/i.test(value);
-      } else if (systemInput.unit || typeof systemInput.value === "number") {
-        if (!Number.isFinite(Number(value))) throw new Error("CONVERSATION_ANSWER_INVALID");
-        systemAnswers[answer.field] = Number(value);
+      if (guidanceSelection.status === "SELECTED" && guidanceSelection.input.name === answer.field) {
+        systemAnswers[answer.field] = guidanceSelection.option.value;
+        deferredFields.delete(answer.field);
       } else {
-        systemAnswers[answer.field] = answer.field === "accessDirection"
-          ? /^(دخول فقط|entry only)$/i.test(value) ? "ENTRY_ONLY" : /^(دخول وخروج|entry and exit)$/i.test(value) ? "ENTRY_EXIT" : value
-          : value;
+        const value = latinDigits(answer.value.trim());
+        if (typeof systemInput.value === "boolean") {
+          if (!/^(true|false|yes|no|نعم|لا)$/i.test(value)) throw new Error("CONVERSATION_ANSWER_INVALID");
+          systemAnswers[answer.field] = /^(true|yes|نعم)$/i.test(value);
+        } else if (systemInput.unit || typeof systemInput.value === "number") {
+          if (!Number.isFinite(Number(value))) throw new Error("CONVERSATION_ANSWER_INVALID");
+          systemAnswers[answer.field] = Number(value);
+        } else {
+          systemAnswers[answer.field] = answer.field === "accessDirection"
+            ? /^(دخول فقط|entry only)$/i.test(value) ? "ENTRY_ONLY" : /^(دخول وخروج|entry and exit)$/i.test(value) ? "ENTRY_EXIT" : value
+            : value;
+        }
+        deferredFields.delete(answer.field);
       }
-      deferredFields.delete(answer.field);
     }
     if (input.selection?.customer) {
       answers.customerMention = input.selection.customer.name;
@@ -196,7 +215,7 @@ export class CompleteCommercialConversation {
     const buildMode = input.buildMode ?? previous?.buildMode ?? "AUTO";
     let operation = buildMode === "DRAWING" ? "DRAWING_TAKEOFF" as const : documentMode === "AUTO" ? previous?.operation ?? input.operation ?? classifyCommercialOperation(input.reply).operation : documentMode;
     if (previous && operation && previous.operation !== operation) throw new Error("CONVERSATION_OPERATION_IMMUTABLE");
-    const targeted = Boolean(patchedSystemFields.length || (answer && !["lines", "userIntent"].includes(answer.field)) || input.selection || input.reanalyze || isDeferIntent);
+    const targeted = Boolean(guidanceControl || patchedSystemFields.length || (answer && !["lines", "userIntent"].includes(answer.field)) || input.selection || input.reanalyze || isDeferIntent);
     const previousIntelligence = previous?.intelligenceText ?? previous?.turns.filter((turn) => !turn.target).map((turn) => turn.text).join("\n");
     const intelligenceText = targeted && previousIntelligence ? previousIntelligence : [previousIntelligence, input.reply].filter(Boolean).join("\n");
     const retainedLines = targeted ? prior?.lines.map((line, index) => {
@@ -292,6 +311,20 @@ export class CompleteCommercialConversation {
       if (answers.attentionName) draft.answers = { ...draft.answers, attentionName: proposal.proposal.attentionName ?? '' };
     }
     const completed = completeFields(draft);
+
+    const guidedQuestion = guidanceSelection.status === "INVALID"
+      ? guidanceQuestion(guidanceSelection.input, true)
+      : guidanceTurn
+        ? relevantGuidanceInput(completed)
+        : null;
+    if (guidedQuestion) {
+      completed.activeQuestion = "field" in guidedQuestion ? guidedQuestion : guidanceQuestion(guidedQuestion);
+      completed.clarification = {
+        ar: completed.activeQuestion.ar,
+        en: completed.activeQuestion.en,
+        suggestions: [],
+      };
+    }
     if (nonDeferrableAttempt && completed.activeQuestion) {
       completed.activeQuestion = {
         ...completed.activeQuestion,
@@ -308,7 +341,7 @@ export class CompleteCommercialConversation {
     }
     const deterministicToolsMs = Math.max(0, performance.now() - deterministicStarted - researchMs);
     const responseStarted = performance.now();
-    const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply });
+    const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply, guidanceSelection });
     const naturalResponseMs = performance.now() - responseStarted;
     const priorMessages = previous?.conversationMessages ?? previous?.turns.map((turn) => ({ role: turn.role ?? "USER" as const, source: turn.source, text: turn.text })) ?? [];
     const withResponse = {
