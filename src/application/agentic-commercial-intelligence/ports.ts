@@ -7,6 +7,8 @@ export interface CommercialSystemResearchPort {
     query: string;
     locale: "ar" | "en";
     jurisdiction: string | null;
+    /** Called only when the adapter performs an external provider request. */
+    onProviderCall?: () => void;
   }): Promise<ProvisionalSystemModel | null>;
 }
 

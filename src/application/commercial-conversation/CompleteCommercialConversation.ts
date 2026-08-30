@@ -11,6 +11,7 @@ import { explicitPaymentTerms, renderPaymentSchedule } from "../ai-sales-assista
 import { commitTurnDecision, projectFactLedger, proposalDecision, type CommercialReadiness } from "./transactional-state";
 import { generateGroundedResponse } from "./chat-first-response";
 import { projectStructuredResult } from "./live-result";
+import type { SalesAssistantProviderCallKind } from "../ai-sales-assistant/services/AISalesAssistantService";
 
 const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
@@ -31,6 +32,8 @@ export type SalesAssistantTurnTiming = {
   naturalResponseMs: number;
   totalMs: number;
   researchInvoked: boolean;
+  aiProviderCallCount: number;
+  providerCallBreakdown: Record<SalesAssistantProviderCallKind, number>;
 };
 
 export type CompleteConversationOptions = {
@@ -48,6 +51,10 @@ export class CompleteCommercialConversation {
     const turnStarted = performance.now();
     let semanticProviderMs = 0;
     let researchMs = 0;
+    const providerCallBreakdown: Record<SalesAssistantProviderCallKind, number> = {
+      SEMANTIC: 0, INTENT_FALLBACK: 0, CUSTOMER_REPAIR: 0, RESEARCH: 0, PRICE_ESTIMATE: 0,
+    };
+    const onProviderCall = (kind: SalesAssistantProviderCallKind) => { providerCallBreakdown[kind] += 1; };
     const previous = input.draft;
     let semanticMode: string | null = null;
     let semanticDeferPayment = false;
@@ -64,7 +71,7 @@ export class CompleteCommercialConversation {
           activeQuestion: previous?.activeQuestion?.field ?? null,
           activeSystem: previous?.systemWorkingPlan?.systemIdentity ?? null,
           documentIntent: previous?.operation ?? input.operation ?? null,
-        }) as { mode?: unknown; deferPayment?: unknown; targetField?: unknown; intent?: unknown; researchRequired?: unknown } | undefined;
+        }, { onProviderCall }) as { mode?: unknown; deferPayment?: unknown; targetField?: unknown; intent?: unknown; researchRequired?: unknown } | undefined;
         if (typeof raw?.mode === "string" && ["CONTINUE", "PROVIDE_FACTS", "CORRECTION", "QUESTION", "RECOMMENDATION", "UNKNOWN", "DEFER"].includes(raw.mode)) semanticMode = raw.mode;
         semanticDeferPayment = raw?.deferPayment === true;
         semanticTargetField = typeof raw?.targetField === "string" ? raw.targetField : null;
@@ -211,6 +218,7 @@ export class CompleteCommercialConversation {
       preinterpretedIntent: semanticIntent,
       researchRequired,
       onResearchLatency: (milliseconds) => { researchMs += milliseconds; },
+      onProviderCall,
     });
     operation ??= proposal?.documentType ?? null;
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });
@@ -238,8 +246,9 @@ export class CompleteCommercialConversation {
       const systemIdentity = proposal.smartSystem?.systemNameEn ?? proposal.agenticState?.systemName;
       if (systemIdentity) decision.patches.push({ field: "system.identity", operation: previous?.transactionalState?.ledger.facts["system.identity"] ? "REPLACE" : "SET", value: systemIdentity,
         provenance: proposal.smartSystem ? "DETERMINISTIC_DERIVATION" : proposal.agenticState?.provisionalSystem?.provenance === "RESEARCHED" ? "RESEARCHED" : "AI_INFERRED", evidence: "Validated canonical system identity." });
-      const systemJurisdiction = proposal.agenticState?.provisionalSystem?.jurisdiction;
-      if (systemJurisdiction) decision.patches.push({ field: "system.jurisdiction", operation: previous?.transactionalState?.ledger.facts["system.jurisdiction"] ? "REPLACE" : "SET", value: systemJurisdiction, provenance: "DETERMINISTIC_DERIVATION", evidence: "Jurisdiction derived from explicit request context." });
+      const explicitJurisdiction = /\bkuwait\b|الكويت/i.test(intelligenceText) ? "Kuwait" : null;
+      const systemJurisdiction = proposal.agenticState?.provisionalSystem?.jurisdiction ?? explicitJurisdiction;
+      if (systemJurisdiction) decision.patches.push({ field: "system.jurisdiction", operation: previous?.transactionalState?.ledger.facts["system.jurisdiction"] ? "REPLACE" : "SET", value: systemJurisdiction, provenance: explicitJurisdiction ? "USER_EXPLICIT" : "DETERMINISTIC_DERIVATION", evidence: "Jurisdiction derived from explicit request context." });
       const hasRelativeValidityAnchor = answer?.field === "expiryDate" && /(?:من\s+تاريخ\s+(?:الاعتماد|الموافقة|العرض|إصدار\s+العرض)|from\s+(?:the\s+)?(?:approval|quotation|quote|issue)\s+date)/i.test(answer.value);
       if (answer?.field === "expiryDate" && (parseValidityDuration(answer.value) || hasRelativeValidityAnchor)) {
         decision.patches.push({ field: "validity", operation: previous?.transactionalState?.ledger.facts.validity ? "REPLACE" : "SET", value: answer.value.trim(), provenance: previous?.transactionalState?.ledger.facts.validity ? "USER_CORRECTION" : "USER_EXPLICIT", evidence: "User-supplied quotation validity wording." });
@@ -299,7 +308,7 @@ export class CompleteCommercialConversation {
     }
     const deterministicToolsMs = Math.max(0, performance.now() - deterministicStarted - researchMs);
     const responseStarted = performance.now();
-    const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply, provider: this.intelligence });
+    const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply });
     const naturalResponseMs = performance.now() - responseStarted;
     const priorMessages = previous?.conversationMessages ?? previous?.turns.map((turn) => ({ role: turn.role ?? "USER" as const, source: turn.source, text: turn.text })) ?? [];
     const withResponse = {
@@ -320,6 +329,8 @@ export class CompleteCommercialConversation {
       naturalResponseMs: Math.round(naturalResponseMs),
       totalMs: Math.round(performance.now() - turnStarted),
       researchInvoked: researchMs > 0,
+      aiProviderCallCount: Object.values(providerCallBreakdown).reduce((sum, count) => sum + count, 0),
+      providerCallBreakdown,
     });
     return result;
   }

@@ -1,7 +1,5 @@
-import type { AISalesAssistantPort } from "../ai-sales-assistant/ports/AISalesAssistantPort";
+import { projectStructuredResult } from "./live-result";
 import type { WorkingCommercialDraft } from "./types";
-
-const internalTerms = /RESEARCHED|SYSTEM_PLANNED|PROVISIONAL_MODEL_CREATED|materializ|readiness|engineering review|catalog mapping|تحويل المتطلبات|المراجعة الهندسية|حالة الجاهزية/i;
 
 function isRecommendation(text: string) {
   return /(?:إيه|ايه|ما|وش)\s*(?:هو\s*)?(?:الأفضل|الأنسب)|اختارلي|رشحلي|what(?:'s| is) best|recommend|choose for me/i.test(text);
@@ -15,81 +13,90 @@ function isContinue(text: string) {
   return /^(?:كمل|كمّل|تابع|استمر|continue|go on|carry on)[.!؟\s]*$/i.test(text.trim());
 }
 
-function safeText(value: unknown) {
-  return typeof value === "string" ? value.trim().slice(0, 1200) : "";
+function isResearchRequest(text: string) {
+  return /(?:search|research|ابحث|دور\s+(?:على|في)|راجع\s+(?:المصادر|النت)|على\s+النت)/i.test(text);
 }
 
-function responseIsGrounded(text: string, truth: Record<string, unknown>) {
-  const serialized = JSON.stringify(truth);
-  const allowedNumbers = new Set(serialized.match(/\d+(?:\.\d+)?/g) ?? []);
-  if ((text.match(/\d+(?:\.\d+)?/g) ?? []).some((number) => !allowedNumbers.has(number))) return false;
-  const hasVerifiedPrice = Array.isArray(truth.lines) && truth.lines.some((line) => typeof line === "object" && line && (line as { priceStatus?: string }).priceStatus === "VERIFIED");
-  if (!hasVerifiedPrice && /(?:price|cost|سعر|تكلفة).{0,30}(?:KWD|USD|EUR|SAR|AED|د\.?\s*ك)/i.test(text)) return false;
-  return true;
+function value(draft: WorkingCommercialDraft, key: string, locale: "ar" | "en") {
+  const fact = projectStructuredResult(draft).summary.find((item) => item.key === key);
+  return fact ? (locale === "ar" ? fact.valueAr ?? fact.value : fact.valueEn ?? fact.value) : null;
 }
 
-function fallback(draft: WorkingCommercialDraft, userMessage: string) {
-  const ar = draft.locale === "ar";
+function join(items: string[], locale: "ar" | "en") {
+  if (items.length < 2) return items[0] ?? "";
+  const last = items.at(-1)!;
+  return `${items.slice(0, -1).join(locale === "ar" ? "، " : ", ")}${locale === "ar" ? "، و" : ", and "}${last}`;
+}
+
+function boundedRecommendation(draft: WorkingCommercialDraft, locale: "ar" | "en") {
   const plan = draft.systemWorkingPlan;
-  const question = draft.activeQuestion ? (ar ? draft.activeQuestion.ar : draft.activeQuestion.en) : null;
-  const researched = draft.canonicalProposal?.agenticState?.researchStatus === "COMPLETED";
+  const question = draft.activeQuestion ? draft.activeQuestion[locale] : null;
   const vehicleClass = plan?.knownInputs.vehicleClass;
-  const facts = Object.entries(plan?.knownInputs ?? {}).map(([key, value]) => `${key}: ${String(value)}`);
-
-  if (isRecommendation(userMessage) || isUnknown(userMessage)) {
-    if (plan && /vehicle|car|مصعد سيارات/i.test(plan.systemIdentity)) {
-      return ar
-        ? `أقدر أرشح لك تكوينًا مبدئيًا مناسبًا لـ${vehicleClass === "SUV" ? " سيارات SUV" : " الاستخدام المطلوب"}، مع أبواب وتحكم ووسائل أمان مناسبة لعدد الوقفات. الحمولة والأبعاد النهائية لا يصح اعتمادها من غير أبعاد البئر والمخطط. ${question ?? "لو عندك مخطط ارفعه وأنا أكمل عليه."}`
-        : `I can recommend a preliminary configuration for ${vehicleClass === "SUV" ? "SUV use" : "the requested use"}, with doors, controls, and safety provisions suited to the stops. Final load and dimensions cannot be approved without the shaft dimensions or drawing. ${question ?? "Attach a drawing when available and I can continue from it."}`;
-    }
-    return ar
-      ? `أقدر أقترح خيارًا مبدئيًا وأوضح الافتراضات، لكن لن أعتمد قيمة هندسية غير مؤكدة. ${question ?? "أكمل معك بالمعلومات المتاحة."}`
-      : `I can suggest a preliminary option and make the assumptions clear, but I will not approve an uncertain engineering value. ${question ?? "I can continue with the information available."}`;
+  if (plan && /vehicle|car|مصعد سيارات/i.test(plan.systemIdentity)) {
+    return locale === "ar"
+      ? `أقدر أرشح لك تكوينًا مبدئيًا مناسبًا${vehicleClass === "SUV" ? " لسيارات SUV" : " للاستخدام المطلوب"}، مع مجموعة رفع وتحكم وأبواب ووسائل أمان مناسبة لعدد الوقفات. لن أفترض الحمولة أو الأبعاد النهائية من غير أبعاد البئر والمخطط.${question ? ` ${question}` : ""}`
+      : `I can recommend a preliminary configuration${vehicleClass === "SUV" ? " for SUV use" : " for the intended use"}, including a drive assembly, controls, doors, and safety provisions suited to the stops. I will not assume the final rated load or dimensions without the shaft dimensions and drawing.${question ? ` ${question}` : ""}`;
   }
-
-  if (isContinue(userMessage)) {
-    return ar ? `تمام، مكمل معاك من نفس السياق. ${question ?? "الملخص المبدئي محدث بالأسفل."}` : `All right, I’m continuing from the same context. ${question ?? "The preliminary summary below is up to date."}`;
-  }
-
-  const intro = researched
-    ? (ar ? "راجعت المصادر المتاحة وحدثت التكوين المبدئي." : "I reviewed the available sources and updated the preliminary configuration.")
-    : (ar ? "تمام، حدثت الطلب بالمعلومات الجديدة." : "Got it — I updated the request with the new information.");
-  const context = facts.length ? (ar ? ` المؤكد حتى الآن: ${facts.join("، ")}.` : ` Confirmed so far: ${facts.join(", ")}.`) : "";
-  return `${intro}${context}${question ? ` ${question}` : ""}`;
+  return locale === "ar"
+    ? `أقدر أقترح خيارًا مبدئيًا وأوضح الافتراضات، لكن لن أعتمد قيمة هندسية غير مؤكدة.${question ? ` ${question}` : ""}`
+    : `I can suggest a preliminary option and make the assumptions clear, but I will not approve an uncertain engineering value.${question ? ` ${question}` : ""}`;
 }
 
-export async function generateGroundedResponse(input: {
-  draft: WorkingCommercialDraft;
-  userMessage: string;
-  provider?: Pick<AISalesAssistantPort, "generateConversationResponse"> | null;
-}) {
-  const { draft, userMessage, provider } = input;
-  const fallbackText = fallback(draft, userMessage);
-  if (!provider?.generateConversationResponse) return { ar: fallbackText, en: fallbackText };
-  const ledger = draft.transactionalState?.ledger.facts ?? {};
-  const committedTruth = {
-    facts: Object.fromEntries(Object.entries(ledger).map(([key, fact]) => [key, { value: fact.value, source: fact.source }])),
-    system: draft.systemWorkingPlan,
-    customer: draft.canonicalProposal?.customer ? {
-      status: draft.canonicalProposal.customer.status,
-      name: draft.canonicalProposal.customer.name ?? draft.canonicalProposal.customer.proposedCustomerName,
-    } : null,
-    lines: draft.canonicalProposal?.lines.map((line) => ({ name: line.itemName, quantity: line.quantity, priceStatus: line.unitPrice == null ? "PRICE_REQUIRED" : "VERIFIED" })) ?? [],
-    research: draft.canonicalProposal?.agenticState?.provisionalSystem?.evidence.map((item) => ({ title: item.title, publisher: item.publisher })) ?? [],
-  };
-  try {
-    const raw = await provider.generateConversationResponse({
-      locale: draft.locale,
-      userMessage,
-      conversationHistory: (draft.conversationMessages ?? draft.turns.map((turn) => ({ role: turn.role ?? "USER", source: turn.source, text: turn.text }))).slice(-12).map((turn) => ({ role: turn.role, text: turn.text })),
-      committedTruth,
-      nextQuestion: draft.activeQuestion ? { ar: draft.activeQuestion.ar, en: draft.activeQuestion.en } : null,
-      limitations: draft.canonicalProposal?.agenticState?.provisionalSystem?.limitations ?? [],
-    });
-    const text = safeText((raw as { text?: unknown })?.text);
-    if (!text || internalTerms.test(text) || !responseIsGrounded(text, committedTruth)) return { ar: fallbackText, en: fallbackText };
-    return { ar: text, en: text };
-  } catch {
-    return { ar: fallbackText, en: fallbackText };
+function groundedText(draft: WorkingCommercialDraft, userMessage: string, locale: "ar" | "en") {
+  if (isRecommendation(userMessage) || isUnknown(userMessage)) return boundedRecommendation(draft, locale);
+  const question = draft.activeQuestion ? draft.activeQuestion[locale] : null;
+  if (isContinue(userMessage)) {
+    return locale === "ar"
+      ? `تمام، مكمل معاك من نفس السياق.${question ? ` ${question}` : " الملخص المحدث موجود بالأسفل."}`
+      : `All right, I’m continuing from the same context.${question ? ` ${question}` : " The updated summary is below."}`;
   }
+
+  const result = projectStructuredResult(draft);
+  const understanding = result.systemUnderstanding;
+  const system = value(draft, "system.identity", locale);
+  const jurisdiction = value(draft, "system.jurisdiction", locale);
+  const scope = value(draft, "scopeType", locale);
+  const stops = value(draft, "system.numberOfStops", locale);
+  const hasPriorAssistant = (draft.conversationMessages ?? []).some((message) => message.role === "ASSISTANT");
+  const researched = draft.canonicalProposal?.agenticState?.researchStatus === "COMPLETED";
+
+  if (understanding && system && !hasPriorAssistant) {
+    const context = scope && jurisdiction ? (locale === "ar" ? `${scope} في ${jurisdiction}` : `${scope} in ${jurisdiction}`) : scope ?? jurisdiction;
+    const opening = locale === "ar"
+      ? `تمام، فهمت النظام. إحنا بنتكلم عن ${system}${context ? ` ${context}` : ""}${stops ? `، ويخدم ${stops} طوابق أو وقفات` : ""}.`
+      : `Got it — I understand the system. We’re discussing ${system}${context ? ` for ${context}` : ""}${stops ? ` serving ${stops} floors or stops` : ""}.`;
+    const componentLabels = understanding.components.map((item) => item[`label${locale === "ar" ? "Ar" : "En"}`]);
+    const components = componentLabels.length
+      ? locale === "ar"
+        ? ` التكوين العام الذي فهمته يشمل ${join(componentLabels.slice(0, 6), locale)}.`
+        : ` The general structure I understand includes ${join(componentLabels.slice(0, 6), locale)}.`
+      : "";
+    const confidence = locale === "ar" ? understanding.descriptionAr : understanding.descriptionEn;
+    return `${opening}${components} ${confidence}${question ? ` ${question}` : ""}`.trim();
+  }
+
+  if (isResearchRequest(userMessage) && researched) {
+    const confidence = understanding ? (locale === "ar" ? understanding.descriptionAr : understanding.descriptionEn) : "";
+    return locale === "ar"
+      ? `راجعت المصادر الفنية المتاحة وحدثت فهم النظام من دون تغيير معلوماتك المؤكدة.${confidence ? ` ${confidence}` : ""}${question ? ` ${question}` : ""}`
+      : `I reviewed the available technical sources and updated the system understanding without changing your confirmed facts.${confidence ? ` ${confidence}` : ""}${question ? ` ${question}` : ""}`;
+  }
+
+  const committed = [stops ? (locale === "ar" ? `${stops} طوابق أو وقفات` : `${stops} floors or stops`) : null]
+    .filter((item): item is string => Boolean(item));
+  const update = locale === "ar"
+    ? `تمام، حدثت الطلب${committed.length ? ` وثبتُّ ${join(committed, locale)}` : " بالمعلومات الجديدة"}.`
+    : `Got it — I updated the request${committed.length ? ` and recorded ${join(committed, locale)}` : " with the new information"}.`;
+  return `${update}${question ? ` ${question}` : ""}`;
+}
+
+/**
+ * Presentation-only response projected after the reducer commits. Keeping this
+ * deterministic removes a second model interpretation of the same turn.
+ */
+export async function generateGroundedResponse(input: { draft: WorkingCommercialDraft; userMessage: string }) {
+  return {
+    ar: groundedText(input.draft, input.userMessage, "ar"),
+    en: groundedText(input.draft, input.userMessage, "en"),
+  };
 }

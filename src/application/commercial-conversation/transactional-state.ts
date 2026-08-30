@@ -66,7 +66,9 @@ export function proposalDecision(input: { requestId: string; turn: number; propo
   const patches = Object.entries(values).flatMap(([field, value]): TurnPatch[] => {
     if (value == null) return [];
     const provenanceField = field === "paymentSchedule" ? "paymentTerms" : field;
-    const provenance = proposal.fieldProvenance?.[provenanceField as keyof typeof proposal.fieldProvenance] ?? (field === "currencyCode" || field === "scopeType" ? "RULE_CALCULATED" : undefined);
+    const provenance = proposal.fieldProvenance?.[provenanceField as keyof typeof proposal.fieldProvenance]
+      ?? (field === "currencyCode" ? proposal.completion?.currency : field === "scopeType" ? proposal.completion?.scope : undefined)
+      ?? (field === "currencyCode" || field === "scopeType" ? "RULE_CALCULATED" : undefined);
     return [{ field, operation: input.correctionFields.has(field) ? "REPLACE" : "SET", value, provenance: source(provenance, input.correctionFields.has(field)), evidence: "Committed from validated canonical proposal projection." }];
   });
   return { requestId: input.requestId, turn: input.turn, turnId: `${input.requestId}:${input.turn}`, patches, researchRequests: [], unresolvedFacts: [], nextQuestion: null, readinessProposal: input.readiness };

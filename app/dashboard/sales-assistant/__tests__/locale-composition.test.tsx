@@ -91,7 +91,7 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     expectLocale(render(<SalesAssistantPage />).container);
   });
 
-  it("keeps controls, text and result adjacent with an 8px shared gap and responsive touch controls", () => {
+  it("keeps the passive result above an elevated sticky composer with responsive supporting controls", () => {
     sessionStorage.setItem("voka_commercial_conversation_draft", JSON.stringify(draft()));
     const { container } = render(<SalesAssistantPage />);
     const composer = screen.getByTestId("commercial-composer");
@@ -100,17 +100,19 @@ describe.each([true, false])("compact assistant locale (Arabic=%s)", (isArabic) 
     const actions = screen.getByTestId("compact-conversation-actions");
     const result = screen.getByTestId("commercial-conversation");
     expect(composer.classList.contains("gap-2")).toBe(true);
-    expect(composer.classList.contains("p-3")).toBe(true);
     expect(controls.nextElementSibling).toBe(input);
     expect(input.nextElementSibling).toBe(actions);
-    expect(actions.nextElementSibling).toBe(result);
+    expect(actions.nextElementSibling).toBe(result.parentElement);
+    expect(result.parentElement?.className).toContain("order-3");
     expect(controls.parentElement).toBe(composer);
     expect(controls.classList.contains("flex-wrap")).toBe(true);
-    expect(controls.className).not.toMatch(/\bp-\d|\bmt-\d|\bmb-\d|\bborder\b/);
-    expect(screen.getByRole("textbox").className).toContain("block w-full min-w-0");
+    expect(input.className).toMatch(/sticky.*bottom-3/);
+    expect(input.className).toContain("focus-within:border-sky-400/45");
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).rows).toBe(1);
+    expect(screen.getByRole("textbox").className).toContain("resize-none");
     for (const select of screen.getAllByRole("combobox")) {
-      expect(select.className).toContain("min-h-11 w-full min-w-0");
-      expect(select.parentElement?.className).toContain("basis-[calc(50%-0.25rem)]");
+      expect(select.className).toContain("min-h-10");
+      expect(select.parentElement?.className).toContain("flex-1");
     }
     expect(container.firstElementChild?.getAttribute("dir")).toBe(isArabic ? "rtl" : "ltr");
     if (isArabic) expect(container.firstElementChild?.className).toContain("font-[var(--font-cairo)]");

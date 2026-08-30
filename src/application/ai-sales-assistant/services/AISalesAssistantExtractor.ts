@@ -14,6 +14,7 @@ import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
 import { SmartSystemBuilderService } from "../../smart-system/services/SmartSystemBuilderService";
 import { cleanCustomerEntity, extractArabicRelationalEntities, extractEnglishRelationalEntities, fallbackCompanyEntity } from "./customer-entity";
 import { commercializeSystemComponent } from "./commercialize-system-component";
+import type { SalesAssistantProviderCallKind } from "./AISalesAssistantService";
 
 const FALLBACK_WARNING =
   "Structured AI extraction was unavailable or invalid; conservative heuristic extraction was used.";
@@ -34,16 +35,18 @@ export class AISalesAssistantExtractor {
     answers: CommercialAnswers = {},
     systemAnswers: SystemFieldAnswers = {},
     preinterpretedIntent?: unknown,
+    onProviderCall?: (kind: SalesAssistantProviderCallKind) => void,
   ): Promise<ExtractedIntentResult> {
     const trimmed = prompt.trim();
     let understood: ExtractedSalesIntent | null = validateExtractedSalesIntent(preinterpretedIntent);
     if (!understood && this.provider) {
-      try { understood = validateExtractedSalesIntent(await this.provider.extractIntent(trimmed, sourceLocale)); } catch { /* deterministic fallback */ }
+      try { onProviderCall?.("INTENT_FALLBACK"); understood = validateExtractedSalesIntent(await this.provider.extractIntent(trimmed, sourceLocale)); } catch { /* deterministic fallback */ }
     }
     let customerMention = cleanCustomerEntity(understood?.customerMention);
     const fallbackCustomer = this.extractCustomerMention(trimmed, sourceLocale);
     if (!customerMention && this.provider?.extractCustomerMention && (understood?.customerMention || fallbackCustomer)) {
       try {
+        onProviderCall?.("CUSTOMER_REPAIR");
         const repaired = await this.provider.extractCustomerMention(trimmed, sourceLocale);
         if (repaired && typeof repaired === "object") customerMention = cleanCustomerEntity((repaired as { customerMention?: unknown }).customerMention);
       } catch { /* Keep commercial intelligence usable if focused extraction fails. */ }

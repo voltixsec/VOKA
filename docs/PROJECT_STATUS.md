@@ -2,6 +2,7 @@
 
 Current Product Frontier: **V1 Product Completion & Globalization**
 
+Feature checkpoint (2026-08-30): [Conversational Experience V2](product/changes/2026-08-30-conversational-experience-v2.md) implements the premium conversation surface, governed system understanding, exact call-count instrumentation and bounded research behavior. Automated boundaries pass; real provider timing and manual browser acceptance are environment-blocked and remain open.
 Feature checkpoint (2026-08-28): [Slice 2.2 payment percentages and validity](product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-22--payment-percentages-and-validity), preserving Slice 3 commercial BOM and existing field ownership/review UX.
 Unmerged; manual CEO acceptance remains required. No release/deployment claim.
 

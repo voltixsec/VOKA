@@ -54,6 +54,16 @@ export type StructuredLiveResult = {
   /** Detailed committed facts remain available behind one optional disclosure. */
   facts: LiveResultItem[];
   evidence: Array<{ title: string; url: string; publisher: string }>;
+  /** Human-facing projection of governed system knowledge. No internal keys. */
+  systemUnderstanding: {
+    recognized: boolean;
+    confidence: "TRUSTED" | "PROVISIONAL" | "SAFETY_CRITICAL";
+    headingAr: string;
+    headingEn: string;
+    descriptionAr: string;
+    descriptionEn: string;
+    components: Array<{ labelAr: string; labelEn: string }>;
+  } | null;
   readiness: CommercialReadiness;
 };
 

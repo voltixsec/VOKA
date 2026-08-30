@@ -67,7 +67,7 @@ function applyAnswers(model: ProvisionalSystemModel, answers: SystemFieldAnswers
 export class AgenticSystemReasoner {
   constructor(private readonly research?: CommercialSystemResearchPort | null) {}
 
-  async resolve(input: { companyId: string; prompt: string; currentTurn?: string; locale: "ar" | "en"; knownSystem?: SystemCalculationResult | null; retained?: AgenticCommercialState | null; answers?: SystemFieldAnswers; researchRequired?: boolean; onResearchLatency?: (milliseconds: number) => void }): Promise<AgenticCommercialState | null> {
+  async resolve(input: { companyId: string; prompt: string; currentTurn?: string; locale: "ar" | "en"; knownSystem?: SystemCalculationResult | null; retained?: AgenticCommercialState | null; answers?: SystemFieldAnswers; researchRequired?: boolean; onResearchLatency?: (milliseconds: number) => void; onProviderCall?: (kind: "RESEARCH") => void }): Promise<AgenticCommercialState | null> {
     if (input.knownSystem) return {
       route: "VERIFIED_PROFILE", systemName: input.locale === "ar" ? input.knownSystem.systemNameAr : input.knownSystem.systemNameEn,
       profileId: input.knownSystem.systemType, profileVersion: input.knownSystem.templateVersion, provisionalSystem: null,
@@ -86,7 +86,7 @@ export class AgenticSystemReasoner {
     if (shouldResearch && research) {
       const researchStarted = performance.now();
       try {
-        model = await research.researchSystem({ companyId: input.companyId, query, locale: input.locale, jurisdiction: jurisdiction(researchPrompt) });
+        model = await research.researchSystem({ companyId: input.companyId, query, locale: input.locale, jurisdiction: jurisdiction(researchPrompt), onProviderCall: () => input.onProviderCall?.("RESEARCH") });
       } catch {
         model = null;
       } finally {

@@ -19,7 +19,10 @@ export type SalesAssistantProposalRuntime = {
   preinterpretedIntent?: unknown;
   researchRequired?: boolean;
   onResearchLatency?: (milliseconds: number) => void;
+  onProviderCall?: (kind: SalesAssistantProviderCallKind) => void;
 };
+
+export type SalesAssistantProviderCallKind = "SEMANTIC" | "INTENT_FALLBACK" | "CUSTOMER_REPAIR" | "RESEARCH" | "PRICE_ESTIMATE";
 
 export class AISalesAssistantService {
   private readonly extractor: AISalesAssistantExtractor;
@@ -37,8 +40,10 @@ export class AISalesAssistantService {
 
   private readonly agenticReasoner: AgenticSystemReasoner;
 
-  async reasonConversation(input: Parameters<NonNullable<AISalesAssistantPort["reasonConversation"]>>[0]): Promise<unknown> {
-    return this.provider?.reasonConversation?.(input);
+  async reasonConversation(input: Parameters<NonNullable<AISalesAssistantPort["reasonConversation"]>>[0], runtime: Pick<SalesAssistantProposalRuntime, "onProviderCall"> = {}): Promise<unknown> {
+    if (!this.provider?.reasonConversation) return undefined;
+    runtime.onProviderCall?.("SEMANTIC");
+    return this.provider.reasonConversation(input);
   }
 
   async generateConversationResponse(input: Parameters<NonNullable<AISalesAssistantPort["generateConversationResponse"]>>[0]): Promise<unknown> {
@@ -63,7 +68,7 @@ export class AISalesAssistantService {
       (/[\u0600-\u06FF]/.test(prompt) ? "ar" : "en");
 
     const { intent, extractionMode, warnings } =
-      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers, request.systemAnswers, runtime.preinterpretedIntent);
+      await this.extractor.extractIntent(prompt, sourceLocale, request.buildMode, request.answers, request.systemAnswers, runtime.preinterpretedIntent, runtime.onProviderCall);
     // A provider may propose commercial text, but cannot invent customer notes or
     // terms. Structured extraction must point back to actual user content.
     intent.commercialSourceText = prompt;
@@ -78,6 +83,7 @@ export class AISalesAssistantService {
       currentTurn: request.currentTurn,
       researchRequired: runtime.researchRequired,
       onResearchLatency: runtime.onResearchLatency,
+      onProviderCall: runtime.onProviderCall,
     });
     // Unknown system prose is not a quantity source. In particular, model names
     // such as FM-200 must never become 200 sale units.
@@ -120,6 +126,6 @@ export class AISalesAssistantService {
     );
     const [agenticState, proposal] = await Promise.all([agenticStatePromise, proposalPromise]);
     if (agenticState && agenticState.route !== "VERIFIED_PROFILE") proposal.lines = [];
-    return completeEstimatedPricing({ ...proposal, agenticState }, this.provider);
+    return completeEstimatedPricing({ ...proposal, agenticState }, this.provider, runtime.onProviderCall);
   }
 }

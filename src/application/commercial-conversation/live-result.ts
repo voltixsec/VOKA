@@ -1,4 +1,5 @@
 import type { LiveResultItem, LiveResultStatus, StructuredLiveResult, WorkingCommercialDraft } from "./types";
+import { projectSystemUnderstanding } from "./system-understanding";
 
 function sourceStatus(source: string): LiveResultStatus {
   if (source.startsWith("USER_")) return "CONFIRMED";
@@ -11,12 +12,14 @@ const labels: Record<string, [string, string]> = {
   "system.identity": ["النظام", "System"], "system.jurisdiction": ["الدولة", "Country / jurisdiction"],
   "system.elevatorQuantity": ["عدد المصاعد", "Elevators"], "system.numberOfStops": ["الطوابق", "Floors / stops"],
   "system.capacity": ["الحمولة", "Capacity"], "system.vehicleClass": ["نوع المركبات", "Vehicle class"],
+  "system.cameraCount": ["عدد الكاميرات", "Cameras"], "system.resolutionMp": ["الدقة", "Resolution"],
+  "system.storageDays": ["مدة التسجيل", "Recording retention"], "system.projectContext": ["سياق المشروع", "Project context"],
   customerMention: ["العميل", "Customer"], projectName: ["المشروع", "Project"], attentionName: ["إلى عناية", "Attention"], paymentTerms: ["الدفع", "Payment"],
   delivery: ["التسليم", "Delivery"], warranty: ["الضمان", "Warranty"], expiryDate: ["الصلاحية", "Validity"],
   validity: ["صلاحية العرض", "Validity"], currencyCode: ["العملة", "Currency"], scopeType: ["النطاق", "Scope"],
 };
 
-const summaryOrder = ["system.identity", "system.jurisdiction", "scopeType", "system.elevatorQuantity", "system.numberOfStops", "system.capacity", "system.vehicleClass", "customerMention", "projectName", "attentionName", "validity", "expiryDate"];
+const summaryOrder = ["system.identity", "system.jurisdiction", "scopeType", "system.cameraCount", "system.resolutionMp", "system.storageDays", "system.elevatorQuantity", "system.numberOfStops", "system.capacity", "system.vehicleClass", "customerMention", "projectName", "attentionName", "validity", "expiryDate"];
 const pendingCommercial: Record<string, [string, string]> = {
   paymentTerms: ["الدفع", "Payment"], delivery: ["التسليم", "Delivery"], warranty: ["الضمان", "Warranty"], expiryDate: ["صلاحية العرض", "Validity"],
 };
@@ -35,7 +38,18 @@ function displayValues(key: string, value: unknown) {
     if (scope) return { value: raw, valueAr: scope[0], valueEn: scope[1] };
   }
   if (key === "system.vehicleClass" && raw === "SUV") return { value: raw, valueAr: "سيارات SUV", valueEn: "SUV" };
+  if (key === "system.cameraCount") return { value: raw, valueAr: `${raw} كاميرا`, valueEn: `${raw} cameras` };
+  if (key === "system.resolutionMp") return { value: raw, valueAr: `${raw}MP`, valueEn: `${raw}MP` };
+  if (key === "system.storageDays") return { value: raw, valueAr: `${raw} يوم`, valueEn: `${raw} days` };
   return { value: raw, valueAr: raw, valueEn: raw };
+}
+
+function localizedDisplayValues(draft: WorkingCommercialDraft, key: string, value: unknown) {
+  const smartSystem = draft.canonicalProposal?.smartSystem;
+  if (key === "system.identity" && smartSystem) {
+    return { value: String(value), valueAr: smartSystem.systemNameAr, valueEn: smartSystem.systemNameEn };
+  }
+  return displayValues(key, value);
 }
 
 export function projectStructuredResult(draft: WorkingCommercialDraft): StructuredLiveResult {
@@ -44,7 +58,7 @@ export function projectStructuredResult(draft: WorkingCommercialDraft): Structur
   for (const [key, fact] of Object.entries(ledgerFacts)) {
     const label = labels[key];
     if (!label || typeof fact.value === "object") continue;
-    const values = displayValues(key, fact.value === "DEFERRED" ? "DEFERRED" : fact.value);
+    const values = localizedDisplayValues(draft, key, fact.value === "DEFERRED" ? "DEFERRED" : fact.value);
     facts.push({ key, labelAr: label[0], labelEn: label[1], ...values, status: fact.value === "DEFERRED" ? "DEFERRED" : sourceStatus(fact.source) });
   }
   // Compatibility for drafts created before the transactional ledger was
@@ -63,7 +77,9 @@ export function projectStructuredResult(draft: WorkingCommercialDraft): Structur
     for (const [key, raw] of Object.entries(legacyValues)) {
       const label = labels[key];
       if (raw == null || !label) continue;
-      facts.push({ key, labelAr: label[0], labelEn: label[1], ...displayValues(key, raw), status: "CONFIRMED" });
+      // Legacy payloads have no source ledger, so their values may be shown in
+      // the summary but must never masquerade as confirmed inline facts.
+      facts.push({ key, labelAr: label[0], labelEn: label[1], ...localizedDisplayValues(draft, key, raw), status: "PROVISIONAL" });
     }
   }
   for (const [index, line] of (draft.canonicalProposal?.lines ?? []).entries()) {
@@ -86,6 +102,6 @@ export function projectStructuredResult(draft: WorkingCommercialDraft): Structur
   return {
     summary, stillNeeded,
     commercial: { lineCount: lines.length, priceRequiredCount: lines.filter((line) => line.unitPrice == null).length, draftReady: draft.status === "READY_FOR_REVIEW" },
-    facts, evidence, readiness: draft.readinessStage ?? "CONVERSATION_UNDERSTOOD",
+    facts, evidence, systemUnderstanding: projectSystemUnderstanding(draft), readiness: draft.readinessStage ?? "CONVERSATION_UNDERSTOOD",
   };
 }

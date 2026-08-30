@@ -1,14 +1,16 @@
 import type { SalesAssistantDraftProposal } from "../dto/AISalesAssistantDto";
 import type { AISalesAssistantPort } from "../ports/AISalesAssistantPort";
 import { QuotationCalculator } from "../../../domain/quotation";
+import type { SalesAssistantProviderCallKind } from "./AISalesAssistantService";
 
 /** Estimates never overwrite internal prices, never use FX, and never claim web verification. */
-export async function completeEstimatedPricing(proposal: SalesAssistantDraftProposal, provider?: AISalesAssistantPort | null) {
+export async function completeEstimatedPricing(proposal: SalesAssistantDraftProposal, provider?: AISalesAssistantPort | null, onProviderCall?: (kind: SalesAssistantProviderCallKind) => void) {
   const unresolved = proposal.lines.map((line, index) => ({ line, key: String(index) })).filter(({ line }) => line.unitPrice === null && line.resolutionStatus !== "AMBIGUOUS" && !line.commercializationPending);
   if (!unresolved.length || !provider?.estimatePrices) return proposal;
   const region = proposal.customer.countryCode ?? proposal.metadata.region ?? null;
   if (!region) return proposal;
   try {
+    onProviderCall?.("PRICE_ESTIMATE");
     const output = await provider.estimatePrices({ currency: proposal.proposal.currencyCode, region, lines: unresolved.map(({ line, key }) => ({ key, name: line.itemName, unit: line.unitName })) });
     if (!output || typeof output !== "object" || !Array.isArray((output as { prices?: unknown }).prices)) return proposal;
     const prices = (output as { prices: unknown[] }).prices;

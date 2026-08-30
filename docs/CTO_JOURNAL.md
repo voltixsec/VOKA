@@ -3,6 +3,13 @@
 
 Architecture decisions are recorded here.
 
+## 2026-08-30 — Conversational Experience V2
+
+- The Sales Assistant now projects assistant prose, governed system understanding, committed fact chips and the secondary summary from the same post-reducer canonical draft. Activity indicators remain local presentation state.
+- Normal semantic turns use one provider call; uncached research adds one bounded research call. The duplicate natural-response provider call was removed in favor of a deterministic post-commit bilingual projection. Research uses one tool call, four sources, 1,000 output tokens, a 16-second default timeout and existing normalized cache/retained-model reuse.
+- Vehicle Elevator guidance remains provisional unless governed knowledge supports it, CCTV keeps the deterministic fast path, and FM-200 never receives invented agent/cylinder/nozzle sizing. See [implementation and validation evidence](product/changes/2026-08-30-conversational-experience-v2.md).
+- No schema, dependency, generated-client, database, merge or deployment changes. Manual CEO visual/workflow acceptance and real configured-provider timing remain open.
+
 ## 2026-08-28 — Slice 2.2 payment/validity normalization
 
 - Explicit user percentages remain numeric and retain their supplied schedule. Invalid/incomplete splits request clarification; approved defaults and exact Terms replacement remain unchanged.

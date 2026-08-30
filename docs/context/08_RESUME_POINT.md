@@ -1,10 +1,12 @@
 # Resume Point
 
-## Active feature execution — 2026-08-28
+## Active feature execution — 2026-08-30
 
 The current owner-authorized branch is `feature/pre-staging-product-coherence`.
-See [Slice 2.2 payment percentages and validity](../product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-22--payment-percentages-and-validity)
-for its verified baseline, implementation boundaries and acceptance checks. This
+See [Conversational Experience V2](../product/changes/2026-08-30-conversational-experience-v2.md)
+for the latest implementation boundary, validation evidence and remaining manual acceptance, while
+[Slice 2.2 payment percentages and validity](../product/changes/2026-08-28-professional-quotation-field-ownership.md#slice-22--payment-percentages-and-validity)
+retains its own field-ownership acceptance checks. This
 unmerged feature checkpoint supersedes the historical execution guidance below
 for this task only; it does not change main or establish release readiness.
 

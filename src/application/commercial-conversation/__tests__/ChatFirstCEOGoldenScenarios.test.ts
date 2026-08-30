@@ -28,8 +28,8 @@ function systemModel(kind: "elevator" | "fm200"): ProvisionalSystemModel {
   };
 }
 
-function fixture(options: { generatedResponse?: string } = {}) {
-  const research = { researchSystem: vi.fn().mockImplementation(async ({ query }: { query: string }) => systemModel(/fm[-\s]?200|suppression/i.test(query) ? "fm200" : "elevator")) };
+function fixture(options: { generatedResponse?: string; onTiming?: (timing: any) => void } = {}) {
+  const research = { researchSystem: vi.fn().mockImplementation(async ({ query, onProviderCall }: { query: string; onProviderCall?: () => void }) => { onProviderCall?.(); return systemModel(/fm[-\s]?200|suppression/i.test(query) ? "fm200" : "elevator"); }) };
   const provider = {
     extractIntent: vi.fn().mockImplementation(async (prompt: string) => ({
       documentType: "QUOTATION",
@@ -45,7 +45,7 @@ function fixture(options: { generatedResponse?: string } = {}) {
     units: { findById: vi.fn(), findBySymbol: vi.fn() }, quotationReferences: { resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()) },
     pricing: { resolvePriceListId: vi.fn().mockResolvedValue(null), resolveUnitPrice: vi.fn() }, terms: { find: vi.fn().mockResolvedValue(null) },
   } as any, provider, research);
-  const conversation = new CompleteCommercialConversation(service);
+  const conversation = new CompleteCommercialConversation(service, { onTiming: options.onTiming });
   const run = (reply: string, draft?: WorkingCommercialDraft, source: ConversationReplySource = "TEXT", extra: Record<string, unknown> = {}) => conversation.execute({
     companyId: "tenant-a", reply, draft, replySource: source, locale: "ar", documentMode: "QUOTATION", ...extra,
   });
@@ -132,8 +132,8 @@ describe("Chat-First CEO Golden Scenarios", () => {
     expect(voice.conversationMessages?.at(-2)).toMatchObject({ role: "USER", source: "VOICE" }); expect(voice.transactionalState?.ledger.facts["system.numberOfStops"].value).toBe(6);
   });
   it("21. rejects fabricated response-generator prices", async () => {
-    const { run } = fixture({ generatedResponse: "السعر المؤكد 999 KWD" }); const draft = await run("عايز مصعد سيارات في الكويت");
-    expect(draft.assistantResponse?.ar).not.toContain("999");
+    const { run, provider } = fixture({ generatedResponse: "السعر المؤكد 999 KWD" }); const draft = await run("عايز مصعد سيارات في الكويت");
+    expect(draft.assistantResponse?.ar).not.toContain("999"); expect(provider.generateConversationResponse).not.toHaveBeenCalled();
   });
   it("22. prevents researched facts from overwriting a user correction", () => {
     const first: TurnDecision = { requestId: "r", turn: 1, turnId: "r:1", patches: [{ field: "system.numberOfStops", operation: "SET", value: 8, provenance: "USER_CORRECTION" }], researchRequests: [], unresolvedFacts: [], nextQuestion: null, readinessProposal: "NEEDS_INFORMATION" };
@@ -184,7 +184,8 @@ describe("Chat-First CEO Golden Scenarios", () => {
       units: { findById: vi.fn(), findBySymbol: vi.fn() }, quotationReferences: { resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()) },
       pricing: { resolvePriceListId: vi.fn().mockResolvedValue(null), resolveUnitPrice: vi.fn() }, terms: { find: vi.fn().mockResolvedValue(null) },
     } as any, provider, research);
-    const conversation = new CompleteCommercialConversation(service);
+    const timings: any[] = [];
+    const conversation = new CompleteCommercialConversation(service, { onTiming: (timing) => timings.push(timing) });
     const messages = [
       "عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت.", "ستة طوابق بالضبط.", "الشركة الوطنية",
       "العميل الشركة الوطنية للاتصالات", "هيلتون السالمية", "مهندس أحمد الخولي", "أسبوع من تاريخ الاعتماد",
@@ -207,7 +208,53 @@ describe("Chat-First CEO Golden Scenarios", () => {
     expect(draft!.structuredResult!.summary.map((fact) => fact.labelAr).join(" ")).not.toMatch(/projectConfiguration|attentionName|systemProfileId|engineeringRequirement|[a-z]+[A-Z]/);
     expect(provider.extractIntent).not.toHaveBeenCalled();
     expect(research.researchSystem).not.toHaveBeenCalled();
+    expect(timings).toHaveLength(messages.length);
+    expect(timings.every((timing) => timing.aiProviderCallCount === 1 && timing.providerCallBreakdown.SEMANTIC === 1 && timing.naturalResponseMs < 20)).toBe(true);
     await conversation.execute({ companyId: "tenant-a", reply: "اعمل search على النظام", draft, replySource: "TEXT", locale: "ar", documentMode: "QUOTATION" });
     expect(research.researchSystem).toHaveBeenCalledTimes(1);
+  });
+
+  it("27. explicitly communicates Vehicle Elevator understanding with provisional component language", async () => {
+    const { run } = fixture();
+    const draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت.");
+    expect(draft.assistantResponse?.ar).toMatch(/فهمت النظام.*مصعد سيارات.*توريد وتركيب.*الكويت/);
+    expect(draft.structuredResult?.systemUnderstanding).toMatchObject({ confidence: "PROVISIONAL", recognized: true });
+    expect(draft.structuredResult?.systemUnderstanding?.components.map((item) => item.labelAr)).toEqual(expect.arrayContaining(["مجموعة الرفع والحركة", "منظومة التحكم", "منظومة الأمان"]));
+    expect(JSON.stringify(draft.structuredResult?.systemUnderstanding)).not.toMatch(/componentKey|systemProfile|requirementKey/);
+  });
+
+  it("28. uses governed CCTV knowledge without research and keeps 20 cameras and 4MP coherent", async () => {
+    const { run, research } = fixture();
+    const draft = await run("عايز عرض سعر نظام كاميرات كامل 20 كاميرا 4MP في الكويت.");
+    const summary = Object.fromEntries(draft.structuredResult!.summary.map((item) => [item.key, item.value]));
+    const systemIdentity = draft.structuredResult!.summary.find((item) => item.key === "system.identity");
+    expect(draft.structuredResult?.systemUnderstanding?.confidence).toBe("TRUSTED");
+    expect(systemIdentity?.valueAr).toMatch(/كامير/);
+    expect(draft.assistantResponse?.ar).toMatch(/كامير/);
+    expect(summary).toMatchObject({ "system.jurisdiction": "Kuwait", "system.cameraCount": "20", "system.resolutionMp": "4" });
+    expect(draft.canonicalProposal?.lines.find((line) => line.componentKey === "CCTV_CAMERAS")?.quantity).toBe(20);
+    expect(research.researchSystem).not.toHaveBeenCalled();
+  });
+
+  it("29. explains FM-200 limits without inventing agent, cylinder, or nozzle sizing", async () => {
+    const { run } = fixture();
+    const draft = await run("عايز نظام FM-200 كامل في الكويت.");
+    expect(draft.structuredResult?.systemUnderstanding?.confidence).toBe("SAFETY_CRITICAL");
+    expect(draft.assistantResponse?.ar).toMatch(/التصميم والكميات النهائية.*أبعاد الحيز.*قبل الاعتماد/);
+    expect(draft.canonicalProposal?.lines).toEqual([]);
+    expect(draft.assistantResponse?.ar).not.toMatch(/\d+\s*(?:كجم|كيلو|أسطوان|فوه)/);
+  });
+
+  it("30. records exact provider call counts after eliminating duplicate natural-response generation", async () => {
+    const normalTiming: any[] = [];
+    const normal = fixture({ onTiming: (timing) => normalTiming.push(timing) });
+    await normal.run("عايز عرض سعر نظام كاميرات كامل 20 كاميرا 4MP في الكويت.");
+    expect(normalTiming.at(-1)).toMatchObject({ aiProviderCallCount: 1, providerCallBreakdown: { INTENT_FALLBACK: 1, RESEARCH: 0 }, researchInvoked: false });
+
+    const researchTiming: any[] = [];
+    const researched = fixture({ onTiming: (timing) => researchTiming.push(timing) });
+    await researched.run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت.");
+    expect(researchTiming.at(-1)).toMatchObject({ aiProviderCallCount: 2, providerCallBreakdown: { INTENT_FALLBACK: 1, RESEARCH: 1 }, researchInvoked: true });
+    expect(researchTiming.at(-1).naturalResponseMs).toBeLessThan(20);
   });
 });
