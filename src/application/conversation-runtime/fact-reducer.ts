@@ -3,6 +3,9 @@ import type { BrainFactProposal, CandidateFact, ConfirmedFact, FactProvenance } 
 const ALLOWED_FACTS = new Set([
   "system.identity", "system.jurisdiction", "system.quantity", "system.numberOfStops", "system.vehicleClass", "system.capacity",
   "scope.type", "customer.name", "project.name", "attention.name", "commercial.payment", "commercial.delivery", "commercial.warranty", "commercial.validity",
+  "system.areaM2", "system.tileSize", "system.qualityTier", "system.cameraCount", "system.resolutionMp", "system.environment", "system.cameraType", "system.storageDays", "system.layersCount",
+  "document.target",
+  "product.origin", "product.brand", "product.model",
 ]);
 const PRECEDENCE: Record<FactProvenance, number> = { DEFAULT: 0, AI_INFERRED: 1, RESEARCHED: 2, DETERMINISTIC_DERIVATION: 3, TRUSTED_PROFILE: 4, VERIFIED_DATABASE: 5, VERIFIED_DOCUMENT: 6, USER_EXPLICIT: 7, USER_CORRECTION: 8 };
 const NON_VALUES = /(?:مش\s*عارف|ما\s*عرفش|اختارلي|إيه\s*(?:رأيك|الأنسب|المتاح)|ساعدني|i\s+don'?t\s+know|what\s+do\s+you\s+recommend|recommend|help\s+me)/iu;

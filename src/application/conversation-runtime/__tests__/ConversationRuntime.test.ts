@@ -35,13 +35,14 @@ describe("clean ConversationRuntime", () => {
     expect(state.messages.at(-1)?.text).toContain("ارفعها");
   });
 
-  it("creates handoff only from reducer-confirmed facts after explicit transition confirmation", async () => {
+  it("records transition intent without creating a handoff or navigating from natural confirmation", async () => {
     const first = await execute({ decide: async () => ({ ...baseDecision("الحل المبدئي أصبح واضحًا. تحب نغيّر شيئًا أم نبدأ تجهيز العرض؟"), solutionReadiness: "AWAITING_USER_CONFIRMATION", transition: "PROPOSE", factProposals: [{ key: "system.identity", value: "Vehicle Elevator", provenance: "USER_EXPLICIT", evidence: "مصعد سيارات" }] }) }, "مصعد سيارات");
     expect(first.transitionState).toBe("PROPOSED");
     expect(first.handoff).toBeNull();
     const second = await execute({ decide: async () => ({ ...baseDecision("تمام، هنقل الحل المؤكد لتجهيز العرض."), solutionReadiness: "READY_FOR_HANDOFF", transition: "CONFIRM" }) }, "تمام نبدأ", first);
-    expect(second.transitionState).toBe("COMMERCIAL_HANDOFF");
-    expect(second.handoff?.confirmedFacts["system.identity"].value).toBe("Vehicle Elevator");
+    expect(second.transitionState).toBe("TRANSITION_REQUESTED");
+    expect(second.handoff).toBeNull();
+    expect(second.handoffToken).toBeNull();
   });
 
   it("rejects AI and research proposals from confirmed truth until user confirmation", async () => {

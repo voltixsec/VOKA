@@ -9,7 +9,8 @@ export type CommercialBlockingField = {
 
 export type HandoffCustomerResolution =
   | { status: "RESOLVED"; id: string; name: string }
-  | { status: "AMBIGUOUS"; candidates: Array<{ id: string; name: string }> };
+  | { status: "AMBIGUOUS"; candidates: Array<{ id: string; name: string }> }
+  | { status: "PENDING" };
 
 export type QuotationDraftDefaults = {
   currencyCode: string;
@@ -74,7 +75,7 @@ function localizedNotes(handoff: CommercialSolutionHandoff, locale: "ar" | "en")
 export function adaptCommercialHandoffToQuotationDraft(input: {
   companyId: string;
   handoff: CommercialSolutionHandoff;
-  customer: Extract<HandoffCustomerResolution, { status: "RESOLVED" }>;
+  customer: Extract<HandoffCustomerResolution, { status: "RESOLVED" }> | null;
   defaults: QuotationDraftDefaults;
   locale: "ar" | "en";
 }): CreateQuotationDto | null {
@@ -84,13 +85,16 @@ export function adaptCommercialHandoffToQuotationDraft(input: {
   const scopeType = isQuotationScopeType(scopeValue) ? scopeValue : null;
   const projectName = textFact(input.handoff, "project.name");
   const attentionName = textFact(input.handoff, "attention.name");
-  const lines = input.handoff.commercialLines.flatMap((line, index) => line.catalogItemId.trim() && ["VERIFIED_PROFILE", "VERIFIED_DATABASE"].includes(line.authority) && Number.isFinite(line.quantity) && line.quantity > 0 && Number.isFinite(line.unitPrice) && line.unitPrice >= 0 ? [{ catalogItemId: line.catalogItemId.trim(), taxRateId: null, position: index + 1, type: line.type, itemName: line.itemName, itemNameAr: line.itemNameAr, itemNameEn: line.itemNameEn, description: line.description, unitName: line.unitName, quantity: line.quantity, unitPrice: line.unitPrice, taxPercentage: 0 }] : []);
+  const lines = input.handoff.commercialLines.map((line, index) => {
+    const catalogVerified = ["VERIFIED_PROFILE", "VERIFIED_DATABASE"].includes(line.authority);
+    return { catalogItemId: catalogVerified ? line.catalogItemId?.trim() || null : null, taxRateId: null, position: index + 1, type: line.type, itemName: line.itemName, itemNameAr: line.itemNameAr, itemNameEn: line.itemNameEn, description: line.description, unitName: line.unitName, quantity: line.quantity, unitPrice: catalogVerified ? line.unitPrice : null, quantityStatus: line.quantity === null ? "PENDING" as const : "CONFIRMED" as const, pricingStatus: catalogVerified && line.unitPrice !== null ? "CONFIRMED" as const : "PENDING" as const, productSelectionStatus: catalogVerified && line.catalogItemId ? "SELECTED" as const : "PENDING" as const, brandName: catalogVerified ? line.brand ?? null : null, modelNumber: catalogVerified ? line.model ?? null : null, provenance: line.authority, engineeringComponentKeys: line.componentKeys ?? [], taxPercentage: 0 };
+  });
   return {
     companyId: input.companyId,
-    customerId: input.customer.id,
+    customerId: input.customer?.id ?? null,
     quotationNumber: commercialHandoffQuotationNumber(input.handoff),
     currencyCode: input.defaults.currencyCode,
-    customer: { name: input.customer.name },
+    customer: input.customer ? { name: input.customer.name } : null,
     lines,
     scopeType,
     projectName,
@@ -107,15 +111,13 @@ export class CreateQuotationFromCommercialHandoff {
     const system = textFact(input.handoff, "system.identity");
     if (!system) return { status: "INVALID_HANDOFF", code: "CONFIRMED_SYSTEM_REQUIRED", message: "A confirmed system is required." };
     const customerName = textFact(input.handoff, "customer.name");
-    if (!customerName) return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] };
     const quotationNumber = commercialHandoffQuotationNumber(input.handoff);
     const existing = await this.port.findByNumber(input.companyId, quotationNumber);
     if (existing) return { status: "EXISTING", quotationId: existing.id, navigationTarget: `/dashboard/quotations/${existing.id}/edit`, localizationPending: existing.localizationPending };
-    const customer = await this.port.resolveCustomer(input.companyId, customerName, input.locale);
-    if (customer.status === "AMBIGUOUS") return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.selection", candidates: customer.candidates }] };
+    const customer = customerName ? await this.port.resolveCustomer(input.companyId, customerName, input.locale) : { status: "PENDING" as const };
     const scopeValue = textFact(input.handoff, "scope.type");
     const defaults = await this.port.loadDefaults(input.companyId, isQuotationScopeType(scopeValue) ? scopeValue : null);
-    const dto = adaptCommercialHandoffToQuotationDraft({ ...input, customer, defaults });
+    const dto = adaptCommercialHandoffToQuotationDraft({ ...input, customer: customer.status === "RESOLVED" ? customer : null, defaults });
     if (!dto) return { status: "INVALID_HANDOFF", code: "CONFIRMED_SYSTEM_REQUIRED", message: "A confirmed system is required." };
     try {
       const created = await this.port.createDraft(dto);

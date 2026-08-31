@@ -44,7 +44,7 @@ export class UpdateQuotationUseCase {
     const invalidReference =
       await this.referenceValidator.findInvalidReference({
         companyId: processedDto.companyId,
-        customerId: quotation.customerId,
+        customerId: processedDto.customerId === undefined ? quotation.customerIdOrNull : processedDto.customerId,
         priceListId: quotation.priceListId,
         catalogItemIds: processedDto.lines
           .map((line) => line?.catalogItemId)
@@ -122,6 +122,11 @@ export class UpdateQuotationUseCase {
     });
 
     try {
+      if (processedDto.customerId && processedDto.customerId !== quotation.customerIdOrNull) {
+        const customer = await this.referenceValidator.getCustomerSnapshot(processedDto.companyId, processedDto.customerId);
+        if (!customer) return { success: false, error: { code: "CUSTOMER_NOT_FOUND", message: "Customer was not found for the active company." } };
+        quotation.assignCustomer(processedDto.customerId, customer);
+      }
       if (processedDto.expiryDate !== undefined) {
         quotation.updateExpiryDate(
           processedDto.expiryDate,
@@ -157,7 +162,7 @@ export class UpdateQuotationUseCase {
 
       const analysis = analyzeQuotationLocalization(
         {
-          customer: quotation.customer.toJSON(),
+          customer: quotation.customerOrNull?.toJSON() ?? null,
           projectName: quotation.projectName,
           projectNameAr: quotation.projectNameAr,
           projectNameEn: quotation.projectNameEn,

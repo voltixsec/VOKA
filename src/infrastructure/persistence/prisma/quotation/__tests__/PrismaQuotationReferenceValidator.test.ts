@@ -37,12 +37,12 @@ const input = {
 };
 
 describe("PrismaQuotationReferenceValidator", () => {
-  it('does not treat a proposed name as a persistent canonical reference', async () => {
+  it('allows a pending Draft customer without treating a proposed name as a canonical reference', async () => {
     const db = createDb();
     db.customer.findFirst.mockResolvedValue(null);
-    const result = await new PrismaQuotationReferenceValidator(db as never).findInvalidReference({ ...input, customerId: '', proposedCustomerName: 'شركة الأفق' } as typeof input);
-    expect(result?.code).toBe('CUSTOMER_NOT_FOUND');
-    expect(db.customer.findFirst).toHaveBeenCalledWith({ where: { id: '', companyId: 'company-1', isDeleted: false }, select: { id: true } });
+    const result = await new PrismaQuotationReferenceValidator(db as never).findInvalidReference({ ...input, customerId: null, proposedCustomerName: 'شركة الأفق' } as never);
+    expect(result).toBeNull();
+    expect(db.customer.findFirst).not.toHaveBeenCalled();
   });
   it("accepts only company references and global system tax rates", async () => {
     const db = createDb();

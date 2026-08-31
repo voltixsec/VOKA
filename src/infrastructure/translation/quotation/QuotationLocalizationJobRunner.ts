@@ -26,7 +26,7 @@ const LEASE_DURATION_MS = 12 * 60 * 1000;
 
 function buildLocalizationSnapshot(quotation: Quotation): UnknownRecord {
   return {
-    customer: quotation.customer.toJSON(),
+    customer: quotation.customerOrNull?.toJSON() ?? null,
     projectName: quotation.projectName,
     projectNameAr: quotation.projectNameAr,
     projectNameEn: quotation.projectNameEn,

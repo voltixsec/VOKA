@@ -110,6 +110,7 @@ export class DeliverQuotationUseCase {
     }
 
     if (input.updateCustomerContact) {
+      if (!quotation.customerId) return { success: false, error: { code: "DELIVERY_CUSTOMER_NOT_FOUND", message: "A linked customer is required before delivery." } };
       let canonicalWhatsApp: string | undefined;
       if (input.channel === "WHATSAPP") {
         const canonical = normalizeCanonicalWhatsApp(`+${recipient}`);

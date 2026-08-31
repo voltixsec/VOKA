@@ -119,11 +119,8 @@ export const GET = withCompanyAuth(
     if (isBrokenCompletedDraft) {
       serialized.localizationStatus = LocalizationStatus.PENDING;
     }
-    const liveContact = await customerContacts.find(
-      company.companyId,
-      quotationData.customerId,
-    );
-    const snapshot = quotationData.customer.toJSON();
+    const liveContact = quotationData.customerIdOrNull ? await customerContacts.find(company.companyId, quotationData.customerIdOrNull) : null;
+    const snapshot = quotationData.customerOrNull?.toJSON() ?? { email: null, phone: null };
 
     return apiSuccess(
       {

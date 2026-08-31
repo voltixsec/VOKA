@@ -19,6 +19,8 @@ export class QuotationApplicationService {
     dto: CreateQuotationDto,
   ): Promise<ApplicationResult<Quotation>> {
 
+    if (!dto.customer) return { success: false, error: { code: "CUSTOMER_REQUIRED", message: "Customer is required for this quotation flow." } };
+
     const customer =
       await this.customerResolver.resolve({
         companyId: dto.companyId,

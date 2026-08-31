@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { CreateCustomer } from "@/features/customers/application/commands/CreateCustomer";
 import { PrismaCustomerRepository } from "@/features/customers/infrastructure/prisma/PrismaCustomerRepository";
 import { CreateQuotationUseCase } from "@/src/application/quotation";
 import type { CommercialHandoffQuotationPort, HandoffCustomerResolution } from "@/src/application/conversation-runtime";
@@ -36,10 +35,7 @@ export class PrismaCommercialHandoffQuotationPort implements CommercialHandoffQu
       const candidates = (exact.length ? exact : matches).slice(0, 5).map((customer) => ({ id: customer.id.toString(), name: customer.name }));
       return { status: "AMBIGUOUS", candidates };
     }
-    const result = await new CreateCustomer(this.customerRepository).execute({ companyId, ...(locale === "ar" ? { nameAr: confirmedName } : { nameEn: confirmedName }) });
-    if (!result.isSuccess) throw new Error(result.getError().code);
-    const customer = result.getValue();
-    return { status: "RESOLVED", id: customer.id.toString(), name: customer.name };
+    return { status: "PENDING" };
   }
 
   async loadDefaults(companyId: string, scopeType: QuotationScopeType | null) {

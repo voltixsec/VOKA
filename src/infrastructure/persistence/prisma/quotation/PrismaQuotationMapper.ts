@@ -20,7 +20,7 @@ export class PrismaQuotationMapper {
   static toPersistence(
     quotation: Quotation,
   ): Prisma.QuotationCreateInput {
-    const customer = quotation.customer.toJSON();
+    const customer = quotation.customerOrNull?.toJSON() ?? null;
     const id = quotation.id || crypto.randomUUID();
 
     return {
@@ -30,11 +30,7 @@ export class PrismaQuotationMapper {
           id: quotation.companyId,
         },
       },
-      customer: {
-        connect: {
-          id: quotation.customerId,
-        },
-      },
+      ...(quotation.customerIdOrNull ? { customer: { connect: { id: quotation.customerIdOrNull } } } : {}),
       ...(quotation.priceListId
         ? {
             priceList: {
@@ -56,13 +52,13 @@ export class PrismaQuotationMapper {
       issueDate: quotation.issueDate,
       expiryDate: quotation.expiryDate,
       currencyCode: quotation.currencyCode,
-      customerName: customer.name,
-      customerNameAr: customer.nameAr,
-      customerNameEn: customer.nameEn,
-      customerEmail: customer.email,
-      customerPhone: customer.phone,
-      customerTaxNo: customer.taxNumber,
-      billingAddress: customer.billingAddress,
+      customerName: customer?.name ?? null,
+      customerNameAr: customer?.nameAr ?? null,
+      customerNameEn: customer?.nameEn ?? null,
+      customerEmail: customer?.email ?? null,
+      customerPhone: customer?.phone ?? null,
+      customerTaxNo: customer?.taxNumber ?? null,
+      billingAddress: customer?.billingAddress ?? null,
       subjectAr: quotation.subjectAr,
       subjectEn: quotation.subjectEn,
       briefAr: quotation.briefAr,
@@ -147,6 +143,13 @@ export class PrismaQuotationMapper {
           unitNameEn: line.unitNameEn ?? null,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
+          quantityStatus: line.quantityStatus ?? (line.quantity === null ? "PENDING" : "CONFIRMED"),
+          pricingStatus: line.pricingStatus ?? (line.unitPrice === null ? "PENDING" : "CONFIRMED"),
+          productSelectionStatus: line.productSelectionStatus ?? (line.catalogItemId ? "SELECTED" : "GENERIC"),
+          brandName: line.brandName ?? null,
+          modelNumber: line.modelNumber ?? null,
+          provenance: line.provenance ?? null,
+          engineeringComponentKeys: line.engineeringComponentKeys ?? [],
           discountType: line.discount?.type ?? null,
           discountValue: line.discount?.value ?? 0,
           discountAmount: line.discountAmount,
@@ -187,8 +190,15 @@ export class PrismaQuotationMapper {
       unitName: line.unitName,
       unitNameAr: line.unitNameAr,
       unitNameEn: line.unitNameEn,
-      quantity: Number(line.quantity),
-      unitPrice: Number(line.unitPrice),
+      quantity: line.quantity === null ? null : Number(line.quantity),
+      unitPrice: line.unitPrice === null ? null : Number(line.unitPrice),
+      quantityStatus: line.quantityStatus as "PENDING" | "CONFIRMED",
+      pricingStatus: line.pricingStatus as "PENDING" | "CONFIRMED",
+      productSelectionStatus: line.productSelectionStatus as "PENDING" | "GENERIC" | "SELECTED",
+      brandName: line.brandName,
+      modelNumber: line.modelNumber,
+      provenance: line.provenance,
+      engineeringComponentKeys: Array.isArray(line.engineeringComponentKeys) ? line.engineeringComponentKeys.filter((key): key is string => typeof key === "string") : [],
       discount: line.discountType
         ? {
             type: line.discountType,
@@ -213,7 +223,7 @@ export class PrismaQuotationMapper {
       issueDate: record.issueDate,
       expiryDate: record.expiryDate,
       currencyCode: record.currencyCode,
-      customer: {
+      customer: record.customerId && record.customerName ? {
         name: record.customerName,
         nameAr: record.customerNameAr,
         nameEn: record.customerNameEn,
@@ -221,7 +231,7 @@ export class PrismaQuotationMapper {
         phone: record.customerPhone,
         taxNumber: record.customerTaxNo,
         billingAddress: record.billingAddress,
-      },
+      } : null,
       subjectAr: record.subjectAr,
       subjectEn: record.subjectEn,
       briefAr: record.briefAr,

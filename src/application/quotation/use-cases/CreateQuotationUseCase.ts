@@ -92,13 +92,11 @@ export class CreateQuotationUseCase {
       };
     });
 
-    const customer =
-      await this.referenceValidator.getCustomerSnapshot(
-        dto.companyId,
-        dto.customerId,
-      );
+    const customer = dto.customerId
+      ? await this.referenceValidator.getCustomerSnapshot(dto.companyId, dto.customerId)
+      : null;
 
-    if (!customer) {
+    if (dto.customerId && !customer) {
       return {
         success: false,
         error: {
@@ -108,14 +106,14 @@ export class CreateQuotationUseCase {
       };
     }
     try {
-      const customerInfo = {
+      const customerInfo = customer ? {
         ...customer,
-        ...(dto.customer || {}),
+        ...(dto.customer ?? {}),
         // Preserve persisted customer name, ignore name from DTO to maintain data integrity
         name: customer.name,
         nameAr: dto.customer?.nameAr ?? customer.nameAr,
         nameEn: dto.customer?.nameEn ?? customer.nameEn,
-      };
+      } : null;
 
       const quotation = new Quotation({
         companyId: dto.companyId,
@@ -148,7 +146,7 @@ export class CreateQuotationUseCase {
       });
 
       const quotationSnapshot = {
-        customer: quotation.customer.toJSON(),
+        customer: quotation.customerOrNull?.toJSON() ?? null,
         projectName: quotation.projectName,
         projectNameAr: quotation.projectNameAr,
         projectNameEn: quotation.projectNameEn,

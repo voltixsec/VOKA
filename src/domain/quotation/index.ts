@@ -12,5 +12,6 @@ export * from "./value-objects/Money";
 export * from "./value-objects/QuotationNumber";
 
 export * from "./services/QuotationCalculator";
+export * from "./services/QuotationFinalizationValidator";
 
 export * from "./entities/Quotation";

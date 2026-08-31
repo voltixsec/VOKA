@@ -90,6 +90,10 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
           return { kind: "QUOTATION_NOT_FOUND" as const };
         }
 
+        if (!quotation.customerId || !quotation.customerName || quotation.lines.some((line) => line.quantity === null || line.unitPrice === null)) {
+          return { kind: "INVALID_SOURCE_SNAPSHOT" as const, message: "The approved quotation contains incomplete commercial data." };
+        }
+
         const orderDate = new Date();
         const draft = buildApprovedQuotationSalesOrderDraft(
           toApprovedQuotationSnapshot(quotation),
@@ -185,8 +189,8 @@ export class PrismaSalesOrderRepository implements ISalesOrderRepository {
                 unitName: line.unitName,
                 unitNameAr: line.unitNameAr,
                 unitNameEn: line.unitNameEn,
-                quantity: line.quantity,
-                unitPrice: line.unitPrice,
+                quantity: line.quantity!,
+                unitPrice: line.unitPrice!,
                 discountType: line.discountType,
                 discountValue: line.discountValue,
                 discountAmount: line.discountAmount,
@@ -509,12 +513,12 @@ function toApprovedQuotationSnapshot(
   return {
     id: quotation.id,
     companyId: quotation.companyId,
-    customerId: quotation.customerId,
+    customerId: quotation.customerId!,
     priceListId: quotation.priceListId,
     number: quotation.number,
     status: quotation.status,
     currencyCode: quotation.currencyCode,
-    customerName: quotation.customerName,
+    customerName: quotation.customerName!,
     customerNameAr: quotation.customerNameAr,
     customerNameEn: quotation.customerNameEn,
     customerEmail: quotation.customerEmail,
@@ -566,8 +570,8 @@ function toApprovedQuotationSnapshot(
       unitName: line.unitName,
       unitNameAr: line.unitNameAr,
       unitNameEn: line.unitNameEn,
-      quantity: Number(line.quantity),
-      unitPrice: Number(line.unitPrice),
+      quantity: Number(line.quantity!),
+      unitPrice: Number(line.unitPrice!),
       discountType: line.discountType,
       discountValue: Number(line.discountValue),
       discountAmount: Number(line.discountAmount),

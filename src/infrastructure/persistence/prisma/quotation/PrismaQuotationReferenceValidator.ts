@@ -15,7 +15,7 @@ implements IQuotationReferenceValidator {
   async findInvalidReference(
     input: QuotationReferenceValidationInput,
   ): Promise<InvalidQuotationReference | null> {
-    const customer = await this.db.customer.findFirst({
+    const customer = input.customerId ? await this.db.customer.findFirst({
       where: {
         id: input.customerId,
         companyId: input.companyId,
@@ -24,9 +24,9 @@ implements IQuotationReferenceValidator {
       select: {
         id: true,
       },
-    });
+    }) : null;
 
-    if (!customer) {
+    if (input.customerId && !customer) {
       return {
         code: "CUSTOMER_NOT_FOUND",
         message: "Customer was not found for the active company.",

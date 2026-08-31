@@ -53,38 +53,33 @@ describe("Sales Assistant clean runtime UI", () => {
     expect(await screen.findByRole("button", { name: "Prepare quotation" })).toBeTruthy();
   });
 
-  it("confirms the transition, creates one draft, and opens the existing quotation editor", async () => {
+  it("uses the explicit CTA to prepare a signed handoff, create one draft, and open the editor", async () => {
     sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(proposedState()));
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: handoffState() }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { handoffToken: "signed-handoff" } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { status: "CREATED", quotationId: "quotation-1", navigationTarget: "/dashboard/quotations/quotation-1/edit" } }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Prepare quotation" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/dashboard/quotations/quotation-1/edit"));
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/ai/conversation-runtime");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/ai/conversation-runtime/prepare-handoff");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/ai/conversation-runtime/quotation-draft");
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ handoffToken: "signed-handoff", locale: "en" });
   });
 
-  it("keeps a loading CTA after natural confirmation until persistence succeeds", async () => {
+  it("natural prepare language remains in chat and never persists or navigates", async () => {
     sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(proposedState()));
-    let release!: (value: unknown) => void;
-    const persistence = new Promise((resolve) => { release = resolve; });
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: handoffState() }) })
-      .mockReturnValueOnce(persistence);
+    const requested = { ...proposedState(), transitionState: "TRANSITION_REQUESTED" as const, messages: [...proposedState().messages, { id: "u2", role: "USER" as const, text: "Yes, prepare it", source: "TEXT" as const, createdAt: "2026-01-01" }, { id: "a2", role: "ASSISTANT" as const, text: "The draft is ready whenever you choose to open it.", source: "AI" as const, createdAt: "2026-01-01" }] };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: requested }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Yes, prepare it" } });
     fireEvent.click(screen.getByRole("button", { name: "Start Request" }));
-    const loading = await screen.findByRole("button", { name: "Preparing quotation…" });
-    expect(loading).toHaveProperty("disabled", true);
-    expect(screen.getByTestId("transition-prompt-card")).toBeTruthy();
-    release({ ok: true, json: async () => ({ data: { status: "CREATED", quotationId: "quotation-natural", navigationTarget: "/dashboard/quotations/quotation-natural/edit" } }) });
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/dashboard/quotations/quotation-natural/edit"));
-    expect(screen.queryByTestId("transition-prompt-card")).toBeNull();
+    expect(await screen.findByText("The draft is ready whenever you choose to open it.")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeTruthy();
   });
 
   it("does not dead-end in COMMERCIAL_HANDOFF and retries persistence without another brain turn", async () => {
@@ -105,7 +100,7 @@ describe("Sales Assistant clean runtime UI", () => {
     render(<SalesAssistantPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Prepare quotation" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/dashboard/quotations/quotation-1/edit"));
-    expect(screen.queryByTestId("transition-prompt-card")).toBeNull();
+    expect(screen.getByTestId("draft-readiness")).toBeTruthy();
   });
 
   it("prevents repeated confirmation from creating duplicate drafts", async () => {
@@ -122,17 +117,15 @@ describe("Sales Assistant clean runtime UI", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
   });
 
-  it("keeps missing customer information in the conversation instead of navigating", async () => {
+  it("allows customer to remain pending in an editable Draft", async () => {
     sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(proposedState()));
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: handoffState() }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] } }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { handoffToken: "pending-customer" } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { status: "CREATED", quotationId: "quotation-pending-customer", navigationTarget: "/dashboard/quotations/quotation-pending-customer/edit" } }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Prepare quotation" }));
-    expect(await screen.findByText("A confirmed customer name is required before creating the quotation draft.")).toBeTruthy();
-    expect(mocks.push).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeTruthy();
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/dashboard/quotations/quotation-pending-customer/edit"));
   });
 
   it("keeps a usable retry path after failed quotation persistence", async () => {

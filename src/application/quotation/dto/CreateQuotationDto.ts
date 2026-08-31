@@ -8,14 +8,14 @@ import type {
 export interface CreateQuotationDto
   extends QuotationProposalProps {
   companyId: string;
-  customerId: string;
+  customerId: string | null;
   priceListId?: string | null;
 
   quotationNumber: string;
 
   currencyCode?: string;
 
-  customer: CustomerSnapshotProps;
+  customer: CustomerSnapshotProps | null;
 
   lines: QuotationLineInput[];
 

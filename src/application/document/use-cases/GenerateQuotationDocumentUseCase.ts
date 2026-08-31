@@ -59,7 +59,7 @@ export type GenerateQuotationDocumentResult =
 
       error: {
         code:
-          "QUOTATION_NOT_FOUND";
+          "QUOTATION_NOT_FOUND" | "QUOTATION_NOT_FINALIZABLE";
 
         message: string;
       };
@@ -100,8 +100,10 @@ export class GenerateQuotationDocumentUseCase {
       };
     }
 
-    const customer =
-      quotation.customer.toJSON();
+    if (!quotation.customer || !quotation.customerId || quotation.lines.some((line) => line.quantity === null || line.unitPrice === null)) {
+      return { success: false, error: { code: "QUOTATION_NOT_FINALIZABLE", message: "Quotation customer, quantities, and prices must be complete before document generation." } };
+    }
+    const customer = quotation.customer.toJSON();
 
     const liveBrand = createCompanyDocumentBrandSnapshot({
       nameAr: input.companyIdentity?.nameAr ?? null,
@@ -340,10 +342,10 @@ export class GenerateQuotationDocumentUseCase {
                 null,
 
               quantity:
-                line.quantity,
+                line.quantity!,
 
               unitPrice:
-                line.unitPrice,
+                line.unitPrice!,
 
               discountAmount:
                 line.discountAmount,

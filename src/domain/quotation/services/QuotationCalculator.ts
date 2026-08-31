@@ -23,7 +23,7 @@ export class QuotationCalculator {
   static calculateLine(line: QuotationLineInput): CalculatedQuotationLine {
     this.validateLine(line);
 
-    const subtotal = this.round(line.quantity * line.unitPrice);
+    const subtotal = this.round((line.quantity ?? 0) * (line.unitPrice ?? 0));
     const discountAmount = this.calculateDiscount(
       subtotal,
       line.discount ?? null,
@@ -155,13 +155,13 @@ export class QuotationCalculator {
       );
     }
 
-    if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
+    if (line.quantity !== null && (!Number.isFinite(line.quantity) || line.quantity <= 0)) {
       throw new QuotationDomainError(
         "Quotation line quantity must be greater than zero.",
       );
     }
 
-    if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) {
+    if (line.unitPrice !== null && (!Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
       throw new QuotationDomainError(
         "Quotation line unit price cannot be negative.",
       );

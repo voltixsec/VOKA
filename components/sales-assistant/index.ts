@@ -5,5 +5,6 @@ export { MessageBubble } from "./MessageBubble";
 export { MessageList } from "./MessageList";
 export { NewRequestCTA } from "./NewRequestCTA";
 export { TransitionPromptCard } from "./TransitionPromptCard";
+export { SolutionWorkspace } from "./SolutionWorkspace";
 export { AssistantIcon } from "./AssistantIcon";
 export { ActivityIndicator, AssistantContextCues, type ActivityStage } from "./AssistantContextCues";

@@ -606,7 +606,7 @@ model Quotation {
   id String @id @default(cuid())
 
   companyId   String
-  customerId  String
+  customerId  String?
   priceListId String?
 
   number             String
@@ -619,7 +619,7 @@ model Quotation {
   issueDate          DateTime        @default(now())
   expiryDate         DateTime?
   currencyCode       String          @default("KWD")
-  customerName       String
+  customerName       String?
   customerNameAr     String?
   customerNameEn     String?
   customerEmail      String?
@@ -676,7 +676,7 @@ model Quotation {
   deletedAt DateTime?
 
   company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer         Customer            @relation(fields: [customerId], references: [id])
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   priceList        PriceList?          @relation(fields: [priceListId], references: [id], onDelete: SetNull)
   lines            QuotationLine[]
   deliveries       QuotationDelivery[]
@@ -756,8 +756,15 @@ model QuotationLine {
   unitNameAr    String?
   unitNameEn    String?
 
-  quantity  Decimal @db.Decimal(18, 3)
-  unitPrice Decimal @db.Decimal(18, 3)
+  quantity                 Decimal? @db.Decimal(18, 3)
+  unitPrice                Decimal? @db.Decimal(18, 3)
+  quantityStatus           String   @default("CONFIRMED")
+  pricingStatus            String   @default("CONFIRMED")
+  productSelectionStatus   String   @default("GENERIC")
+  brandName                String?
+  modelNumber              String?
+  provenance               String?
+  engineeringComponentKeys Json?
 
   discountType   DiscountType?
   discountValue  Decimal       @default(0) @db.Decimal(18, 3)

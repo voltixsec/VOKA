@@ -2,7 +2,7 @@ import type { CustomerSnapshotProps } from "../../../domain/quotation";
 
 export type QuotationReferenceValidationInput = {
   companyId: string;
-  customerId: string;
+  customerId: string | null;
   priceListId?: string | null;
   catalogItemIds: string[];
   taxRateIds: string[];

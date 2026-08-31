@@ -1,12 +1,13 @@
-import type { ConversationBrainPort, ConversationToolPort } from "./ports";
+import type { ConversationBrainPort, ConversationToolPort, SolutionCandidateResolverPort } from "./ports";
 import { reduceFactProposals } from "./fact-reducer";
 import type { CommercialSolutionHandoff, ConversationRuntimeState, ConversationTurnInput, RuntimeMessage } from "./types";
+import { buildSystemConfigurationGraph, emptySystemConfigurationGraph } from "./solution-graph";
 
 const MAX_MESSAGES = 30;
 const MAX_TOOL_ITERATIONS = 1;
 
 export class ConversationRuntime {
-  constructor(private readonly brain: ConversationBrainPort, private readonly tools: ConversationToolPort, private readonly now = () => new Date().toISOString(), private readonly id = () => crypto.randomUUID()) {}
+  constructor(private readonly brain: ConversationBrainPort, private readonly tools: ConversationToolPort, private readonly now = () => new Date().toISOString(), private readonly id = () => crypto.randomUUID(), private readonly candidates?: SolutionCandidateResolverPort) {}
 
   async execute(input: ConversationTurnInput): Promise<ConversationRuntimeState> {
     const message = input.message.trim();
@@ -24,17 +25,23 @@ export class ConversationRuntime {
     }
     if (!decision.reply.trim()) throw new Error("CONVERSATION_RUNTIME_EMPTY_REPLY");
     const reduced = reduceFactProposals(base.confirmedFacts, decision.factProposals, message, this.now());
-    const canHandoff = base.transitionState === "PROPOSED" && decision.solutionReadiness === "READY_FOR_HANDOFF" && Boolean(reduced.confirmed["system.identity"]);
+    const canHandoff = decision.solutionReadiness === "READY_FOR_HANDOFF" && Boolean(reduced.confirmed["system.identity"]);
     const transitionState = decision.transition === "CONFIRM" && canHandoff
-      ? "COMMERCIAL_HANDOFF"
+      ? "TRANSITION_REQUESTED"
       : decision.transition === "PROPOSE" ? "PROPOSED" : decision.transition === "REOPEN" ? "EXPLORING" : base.transitionState;
-    const handoff: CommercialSolutionHandoff | null = transitionState === "COMMERCIAL_HANDOFF" ? { runtimeId: base.runtimeId, confirmedFacts: reduced.confirmed, commercialLines: [], toolEvidence: observations, createdAt: this.now() } : null;
+    let solutionGraph = buildSystemConfigurationGraph(reduced.confirmed);
+    if (this.candidates && solutionGraph.catalogResolution === "PENDING") {
+      const resolved = await this.candidates.resolve({ graph: solutionGraph, companyId: input.companyId, locale: input.locale, allowResearchFallback: Boolean(reduced.confirmed["system.qualityTier"]) });
+      solutionGraph = resolved.graph;
+      if (resolved.researchObservation) observations.push(resolved.researchObservation);
+    }
+    const handoff: CommercialSolutionHandoff | null = null;
     const assistantMessage: RuntimeMessage = { id: this.id(), role: "ASSISTANT", text: decision.reply.trim(), source: "AI", createdAt: this.now() };
-    return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: [...base.candidateFacts, ...reduced.candidates].slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: observations.slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: decision.suggestedReplies.slice(0, 4), handoff, handoffToken: null };
+    return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: [...base.candidateFacts, ...reduced.candidates].slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: observations.slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: decision.suggestedReplies.slice(0, 4), handoff, handoffToken: null, solutionGraph };
   }
 
   private normalizeState(state: ConversationRuntimeState | null, locale: "ar" | "en"): ConversationRuntimeState {
-    if (state?.version === 1 && typeof state.runtimeId === "string" && Array.isArray(state.messages) && state.confirmedFacts && typeof state.confirmedFacts === "object" && Array.isArray(state.candidateFacts) && Array.isArray(state.unresolvedImportantQuestions) && Array.isArray(state.toolResults) && Array.isArray(state.suggestedReplies) && typeof state.compactMemory === "string") return state;
-    return { runtimeId: this.id(), version: 1, locale, messages: [], confirmedFacts: {}, candidateFacts: [], unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "EXPLORING", transitionState: "EXPLORING", compactMemory: "", suggestedReplies: [], handoff: null, handoffToken: null };
+    if (state?.version === 1 && typeof state.runtimeId === "string" && Array.isArray(state.messages) && state.confirmedFacts && typeof state.confirmedFacts === "object" && Array.isArray(state.candidateFacts) && Array.isArray(state.unresolvedImportantQuestions) && Array.isArray(state.toolResults) && Array.isArray(state.suggestedReplies) && typeof state.compactMemory === "string") return { ...state, solutionGraph: state.solutionGraph ?? buildSystemConfigurationGraph(state.confirmedFacts) };
+    return { runtimeId: this.id(), version: 1, locale, messages: [], confirmedFacts: {}, candidateFacts: [], unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "EXPLORING", transitionState: "EXPLORING", compactMemory: "", suggestedReplies: [], handoff: null, handoffToken: null, solutionGraph: emptySystemConfigurationGraph() };
   }
 }

@@ -39,14 +39,13 @@ export function serializeQuotation(
   quotation: Quotation,
   locale?: QuotationSerializationLocale,
 ) {
-  const customer =
-    quotation.customer.toJSON();
+  const customer = quotation.customerOrNull?.toJSON() ?? null;
   const isCompleted = quotation.localizationStatus === "COMPLETED";
 
   return {
     id: quotation.id,
     companyId: quotation.companyId,
-    customerId: quotation.customerId,
+    customerId: quotation.customerIdOrNull,
     priceListId: quotation.priceListId,
 
     quotationNumber:
@@ -69,18 +68,10 @@ export function serializeQuotation(
     currencyCode:
       quotation.currencyCode,
 
-    customer: {
+    customer: customer ? {
       ...customer,
-
-      name:
-        pickLocalized(
-          locale,
-          customer.nameAr,
-          customer.nameEn,
-          customer.name,
-          isCompleted,
-        ) ?? customer.name,
-    },
+      name: pickLocalized(locale, customer.nameAr, customer.nameEn, customer.name, isCompleted) ?? customer.name,
+    } : null,
 
     subject:
       pickLocalized(
@@ -215,6 +206,14 @@ export function serializeQuotation(
 
           unitPrice:
             line.unitPrice,
+
+          quantityStatus: line.quantityStatus,
+          pricingStatus: line.pricingStatus,
+          productSelectionStatus: line.productSelectionStatus,
+          brandName: line.brandName ?? null,
+          modelNumber: line.modelNumber ?? null,
+          provenance: line.provenance ?? null,
+          engineeringComponentKeys: line.engineeringComponentKeys ?? [],
 
           discount:
             line.discount,

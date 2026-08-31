@@ -10,6 +10,8 @@ export interface UpdateQuotationDto
 
   quotationId: string;
 
+  customerId?: string | null;
+
   lines: QuotationLineInput[];
 
   discount?: Discount | null;

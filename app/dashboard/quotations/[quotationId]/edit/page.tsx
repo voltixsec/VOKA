@@ -82,8 +82,13 @@ type Line = {
   unitName?: string | null;
   unitNameAr?: string | null;
   unitNameEn?: string | null;
-  quantity: number;
-  unitPrice: number;
+  quantity: number | null;
+  unitPrice: number | null;
+  quantityStatus?: "PENDING" | "CONFIRMED";
+  pricingStatus?: "PENDING" | "CONFIRMED";
+  productSelectionStatus?: "PENDING" | "GENERIC" | "SELECTED";
+  brandName?: string | null;
+  modelNumber?: string | null;
   taxPercentage?: number;
   discount?: Discount | null;
   taxUnavailable?: boolean;
@@ -108,6 +113,7 @@ type Quote = {
   quotationNumber: string;
   status: string;
   currencyCode: string;
+  customerId?: string | null;
   issueDate: string;
   expiryDate?: string | null;
   lines: Line[];
@@ -135,6 +141,8 @@ type Quote = {
   briefEn?: string | null;
   scopeType?: ScopeType | null;
 };
+
+type CustomerOption = { id: string; name: string; nameAr?: string | null; nameEn?: string | null };
 
 const scopeOptions: Array<{
   value: ScopeType;
@@ -213,6 +221,9 @@ export default function EditQuotationPage() {
 
   const [items, setItems] =
     useState<Item[]>([]);
+
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [customerId, setCustomerId] = useState("");
 
   const [units, setUnits] =
     useState<Unit[]>([]);
@@ -334,6 +345,7 @@ export default function EditQuotationPage() {
         }
 
         setQuote(loaded);
+        setCustomerId(loaded.customerId ?? "");
         setLines(
           loaded.lines.map((line) => ({
             ...line,
@@ -407,10 +419,11 @@ export default function EditQuotationPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [catalogResponse, taxRateResponse, unitResponse] = await Promise.all([
+        const [catalogResponse, taxRateResponse, unitResponse, customerResponse] = await Promise.all([
           fetch("/api/catalog/items?pageSize=100&isActive=true"),
           fetch("/api/tax-rates"),
           fetch("/api/units"),
+          fetch("/api/customers?pageSize=100"),
         ]);
 
         if (!catalogResponse.ok) {
@@ -430,6 +443,10 @@ export default function EditQuotationPage() {
         } else {
           const json = await unitResponse.json();
           setUnits(Array.isArray(json.data) ? json.data : []);
+        }
+        if (customerResponse.ok) {
+          const json = await customerResponse.json();
+          setCustomers(Array.isArray(json.data?.customers) ? json.data.customers : []);
         }
       } catch {
         setCatalogError(true);
@@ -494,8 +511,11 @@ export default function EditQuotationPage() {
         itemName: "",
         description: "",
         unitName: "",
-        quantity: 1,
-        unitPrice: 0,
+        quantity: null,
+        unitPrice: null,
+        quantityStatus: "PENDING",
+        pricingStatus: "PENDING",
+        productSelectionStatus: "PENDING",
         taxRateId: null,
         taxPercentage: 0,
       },
@@ -510,7 +530,7 @@ export default function EditQuotationPage() {
       | "quantity"
       | "unitPrice"
       | "description",
-    value: string | number,
+    value: string | number | null,
   ) {
     setDirty(true);
 
@@ -539,6 +559,8 @@ export default function EditQuotationPage() {
           return {
             ...line,
             [key]: value,
+            ...(key === "quantity" ? { quantityStatus: value === null ? "PENDING" as const : "CONFIRMED" as const } : {}),
+            ...(key === "unitPrice" ? { pricingStatus: value === null ? "PENDING" as const : "CONFIRMED" as const } : {}),
             ...(localizedKey
               ? {
                   [localizedKey]:
@@ -607,6 +629,7 @@ export default function EditQuotationPage() {
               "application/json",
           },
           body: JSON.stringify({
+            customerId: customerId || null,
             localizationSourceLocale:
               isArabic ? "ar" : "en",
 
@@ -807,6 +830,13 @@ export default function EditQuotationPage() {
           </h3>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm text-slate-400">{t("العميل", "Customer")}</span>
+              <select value={customerId} onChange={(event) => { setCustomerId(event.target.value); setDirty(true); }} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4">
+                <option value="">{t("العميل لم يُحدد بعد", "Customer pending")}</option>
+                {customers.map((customer) => <option key={customer.id} value={customer.id}>{(isArabic ? customer.nameAr : customer.nameEn) || customer.name}</option>)}
+              </select>
+            </label>
             <label className="space-y-2">
               <span className="text-sm text-slate-400">
                 {t(
@@ -1097,6 +1127,8 @@ export default function EditQuotationPage() {
                                 : localizedName;
                             })(),
                             unitPrice: item.salePrice,
+                            pricingStatus: "CONFIRMED",
+                            productSelectionStatus: "SELECTED",
                             taxRateId: catalogTaxRate?.id ?? null,
                             taxPercentage:
                               catalogTaxRate?.percentage ?? 0,
@@ -1180,15 +1212,12 @@ export default function EditQuotationPage() {
                   type="number"
                   min="0.001"
                   step="0.001"
-                  value={line.quantity}
+                  value={line.quantity ?? ""}
                   onChange={(event) =>
                     changeLine(
                       index,
                       "quantity",
-                      Number(
-                        event.target
-                          .value,
-                      ),
+                      event.target.value === "" ? null : Number(event.target.value),
                     )
                   }
                 />
@@ -1199,15 +1228,12 @@ export default function EditQuotationPage() {
                   type="number"
                   min="0"
                   step="0.001"
-                  value={line.unitPrice}
+                  value={line.unitPrice ?? ""}
                   onChange={(event) =>
                     changeLine(
                       index,
                       "unitPrice",
-                      Number(
-                        event.target
-                          .value,
-                      ),
+                      event.target.value === "" ? null : Number(event.target.value),
                     )
                   }
                 />
@@ -1495,6 +1521,8 @@ export default function EditQuotationPage() {
                 description: savedItem.description ?? candidate.description ?? "",
                 unitName: localizedUnitName,
                 unitPrice: savedItem.salePrice,
+                pricingStatus: "CONFIRMED",
+                productSelectionStatus: "SELECTED",
                 taxRateId: catalogTaxRate?.id ?? null,
                 taxPercentage: catalogTaxRate?.percentage ?? 0,
                 taxUnavailable: Boolean(

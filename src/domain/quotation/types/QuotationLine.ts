@@ -17,8 +17,15 @@ export interface QuotationLineInput {
   unitName?: string | null;
   unitNameAr?: string | null;
   unitNameEn?: string | null;
-  quantity: number;
-  unitPrice: number;
+  quantity: number | null;
+  unitPrice: number | null;
+  quantityStatus?: "PENDING" | "CONFIRMED";
+  pricingStatus?: "PENDING" | "CONFIRMED";
+  productSelectionStatus?: "PENDING" | "GENERIC" | "SELECTED";
+  brandName?: string | null;
+  modelNumber?: string | null;
+  provenance?: string | null;
+  engineeringComponentKeys?: string[];
   discount?: Discount | null;
   taxPercentage?: number;
 }

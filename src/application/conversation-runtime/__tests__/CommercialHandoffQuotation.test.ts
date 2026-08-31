@@ -41,19 +41,19 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ currencyCode: "KWD", termsAndConditionsAr: "شروط الشركة" });
   });
 
-  it("returns typed commercial follow-up when the mandatory customer is missing", async () => {
+  it("creates an editable Draft with an explicitly pending customer", async () => {
     const gateway = port();
     const value = handoff(); delete value.confirmedFacts["customer.name"];
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: value, locale: "ar" });
-    expect(result).toEqual({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] });
-    expect(gateway.createDraft).not.toHaveBeenCalled();
+    expect(result.status).toBe("CREATED");
+    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
   });
 
-  it("returns candidate selection rather than guessing an ambiguous customer", async () => {
+  it("keeps an ambiguous customer pending rather than guessing or blocking Draft creation", async () => {
     const gateway = port({ resolveCustomer: vi.fn().mockResolvedValue({ status: "AMBIGUOUS", candidates: [{ id: "c1", name: "National Co" }, { id: "c2", name: "National Telecom" }] }) });
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: handoff(), locale: "en" });
-    expect(result).toMatchObject({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.selection" }] });
-    expect(gateway.createDraft).not.toHaveBeenCalled();
+    expect(result.status).toBe("CREATED");
+    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
   });
 
   it("does not block on optional project, attention, validity, or commercial lines", async () => {
@@ -81,9 +81,10 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(commercialHandoffQuotationNumber(handoff())).not.toBe(commercialHandoffQuotationNumber(handoff({ confirmedFacts: { ...handoff().confirmedFacts, "system.numberOfStops": confirmed("system.numberOfStops", 8) } })));
   });
 
-  it("never materializes researched or AI-recommended lines as authoritative quotation lines", () => {
+  it("preserves researched requirements as pending generic Draft lines without fake catalog or price truth", () => {
     const unsafe = handoff({ commercialLines: [{ catalogItemId: "fake-sku", itemName: "Suggested cylinder", quantity: 1, unitPrice: 10, type: "PRODUCT", authority: "RESEARCHED" as never }] });
     const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: unsafe, customer: { status: "RESOLVED", id: "customer-1", name: "Customer" }, defaults: { currencyCode: "KWD", termsAr: null, termsEn: null }, locale: "en" });
-    expect(draft?.lines).toEqual([]);
+    expect(draft?.lines).toHaveLength(1);
+    expect(draft?.lines[0]).toMatchObject({ catalogItemId: null, unitPrice: null, pricingStatus: "PENDING", productSelectionStatus: "PENDING", provenance: "RESEARCHED" });
   });
 });

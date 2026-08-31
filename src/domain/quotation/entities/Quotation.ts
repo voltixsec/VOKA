@@ -20,6 +20,7 @@ import {
 } from "../value-objects/CustomerSnapshot";
 import { QuotationNumber } from "../value-objects/QuotationNumber";
 import type { CompanyDocumentBrandSnapshot } from "../../document/CompanyDocumentBrandSnapshot";
+import { QuotationFinalizationValidator } from "../services/QuotationFinalizationValidator";
 
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 
@@ -46,7 +47,7 @@ export interface QuotationProps
   extends QuotationProposalProps {
   id?: string;
   companyId: string;
-  customerId: string;
+  customerId?: string | null;
   priceListId?: string | null;
   number: string;
   familyId?: string;
@@ -58,7 +59,7 @@ export interface QuotationProps
   issueDate?: Date;
   expiryDate?: Date | null;
   currencyCode?: string;
-  customer: CustomerSnapshotProps;
+  customer: CustomerSnapshotProps | null;
   lines?: QuotationLineInput[];
   discount?: Discount | null;
   notes?: string | null;
@@ -90,7 +91,7 @@ export interface QuotationProps
 export class Quotation {
   public readonly id?: string;
   public readonly companyId: string;
-  public readonly customerId: string;
+  private _customerId: string | null;
   public readonly priceListId: string | null;
   public readonly number: QuotationNumber;
   public readonly familyId: string;
@@ -100,7 +101,7 @@ export class Quotation {
   public readonly supersededAt: Date | null;
   public readonly issueDate: Date;
   public readonly currencyCode: string;
-  public readonly customer: CustomerSnapshot;
+  private _customer: CustomerSnapshot | null;
 
   private _status: QuotationStatus;
   private _expiryDate: Date | null;
@@ -145,7 +146,6 @@ export class Quotation {
 
   constructor(props: QuotationProps) {
     this.assertRequiredIdentifier(props.companyId, "Company id");
-    this.assertRequiredIdentifier(props.customerId, "Customer id");
 
     const currencyCode = (props.currencyCode ?? "KWD")
       .trim()
@@ -176,7 +176,7 @@ export class Quotation {
 
     this.id = props.id;
     this.companyId = props.companyId.trim();
-    this.customerId = props.customerId.trim();
+    this._customerId = props.customerId?.trim() || null;
     this.priceListId = props.priceListId?.trim() || null;
     this.number = QuotationNumber.create(props.number);
     this.familyId = props.familyId?.trim() || props.id?.trim() || "";
@@ -191,7 +191,7 @@ export class Quotation {
     this.issueDate = issueDate;
     this._expiryDate = expiryDate;
     this.currencyCode = currencyCode;
-    this.customer = new CustomerSnapshot(props.customer);
+    this._customer = props.customer ? new CustomerSnapshot(props.customer) : null;
 
     this._status = props.status ?? "DRAFT";
     this._discount = props.discount ?? null;
@@ -515,6 +515,27 @@ export class Quotation {
     this._totals = calculated.totals;
   }
 
+  get customerId(): string {
+    if (!this._customerId) throw new QuotationDomainError("Quotation customer is pending.");
+    return this._customerId;
+  }
+
+  get customerIdOrNull(): string | null { return this._customerId; }
+
+  get customer(): CustomerSnapshot {
+    if (!this._customer) throw new QuotationDomainError("Quotation customer is pending.");
+    return this._customer;
+  }
+
+  get customerOrNull(): CustomerSnapshot | null { return this._customer; }
+
+  assignCustomer(customerId: string, customer: CustomerSnapshotProps): void {
+    this.assertDraft();
+    this.assertRequiredIdentifier(customerId, "Customer id");
+    this._customerId = customerId.trim();
+    this._customer = new CustomerSnapshot(customer);
+  }
+
   setDiscount(discount: Discount | null): void {
     this.assertDraft();
     this._discount = discount;
@@ -634,12 +655,7 @@ export class Quotation {
 
   send(at: Date = new Date()): void {
     this.assertTransition(["DRAFT"], "SENT");
-
-    if (this._lines.length === 0) {
-      throw new QuotationDomainError(
-        "Quotation cannot be sent without lines.",
-      );
-    }
+    QuotationFinalizationValidator.assertFinalizable(this);
 
     this._status = "SENT";
     this._sentAt = at;

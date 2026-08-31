@@ -8,7 +8,7 @@ type UnknownRecord = Record<string, unknown>;
 
 function buildSnapshot(quotation: Quotation): UnknownRecord {
   return {
-    customer: quotation.customer.toJSON(),
+    customer: quotation.customerOrNull?.toJSON() ?? null,
     projectName: quotation.projectName,
     projectNameAr: quotation.projectNameAr,
     projectNameEn: quotation.projectNameEn,
