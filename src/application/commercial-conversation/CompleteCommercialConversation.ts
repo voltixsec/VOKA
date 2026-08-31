@@ -4,7 +4,7 @@ import type { CommercialAnswerField, CommercialAnswers, CommercialSelection } fr
 import { latinDigits, parseValidityDuration } from "../ai-sales-assistant/services/commercial-field-values";
 import { applyCanonicalIntelligence, ConversationalDraftEngine } from "./ConversationalDraftEngine";
 import { completeFields } from "./field-completion";
-import type { AdvanceConversationInput, FieldAnswer } from "./types";
+import type { AdvanceConversationInput, ConversationOrchestratorDecision, FieldAnswer } from "./types";
 import { labelledFieldAnswer } from "./labelled-field-answer";
 import { systemTurnValues } from "./system-turn-values";
 import { explicitPaymentTerms, renderPaymentSchedule } from "../ai-sales-assistant/services/payment-terms";
@@ -12,7 +12,11 @@ import { commitTurnDecision, projectFactLedger, proposalDecision, type Commercia
 import { generateGroundedResponse } from "./chat-first-response";
 import { projectStructuredResult } from "./live-result";
 import type { SalesAssistantProviderCallKind } from "../ai-sales-assistant/services/AISalesAssistantService";
-import { guidanceQuestion, isGuidanceRequest, relevantGuidanceInput, resolveGuidanceSelection } from "./engineering-guidance";
+import { attemptedPrerequisiteFields, guidanceQuestion, isGuidanceRequest, isUnanswerableResponse, prerequisiteQuestion, questionForEngineeringField, relevantGuidanceInput, relevantPrerequisiteInput, resolveGuidanceSelection } from "./engineering-guidance";
+import {
+  buildCommercialSolutionHandoff, confirmsCommercialTransition, fallbackOrchestratorDecision, parseOrchestratorDecision,
+  reopensSolutionExploration, sanitizeControlIntent,
+} from "./conversation-orchestrator";
 
 const answerFields = new Set(["customerMention", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty", "notes", "cameraCount", "storageDays", "bitrateMbps", "cableMetersPerCamera"]);
 const nullableFields = new Set(["projectName", "attentionName", "expiryDate", "delivery", "warranty"]);
@@ -57,16 +61,17 @@ export class CompleteCommercialConversation {
     };
     const onProviderCall = (kind: SalesAssistantProviderCallKind) => { providerCallBreakdown[kind] += 1; };
     const previous = input.draft;
-    const guidanceTurn = isGuidanceRequest(input.reply);
+    let guidanceTurn = isGuidanceRequest(input.reply);
     const guidanceSelection = guidanceTurn
       ? { status: "NONE" as const }
       : resolveGuidanceSelection(previous, input.answer?.value ?? input.reply, input.answer?.field);
-    const guidanceControl = guidanceTurn || guidanceSelection.status !== "NONE";
+    let guidanceControl = guidanceTurn || guidanceSelection.status !== "NONE";
     let semanticMode: string | null = null;
     let semanticDeferPayment = false;
     let semanticTargetField: string | null = null;
     let semanticIntent: unknown;
     let researchRequired: boolean | undefined;
+    let orchestratorDecision: ConversationOrchestratorDecision | null = null;
     if (this.intelligence.reasonConversation) {
       const semanticStarted = performance.now();
       try {
@@ -77,23 +82,38 @@ export class CompleteCommercialConversation {
           activeQuestion: previous?.activeQuestion?.field ?? null,
           activeSystem: previous?.systemWorkingPlan?.systemIdentity ?? null,
           documentIntent: previous?.operation ?? input.operation ?? null,
+          missingEngineeringFields: previous?.completionDiagnostics?.missingEngineering ?? [],
+          missingCommercialFields: previous?.completionDiagnostics?.missingCommercial ?? [],
+          conversationPhase: previous?.conversationPhase ?? "SOLUTION_EXPLORATION",
+          attachmentAvailable: Boolean(input.attachment ?? previous?.attachment),
         }, { onProviderCall }) as { mode?: unknown; deferPayment?: unknown; targetField?: unknown; intent?: unknown; researchRequired?: unknown } | undefined;
+        orchestratorDecision = parseOrchestratorDecision(raw);
         if (typeof raw?.mode === "string" && ["CONTINUE", "PROVIDE_FACTS", "CORRECTION", "QUESTION", "RECOMMENDATION", "UNKNOWN", "DEFER"].includes(raw.mode)) semanticMode = raw.mode;
         semanticDeferPayment = raw?.deferPayment === true;
         semanticTargetField = typeof raw?.targetField === "string" ? raw.targetField : null;
         semanticIntent = raw?.intent;
-        researchRequired = typeof raw?.researchRequired === "boolean" ? raw.researchRequired : undefined;
+        researchRequired = orchestratorDecision?.toolAction === "RESEARCH" ? true : typeof raw?.researchRequired === "boolean" ? raw.researchRequired : undefined;
       } catch { /* Conservative local interpretation remains available. */ }
       semanticProviderMs = performance.now() - semanticStarted;
     }
+    const semanticGuidance = semanticMode === "RECOMMENDATION" || semanticMode === "UNKNOWN";
+    const semanticEngineeringQuestion = semanticMode === "QUESTION" && Boolean(
+      semanticTargetField && [previous?.activeQuestion?.field, previous?.activeQuestion?.guidanceFor].includes(semanticTargetField)
+    );
+    guidanceTurn ||= semanticGuidance || semanticEngineeringQuestion;
+    const orchestratorControl = orchestratorDecision && ["ANSWER_USER", "EXPLAIN", "OFFER_OPTIONS", "RECOMMEND", "ASK_FOR_CONFIRMATION", "REQUEST_ATTACHMENT", "REQUEST_DRAWING", "RESEARCH", "PROPOSE_COMMERCIAL_HANDOFF"].includes(orchestratorDecision.action);
+    guidanceControl ||= Boolean(orchestratorControl) || semanticGuidance || semanticMode === "CONTINUE" || semanticMode === "QUESTION";
+    const unanswerablePrerequisite = isUnanswerableResponse(input.reply) || semanticMode === "UNKNOWN";
+    const attemptedPrerequisites = attemptedPrerequisiteFields(previous, unanswerablePrerequisite);
     if (guidanceControl) {
       // A guidance/confirmation utterance is control input, never new commercial intelligence.
-      semanticIntent = undefined;
+      semanticIntent = sanitizeControlIntent(semanticIntent, semanticTargetField, input.reply);
       semanticTargetField = null;
       semanticDeferPayment = false;
     }
     const implicitQuotationValidity = (previous?.operation === "QUOTATION" || input.operation === "QUOTATION" || input.documentMode === "QUOTATION")
-      && previous?.missingRequired.some((field) => field.key === "expiryDate")
+      && (previous?.missingRequired.some((field) => field.key === "expiryDate")
+        || previous?.completionDiagnostics?.missingCommercial.includes("expiryDate"))
       && /(?:من\s+تاريخ\s+(?:الاعتماد|الموافقة|العرض|إصدار\s+العرض)|from\s+(?:the\s+)?(?:approval|quotation|quote|issue)\s+date)/i.test(input.reply)
       && !/(?:تسليم|توريد|ضمان|دفع|delivery|supply|warranty|payment)/i.test(input.reply);
     if (implicitQuotationValidity) {
@@ -120,7 +140,7 @@ export class CompleteCommercialConversation {
     if (!answers.customerMention && retainedCustomer && !deferredFields.has("customerMention")) answers.customerMention = retainedCustomer;
     if (!selection.customer && prior?.customer.id && prior.customer.name) selection.customer = { id: prior.customer.id, name: prior.customer.name };
 
-    const active = previous ? completeFields(previous).activeQuestion : null;
+    const active = previous ? previous.activeQuestion ?? completeFields(previous).activeQuestion : null;
     const provisionalInputs = prior?.agenticState?.provisionalSystem?.inputs ?? [];
     const isDeferIntent = Boolean(
       input.answer?.action === "DEFER" ||
@@ -207,6 +227,7 @@ export class CompleteCommercialConversation {
         deferredFields.delete(answer.field);
       }
     }
+    if (answer && answer.action !== "DEFER" && answer.action !== "SKIP") attemptedPrerequisites.delete(answer.field);
     if (input.selection?.customer) {
       answers.customerMention = input.selection.customer.name;
       deferredFields.delete("customerMention");
@@ -241,7 +262,15 @@ export class CompleteCommercialConversation {
     });
     operation ??= proposal?.documentType ?? null;
     let draft = new ConversationalDraftEngine().advance({ ...input, operation: operation as AdvanceConversationInput["operation"], documentMode, buildMode });
-    draft = { ...draft, completionVersion: 1, answers, systemAnswers, selection, notApplicable: [...notApplicable], deferredFields: [...deferredFields], intelligenceText };
+    draft = {
+      ...draft, completionVersion: 1, answers, systemAnswers, selection, notApplicable: [...notApplicable], deferredFields: [...deferredFields],
+      temporarilyUnanswerable: [...attemptedPrerequisites], intelligenceText,
+      conversationPhase: previous?.conversationPhase ?? "SOLUTION_EXPLORATION",
+      solutionReadiness: previous?.solutionReadiness ?? "NOT_READY",
+      commercialHandoff: previous?.commercialHandoff ?? null,
+      orchestratorDecision: orchestratorDecision ?? undefined,
+      pendingToolAction: orchestratorDecision?.toolAction ?? "NONE",
+    };
     if (answer) draft.turns[draft.turns.length - 1].target = answer.field;
     if (patchedSystemFields.length) draft.turns[draft.turns.length - 1].target = patchedSystemFields.join(",");
     if (input.selection) draft.turns[draft.turns.length - 1].target = input.selection.customer ? "customerMention" : "catalogChoice";
@@ -310,20 +339,113 @@ export class CompleteCommercialConversation {
       if (answers.expiryDate && proposal.proposal.expiryDate) draft.answers = { ...answers, expiryDate: proposal.proposal.expiryDate };
       if (answers.attentionName) draft.answers = { ...draft.answers, attentionName: proposal.proposal.attentionName ?? '' };
     }
-    const completed = completeFields(draft);
+    let completed = completeFields(draft);
+    const engineeringBlockers = completed.completionDiagnostics?.missingEngineering ?? [];
+    const hasEngineeringBlocker = engineeringBlockers.length > 0;
+    let effectiveDecision = orchestratorDecision ?? fallbackOrchestratorDecision(engineeringBlockers);
+    const explicitTransition = confirmsCommercialTransition(input.reply);
+    const reopen = reopensSolutionExploration(input.reply)
+      || effectiveDecision.transition === "REOPEN"
+      || ((previous?.conversationPhase === "TRANSITION_PROPOSED" || previous?.conversationPhase === "COMMERCIAL_HANDOFF")
+        && ["PROVIDE_FACTS", "CORRECTION"].includes(semanticMode ?? ""));
+    const transitionRequested = explicitTransition || effectiveDecision.transition === "CONFIRM";
+    const proposalRequested = effectiveDecision.transition === "PROPOSE"
+      || effectiveDecision.action === "PROPOSE_COMMERCIAL_HANDOFF"
+      || ["READY_TO_PROPOSE", "READY_FOR_COMMERCIAL_HANDOFF"].includes(effectiveDecision.readiness);
+    let conversationPhase = previous?.conversationPhase ?? "SOLUTION_EXPLORATION";
+    let solutionReadiness = effectiveDecision.readiness;
 
+    if (reopen) {
+      conversationPhase = "SOLUTION_EXPLORATION";
+      solutionReadiness = "NOT_READY";
+      completed.commercialHandoff = null;
+    } else if ((transitionRequested || proposalRequested) && hasEngineeringBlocker) {
+      effectiveDecision = {
+        ...effectiveDecision,
+        action: "ASK_ENGINEERING", readiness: "NOT_READY", transition: "NONE",
+        referencedField: engineeringBlockers[0] ?? null, responseFocus: "ASK_REFERENCED_FIELD", reasonCode: "ENGINEERING_BLOCKER",
+      };
+      conversationPhase = "SOLUTION_EXPLORATION";
+      solutionReadiness = "NOT_READY";
+    } else if (transitionRequested) {
+      conversationPhase = "COMMERCIAL_HANDOFF";
+      solutionReadiness = "READY_FOR_COMMERCIAL_HANDOFF";
+    } else if (proposalRequested) {
+      conversationPhase = "TRANSITION_PROPOSED";
+      solutionReadiness = "AWAITING_USER_TRANSITION";
+    }
+
+    completed = {
+      ...completed,
+      conversationPhase,
+      solutionReadiness,
+      orchestratorDecision: effectiveDecision,
+      pendingToolAction: effectiveDecision.toolAction,
+    };
+    if (conversationPhase === "COMMERCIAL_HANDOFF") {
+      completed = completeFields(completed);
+      completed.commercialHandoff = completed.commercialHandoff ?? buildCommercialSolutionHandoff(completed);
+    }
+
+    const guidanceTarget = previous?.activeQuestion?.guidanceFor
+      ?? previous?.activeQuestion?.field
+      ?? completed.activeQuestion?.field;
+    const guidedInput = guidanceTurn ? relevantGuidanceInput(completed) : null;
+    const pendingPrerequisite = guidanceTurn && !guidedInput
+      ? relevantPrerequisiteInput(completed, guidanceTarget, attemptedPrerequisites)
+      : null;
+    const resumedTarget = guidanceSelection.status === "SELECTED" && previous?.activeQuestion?.field === guidanceSelection.input.name
+      ? previous.activeQuestion.guidanceFor ?? guidanceSelection.input.prerequisiteFor
+      : null;
+    const nextPrerequisiteExclusions = new Set(attemptedPrerequisites);
+    if (guidanceSelection.status === "SELECTED") nextPrerequisiteExclusions.add(guidanceSelection.input.name);
+    const nextPrerequisite = resumedTarget
+      ? relevantPrerequisiteInput(completed, resumedTarget, nextPrerequisiteExclusions)
+      : null;
     const guidedQuestion = guidanceSelection.status === "INVALID"
-      ? guidanceQuestion(guidanceSelection.input, true)
-      : guidanceTurn
-        ? relevantGuidanceInput(completed)
-        : null;
+      ? guidanceQuestion(guidanceSelection.input, true, previous?.activeQuestion?.guidanceFor)
+      : guidedInput
+        ? guidanceQuestion(guidedInput, false, guidanceTarget)
+        : pendingPrerequisite
+          ? prerequisiteQuestion(pendingPrerequisite)
+          : nextPrerequisite
+            ? prerequisiteQuestion(nextPrerequisite)
+            : null;
     if (guidedQuestion) {
-      completed.activeQuestion = "field" in guidedQuestion ? guidedQuestion : guidanceQuestion(guidedQuestion);
+      completed.activeQuestion = guidedQuestion;
       completed.clarification = {
         ar: completed.activeQuestion.ar,
         en: completed.activeQuestion.en,
         suggestions: [],
       };
+    }
+    if (conversationPhase === "TRANSITION_PROPOSED") {
+      completed.activeQuestion = null;
+      completed.clarification = null;
+    } else if (conversationPhase === "SOLUTION_EXPLORATION") {
+      const guidanceActions = new Set(["EXPLAIN", "OFFER_OPTIONS", "RECOMMEND", "ASK_FOR_CONFIRMATION"]);
+      if (effectiveDecision.action === "ASK_ENGINEERING" && (!guidedQuestion || effectiveDecision.providerAvailable)) {
+        const proposedQuestion = completed.activeQuestion?.field === effectiveDecision.referencedField
+          ? completed.activeQuestion
+          : effectiveDecision.referencedField
+          ? questionForEngineeringField(completed, effectiveDecision.referencedField)
+          : null;
+        if (proposedQuestion) {
+          completed.activeQuestion = proposedQuestion;
+          completed.clarification = { ar: proposedQuestion.ar, en: proposedQuestion.en, suggestions: [] };
+        }
+      } else if (effectiveDecision.providerAvailable && (effectiveDecision.action === "REQUEST_ATTACHMENT" || effectiveDecision.action === "REQUEST_DRAWING")) {
+        completed.activeQuestion = {
+          field: "attachment",
+          ar: effectiveDecision.action === "REQUEST_DRAWING" ? "ارفع المخطط المتاح علشان أستخدمه في استكمال الحل." : "ارفق الملف المتاح علشان أستخدمه داخل نفس المحادثة.",
+          en: effectiveDecision.action === "REQUEST_DRAWING" ? "Attach the available drawing so I can use it to continue the solution." : "Attach the available file so I can use it in this conversation.",
+          allowNotApplicable: false, allowDefer: false,
+        };
+        completed.clarification = { ar: completed.activeQuestion.ar, en: completed.activeQuestion.en, suggestions: [] };
+      } else if (effectiveDecision.providerAvailable && (!guidanceActions.has(effectiveDecision.action) || !guidedQuestion)) {
+        completed.activeQuestion = null;
+        completed.clarification = null;
+      }
     }
     if (nonDeferrableAttempt && completed.activeQuestion) {
       completed.activeQuestion = {
@@ -341,7 +463,10 @@ export class CompleteCommercialConversation {
     }
     const deterministicToolsMs = Math.max(0, performance.now() - deterministicStarted - researchMs);
     const responseStarted = performance.now();
-    const assistantResponse = await generateGroundedResponse({ draft: completed, userMessage: input.reply, guidanceSelection });
+    const assistantResponse = await generateGroundedResponse({
+      draft: completed, userMessage: input.reply, guidanceSelection, guidanceRequested: guidanceTurn,
+      orchestratorDecision: effectiveDecision,
+    });
     const naturalResponseMs = performance.now() - responseStarted;
     const priorMessages = previous?.conversationMessages ?? previous?.turns.map((turn) => ({ role: turn.role ?? "USER" as const, source: turn.source, text: turn.text })) ?? [];
     const withResponse = {

@@ -23,7 +23,8 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe("SalesAssistantPage", () => {
+// Superseded legacy WorkingCommercialDraft UI contract; clean-runtime coverage lives in clean-runtime-page.test.tsx.
+describe.skip("SalesAssistantPage", () => {
   it("renders natural language input and prepares a draft for human review", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: { id: "draft-1", operation: "QUOTATION", locale: "en", fields: { customerMention: "Kuwait National Telecom", currencyCode: null, paymentTerms: null, scopeType: null, sourceReference: null, lines: [{ itemName: "4K IP Camera", quantity: 5 }] }, attachment: null, turns: [{ source: "TEXT", text: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras" }], contextText: "Create a quotation for Kuwait National Telecom 5 4K IP Cameras", missingRequired: [], recommended: [], status: "READY_FOR_REVIEW", clarification: null, requiresHumanReview: true, executed: false } }) });
 

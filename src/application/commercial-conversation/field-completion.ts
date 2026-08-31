@@ -55,42 +55,56 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
   const deferredSet = new Set(draft.deferredFields ?? []);
 
   // Update missingRequired state based on whether fields are deferred
-  const missingWithState = requirements.missingRequired.map((field) => ({
+  const allMissingWithState = requirements.missingRequired.map((field) => ({
     ...field,
     state: deferredSet.has(fieldTarget(field)) ? ("DEFERRED" as const) : ("UNRESOLVED" as const),
   }));
+  const engineeringKeys = new Set(["systemInput", "catalogChoice", "quantity", "lines", "attachment", "userIntent"]);
+  const completionDiagnostics = {
+    missingEngineering: allMissingWithState.filter((field) => engineeringKeys.has(field.key)).map(fieldTarget),
+    missingCommercial: allMissingWithState.filter((field) => !engineeringKeys.has(field.key)).map(fieldTarget),
+  };
+  const actionableMissing = draft.conversationPhase === "SOLUTION_EXPLORATION" || draft.conversationPhase === "TRANSITION_PROPOSED"
+    ? allMissingWithState.filter((field) => engineeringKeys.has(field.key))
+    : allMissingWithState;
 
-  const first = missingWithState.find((field) => !deferredSet.has(fieldTarget(field)));
+  const first = actionableMissing.find((field) => !deferredSet.has(fieldTarget(field)));
+  // During solution exploration this is diagnostic only. The conversation
+  // orchestrator may choose this candidate, another useful question, or a
+  // different conversational action altogether.
+  const conversationalField = draft.conversationPhase === "SOLUTION_EXPLORATION" || draft.conversationPhase === "TRANSITION_PROPOSED"
+    ? null
+    : first;
   let activeQuestion: FieldQuestion | null = null;
-  if (first) {
-    const [ar, en] = first.key === "systemInput"
-      ? systemQuestion(first)
-      : questions[first.key] ?? [`يرجى تحديد: ${first.labelAr}.`, `Please provide: ${first.labelEn}.`];
+  if (conversationalField) {
+    const [ar, en] = conversationalField.key === "systemInput"
+      ? systemQuestion(conversationalField)
+      : questions[conversationalField.key] ?? [`يرجى تحديد: ${conversationalField.labelAr}.`, `Please provide: ${conversationalField.labelEn}.`];
     activeQuestion = {
-      field: fieldTarget(first), ar, en,
-      allowNotApplicable: ["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(first.key),
-      allowDefer: first.deferPolicy === "DEFER_ALLOWED",
-      deferLabelAr: first.deferPolicy === "DEFER_ALLOWED" ? "تجاوز الآن" : undefined,
-      deferLabelEn: first.deferPolicy === "DEFER_ALLOWED" ? "Skip for now" : undefined,
+      field: fieldTarget(conversationalField), ar, en,
+      allowNotApplicable: ["projectName", "attentionName", "expiryDate", "delivery", "warranty"].includes(conversationalField.key),
+      allowDefer: conversationalField.deferPolicy === "DEFER_ALLOWED",
+      deferLabelAr: conversationalField.deferPolicy === "DEFER_ALLOWED" ? "تجاوز الآن" : undefined,
+      deferLabelEn: conversationalField.deferPolicy === "DEFER_ALLOWED" ? "Skip for now" : undefined,
     };
     const paymentReview = draft.canonicalProposal?.paymentTermsReview;
-    if (first.key === "paymentTerms" && paymentReview) {
+    if (conversationalField.key === "paymentTerms" && paymentReview) {
       activeQuestion = { ...activeQuestion,
         ar: paymentReview.reason === 'TOTAL_NOT_100' ? `مجموع نسب الدفع المدخلة ${paymentReview.totalPercentage}% وليس 100%. ما جدول الدفع الكامل؟` : 'يرجى تحديد نسبة كل دفعة وموعدها بوضوح؛ لم يتم تعديل النسب أو استكمالها تلقائياً.',
         en: paymentReview.reason === 'TOTAL_NOT_100' ? `The supplied payment percentages total ${paymentReview.totalPercentage}%, not 100%. What is the complete payment schedule?` : 'Please specify each payment percentage and milestone clearly; no percentages were changed or filled in automatically.',
       };
     }
-    if (first.key === "systemInput" && first.sourceField === "accessDirection") activeQuestion.options = [
+    if (conversationalField.key === "systemInput" && conversationalField.sourceField === "accessDirection") activeQuestion.options = [
       { ar: "دخول فقط", en: "Entry only", value: "ENTRY_ONLY" },
       { ar: "دخول وخروج", en: "Entry and exit", value: "ENTRY_EXIT" },
     ];
-    if (first.key === "customer" && draft.clarification && ["AMBIGUOUS", "NOT_FOUND"].includes(draft.customerResolution.status)) {
+    if (conversationalField.key === "customer" && draft.clarification && ["AMBIGUOUS", "NOT_FOUND"].includes(draft.customerResolution.status)) {
       activeQuestion = { ...activeQuestion, ar: draft.clarification.ar, en: draft.clarification.en };
     }
   }
 
-  const hasUnresolvedSystem = missingWithState.some((f) => f.key === "systemInput");
-  const hasDeferredGaps = missingWithState.some((f) => deferredSet.has(fieldTarget(f)));
+  const hasUnresolvedSystem = actionableMissing.some((f) => f.key === "systemInput");
+  const hasDeferredGaps = actionableMissing.some((f) => deferredSet.has(fieldTarget(f)));
   const readinessStage = first
     ? "NEEDS_INFORMATION"
     : hasUnresolvedSystem || draft.systemWorkingPlan?.commercializationStatus === "PENDING"
@@ -99,7 +113,7 @@ export function completeFields(draft: WorkingCommercialDraft): WorkingCommercial
         ? "COMMERCIAL_MATERIALIZED"
         : "READY_FOR_DRAFT";
 
-  return { ...draft, missingRequired: missingWithState, recommended: requirements.recommended, completionVersion: 1, activeQuestion,
+  return { ...draft, missingRequired: allMissingWithState, recommended: requirements.recommended, completionDiagnostics, completionVersion: 1, activeQuestion,
     readinessStage,
     phase: first ? "FIELD_ANSWER_PENDING" : hasDeferredGaps ? "NEEDS_INFO" : "DRAFT_READY_FOR_REVIEW",
     status: first || hasDeferredGaps ? "NEEDS_CLARIFICATION" : "READY_FOR_REVIEW",

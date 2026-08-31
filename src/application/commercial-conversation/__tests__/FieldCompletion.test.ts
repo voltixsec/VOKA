@@ -13,6 +13,16 @@ function setup(options: { names?: string[]; terms?: string | null; paymentDays?:
   const findAll = vi.fn().mockImplementation(async ({ search }) => customers.filter((customer) => customerMatchScore(customer, search)));
   const catalog = vi.fn().mockResolvedValue([]);
   const extractIntent = vi.fn().mockResolvedValue({ customerMention: "الوطنية", lines: [] });
+  const reasonConversation = vi.fn(async ({ currentTurn }: { currentTurn: string }) => ({
+    action: "COMMERCIAL_FOLLOWUP",
+    solutionReadiness: "READY_FOR_COMMERCIAL_HANDOFF",
+    transition: "CONFIRM",
+    referencedField: null,
+    toolAction: "NONE",
+    responseFocus: "ASK_REFERENCED_FIELD",
+    reasonCode: "FIELD_COMPLETION_FIXTURE_HANDOFF",
+    intent: await extractIntent(currentTurn),
+  }));
   const service = new AISalesAssistantService({
     companies: { findById: vi.fn().mockResolvedValue({ defaultCurrency: "KWD", timezone: "Asia/Kuwait" }) },
     customers: { findAll }, catalogItems: { findAll: catalog },
@@ -20,7 +30,7 @@ function setup(options: { names?: string[]; terms?: string | null; paymentDays?:
     quotationReferences: { resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()) },
     pricing: { resolvePriceListId: vi.fn().mockResolvedValue(null), resolveUnitPrice: vi.fn() },
     terms: { find: vi.fn().mockResolvedValue(options.terms === undefined ? defaultTerms : options.terms) },
-  } as any, { extractIntent });
+  } as any, { extractIntent, reasonConversation });
   const generate = vi.spyOn(service, "generateDraftProposal");
   const useCase = new CompleteCommercialConversation(service);
   const run = (reply: string, draft?: WorkingCommercialDraft, source: ConversationReplySource = "TEXT", extra = {}) => useCase.execute({ companyId: "tenant", reply, draft, replySource: source, locale: "ar", documentMode: "QUOTATION", ...extra });

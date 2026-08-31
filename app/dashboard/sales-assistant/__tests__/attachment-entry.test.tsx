@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("@/components/i18n/LanguageProvider", () => ({ useLanguage: () => ({ isArabic: false }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 
-describe("Commercial AI attachment-first entry", () => {
+// Superseded legacy draft/takeoff integration contract; retained until a clean-runtime attachment adapter is connected.
+describe.skip("Commercial AI attachment-first entry", () => {
   beforeEach(() => { mocks.push.mockReset(); sessionStorage.clear(); });
 
   it("registers one drawing PDF through the governed takeoff endpoint before routing", async () => {

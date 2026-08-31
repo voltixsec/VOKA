@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guidanceQuestion, relevantGuidanceInput, resolveGuidanceSelection } from "../engineering-guidance";
+import { attemptedPrerequisiteFields, guidanceQuestion, isGuidanceRequest, isUnanswerableResponse, prerequisiteQuestion, relevantGuidanceInput, relevantPrerequisiteInput, resolveGuidanceSelection } from "../engineering-guidance";
 import type { WorkingCommercialDraft } from "../types";
 
 function guidedDraft(options: { activeField?: string; value?: string | null } = {}) {
@@ -31,6 +31,18 @@ function guidedDraft(options: { activeField?: string; value?: string | null } = 
 }
 
 describe("bounded engineering guidance resolution", () => {
+  it.each([
+    "إيه هي الحمولات المتاحة؟", "ما الاختيارات؟", "رشحلي", "إيه المناسب للـ SUV؟",
+    "What capacities are available?", "What are my options?", "What do you recommend?",
+  ])("recognizes an engineering guidance question without treating it as a value: %s", (question) => {
+    expect(isGuidanceRequest(question)).toBe(true);
+  });
+
+  it.each(["مش عارف الوزن", "I don't know the vehicle weight", "What else can you use to decide?"])(
+    "marks an explicitly unanswerable prerequisite as conversation control: %s",
+    (text) => expect(isUnanswerableResponse(text)).toBe(true),
+  );
+
   it.each(["موافق", "تمام اختار ده", "امشي على ترشيحك", "اعتمد الاختيار ده", "yes", "go with that", "use your recommendation"])(
     "resolves recommendation confirmation %s only against the active guided input",
     (reply) => {
@@ -90,5 +102,56 @@ describe("bounded engineering guidance resolution", () => {
       { ar: "نظام جر", en: "Traction", value: "traction" },
       { ar: "نظام هيدروليكي", en: "Hydraulic", value: "hydraulic" },
     ]);
+  });
+
+  it("retains the parent engineering decision while moving to an unresolved prerequisite", () => {
+    const draft = {
+      canonicalProposal: {
+        agenticState: {
+          provisionalSystem: {
+            inputs: [
+              { name: "vehicleClass", labelAr: "نوع المركبات", labelEn: "Vehicle class", value: "SUV", prerequisiteFor: "capacity" },
+              {
+                name: "maximumVehicleWeight", labelAr: "أقصى وزن متوقع للمركبة", labelEn: "Expected maximum vehicle weight",
+                value: null, prerequisiteFor: "capacity", prerequisiteReasonAr: "نوع المركبة وحده لا يكفي لاعتماد الحمولة.", prerequisiteReasonEn: "Vehicle class alone cannot establish rated load.",
+              },
+            ],
+          },
+        },
+      },
+    } as unknown as WorkingCommercialDraft;
+
+    const prerequisite = relevantPrerequisiteInput(draft, "capacity");
+    expect(prerequisite?.name).toBe("maximumVehicleWeight");
+    expect(prerequisiteQuestion(prerequisite!)).toMatchObject({
+      field: "maximumVehicleWeight", guidanceFor: "capacity", allowDefer: false,
+    });
+  });
+
+  it("generically advances parentEngineeringField from prerequisite A to B after UNKNOWN", () => {
+    const unknownText = "I don't know prerequisite A";
+    const draft = {
+      activeQuestion: { field: "prerequisiteA", guidanceFor: "parentEngineeringField" },
+      temporarilyUnanswerable: [],
+      canonicalProposal: {
+        agenticState: {
+          provisionalSystem: {
+            inputs: [
+              { name: "prerequisiteA", labelAr: "المدخل أ", labelEn: "Prerequisite A", value: null, prerequisiteFor: "parentEngineeringField" },
+              { name: "prerequisiteB", labelAr: "المدخل ب", labelEn: "Prerequisite B", value: null, prerequisiteFor: "parentEngineeringField" },
+            ],
+          },
+        },
+      },
+      transactionalState: { ledger: { facts: {} } },
+      systemAnswers: {},
+    } as unknown as WorkingCommercialDraft;
+
+    const attempted = attemptedPrerequisiteFields(draft, isUnanswerableResponse(unknownText));
+    const next = relevantPrerequisiteInput(draft, "parentEngineeringField", attempted);
+    expect([...attempted]).toEqual(["prerequisiteA"]);
+    expect(next?.name).toBe("prerequisiteB");
+    expect([...attempted]).not.toContain(unknownText);
+    expect(Object.values(draft.systemAnswers ?? {})).not.toContain(unknownText);
   });
 });

@@ -23,8 +23,7 @@ function vehicleElevatorModel(): ProvisionalSystemModel {
 
 function fixture(options: { customerNames?: string[]; terms?: string | null } = {}) {
   const research = { researchSystem: vi.fn().mockResolvedValue(vehicleElevatorModel()) };
-  const provider = {
-    extractIntent: vi.fn().mockImplementation(async (inputArg: any) => {
+  const extractIntent = vi.fn().mockImplementation(async (inputArg: any) => {
       const text = typeof inputArg === "string" ? inputArg : inputArg?.reply ?? inputArg?.prompt ?? "";
       const mention = text.includes("وطنية") || text.includes("الوطنية") ? "الوطنية" : text.includes("الشركة العالمية الحديثة") ? "الشركة العالمية الحديثة" : null;
       return {
@@ -33,7 +32,17 @@ function fixture(options: { customerNames?: string[]; terms?: string | null } = 
         customerMention: mention,
         lines: text.includes("130 كاميرا") ? [{ text: "كاميرا مراقبة", quantity: 130, typeIntent: "PRODUCT" }] : [{ text: "مصعد سيارات", quantity: null, typeIntent: "PRODUCT" }],
       };
-    }),
+    });
+  const provider = {
+    extractIntent,
+    // This suite exercises governed field deferral after an explicit commercial
+    // handoff. Engineering blockers still prevent the transition until resolved.
+    reasonConversation: vi.fn(async ({ currentTurn }: { currentTurn: string }) => ({
+      action: "COMMERCIAL_FOLLOWUP", solutionReadiness: "READY_FOR_COMMERCIAL_HANDOFF",
+      transition: "CONFIRM", referencedField: null, toolAction: "NONE",
+      responseFocus: "CONFIRM_HANDOFF", reasonCode: "DEFER_FIXTURE_HANDOFF",
+      intent: await extractIntent(currentTurn),
+    })),
   };
   const customers = (options.customerNames ?? ["الوطنية"]).map((name, i) => ({ id: `c${i}`, name, code: `C${i}`, status: "ACTIVE" }));
   const service = new AISalesAssistantService({

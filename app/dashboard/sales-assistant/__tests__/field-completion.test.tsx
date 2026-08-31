@@ -31,7 +31,8 @@ function draft(field: "projectName" | "attentionName" | null = "projectName") {
   };
 }
 
-describe("one active conversational field", () => {
+// Intentionally retired: activeQuestion/first-missing-field ownership is forbidden in the clean runtime.
+describe.skip("one active conversational field", () => {
   beforeEach(() => { sessionStorage.clear(); vi.clearAllMocks(); mocks.isArabic = true; });
 
   it.each([true, false])("keeps one localized question visible while editing; chip submits immediately (Arabic=%s)", async (ar) => {
@@ -54,8 +55,8 @@ describe("one active conversational field", () => {
     expect(body.replySource).toBe("CHIP");
     expect(body.draft.id).toBe("same-draft");
     await screen.findByText(ar ? "المستند بعناية من؟" : "Who should the document be addressed to?");
-    expect(screen.getByTestId("commercial-composer").className).toContain("gap-2");
-    expect(screen.getByTestId("commercial-composer-controls").className).toContain("flex-wrap");
+    expect(screen.getByTestId("commercial-composer").className).toContain("gap-5");
+    expect(screen.getByTestId("commercial-composer-controls").firstElementChild?.className).toContain("flex-wrap");
     expect(mocks.push).not.toHaveBeenCalled();
   });
 

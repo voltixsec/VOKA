@@ -7,6 +7,10 @@ export interface AISalesAssistantPort {
     activeQuestion: string | null;
     activeSystem: string | null;
     documentIntent: string | null;
+    missingEngineeringFields?: string[];
+    missingCommercialFields?: string[];
+    conversationPhase?: "SOLUTION_EXPLORATION" | "TRANSITION_PROPOSED" | "COMMERCIAL_HANDOFF";
+    attachmentAvailable?: boolean;
   }): Promise<unknown>;
   extractCustomerMention?(prompt: string, sourceLocale: "ar" | "en"): Promise<unknown>;
   estimatePrices?(input: { currency: string; region: string | null; lines: Array<{ key: string; name: string; unit: string | null }> }): Promise<unknown>;

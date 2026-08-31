@@ -37,6 +37,10 @@ export type ProvisionalSystemInput = {
   required: boolean;
   provenance: AgentKnowledgeProvenance;
   guidance?: SystemInputGuidance;
+  /** Optional conversational dependency; it narrows another input but never derives its value. */
+  prerequisiteFor?: string;
+  prerequisiteReasonAr?: string;
+  prerequisiteReasonEn?: string;
 };
 
 export type ProvisionalSystemModel = {

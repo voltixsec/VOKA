@@ -11,15 +11,21 @@ describe("CEO acceptance Arabic relational entity boundaries", () => {
     const findAll = vi.fn().mockImplementation(async ({ search }) => search === CUSTOMER
       ? [{ id: "customer-1", code: "C1", name: CUSTOMER, status: "ACTIVE", countryCode: "KW" }]
       : []);
-    const provider = {
-      extractIntent: vi.fn().mockResolvedValue({
+    const extractIntent = vi.fn().mockResolvedValue({
         // Reproduce the live regression: provider customer output swallowed the
         // remaining sentence and omitted both relational fields.
         customerMention: `${CUSTOMER} لمشروع مخزن الشويخ بعناية المهندس محمد خالد لتوريد وتركيب نظام كاميرات مراقبة IP كامل عدد 180 كاميرا`,
         projectName: null,
         attentionName: null,
         lines: [],
-      }),
+      });
+    const provider = {
+      extractIntent,
+      reasonConversation: vi.fn(async () => ({
+        action: "COMMERCIAL_FOLLOWUP", solutionReadiness: "READY_FOR_COMMERCIAL_HANDOFF", transition: "CONFIRM",
+        referencedField: null, toolAction: "NONE", responseFocus: "CONFIRM_HANDOFF", reasonCode: "CEO_ENTITY_FIXTURE_HANDOFF",
+        intent: await extractIntent(),
+      })),
     };
     const service = new AISalesAssistantService({
       companies: { findById: vi.fn().mockResolvedValue({ defaultCurrency: "KWD", timezone: "Asia/Kuwait" }) },

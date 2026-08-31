@@ -83,6 +83,18 @@ export class PrismaQuotationRepository implements IQuotationRepository {
 
   }
 
+  /** Tenant-scoped lookup used by deterministic quotation-draft idempotency. */
+  async findByNumber(
+    companyId: string,
+    number: string,
+  ): Promise<Quotation | null> {
+    const record = await this.db.quotation.findFirst({
+      where: { companyId, number, revisionNumber: 0, isDeleted: false },
+      include: { lines: true },
+    });
+    return record ? PrismaQuotationMapper.toDomain(record) : null;
+  }
+
   async findAll(
     filters: QuotationListFilters,
   ): Promise<QuotationListResult> {

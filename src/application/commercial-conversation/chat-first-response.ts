@@ -1,14 +1,6 @@
 import { projectStructuredResult } from "./live-result";
-import type { WorkingCommercialDraft } from "./types";
-import type { GuidanceSelection } from "./engineering-guidance";
-
-function isRecommendation(text: string) {
-  return /(?:إيه|ايه|ما|وش)\s*(?:هو\s*)?(?:الأفضل|الأنسب)|اختارلي|رشحلي|what(?:'s| is) best|recommend|choose for me/i.test(text);
-}
-
-function isUnknown(text: string) {
-  return /مش\s*(?:عارف|فاهم)|ما\s*أعرف|لا\s*أعلم|i\s*(?:do not|don't)\s*know|not sure/i.test(text);
-}
+import type { ConversationOrchestratorDecision, WorkingCommercialDraft } from "./types";
+import { isGuidanceRequest, type GuidanceSelection } from "./engineering-guidance";
 
 function isContinue(text: string) {
   return /^(?:كمل|كمّل|تابع|استمر|continue|go on|carry on)[.!؟\s]*$/i.test(text.trim());
@@ -70,6 +62,10 @@ function boundedRecommendation(draft: WorkingCommercialDraft, locale: "ar" | "en
     return `${introduction}${recommendation}${reason}${boundary}${question ? ` ${question}` : ""}`.trim();
   }
 
+  // A prerequisite question already contains the governed explanation for this
+  // level. Replaying the generic recommendation would hide recursive progress.
+  if (draft.activeQuestion?.guidanceFor && question) return question;
+
   const vehicleClass = plan?.knownInputs.vehicleClass;
   if (plan && /vehicle|car|مصعد سيارات/i.test(plan.systemIdentity)) {
     return locale === "ar"
@@ -99,10 +95,41 @@ function guidanceSelectionText(draft: WorkingCommercialDraft, selection: Guidanc
     : `Confirmed — I recorded ${label} as your explicit project selection.${question ? ` ${question}` : " The updated summary is ready for review."}`;
 }
 
-function groundedText(draft: WorkingCommercialDraft, userMessage: string, locale: "ar" | "en", guidanceSelection: GuidanceSelection) {
+function orchestratedText(draft: WorkingCommercialDraft, locale: "ar" | "en", decision: ConversationOrchestratorDecision) {
+  const question = draft.activeQuestion ? draft.activeQuestion[locale] : null;
+  const system = value(draft, "system.identity", locale);
+  if (draft.conversationPhase === "TRANSITION_PROPOSED") {
+    return locale === "ar"
+      ? `الحل${system ? ` الخاص بـ${system}` : ""} بقى محدد بدرجة كافية للانتقال للعرض التجاري. تحب تضيف أو تغيّر أي حاجة، ولا أبدأ تجهيز العرض؟`
+      : `The${system ? ` ${system}` : ""} solution is now sufficiently defined to move into the commercial draft. Would you like to add or change anything, or shall I prepare the quotation?`;
+  }
+  if (draft.conversationPhase === "COMMERCIAL_HANDOFF") {
+    return locale === "ar"
+      ? `تمام، نقلت الحل المتفق عليه لتجهيز العرض من المعلومات المؤكدة فقط.${question ? ` ${question}` : " تقدر تراجع المسودة قبل أي اعتماد."}`
+      : `Done — I moved the agreed solution into quotation preparation using confirmed information only.${question ? ` ${question}` : " You can review the draft before any approval."}`;
+  }
+  if (decision.action === "REQUEST_DRAWING" || decision.action === "REQUEST_ATTACHMENT") return question;
+  if ((decision.action === "ANSWER_USER" || decision.action === "EXPLAIN") && !question) {
+    const understanding = projectStructuredResult(draft).systemUnderstanding;
+    const limitation = understanding ? (locale === "ar" ? understanding.descriptionAr : understanding.descriptionEn) : null;
+    return locale === "ar"
+      ? `فاهم سؤالك${system ? ` بخصوص ${system}` : ""}.${limitation ? ` ${limitation}` : " هجاوب في حدود المعلومات المؤكدة من غير ما أفترض قيمة فنية."}`
+      : `I understand your question${system ? ` about ${system}` : ""}.${limitation ? ` ${limitation}` : " I’ll stay within confirmed information and won’t assume a technical value."}`;
+  }
+  if (decision.action === "CONTINUE_EXPLORATION" && !question) {
+    const hasPriorAssistant = (draft.conversationMessages ?? []).some((message) => message.role === "ASSISTANT");
+    if (!hasPriorAssistant) return null;
+    return locale === "ar" ? "تمام، فهمت التحديث ومكمل معاك في استكشاف الحل." : "Got it — I understand the update and will continue exploring the solution with you.";
+  }
+  return null;
+}
+
+function groundedText(draft: WorkingCommercialDraft, userMessage: string, locale: "ar" | "en", guidanceSelection: GuidanceSelection, guidanceRequested: boolean, orchestratorDecision?: ConversationOrchestratorDecision) {
+  const orchestrated = orchestratorDecision ? orchestratedText(draft, locale, orchestratorDecision) : null;
+  if (orchestrated) return orchestrated;
   const selectionText = guidanceSelectionText(draft, guidanceSelection, locale);
   if (selectionText) return selectionText;
-  if (isRecommendation(userMessage) || isUnknown(userMessage)) return boundedRecommendation(draft, locale);
+  if (guidanceRequested || isGuidanceRequest(userMessage)) return boundedRecommendation(draft, locale);
   const question = draft.activeQuestion ? draft.activeQuestion[locale] : null;
   if (isContinue(userMessage)) {
     return locale === "ar"
@@ -153,10 +180,10 @@ function groundedText(draft: WorkingCommercialDraft, userMessage: string, locale
  * Presentation-only response projected after the reducer commits. Keeping this
  * deterministic removes a second model interpretation of the same turn.
  */
-export async function generateGroundedResponse(input: { draft: WorkingCommercialDraft; userMessage: string; guidanceSelection?: GuidanceSelection }) {
+export async function generateGroundedResponse(input: { draft: WorkingCommercialDraft; userMessage: string; guidanceSelection?: GuidanceSelection; guidanceRequested?: boolean; orchestratorDecision?: ConversationOrchestratorDecision }) {
   const guidanceSelection = input.guidanceSelection ?? { status: "NONE" as const };
   return {
-    ar: groundedText(input.draft, input.userMessage, "ar", guidanceSelection),
-    en: groundedText(input.draft, input.userMessage, "en", guidanceSelection),
+    ar: groundedText(input.draft, input.userMessage, "ar", guidanceSelection, input.guidanceRequested === true, input.orchestratorDecision),
+    en: groundedText(input.draft, input.userMessage, "en", guidanceSelection, input.guidanceRequested === true, input.orchestratorDecision),
   };
 }

@@ -8,6 +8,39 @@ export type ConversationReplySource = "TEXT" | "VOICE" | "CHIP";
 export type ConversationLocale = "ar" | "en";
 export type ConversationDocumentMode = "AUTO" | "QUOTATION" | "INVOICE" | "CONTRACT" | "SALES_ORDER";
 export type ConversationBuildMode = "AUTO" | "CATALOG_ONLY" | "SUPPLY_INSTALL_SYSTEM" | "DRAWING";
+export type ConversationAction =
+  | "ANSWER_USER" | "EXPLAIN" | "ASK_ENGINEERING" | "OFFER_OPTIONS" | "RECOMMEND"
+  | "ASK_FOR_CONFIRMATION" | "REQUEST_ATTACHMENT" | "REQUEST_DRAWING" | "RESEARCH"
+  | "CONTINUE_EXPLORATION" | "PROPOSE_COMMERCIAL_HANDOFF" | "COMMERCIAL_FOLLOWUP";
+export type SolutionReadiness = "NOT_READY" | "READY_TO_PROPOSE" | "AWAITING_USER_TRANSITION" | "READY_FOR_COMMERCIAL_HANDOFF";
+export type ConversationPhase = "SOLUTION_EXPLORATION" | "TRANSITION_PROPOSED" | "COMMERCIAL_HANDOFF";
+export type ConversationTransition = "NONE" | "PROPOSE" | "CONFIRM" | "REOPEN";
+export type ConversationToolAction = "NONE" | "RESEARCH" | "INSPECT_ATTACHMENT" | "REQUEST_DRAWING";
+export type ConversationResponseFocus =
+  | "ACKNOWLEDGE_FACTS" | "ADDRESS_QUESTION" | "EXPLAIN_LIMITATION" | "PRESENT_OPTIONS"
+  | "ASK_REFERENCED_FIELD" | "OFFER_HANDOFF" | "CONFIRM_HANDOFF" | "REQUEST_ATTACHMENT" | "CONTINUE";
+
+export type ConversationOrchestratorDecision = {
+  action: ConversationAction;
+  readiness: SolutionReadiness;
+  transition: ConversationTransition;
+  referencedField: string | null;
+  toolAction: ConversationToolAction;
+  responseFocus: ConversationResponseFocus;
+  reasonCode: string | null;
+  providerAvailable: boolean;
+};
+
+export type CommercialSolutionHandoff = {
+  createdAtTurn: number;
+  systemIdentity: string | null;
+  scopeType: string | null;
+  jurisdiction: string | null;
+  confirmedEngineeringInputs: Array<{ field: string; value: string | number | boolean; source: string }>;
+  limitations: string[];
+  evidence: Array<{ title: string; url: string; publisher: string }>;
+  unresolvedEngineeringFields: string[];
+};
 
 export type DraftAttachment = {
   name: string;
@@ -72,6 +105,8 @@ export type MissingFieldKey = "customer" | "lines" | "sourceReference" | "attach
 export type FieldAnswer = { field: string; value: string; action?: "VALUE" | "NOT_APPLICABLE" | "DEFER" | "SKIP" };
 export type FieldQuestion = {
   field: string;
+  /** Engineering decision this prerequisite is helping the user resolve. */
+  guidanceFor?: string;
   ar: string;
   en: string;
   allowNotApplicable: boolean;
@@ -116,12 +151,20 @@ export type WorkingCommercialDraft = {
   conversationMessages?: ConversationMessage[];
   structuredResult?: StructuredLiveResult;
   internalIterations?: number;
+  conversationPhase?: ConversationPhase;
+  solutionReadiness?: SolutionReadiness;
+  orchestratorDecision?: ConversationOrchestratorDecision;
+  commercialHandoff?: CommercialSolutionHandoff | null;
+  pendingToolAction?: ConversationToolAction;
+  completionDiagnostics?: { missingEngineering: string[]; missingCommercial: string[] };
   /** Versioned so previously persisted draft payloads can be upgraded on analysis. */
   completionVersion?: 1;
   phase?: CommercialPhase;
   activeQuestion?: FieldQuestion | null;
   notApplicable?: CommercialAnswerField[];
   deferredFields?: string[];
+  /** Conversation-control only: prerequisites the user cannot currently answer. */
+  temporarilyUnanswerable?: string[];
   systemAnswers?: SystemFieldAnswers;
   intelligenceText?: string;
   proposedCustomerName?: string | null;

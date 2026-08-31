@@ -146,12 +146,14 @@ describe("production commercial system research adapter", () => {
   });
 
   it("uses normalized server cache without repeating the provider call", async () => {
+    const events: Parameters<CommercialResearchTelemetry>[0][] = [];
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response()), { status: 200 })); vi.stubGlobal("fetch", fetchMock);
-    const research = adapter();
+    const research = adapter({ telemetry: (event: Parameters<CommercialResearchTelemetry>[0]) => events.push(event) });
     const externalCalls = vi.fn();
     const first = await research.researchSystem({ ...input(" cache-once"), onProviderCall: externalCalls });
     const second = await research.researchSystem({ ...input(" CACHE-ONCE"), companyId: "another-tenant", onProviderCall: externalCalls });
     expect(first).toEqual(second); expect(fetchMock).toHaveBeenCalledTimes(1); expect(externalCalls).toHaveBeenCalledTimes(1);
+    expect(events.map((event) => event.intent)).toEqual(expect.arrayContaining([expect.stringMatching(/^v2\|/)]));
   });
 
   it("performs new research when normalized material system intent changes", async () => {

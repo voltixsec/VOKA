@@ -47,11 +47,71 @@ function interpretedModel(prompt: string, locale: "ar" | "en"): ProvisionalSyste
   };
 }
 
+const vehicleClassGuidance = {
+  options: [
+    { value: "PASSENGER_CAR", labelAr: "سيارات ركوب عادية", labelEn: "Passenger cars", explanationAr: "للسيارات العادية فقط.", explanationEn: "For standard passenger cars only." },
+    { value: "SUV", labelAr: "سيارات SUV", labelEn: "SUVs", explanationAr: "عند الحاجة لاستيعاب سيارات أكبر.", explanationEn: "When larger passenger vehicles must be accommodated." },
+    { value: "HEAVIER_VEHICLE", labelAr: "مركبات أثقل", labelEn: "Heavier vehicles", explanationAr: "يحتاج تحديد نوع المركبة وأبعادها قبل أي اختيار للحمولة.", explanationEn: "Requires the vehicle type and dimensions before any load selection." },
+  ],
+  recommendedValue: null,
+  rationaleAr: "نوع المركبة سؤال تمهيدي آمن يساعدنا نوجّه اختيار الحمولة لاحقًا من غير ما نفترض قيمة هندسية.",
+  rationaleEn: "Vehicle class is a safe prerequisite that guides later load selection without assuming an engineering value.",
+  requiresConfirmation: true,
+  provenance: "SUGGESTED" as const,
+};
+
 function enrichSafeInputs(model: ProvisionalSystemModel): ProvisionalSystemModel {
   const names = new Set(model.inputs.map((item) => item.name));
-  const inputs = [...model.inputs];
-  if (/vehicle|car\s*lift|مصعد سيارات/i.test(`${model.systemName} ${model.aliases.join(" ")}`) && !names.has("vehicleClass")) {
-    inputs.push({ name: "vehicleClass", labelAr: "نوع المركبات", labelEn: "Vehicle class", value: null, required: false, provenance: "NEEDS_CONFIRMATION" });
+  const vehicleElevator = /vehicle|car\s*lift|مصعد سيارات/i.test(`${model.systemName} ${model.aliases.join(" ")}`);
+  const inputs = model.inputs.map((input) => vehicleElevator && input.name === "vehicleClass"
+    ? {
+        ...input,
+        guidance: input.guidance ?? vehicleClassGuidance,
+        prerequisiteFor: "capacity",
+        prerequisiteReasonAr: "نوع المركبة يضيّق نطاق قرار الحمولة، لكنه لا يحدد حمولة نهائية بمفرده.",
+        prerequisiteReasonEn: "Vehicle class narrows the load decision, but it cannot establish a final rated load by itself.",
+      }
+    : input);
+  if (vehicleElevator && !names.has("vehicleClass")) {
+    inputs.push({
+      name: "vehicleClass", labelAr: "نوع المركبات", labelEn: "Vehicle class", value: null, required: false, provenance: "NEEDS_CONFIRMATION",
+      guidance: vehicleClassGuidance,
+      prerequisiteFor: "capacity",
+      prerequisiteReasonAr: "نوع المركبة يضيّق نطاق قرار الحمولة، لكنه لا يحدد حمولة نهائية بمفرده.",
+      prerequisiteReasonEn: "Vehicle class narrows the load decision, but it cannot establish a final rated load by itself.",
+    });
+  }
+  if (vehicleElevator && !names.has("maximumVehicleWeight")) {
+    inputs.push({
+      name: "maximumVehicleWeight", labelAr: "أقصى وزن متوقع للمركبة", labelEn: "Expected maximum vehicle weight", unit: "kg",
+      value: null, required: false, provenance: "NEEDS_CONFIRMATION", prerequisiteFor: "capacity",
+      prerequisiteReasonAr: "اختيار فئة SUV ضيّق لنا النطاق، لكن نوع السيارة وحده مش كفاية لاعتماد حمولة نهائية. محتاجين أقصى وزن تقريبي للمركبة أو أبعاد المنصة/البئر أو المخطط.",
+      prerequisiteReasonEn: "SUV use narrows the range, but vehicle class alone is insufficient to establish a final rated load. We need the approximate maximum vehicle weight, platform or shaft dimensions, or the drawing.",
+    });
+  }
+  if (vehicleElevator && !names.has("expectedVehicleModel")) {
+    inputs.push({
+      name: "expectedVehicleModel", labelAr: "أكبر نوع أو موديل مركبة متوقع", labelEn: "Heaviest expected vehicle type or model",
+      value: null, required: false, provenance: "NEEDS_CONFIRMATION", prerequisiteFor: "capacity",
+      prerequisiteReasonAr: "بما إن الوزن مش متوفر، نقدر نضيّق القرار من نوع أو موديل أكبر مركبة متوقع تستخدم المصعد من غير ما نفترض وزنها.",
+      prerequisiteReasonEn: "Since the weight is unavailable, we can narrow the decision using the heaviest expected vehicle type or model without inventing its weight.",
+    });
+  }
+  if (vehicleElevator && !names.has("drawingAvailable")) {
+    inputs.push({
+      name: "drawingAvailable", labelAr: "توفر مخطط للمصعد أو البئر", labelEn: "Availability of an elevator or shaft drawing",
+      value: null, required: false, provenance: "NEEDS_CONFIRMATION", prerequisiteFor: "capacity",
+      prerequisiteReasonAr: "لو نوع المركبة أو وزنها غير معروفين، المخطط يوفّر مدخلًا أوثق لاستكمال الترشيح من غير افتراضات.",
+      prerequisiteReasonEn: "If the vehicle type and weight are unknown, a drawing provides a more reliable input without unsafe assumptions.",
+    });
+  }
+  if (vehicleElevator && !names.has("shaftDimensions")) {
+    inputs.push({
+      name: "shaftDimensions", labelAr: "أبعاد بئر المصعد التقريبية", labelEn: "Approximate shaft dimensions",
+      value: null, required: false, provenance: "NEEDS_CONFIRMATION", prerequisiteFor: "capacity",
+      prerequisiteReasonAr: "لو المخطط غير متوفر، أبعاد البئر التقريبية تساعد في تضييق التكوين، لكنها لن تعتمد الحمولة وحدها.",
+      prerequisiteReasonEn: "If no drawing is available, approximate shaft dimensions can narrow the configuration but cannot establish rated load alone.",
+    });
   }
   const hasSizingGeometry = [...names].some((name) => /volume|dimension|area|حجم|أبعاد/i.test(name));
   if (/fm[-\s]?200|fire suppression|إطفاء/i.test(`${model.systemName} ${model.aliases.join(" ")}`) && !hasSizingGeometry) {

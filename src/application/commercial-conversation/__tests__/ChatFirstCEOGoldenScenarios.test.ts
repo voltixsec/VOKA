@@ -28,7 +28,7 @@ function systemModel(kind: "elevator" | "fm200"): ProvisionalSystemModel {
   };
 }
 
-function fixture(options: { generatedResponse?: string; onTiming?: (timing: any) => void; withGuidance?: boolean } = {}) {
+function fixture(options: { generatedResponse?: string; onTiming?: (timing: any) => void; withGuidance?: boolean; reasonConversation?: (currentTurn: string) => unknown } = {}) {
   const research = { researchSystem: vi.fn().mockImplementation(async ({ query, onProviderCall }: { query: string; onProviderCall?: () => void }) => {
     onProviderCall?.();
     const model = systemModel(/fm[-\s]?200|suppression/i.test(query) ? "fm200" : "elevator");
@@ -56,6 +56,9 @@ function fixture(options: { generatedResponse?: string; onTiming?: (timing: any)
     return model;
   }) };
   const provider = {
+    reasonConversation: options.reasonConversation
+      ? vi.fn(async ({ currentTurn }: { currentTurn: string }) => options.reasonConversation!(currentTurn))
+      : undefined,
     extractIntent: vi.fn().mockImplementation(async (prompt: string) => ({
       documentType: "QUOTATION",
       customerMention: prompt.includes("شركة المستقبل") ? "شركة المستقبل" : null,
@@ -174,6 +177,181 @@ describe("Chat-First CEO Golden Scenarios", () => {
     expect(repeated.systemAnswers?.driveType).toBeUndefined();
   });
 
+  it("17b.1 handles the real CEO recommendation path without injected research guidance", async () => {
+    const { run } = fixture();
+    let draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    const beforeCommercial = {
+      customerMention: draft.answers?.customerMention,
+      projectName: draft.answers?.projectName,
+      paymentTerms: draft.answers?.paymentTerms,
+    };
+    const guidanceText = "أنا مش فاهم قوي في المصاعد، إنت شوف الأنسب أو اديني اختيارات";
+    draft = await run(guidanceText, draft);
+
+    expect(draft.activeQuestion).toMatchObject({ field: "vehicleClass" });
+    expect(draft.activeQuestion?.field).not.toMatch(/customerMention|projectName|paymentTerms|capacity/);
+    expect(draft.activeQuestion?.options?.map((option) => option.value)).toEqual(["PASSENGER_CAR", "SUV", "HEAVIER_VEHICLE"]);
+    expect(draft.assistantResponse?.ar).toMatch(/سيارات ركوب عادية|SUV|مركبات أثقل/);
+    expect(draft.assistantResponse?.ar).not.toMatch(/ما الحمولة المطلوبة/);
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(draft.systemAnswers?.vehicleClass).toBeUndefined();
+    expect({
+      customerMention: draft.answers?.customerMention,
+      projectName: draft.answers?.projectName,
+      paymentTerms: draft.answers?.paymentTerms,
+    }).toEqual(beforeCommercial);
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === guidanceText)).toBe(false);
+    expect(Object.values(draft.systemAnswers ?? {})).not.toContain(guidanceText);
+    expect(draft.structuredResult?.facts.map((fact) => fact.value)).not.toContain(guidanceText);
+    expect(draft.structuredResult?.summary.map((fact) => fact.value)).not.toContain(guidanceText);
+    expect(draft.turns.at(-1)?.target).toBeUndefined();
+  });
+
+  it("17b.2 never captures a standalone choose-for-me control sentence as a fact or chip", async () => {
+    const { run } = fixture();
+    let draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    const guidanceText = "شوف انت واديني اختيارات";
+    draft = await run(guidanceText, draft);
+
+    expect(draft.activeQuestion?.field).toBe("vehicleClass");
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === guidanceText)).toBe(false);
+    expect(Object.values(draft.systemAnswers ?? {})).not.toContain(guidanceText);
+    expect(draft.structuredResult?.facts.map((fact) => fact.value)).not.toContain(guidanceText);
+    expect(draft.structuredResult?.summary.map((fact) => fact.value)).not.toContain(guidanceText);
+    expect(draft.turns.at(-1)?.target).toBeUndefined();
+  });
+
+  it("17b.3 treats the provider's recommendation mode as control even when it targets capacity", async () => {
+    const controlText = "ساعدني أقرر في النقطة دي";
+    const { run } = fixture({
+      reasonConversation: (currentTurn) => currentTurn === controlText
+        ? { mode: "RECOMMENDATION", targetField: "capacity", deferPayment: false, researchRequired: false, intent: { documentType: "QUOTATION", capacity: controlText, lines: [], facts: [] } }
+        : { mode: "PROVIDE_FACTS", targetField: null, deferPayment: false, researchRequired: false, intent: { documentType: "QUOTATION", scopeType: "SUPPLY_AND_INSTALLATION", lines: [], facts: [] } },
+    });
+    let draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    draft = await run(controlText, draft);
+
+    expect(draft.activeQuestion?.field).toBe("vehicleClass");
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === controlText)).toBe(false);
+    expect(draft.structuredResult?.facts.map((fact) => fact.value)).not.toContain(controlText);
+  });
+
+  it("17b.4 continues the real CEO path from confirmed SUV to a safe capacity prerequisite", async () => {
+    const { run } = fixture();
+    let draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    draft = await run("أنا مش فاهم قوي في المصاعد، إنت شوف الأنسب أو اديني اختيارات", draft);
+    draft = await run("سيارات SUV", draft);
+
+    expect(draft.transactionalState?.ledger.facts["system.vehicleClass"]).toMatchObject({ value: "SUV", source: "USER_EXPLICIT" });
+    expect(draft.activeQuestion).toMatchObject({ field: "maximumVehicleWeight", guidanceFor: "capacity" });
+
+    const question = "إيه هي الحمولات المتاحة؟";
+    draft = await run(question, draft);
+
+    expect(draft.transactionalState?.ledger.facts["system.vehicleClass"]).toMatchObject({ value: "SUV", source: "USER_EXPLICIT" });
+    expect(draft.activeQuestion).toMatchObject({ field: "maximumVehicleWeight", guidanceFor: "capacity" });
+    expect(draft.activeQuestion?.field).not.toMatch(/customerMention|projectName|paymentTerms/);
+    expect(draft.assistantResponse?.ar).toMatch(/SUV.*(?:نوع السيارة|الحمولة|أقصى وزن|أبعاد|مخطط)|(?:نوع السيارة|الحمولة|أقصى وزن|أبعاد|مخطط).*SUV/s);
+    expect(draft.assistantResponse?.ar).not.toBe("ما الحمولة المطلوبة للمصعد؟");
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(draft.transactionalState?.ledger.facts["system.capacity"]).toBeUndefined();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === question)).toBe(false);
+    expect(Object.values(draft.systemAnswers ?? {})).not.toContain(question);
+    expect(draft.structuredResult?.facts.map((fact) => fact.value)).not.toContain(question);
+    expect(draft.structuredResult?.summary.map((fact) => fact.value)).not.toContain(question);
+    expect(draft.turns.at(-1)?.target).toBeUndefined();
+  });
+
+  it("17b.5 answers رشحلي الأنسب after SUV with the next safe prerequisite", async () => {
+    const { run } = fixture();
+    let draft = await run("عايز مصعد سيارات في الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    draft = await run("اديني اختيارات", draft);
+    draft = await run("سيارات SUV", draft);
+    const recommendation = "رشحلي الأنسب";
+    draft = await run(recommendation, draft);
+
+    expect(draft.activeQuestion).toMatchObject({ field: "maximumVehicleWeight", guidanceFor: "capacity" });
+    expect(draft.assistantResponse?.ar).toMatch(/SUV|أقصى وزن|أبعاد|مخطط/);
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === recommendation)).toBe(false);
+  });
+
+  it("17b.6 preserves English question parity after the SUV prerequisite", async () => {
+    const { run } = fixture();
+    const turn = (reply: string, draft?: WorkingCommercialDraft) => run(reply, draft, "TEXT", { locale: "en" });
+    let draft = await turn("Create a supply and installation quotation for a vehicle elevator in Kuwait");
+    draft = await turn("1 elevator serving 6 floors", draft);
+    draft = await turn("I don't know the engineering details, give me options", draft);
+    draft = await turn("SUVs", draft);
+    const question = "What capacities are available?";
+    draft = await turn(question, draft);
+
+    expect(draft.transactionalState?.ledger.facts["system.vehicleClass"]).toMatchObject({ value: "SUV", source: "USER_EXPLICIT" });
+    expect(draft.activeQuestion).toMatchObject({ field: "maximumVehicleWeight", guidanceFor: "capacity" });
+    expect(draft.assistantResponse?.en).toMatch(/SUV|rated load|maximum vehicle weight|platform|shaft|drawing/i);
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === question)).toBe(false);
+  });
+
+  it("17b.7 advances the exact six-turn CEO scenario beyond an unknown vehicle weight", async () => {
+    const { run } = fixture();
+    let draft = await run("عايز أعمل عرض سعر لتوريد وتركيب نظام مصعد سيارات في الكويت");
+    draft = await run("مصعد واحد يخدم 6 طوابق", draft);
+    draft = await run("أنا مش فاهم قوي في المصاعد، إنت شوف الأنسب أو اديني اختيارات", draft);
+    draft = await run("سيارات SUV", draft);
+    draft = await run("إيه هي الحمولات المتاحة؟", draft);
+    const priorResponse = draft.assistantResponse?.ar;
+    const unknownWeight = "فيه أوزان معينة تديني اختيارات؟ أنا مش عارف الأوزان، ممكن أختار إيه؟";
+    draft = await run(unknownWeight, draft);
+
+    expect(draft.transactionalState?.ledger.facts["system.vehicleClass"]).toMatchObject({ value: "SUV", source: "USER_EXPLICIT" });
+    expect(draft.systemAnswers?.capacity).toBeUndefined();
+    expect(draft.systemAnswers?.maximumVehicleWeight).toBeUndefined();
+    expect(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs.find((input) => input.name === "capacity")?.value).toBeNull();
+    expect(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs.find((input) => input.name === "maximumVehicleWeight")?.value).toBeNull();
+    expect(draft.temporarilyUnanswerable).toContain("maximumVehicleWeight");
+    expect(draft.activeQuestion).toMatchObject({ field: "expectedVehicleModel", guidanceFor: "capacity" });
+    expect(draft.activeQuestion?.field).not.toMatch(/capacity|maximumVehicleWeight|customerMention|projectName|paymentTerms/);
+    expect(draft.assistantResponse?.ar).toMatch(/نوع|موديل|مركبة/);
+    expect(draft.assistantResponse?.ar).not.toBe(priorResponse);
+    expect(draft.assistantResponse?.ar).not.toMatch(/\d+(?:[.,]\d+)?\s*(?:kg|كجم|كغ|كيلو)/i);
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === unknownWeight)).toBe(false);
+    expect(Object.values(draft.systemAnswers ?? {})).not.toContain(unknownWeight);
+    expect(draft.structuredResult?.facts.map((fact) => fact.value)).not.toContain(unknownWeight);
+    expect(draft.structuredResult?.summary.map((fact) => fact.value)).not.toContain(unknownWeight);
+    expect(draft.conversationMessages?.at(-1)?.role).toBe("ASSISTANT");
+  });
+
+  it.each([
+    { message: "مش عارف الوزن", locale: "ar" as const, source: "TEXT" as const },
+    { message: "مش عارف الوزن", locale: "ar" as const, source: "VOICE" as const },
+    { message: "I don't know the vehicle weight", locale: "en" as const, source: "TEXT" as const },
+    { message: "What else can you use to decide?", locale: "en" as const, source: "TEXT" as const },
+  ])("17b.8 recursively advances for $message via $source", async ({ message, locale, source }) => {
+    const { run } = fixture();
+    const turn = (reply: string, draft?: WorkingCommercialDraft, replySource: ConversationReplySource = "TEXT") => run(reply, draft, replySource, { locale });
+    let draft = locale === "ar"
+      ? await turn("عايز مصعد سيارات في الكويت")
+      : await turn("Create a vehicle elevator quotation in Kuwait");
+    draft = locale === "ar" ? await turn("مصعد واحد يخدم 6 طوابق", draft) : await turn("1 elevator serving 6 floors", draft);
+    draft = locale === "ar" ? await turn("اديني اختيارات", draft) : await turn("Give me options", draft);
+    draft = await turn("SUV", draft);
+    draft = locale === "ar" ? await turn("إيه هي الحمولات المتاحة؟", draft) : await turn("What capacities are available?", draft);
+    draft = await turn(message, draft, source);
+
+    expect(draft.activeQuestion).toMatchObject({ field: "expectedVehicleModel", guidanceFor: "capacity" });
+    expect(draft.systemAnswers?.maximumVehicleWeight).toBeUndefined();
+    expect(Object.values(draft.transactionalState?.ledger.facts ?? {}).some((fact) => fact.value === message)).toBe(false);
+    expect(draft.conversationMessages?.at(-2)).toMatchObject({ role: "USER", source, text: message });
+  });
+
   it("17c. commits a confirmed recommendation only as the selected engineering input", async () => {
     const { run, draft: guided } = await reachDriveGuidance();
     const draft = await run("موافق", guided);
@@ -220,7 +398,7 @@ describe("Chat-First CEO Golden Scenarios", () => {
   it("17h. continues to the next unresolved engineering input after confirmation", async () => {
     const { run, draft: guided } = await reachDriveGuidance();
     const draft = await run("امشي على ترشيحك", guided);
-    expect(draft.activeQuestion?.field).toBe("capacity");
+    expect(draft.activeQuestion).toMatchObject({ field: "vehicleClass", guidanceFor: "capacity" });
     expect(draft.activeQuestion?.field).not.toMatch(/customerMention|projectName|paymentTerms/);
     expect(draft.canonicalProposal?.agenticState?.missingInputs).toEqual(["capacity"]);
   });

@@ -63,7 +63,18 @@ describe("agent conversation continuity lock", () => {
     draft = await run("2000", draft);
     expect(draft.canonicalProposal?.agenticState?.missingInputs).toEqual([]);
     expect(draft.missingRequired.some((field) => field.key === "lines")).toBe(false);
-    expect(draft.activeQuestion?.ar).not.toMatch(/ما المنتج أو الخدمة/);
+    expect(draft.activeQuestion?.ar ?? "").not.toMatch(/ما المنتج أو الخدمة/);
+    expect(draft.activeQuestion).toBeNull();
+    // Commercial collection starts only after the orchestrator has proposed the
+    // transition and the user confirms it; the field-completion engine no longer
+    // turns a mature solution into an implicit form by itself.
+    draft = await run("جهز العرض", {
+      ...draft,
+      conversationPhase: "TRANSITION_PROPOSED",
+      solutionReadiness: "AWAITING_USER_TRANSITION",
+    });
+    expect(draft.conversationPhase).toBe("COMMERCIAL_HANDOFF");
+    expect(draft.activeQuestion?.field).toBe("customerMention");
     draft = await run("شركة الأفق", draft);
     draft = await run("مشروع الشويخ", draft);
     draft = await run("المهندس أحمد", draft);

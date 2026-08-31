@@ -33,7 +33,9 @@ describe("POST /api/ai/commercial-conversation intelligence fusion", () => {
     );
     expect(body.data.canonicalProposal.smartSystem.systemType).toBe("CCTV");
     expect(body.data.missingRequired.map((field: { key: string }) => field.key)).toEqual(["customer", "projectName", "attentionName", "expiryDate", "paymentTerms", "delivery", "warranty"]);
-    expect(body.data.activeQuestion.field).toBe("customerMention");
+    expect(body.data.activeQuestion).toBeNull();
+    expect(body.data.completionDiagnostics.missingCommercial).toContain("customerMention");
+    expect(body.data.conversationPhase).toBe("SOLUTION_EXPLORATION");
     expect(body.data.requiresHumanReview).toBe(true);
     expect(body.data.executed).toBe(false);
   });

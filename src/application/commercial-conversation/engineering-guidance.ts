@@ -1,5 +1,6 @@
 import type { SystemInputGuidance } from "../../domain/smart-system/types";
 import type { FieldQuestion, WorkingCommercialDraft } from "./types";
+import { fieldTarget } from "./field-completion";
 
 type GuidanceOption = SystemInputGuidance["options"][number];
 
@@ -9,6 +10,17 @@ export type GuidedSystemInput = {
   labelEn: string;
   value: string | number | boolean | null;
   guidance: SystemInputGuidance;
+  prerequisiteFor?: string;
+};
+
+export type PrerequisiteSystemInput = {
+  name: string;
+  labelAr: string;
+  labelEn: string;
+  value: string | number | boolean | null;
+  prerequisiteFor: string;
+  prerequisiteReasonAr?: string;
+  prerequisiteReasonEn?: string;
 };
 
 export type GuidanceSelection =
@@ -96,15 +108,47 @@ function confirmsRecommendation(text: string) {
   return /^(?:موافق|نعم|ايو[ه]?|أيو[ه]?|تمام(?:\s+(?:اختار|اعتمد|خلي|خليه)\s*(?:ده|دا|هذا))?|امش[يى]\s+على\s+(?:ترشيحك|اختيارك)|اعتمد\s+(?:الاختيار|الخيار|ترشيحك)(?:\s+(?:ده|دا|هذا))?|yes|okay|ok|go\s+with\s+(?:that|your\s+recommendation)|use\s+your\s+recommendation|accept\s+(?:that|your\s+recommendation))[.!؟\s]*$/iu.test(text.trim());
 }
 
+const uncertaintyPattern = /(?:^| )(?:مش (?:عارف|فاهم)|ما اعرف|لا اعلم|i (?:do not|don t) know|not sure|i can t (?:answer|provide))(?: |$)/iu;
+const alternatePrerequisitePattern = /(?:^| )(?:what else can you use(?: to decide)?|ask (?:me )?something else|اسال(?:ني)? (?:حاجه|شيء) تاني|خلينا في (?:حاجه|شيء) تاني)(?: |$)/iu;
+
+export function isUnanswerableResponse(text: string) {
+  const normalized = normalize(text);
+  return uncertaintyPattern.test(normalized) || alternatePrerequisitePattern.test(normalized);
+}
+
 export function isGuidanceRequest(text: string) {
   if (confirmsRecommendation(text)) return false;
-  return /مش\s*(?:عارف|فاهم)|ما\s*أعرف|لا\s*أعلم|i\s*(?:do\s+not|don't)\s*know|not\s+sure|(?:إيه|ايه|ما|وش|what).*?(?:الأفضل|الأنسب|best)|اختارلي|رشحلي|recommend|choose\s+for\s+me/iu.test(text.trim());
+  const normalized = normalize(text);
+  const advice = /(?:^| )(?:شوف (?:انت|انتم)|اختار ?لي|رشح ?لي|اديني (?:اختيارات|خيارات)|اعطيني (?:اختيارات|خيارات)|recommend|choose for me|give me (?:options|choices))(?: |$)/iu;
+  const comparativeQuestion = /(?:^| )(?:ايه|ما|وش|what).*?(?:الافضل|الانسب|المناسب|best|suitable)(?: |$)/iu;
+  const optionsQuestion = /(?:^| )(?:ايه|ما|وش|what).*?(?:الحمولات|السعات|الاختيارات|الخيارات|capacities|loads|options|choices)(?: |$)/iu;
+  return isUnanswerableResponse(text) || advice.test(normalized) || comparativeQuestion.test(normalized) || optionsQuestion.test(normalized);
+}
+
+export function attemptedPrerequisiteFields(draft: WorkingCommercialDraft | null | undefined, currentIsUnanswerable: boolean) {
+  const attempted = new Set(draft?.temporarilyUnanswerable ?? []);
+  if (currentIsUnanswerable && draft?.activeQuestion?.guidanceFor) attempted.add(draft.activeQuestion.field);
+  return attempted;
 }
 
 export function relevantGuidanceInput(draft: WorkingCommercialDraft | null | undefined) {
   const inputs = guidedInputs(draft);
   const active = inputs.find((input) => input.name === draft?.activeQuestion?.field && input.value == null);
   return active ?? inputs.find((input) => input.value == null) ?? null;
+}
+
+export function relevantPrerequisiteInput(
+  draft: WorkingCommercialDraft | null | undefined,
+  targetField: string | null | undefined,
+  excludedFields: ReadonlySet<string> = new Set(),
+): PrerequisiteSystemInput | null {
+  if (!draft || !targetField) return null;
+  const inputs = [
+    ...(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs ?? []),
+  ];
+  return inputs.find((input): input is typeof input & { prerequisiteFor: string } =>
+    input.value == null && input.prerequisiteFor === targetField && !excludedFields.has(input.name)
+  ) ?? null;
 }
 
 /** Resolves only bounded guidance values. Recommendation/ordinal references require an active guided question. */
@@ -150,9 +194,10 @@ export function resolveGuidanceSelection(
   return { status: "NONE" };
 }
 
-export function guidanceQuestion(input: GuidedSystemInput, invalid = false): FieldQuestion {
+export function guidanceQuestion(input: GuidedSystemInput, invalid = false, guidanceFor = input.prerequisiteFor): FieldQuestion {
   return {
     field: input.name,
+    guidanceFor,
     ar: invalid
       ? "الاختيار المطلوب غير متاح. اختر أحد الخيارات المحددة لـ" + input.labelAr + "."
       : "أي خيار تريد اعتماده لـ" + input.labelAr + "؟",
@@ -166,5 +211,54 @@ export function guidanceQuestion(input: GuidedSystemInput, invalid = false): Fie
       en: option.labelEn,
       value: String(option.value),
     })),
+  };
+}
+
+export function prerequisiteQuestion(input: PrerequisiteSystemInput): FieldQuestion {
+  const askAr = `ما ${input.labelAr}؟`;
+  const askEn = `What is the ${input.labelEn}?`;
+  return {
+    field: input.name,
+    guidanceFor: input.prerequisiteFor,
+    ar: `${input.prerequisiteReasonAr ? `${input.prerequisiteReasonAr} ` : ""}${askAr}`,
+    en: `${input.prerequisiteReasonEn ? `${input.prerequisiteReasonEn} ` : ""}${askEn}`,
+    allowNotApplicable: false,
+    allowDefer: false,
+  };
+}
+
+export function questionForEngineeringField(draft: WorkingCommercialDraft, field: string): FieldQuestion | null {
+  const missing = draft.missingRequired.find((candidate) => fieldTarget(candidate) === field);
+  if (missing) {
+    const explicit: Record<string, [string, string]> = {
+      elevatorQuantity: ["كم عدد المصاعد المطلوبة؟", "How many elevators are required?"],
+      numberOfElevators: ["كم عدد المصاعد المطلوبة؟", "How many elevators are required?"],
+      numberOfStops: ["كم عدد الطوابق أو الوقفات التي سيخدمها المصعد؟", "How many floors or stops will the elevator serve?"],
+      floors: ["كم عدد الطوابق التي سيخدمها المصعد؟", "How many floors will the elevator serve?"],
+      capacity: ["ما الحمولة المطلوبة للمصعد؟", "What elevator capacity is required?"],
+      loadCapacity: ["ما الحمولة المطلوبة للمصعد؟", "What elevator capacity is required?"],
+    };
+    const [ar, en] = explicit[missing.sourceField ?? ""]
+      ?? [`يرجى تحديد: ${missing.labelAr}.`, `Please provide: ${missing.labelEn}.`];
+    return {
+      field, ar, en, allowNotApplicable: false, allowDefer: false,
+      options: missing.sourceField === "accessDirection" ? [
+        { ar: "دخول فقط", en: "Entry only", value: "ENTRY_ONLY" },
+        { ar: "دخول وخروج", en: "Entry and exit", value: "ENTRY_EXIT" },
+      ] : undefined,
+    };
+  }
+  const inputs = [
+    ...(draft.canonicalProposal?.smartSystem?.inputs ?? []),
+    ...(draft.canonicalProposal?.agenticState?.provisionalSystem?.inputs ?? []),
+  ];
+  const input = inputs.find((candidate) => candidate.name === field && candidate.value == null);
+  if (!input) return null;
+  if ("guidance" in input && input.guidance?.options.length) return guidanceQuestion(input as GuidedSystemInput, false, "prerequisiteFor" in input ? input.prerequisiteFor : undefined);
+  if ("prerequisiteFor" in input && typeof input.prerequisiteFor === "string") return prerequisiteQuestion(input as PrerequisiteSystemInput);
+  return {
+    field: input.name,
+    ar: `ما ${input.labelAr}؟`, en: `What is the ${input.labelEn}?`,
+    allowNotApplicable: false, allowDefer: false,
   };
 }

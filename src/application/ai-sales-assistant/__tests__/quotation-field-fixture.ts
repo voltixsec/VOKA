@@ -11,6 +11,11 @@ export function quotationFieldFixture(options: { names?: string[]; locale?: 'ar'
   const customers = (options.names ?? [nationalCustomer]).map((name, i) => ({ id: `customer-${i + 1}`, name, code: `C${i}`, status: 'ACTIVE' }));
   const findAll = vi.fn().mockImplementation(async ({ search }) => customers.filter((customer) => customerMatchScore(customer, search)));
   const extractIntent = vi.fn().mockResolvedValue({ customerMention: nationalCustomer, lines: [], subject: quotationPrompt, brief: 'Payment: fabricated generic terms', notes: 'AI_ESTIMATED: required storage 337 TB', paymentTerms: 'invented payment policy' });
+  const reasonConversation = vi.fn(async ({ currentTurn }: { currentTurn: string }) => ({
+    action: 'COMMERCIAL_FOLLOWUP', solutionReadiness: 'READY_FOR_COMMERCIAL_HANDOFF', transition: 'CONFIRM',
+    referencedField: null, toolAction: 'NONE', responseFocus: 'CONFIRM_HANDOFF', reasonCode: 'QUOTATION_FIELD_FIXTURE_HANDOFF',
+    intent: await extractIntent(currentTurn),
+  }));
   const terms = options.terms === undefined ? (locale === 'ar' ? 'شروط الدفع: 50% مقدم\nالتسليم: 14 يوم\nالضمان: سنة\nالأعمال المدنية غير مشمولة.' : 'Payment: 50% advance\nDelivery: 14 days\nWarranty: 1 year\nCivil works excluded.') : options.terms;
   const service = new AISalesAssistantService({
     companies: { findById: vi.fn().mockResolvedValue({ defaultCurrency: 'KWD', timezone: 'Asia/Kuwait' }) },
@@ -19,7 +24,7 @@ export function quotationFieldFixture(options: { names?: string[]; locale?: 'ar'
     quotationReferences: { resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map()) },
     pricing: { resolvePriceListId: vi.fn().mockResolvedValue(null), resolveUnitPrice: vi.fn() },
     terms: { find: vi.fn().mockResolvedValue(terms) },
-  } as any, { extractIntent });
+  } as any, { extractIntent, reasonConversation });
   const useCase = new CompleteCommercialConversation(service);
   const run = (reply: string, draft?: WorkingCommercialDraft, extra = {}) => useCase.execute({ companyId: 'tenant', locale, documentMode: 'QUOTATION', replySource: 'TEXT', reply, draft, ...extra });
   return { run, service, findAll, extractIntent };
