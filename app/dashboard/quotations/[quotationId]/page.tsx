@@ -43,8 +43,10 @@ type Line = {
   description?: string | null;
   descriptionAr?: string | null;
   descriptionEn?: string | null;
-  quantity: number;
-  unitPrice: number;
+  quantity: number | null;
+  unitPrice: number | null;
+  quantityStatus?: "PENDING" | "CONFIRMED";
+  pricingStatus?: "PENDING" | "CONFIRMED";
   unitName?: string | null;
   unitNameAr?: string | null;
   unitNameEn?: string | null;
@@ -751,6 +753,7 @@ export default function QuotationDetailsPage() {
   if (!quote) {
     return null;
   }
+  const hasPendingPricing = quote.lines.some((line) => line.unitPrice === null || line.pricingStatus === "PENDING");
 
   const actions =
     quote.isCurrentRevision === false
@@ -1424,14 +1427,14 @@ export default function QuotationDetailsPage() {
                 )}
 
                 <p className="mt-1 text-sm text-slate-500">
-                  {line.quantity}{" "}
+                  {line.quantityStatus === "PENDING" || line.quantity === null ? t("الكمية معلّقة", "Quantity pending") : line.quantity}{" "}
                   {(isArabic ? line.unitNameAr ?? line.unitName : line.unitNameEn ?? line.unitName) ||
                     ""}{" "}
-                  x {money(line.unitPrice)}
+                  {line.unitPrice === null || line.pricingStatus === "PENDING" ? ` · ${t("التسعير معلّق", "Pricing pending")}` : ` x ${money(line.unitPrice)}`}
                 </p>
               </div>
 
-              <p className="font-semibold">{money(line.totalAmount)}</p>
+              <p className="font-semibold">{line.unitPrice === null || line.pricingStatus === "PENDING" ? t("معلّق", "Pending") : money(line.totalAmount)}</p>
             </div>
           ))}
         </div>
@@ -1439,6 +1442,7 @@ export default function QuotationDetailsPage() {
 
       <Card>
         <div className="ms-auto max-w-md space-y-3">
+          {hasPendingPricing ? <p role="status" className="text-amber-300">{t("التسعير والإجماليات معلّقة.", "Pricing and totals are pending.")}</p> : <>
           <div className="flex justify-between">
             <span className="text-slate-500">{t("المجموع الفرعي", "Subtotal")}</span>
             <span>{money(quote.totals.subtotal)}</span>
@@ -1462,6 +1466,7 @@ export default function QuotationDetailsPage() {
               {money(quote.totals.totalAmount)}
             </span>
           </div>
+          </>}
         </div>
       </Card>
 

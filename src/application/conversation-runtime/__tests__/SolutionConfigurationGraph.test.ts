@@ -10,7 +10,7 @@ describe("System Configuration Graph", () => {
     expect(graph.system?.key).toBe("CERAMIC_FLOORING");
     expect(graph.engineeringCalculations).toContainEqual(expect.objectContaining({ key: "ceramic.baseTiles", value: "1250" }));
     expect(graph.engineeringBom.find((line) => line.id === "CERAMIC_ADHESIVE")?.itemNameEn).toContain("suitable for tile and substrate");
-    expect(graph.salesBom.find((line) => line.id === "CERAMIC_TILES")).toMatchObject({ itemNameAr: "سيراميك أرضيات 60x60 سم", quantity: 1250, unitPrice: null, priceState: "PENDING" });
+    expect(graph.salesBom.find((line) => line.id === "CERAMIC_TILES")).toMatchObject({ itemNameAr: "سيراميك أرضيات 60x60 سم", quantity: 450, unitPrice: null, priceState: "PENDING" });
     expect(graph.salesBom.find((line) => line.id === "CERAMIC_ADHESIVE")?.quantity).toBeNull();
   });
 

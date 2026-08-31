@@ -156,6 +156,17 @@ describe("production commercial system research adapter", () => {
     expect(events.map((event) => event.intent)).toEqual(expect.arrayContaining([expect.stringMatching(/^v2\|/)]));
   });
 
+  it("returns structured real product identities and limits social evidence to discovery", async () => {
+    const payload: any = response({
+      productAlternatives: [{ componentKey: "CERAMIC_TILES", productName: "Surface Pro 60x60", brand: "RealCeram", model: "SP-6060", sourceUrl: "https://instagram.com/realceram/p/1", sourceTitle: "Ignored model title", jurisdictionRelevance: "Kuwait dealer post", confidence: .72, evidenceBasis: ["Local availability"], evidenceRole: "TECHNICAL_AND_AVAILABILITY" }],
+      evidenceClaims: [{ url: "https://instagram.com/realceram/p/1", claimSupport: ["Availability discovery"], sourceType: "SOCIAL_DISCOVERY" }],
+    });
+    payload.output[0].action.sources = [{ url: "https://instagram.com/realceram/p/1", title: "Kuwait dealer availability post" }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+    const result = await adapter().researchSystem(input(" structured-product-social"));
+    expect(result?.productAlternatives).toEqual([expect.objectContaining({ componentKey: "CERAMIC_TILES", productName: "Surface Pro 60x60", brand: "RealCeram", model: "SP-6060", sourceTitle: "Kuwait dealer availability post", evidenceRole: "DISCOVERY_ONLY" })]);
+  });
+
   it("performs new research when normalized material system intent changes", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response()), { status: 200 })); vi.stubGlobal("fetch", fetchMock);
     const research = adapter();

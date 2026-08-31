@@ -1,5 +1,8 @@
+import { detectExplicitScopeType, detectExplicitSystemIdentity } from "./explicit-system-normalizer";
+import { asksForProductOptions, renderProductOptionsReply } from "./product-options";
+import { resolveProductSelection } from "./product-selection";
 import type { ConversationBrainPort, ConversationToolPort, SolutionCandidateResolverPort } from "./ports";
-import { reduceFactProposals } from "./fact-reducer";
+import { promotePendingCandidateFacts, reduceFactProposals } from "./fact-reducer";
 import type { CommercialSolutionHandoff, ConversationRuntimeState, ConversationTurnInput, RuntimeMessage } from "./types";
 import { buildSystemConfigurationGraph, emptySystemConfigurationGraph } from "./solution-graph";
 
@@ -14,30 +17,77 @@ export class ConversationRuntime {
     if (!message || message.length > 4_000) throw new Error("CONVERSATION_RUNTIME_MESSAGE_INVALID");
     const base = this.normalizeState(input.state, input.locale);
     const userMessage: RuntimeMessage = { id: this.id(), role: "USER", text: message, source: input.source, createdAt: this.now() };
+    const approval = promotePendingCandidateFacts(
+      base.confirmedFacts,
+      base.candidateFacts,
+      message,
+      this.now(),
+    );
+    const existingSystem = approval.confirmed["system.identity"];
+    const explicitSystem = detectExplicitSystemIdentity(
+      message,
+      input.locale,
+      this.now(),
+      Boolean(existingSystem),
+    );
+
+    let turnFacts =
+      explicitSystem &&
+      (!existingSystem ||
+        String(existingSystem.value) !==
+          String(explicitSystem.value))
+        ? {
+            ...approval.confirmed,
+            "system.identity": explicitSystem,
+          }
+        : approval.confirmed;
+    const explicitScope = detectExplicitScopeType(message, this.now());
+    if (explicitScope && turnFacts["scope.type"]?.value !== explicitScope.value) {
+      turnFacts = { ...turnFacts, "scope.type": { ...explicitScope, provenance: turnFacts["scope.type"] ? "USER_CORRECTION" : "USER_EXPLICIT" } };
+    }
+
+    const wantsProductOptions = asksForProductOptions(message);
     const recentMessages = [...base.messages, userMessage].slice(-MAX_MESSAGES);
     const attachment = input.attachment ? { id: input.attachment.id ?? null, name: input.attachment.name, type: input.attachment.type } : null;
-    let decision = await this.brain.decide({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: base.confirmedFacts, compactMemory: base.compactMemory, toolResults: [], attachmentAvailable: Boolean(input.attachment), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] });
+    let decision = await this.brain.decide({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, compactMemory: base.compactMemory, toolResults: [], attachmentAvailable: Boolean(input.attachment), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] });
     const observations = [...base.toolResults];
     if (decision.toolRequest && MAX_TOOL_ITERATIONS > 0) {
       const observation = await this.tools.execute({ request: decision.toolRequest, companyId: input.companyId, locale: input.locale });
       observations.push(observation);
-      decision = await this.brain.decide({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: base.confirmedFacts, compactMemory: base.compactMemory, toolResults: [observation], attachmentAvailable: Boolean(input.attachment), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] });
+      decision = await this.brain.decide({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, compactMemory: base.compactMemory, toolResults: [observation], attachmentAvailable: Boolean(input.attachment), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] });
     }
     if (!decision.reply.trim()) throw new Error("CONVERSATION_RUNTIME_EMPTY_REPLY");
-    const reduced = reduceFactProposals(base.confirmedFacts, decision.factProposals, message, this.now());
+    const reduced = reduceFactProposals(turnFacts, decision.factProposals, message, this.now(), userMessage.id);
+    const productSelection = resolveProductSelection({ graph: base.solutionGraph, confirmed: reduced.confirmed, message, locale: input.locale, now: this.now() });
+    reduced.confirmed = productSelection.confirmed;
+    if (productSelection.reply) decision = { ...decision, reply: productSelection.reply };
     const canHandoff = decision.solutionReadiness === "READY_FOR_HANDOFF" && Boolean(reduced.confirmed["system.identity"]);
     const transitionState = decision.transition === "CONFIRM" && canHandoff
       ? "TRANSITION_REQUESTED"
       : decision.transition === "PROPOSE" ? "PROPOSED" : decision.transition === "REOPEN" ? "EXPLORING" : base.transitionState;
     let solutionGraph = buildSystemConfigurationGraph(reduced.confirmed);
     if (this.candidates && solutionGraph.catalogResolution === "PENDING") {
-      const resolved = await this.candidates.resolve({ graph: solutionGraph, companyId: input.companyId, locale: input.locale, allowResearchFallback: Boolean(reduced.confirmed["system.qualityTier"]) });
+      const resolved = await this.candidates.resolve({ graph: solutionGraph, companyId: input.companyId, locale: input.locale, allowResearchFallback: true });
       solutionGraph = resolved.graph;
-      if (resolved.researchObservation) observations.push(resolved.researchObservation);
+
+      if (resolved.researchObservation) {
+        observations.push(resolved.researchObservation);
+      }
+
+      if (wantsProductOptions) {
+        decision = {
+          ...decision,
+          reply: renderProductOptionsReply(
+            solutionGraph,
+            input.locale,
+            Boolean(resolved.researchObservation),
+          ),
+        };
+      }
     }
     const handoff: CommercialSolutionHandoff | null = null;
     const assistantMessage: RuntimeMessage = { id: this.id(), role: "ASSISTANT", text: decision.reply.trim(), source: "AI", createdAt: this.now() };
-    return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: [...base.candidateFacts, ...reduced.candidates].slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: observations.slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: decision.suggestedReplies.slice(0, 4), handoff, handoffToken: null, solutionGraph };
+    return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: [...approval.candidates, ...reduced.candidates].slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: observations.slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: decision.suggestedReplies.slice(0, 4), handoff, handoffToken: null, solutionGraph };
   }
 
   private normalizeState(state: ConversationRuntimeState | null, locale: "ar" | "en"): ConversationRuntimeState {

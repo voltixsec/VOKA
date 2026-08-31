@@ -26,7 +26,24 @@ export type ResearchSourceType =
   | "MANUFACTURER_PRODUCT"
   | "STANDARDS_ORGANIZATION"
   | "SPECIALIST_TECHNICAL"
+  | "LOCAL_DISTRIBUTOR"
+  | "SUPPLIER_DEALER"
+  | "MARKETPLACE"
+  | "SOCIAL_DISCOVERY"
   | "OTHER";
+
+export type ResearchedProductAlternative = {
+  componentKey: string;
+  productName: string;
+  brand: string | null;
+  model: string | null;
+  sourceUrl: string;
+  sourceTitle: string;
+  jurisdictionRelevance: string | null;
+  confidence: number;
+  evidenceBasis: string[];
+  evidenceRole: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "DISCOVERY_ONLY";
+};
 
 export type ProvisionalSystemInput = {
   name: string;
@@ -53,6 +70,7 @@ export type ProvisionalSystemModel = {
   confidence: number;
   jurisdiction: string | null;
   evidence: ResearchEvidence[];
+  productAlternatives?: ResearchedProductAlternative[];
   provenance: "RESEARCHED" | "AI_INTERPRETED";
   requiresEngineeringVerification: true;
 };

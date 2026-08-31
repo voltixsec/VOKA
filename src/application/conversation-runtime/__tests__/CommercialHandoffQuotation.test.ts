@@ -3,7 +3,7 @@ import { CreateQuotationFromCommercialHandoff, adaptCommercialHandoffToQuotation
 
 const confirmed = (key: string, value: string | number, provenance: FactProvenance = "USER_EXPLICIT") => ({ key, value, provenance, evidence: String(value), updatedAt: "2026-08-31T00:00:00.000Z" });
 function handoff(overrides: Partial<CommercialSolutionHandoff> = {}): CommercialSolutionHandoff {
-  return { runtimeId: "runtime-vehicle-1", confirmedFacts: { "system.identity": confirmed("system.identity", "Vehicle Elevator"), "customer.name": confirmed("customer.name", "National Telecom"), "scope.type": confirmed("scope.type", "SUPPLY_AND_INSTALLATION"), "system.numberOfStops": confirmed("system.numberOfStops", 6) }, commercialLines: [], toolEvidence: [], createdAt: "2026-08-31T00:00:00.000Z", ...overrides };
+  return { runtimeId: "runtime-vehicle-1", confirmedFacts: { "system.identity": confirmed("system.identity", "Vehicle Elevator"), "system.jurisdiction": confirmed("system.jurisdiction", "Kuwait"), "customer.name": confirmed("customer.name", "National Telecom"), "scope.type": confirmed("scope.type", "SUPPLY_AND_INSTALLATION"), "system.numberOfStops": confirmed("system.numberOfStops", 6) }, commercialLines: [], toolEvidence: [], createdAt: "2026-08-31T00:00:00.000Z", ...overrides };
 }
 function port(overrides: Partial<CommercialHandoffQuotationPort> = {}): CommercialHandoffQuotationPort {
   return {
@@ -31,7 +31,7 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: handoff(), customer: { status: "RESOLVED", id: "customer-1", name: "Persisted Customer" }, defaults: { currencyCode: "KWD", termsAr: null, termsEn: "Approved company terms" }, locale: "en" });
     expect(draft).toMatchObject({ customerId: "customer-1", customer: { name: "Persisted Customer" }, scopeType: "SUPPLY_AND_INSTALLATION", currencyCode: "KWD", termsAndConditionsEn: "Approved company terms" });
     expect(JSON.stringify(draft)).not.toContain("raw conversation");
-    expect(draft?.notesEn).toContain("Floors / stops: 6");
+    expect(draft?.notesEn).toBeNull();
   });
 
   it("reuses company currency and approved scope terms", async () => {
@@ -41,19 +41,19 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ currencyCode: "KWD", termsAndConditionsAr: "شروط الشركة" });
   });
 
-  it("creates an editable Draft with an explicitly pending customer", async () => {
+  it("blocks Draft creation when customer is missing", async () => {
     const gateway = port();
     const value = handoff(); delete value.confirmedFacts["customer.name"];
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: value, locale: "ar" });
-    expect(result.status).toBe("CREATED");
-    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
+    expect(result).toEqual({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] });
+    expect(gateway.createDraft).not.toHaveBeenCalled();
   });
 
-  it("keeps an ambiguous customer pending rather than guessing or blocking Draft creation", async () => {
+  it("blocks an ambiguous customer rather than guessing", async () => {
     const gateway = port({ resolveCustomer: vi.fn().mockResolvedValue({ status: "AMBIGUOUS", candidates: [{ id: "c1", name: "National Co" }, { id: "c2", name: "National Telecom" }] }) });
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: handoff(), locale: "en" });
-    expect(result.status).toBe("CREATED");
-    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
+    expect(result).toMatchObject({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.selection", candidates: [{ id: "c1", name: "National Co" }, { id: "c2", name: "National Telecom" }] }] });
+    expect(gateway.createDraft).not.toHaveBeenCalled();
   });
 
   it("does not block on optional project, attention, validity, or commercial lines", async () => {
@@ -75,10 +75,11 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(second).toMatchObject({ status: "EXISTING", quotationId: "quotation-existing" });
   });
 
-  it("produces a deterministic tenant-scoped quotation input identity", () => {
-    expect(commercialHandoffQuotationNumber(handoff())).toBe(commercialHandoffQuotationNumber({ ...handoff(), createdAt: "later" }));
-    expect(commercialHandoffQuotationNumber(handoff())).toBe(commercialHandoffQuotationNumber(handoff({ confirmedFacts: { ...handoff().confirmedFacts, "recommendation.note": confirmed("recommendation.note", "unconfirmed recommendation", "AI_INFERRED") } })));
-    expect(commercialHandoffQuotationNumber(handoff())).not.toBe(commercialHandoffQuotationNumber(handoff({ confirmedFacts: { ...handoff().confirmedFacts, "system.numberOfStops": confirmed("system.numberOfStops", 8) } })));
+  it("produces a professional stable quotation reference without exposing runtime identity", () => {
+    expect(commercialHandoffQuotationNumber(handoff())).toBe(commercialHandoffQuotationNumber(handoff({ confirmedFacts: { ...handoff().confirmedFacts, "system.numberOfStops": confirmed("system.numberOfStops", 8) } })));
+    expect(commercialHandoffQuotationNumber(handoff())).toBe("QT-20260831-000000000");
+    expect(commercialHandoffQuotationNumber(handoff())).not.toContain("AI-");
+    expect(commercialHandoffQuotationNumber(handoff())).not.toContain("RUNTIME");
   });
 
   it("preserves researched requirements as pending generic Draft lines without fake catalog or price truth", () => {

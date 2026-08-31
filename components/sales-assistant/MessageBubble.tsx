@@ -24,7 +24,7 @@ export function MessageBubble({ role, text, isArabic, pending, copied, onCopy, c
         <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-sky-300/15 bg-gradient-to-br from-sky-300/15 to-violet-400/10 text-[11px] font-bold tracking-wide text-sky-200 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">V</span>
         <div><p className="text-xs font-semibold tracking-wide text-slate-200">VOKA</p><p className="text-[10px] text-slate-500">{isArabic ? "مساعد المبيعات الهندسي" : "Sales engineering assistant"}</p></div>
       </div>
-      <p className="whitespace-pre-wrap text-[15px] leading-7 text-slate-100 sm:text-base sm:leading-8">{text}</p>
+      <p className="whitespace-pre-wrap text-[15px] leading-7 text-slate-100 sm:text-base sm:leading-8">{plainConversationText(text)}</p>
       {children}
       {onCopy ? <div className="mt-3 flex min-h-7 items-center gap-1 opacity-100 transition motion-reduce:transition-none sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
         <button type="button" onClick={onCopy} aria-label={isArabic ? "نسخ الرد" : "Copy response"} className="rounded-lg p-1.5 text-slate-500 outline-none hover:bg-white/[0.06] hover:text-slate-300 focus-visible:ring-2 focus-visible:ring-sky-400"><AssistantIcon name="copy" className="h-3.5 w-3.5" /></button>
@@ -32,4 +32,15 @@ export function MessageBubble({ role, text, isArabic, pending, copied, onCopy, c
       </div> : null}
     </div>
   </article>;
+}
+
+export function plainConversationText(text: string) {
+  return text
+    .replace(/^\s*#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*\|(.+)\|\s*$/gm, (_row, cells: string) => cells.split("|").map((cell) => cell.trim()).filter(Boolean).join(" · "))
+    .replace(/\s+\|\s+/g, " · ")
+    .replace(/^\s*:?-{3,}:?(?:\s*·\s*:?-{3,}:?)+\s*$/gm, "")
+    .trim();
 }

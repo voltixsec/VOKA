@@ -475,6 +475,7 @@ export default function EditQuotationPage() {
       };
     }
   }, [discountType, discountValue, lines]);
+  const hasPendingPricing = lines.some((line) => line.unitPrice === null || line.pricingStatus === "PENDING");
 
   function activeLocalizedText(
     itemName: string,
@@ -1239,7 +1240,7 @@ export default function EditQuotationPage() {
                 />
 
                 <div className="flex min-h-9 items-center rounded-lg border border-white/10 bg-white/[0.03] px-2 text-sm font-semibold text-emerald-300">
-                  {(preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
+                  {line.unitPrice === null || line.pricingStatus === "PENDING" ? t("معلّق", "Pending") : (preview.lines[index]?.totalAmount ?? 0).toFixed(3)}
                 </div>
 
                 <div className="flex min-h-9 items-center justify-center">
@@ -1406,6 +1407,7 @@ export default function EditQuotationPage() {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
             <div className="min-w-72 space-y-1 text-sm">
+              {hasPendingPricing ? <p role="status" className="text-amber-300">{t("التسعير والإجماليات معلّقة حتى إدخال أسعار البنود غير المحددة.", "Pricing and totals are pending until unresolved line prices are entered.")}</p> : <>
               <div className="flex justify-between gap-6">
                 <span>{t("\u0625\u062c\u0645\u0627\u0644\u064a \u0642\u0628\u0644 \u0627\u0644\u062e\u0635\u0645 \u0648\u0627\u0644\u0636\u0631\u064a\u0628\u0629", "Subtotal")}</span>
                 <span>{preview.totals.subtotal.toFixed(3)} {quote.currencyCode}</span>
@@ -1424,6 +1426,7 @@ export default function EditQuotationPage() {
                 <span>{t("\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0646\u0647\u0627\u0626\u064a", "Total")}</span>
                 <span>{preview.totals.totalAmount.toFixed(3)} {quote.currencyCode}</span>
               </div>
+              </>}
             </div>
 
             <div className="flex gap-3">

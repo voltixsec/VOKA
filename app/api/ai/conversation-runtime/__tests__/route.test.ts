@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn() }));
 vi.mock("@/src/infrastructure/ai/createConversationRuntime", () => ({ createConversationRuntime: () => ({ execute: mocks.execute }) }));
+vi.mock("@/src/infrastructure/ai/ConversationStateToken", () => ({ signConversationState: vi.fn().mockResolvedValue("signed-state"), verifyConversationState: vi.fn() }));
 vi.mock("@/lib/api", async () => {
   const errors = await vi.importActual<typeof import("@/lib/api/ApiError")>("@/lib/api/ApiError");
   const responses = await vi.importActual<typeof import("@/lib/api/ApiResponse")>("@/lib/api/ApiResponse");

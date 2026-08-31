@@ -11,8 +11,12 @@ afterEach(() => { cleanup(); sessionStorage.clear(); vi.restoreAllMocks(); mocks
 
 const state = (reply = "That makes sense. Let’s start with the vehicle type and number of stops."): ConversationRuntimeState => ({
   runtimeId: "runtime-1", version: 1, locale: "en",
-  messages: [{ id: "u1", role: "USER", text: "I need a vehicle elevator", source: "TEXT", createdAt: "2026-01-01" }, { id: "a1", role: "ASSISTANT", text: reply, source: "AI", createdAt: "2026-01-01" }],
-  confirmedFacts: { "system.identity": { key: "system.identity", value: "Vehicle Elevator", provenance: "USER_EXPLICIT", evidence: "vehicle elevator", updatedAt: "2026-01-01" } },
+  messages: [{ id: "u1", role: "USER", text: "I need a vehicle elevator for National Telecom in Kuwait", source: "TEXT", createdAt: "2026-01-01" }, { id: "a1", role: "ASSISTANT", text: reply, source: "AI", createdAt: "2026-01-01" }],
+  confirmedFacts: {
+    "system.identity": { key: "system.identity", value: "Vehicle Elevator", provenance: "USER_EXPLICIT", evidence: "vehicle elevator", updatedAt: "2026-01-01" },
+    "customer.name": { key: "customer.name", value: "National Telecom", provenance: "USER_EXPLICIT", evidence: "National Telecom", updatedAt: "2026-01-01" },
+    "system.jurisdiction": { key: "system.jurisdiction", value: "Kuwait", provenance: "USER_EXPLICIT", evidence: "Kuwait", updatedAt: "2026-01-01" },
+  },
   candidateFacts: [], unresolvedImportantQuestions: ["vehicle class"], toolResults: [], solutionReadiness: "EXPLORING", transitionState: "EXPLORING", compactMemory: "Vehicle elevator requested", suggestedReplies: ["SUV too"], handoff: null,
 });
 
@@ -117,7 +121,7 @@ describe("Sales Assistant clean runtime UI", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
   });
 
-  it("allows customer to remain pending in an editable Draft", async () => {
+  it("opens only after strict customer and jurisdiction prerequisites are present", async () => {
     sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(proposedState()));
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { handoffToken: "pending-customer" } }) })

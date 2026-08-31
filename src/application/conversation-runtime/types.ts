@@ -1,6 +1,6 @@
 export type ConversationLocale = "ar" | "en";
 export type ConversationMessageSource = "TEXT" | "VOICE" | "CHIP";
-export type FactProvenance = "USER_CORRECTION" | "USER_EXPLICIT" | "VERIFIED_DOCUMENT" | "VERIFIED_DATABASE" | "TRUSTED_PROFILE" | "DETERMINISTIC_DERIVATION" | "RESEARCHED" | "AI_INFERRED" | "DEFAULT";
+export type FactProvenance = "USER_CORRECTION" | "USER_APPROVED" | "USER_EXPLICIT" | "VERIFIED_DOCUMENT" | "VERIFIED_DATABASE" | "TRUSTED_PROFILE" | "DETERMINISTIC_DERIVATION" | "RESEARCHED" | "AI_INFERRED" | "DEFAULT";
 export type FactValue = string | number | boolean;
 
 export type RuntimeMessage = {
@@ -19,7 +19,11 @@ export type ConfirmedFact = {
   updatedAt: string;
 };
 
-export type CandidateFact = ConfirmedFact & { status: "COMMITTED" | "REJECTED"; rejectionReason: string | null };
+export type CandidateFact = ConfirmedFact & {
+  status: "COMMITTED" | "PENDING_APPROVAL" | "REJECTED";
+  rejectionReason: string | null;
+  proposalGroupId?: string | null;
+};
 export type SolutionReadiness = "EXPLORING" | "MATURE" | "AWAITING_USER_CONFIRMATION" | "READY_FOR_HANDOFF";
 export type TransitionState = "EXPLORING" | "PROPOSED" | "TRANSITION_REQUESTED" | "COMMERCIAL_HANDOFF";
 export type ConversationToolKind = "ENGINEERING_KNOWLEDGE" | "RESEARCH" | "CATALOG_LOOKUP" | "PRICING_LOOKUP" | "CUSTOMER_LOOKUP" | "ATTACHMENT_INSPECTION" | "DRAWING_INSPECTION" | "BOQ_INSPECTION";
@@ -60,6 +64,11 @@ export type CandidateProduct = {
   price: number | null;
   source: "VERIFIED_CATALOG" | "RESEARCHED" | "SUGGESTED";
   sourceUrl?: string | null;
+  sourceTitle?: string | null;
+  jurisdictionRelevance?: string | null;
+  confidence?: number | null;
+  evidenceBasis?: string[];
+  evidenceRole?: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "DISCOVERY_ONLY";
 };
 
 export type SystemConfigurationGraph = {
@@ -72,7 +81,7 @@ export type SystemConfigurationGraph = {
   salesBom: SolutionBomLine[];
   candidateProducts: CandidateProduct[];
   catalogResolution: "NOT_REQUIRED" | "PENDING" | "CATALOG_MATCHED" | "CATALOG_INSUFFICIENT" | "RESEARCHED_SUGGESTIONS";
-  readiness: { draftReady: boolean; pendingBeforeFinalIssue: string[] };
+  readiness: { draftReady: boolean; pendingBeforeDraftOpen: string[]; pendingBeforeFinalIssue: string[] };
 };
 
 export type ConfirmedCommercialLine = {
@@ -117,6 +126,8 @@ export type ConversationRuntimeState = {
   handoff: CommercialSolutionHandoff | null;
   /** Server-signed envelope. Required by consequential handoff consumers. */
   handoffToken?: string | null;
+  /** Server signature over the complete governed runtime snapshot. */
+  stateToken?: string | null;
   /** Added after runtime v1 launch; absent only in safely hydrated legacy session state. */
   solutionGraph?: SystemConfigurationGraph;
 };
