@@ -11,7 +11,10 @@ export interface CreateQuotationDto
   customerId: string | null;
   priceListId?: string | null;
 
-  quotationNumber: string;
+  /** Assigned by the canonical server policy in production create paths. */
+  quotationNumber?: string;
+  /** Optional hidden idempotency/family identity; never used as the visible number. */
+  familyId?: string;
 
   currencyCode?: string;
 

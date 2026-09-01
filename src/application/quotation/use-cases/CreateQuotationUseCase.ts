@@ -8,24 +8,47 @@ import { createQuotationLocalizationSourceSignature } from "../services/Quotatio
 import type { CreateQuotationDto } from "../dto/CreateQuotationDto";
 import type { IQuotationRepository } from "../repositories/IQuotationRepository";
 import type { IQuotationReferenceValidator } from "../repositories/IQuotationReferenceValidator";
+import type { IQuotationNumberGenerator } from "../repositories/IQuotationNumberGenerator";
 import type { ApplicationResult } from "../results/ApplicationResult";
 
 export class CreateQuotationUseCase {
   constructor(
     private readonly repository: IQuotationRepository,
     private readonly referenceValidator: IQuotationReferenceValidator,
+    private readonly numberGenerator?: IQuotationNumberGenerator,
   ) {}
 
   async execute(
     dto: CreateQuotationDto,
+    numberAllocationAttempt = 0,
   ): Promise<ApplicationResult<Quotation>> {
+
+    const issueDate = dto.issueDate ?? new Date();
+    const usesCanonicalGenerator = !dto.quotationNumber?.trim();
+    const quotationNumber = dto.quotationNumber?.trim() ||
+      await this.numberGenerator?.generate(dto.companyId, issueDate);
+    if (!quotationNumber) {
+      return {
+        success: false,
+        error: {
+          code: "QUOTATION_NUMBER_REQUIRED",
+          message: "A canonical quotation number could not be assigned.",
+        },
+      };
+    }
 
     const exists = await this.repository.existsByNumber(
       dto.companyId,
-      dto.quotationNumber,
+      quotationNumber,
     );
 
     if (exists) {
+      if (usesCanonicalGenerator && numberAllocationAttempt < 2) {
+        return this.execute(
+          { ...dto, quotationNumber: undefined, issueDate },
+          numberAllocationAttempt + 1,
+        );
+      }
       return {
         success: false,
         error: {
@@ -113,13 +136,17 @@ export class CreateQuotationUseCase {
         name: customer.name,
         nameAr: dto.customer?.nameAr ?? customer.nameAr,
         nameEn: dto.customer?.nameEn ?? customer.nameEn,
+      } : dto.customer ? {
+        ...dto.customer,
+        name: dto.customer.name.trim(),
       } : null;
 
       const quotation = new Quotation({
         companyId: dto.companyId,
         customerId: dto.customerId,
         priceListId: dto.priceListId,
-        number: dto.quotationNumber,
+        number: quotationNumber,
+        familyId: dto.familyId,
         currencyCode: dto.currencyCode,
         customer: customerInfo,
         lines: canonicalLines,
@@ -141,7 +168,7 @@ export class CreateQuotationUseCase {
         attentionNameAr: dto.attentionNameAr,
         attentionNameEn: dto.attentionNameEn,
         scopeType: dto.scopeType,
-        issueDate: dto.issueDate,
+        issueDate,
         expiryDate: dto.expiryDate,
       });
 
@@ -214,6 +241,20 @@ export class CreateQuotationUseCase {
       };
     }
     catch (error) {
+
+      if (
+        usesCanonicalGenerator &&
+        numberAllocationAttempt < 2 &&
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        return this.execute(
+          { ...dto, quotationNumber: undefined, issueDate },
+          numberAllocationAttempt + 1,
+        );
+      }
 
       if (error instanceof QuotationDomainError) {
         return {

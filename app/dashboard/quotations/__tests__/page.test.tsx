@@ -75,4 +75,24 @@ describe("QuotationsPage", () => {
       );
     });
   });
+
+  it("renders an incomplete draft safely when no customer snapshot is available", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { quotations: [{
+        id: "quotation-pending",
+        quotationNumber: "QT-202609-0002",
+        status: "DRAFT",
+        issueDate: "2026-09-01T00:00:00.000Z",
+        currencyCode: "KWD",
+        customer: null,
+        totals: { totalAmount: 0 },
+      }], pagination: { total: 1, page: 1, pageSize: 20, totalPages: 1 } } }),
+    }));
+
+    render(createElement(QuotationsPage));
+
+    expect(await screen.findByText("Customer not linked")).toBeTruthy();
+  });
 });

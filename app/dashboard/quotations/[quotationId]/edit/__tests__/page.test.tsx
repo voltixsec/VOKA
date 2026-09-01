@@ -121,6 +121,10 @@ function fetchForEdit() {
         return Promise.resolve(response(units));
       }
 
+      if (input.startsWith("/api/customers")) {
+        return Promise.resolve(response({ customers: [] }));
+      }
+
       if (init?.method === "PATCH") {
         return Promise.resolve(response(quotation));
       }
@@ -164,6 +168,30 @@ describe("EditQuotationPage dense composer UX", () => {
     expect(screen.getByDisplayValue("1")).toBeTruthy();
     expect(screen.getByDisplayValue("10")).toBeTruthy();
     expect(screen.getByText("10.500 KWD")).toBeTruthy(); // 10 * 1.05 (historical tax 5%)
+  });
+
+  it("preserves a proposed customer and links a newly created customer immediately", async () => {
+    const proposedQuotation = { ...quotation, customerId: null, customer: { name: "New Kuwait Customer" } };
+    const fetchMock = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
+      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
+      if (input === "/api/units") return Promise.resolve(response(units));
+      if (input.startsWith("/api/customers") && !init?.method) return Promise.resolve(response({ customers: [] }));
+      if (input === "/api/customers" && init?.method === "POST") return Promise.resolve({ ok: true, status: 201, json: async () => ({ data: { customer: { id: "customer-new", name: "New Kuwait Customer" } } }) });
+      if (init?.method === "PATCH") return Promise.resolve(response({ ...proposedQuotation, customerId: "customer-new" }));
+      return Promise.resolve(response(proposedQuotation));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(createElement(EditQuotationPage));
+
+    expect(await screen.findByText("New Kuwait Customer")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => {
+      const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+      expect(patch).toBeTruthy();
+      expect(JSON.parse(String(patch?.[1]?.body)).customerId).toBe("customer-new");
+    });
   });
 
   it("2. Historical saved tax survives normal edit/save unchanged", async () => {

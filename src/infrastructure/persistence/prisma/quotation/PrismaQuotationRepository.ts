@@ -95,6 +95,23 @@ export class PrismaQuotationRepository implements IQuotationRepository {
     return record ? PrismaQuotationMapper.toDomain(record) : null;
   }
 
+  /** Tenant-scoped lookup for a hidden source/family idempotency identity. */
+  async findByFamilyId(
+    companyId: string,
+    familyId: string,
+  ): Promise<Quotation | null> {
+    const record = await this.db.quotation.findFirst({
+      where: {
+        companyId,
+        familyId,
+        revisionNumber: 0,
+        isDeleted: false,
+      },
+      include: { lines: true },
+    });
+    return record ? PrismaQuotationMapper.toDomain(record) : null;
+  }
+
   async findAll(
     filters: QuotationListFilters,
   ): Promise<QuotationListResult> {

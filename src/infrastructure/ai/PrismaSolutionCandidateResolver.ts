@@ -1,8 +1,9 @@
 import { PrismaCatalogItemRepository } from "@/features/catalog/infrastructure/prisma/PrismaCatalogItemRepository";
 import { prisma } from "@/lib/prisma";
-import type { CommercialSystemResearchPort } from "@/src/application/agentic-commercial-intelligence";
+import type { CommercialSystemResearchPort, ResearchDiagnosticCode } from "@/src/application/agentic-commercial-intelligence";
 import type {
   CandidateProduct,
+  SolutionBomLine,
   SolutionCandidateResolverPort,
   SystemConfigurationGraph,
 } from "@/src/application/conversation-runtime";
@@ -48,7 +49,25 @@ function primaryLines(graph: SystemConfigurationGraph) {
     return explicitPrimary;
   }
 
-  return products.slice(0, 1);
+  if (products.length) return products.slice(0, 1);
+
+  if (!graph.system) return [];
+
+  return [{
+    id: `${graph.system.key}_SYSTEM`,
+    componentKeys: [`${graph.system.key}_SYSTEM`],
+    category: "PRODUCT",
+    itemName: graph.system.nameEn,
+    itemNameAr: graph.system.nameAr,
+    itemNameEn: graph.system.nameEn,
+    unitName: null,
+    quantity: null,
+    quantityState: "PENDING",
+    unitPrice: null,
+    priceState: "PENDING",
+    type: "PRODUCT",
+    provenance: "AI_INFERRED",
+  } satisfies SolutionBomLine];
 }
 
 function researchCandidate(
@@ -80,6 +99,8 @@ function researchCandidate(
     confidence: product.confidence,
     evidenceBasis: product.evidenceBasis,
     evidenceRole: product.evidenceRole,
+    imageUrl: product.imageUrl ?? null,
+    marketPrice: product.marketPrice ?? null,
   };
 }
 
@@ -124,6 +145,7 @@ export class PrismaSolutionCandidateResolver
     input: Parameters<SolutionCandidateResolverPort["resolve"]>[0],
   ) {
     const lines = primaryLines(input.graph);
+    const requestedCount = Math.max(1, Math.min(3, Math.floor(input.requestedCount) || TARGET_OPTIONS));
 
     if (!lines.length) {
       return {
@@ -147,12 +169,12 @@ export class PrismaSolutionCandidateResolver
     const preferredBrand =
       requirement(input.graph, "product.brand");
 
-    const allCandidates: CandidateProduct[] = [];
-    const researchModels: ResearchResult[] = [];
-    let researchAttempted = false;
-    let everyComponentComplete = true;
+    let allCandidates = input.mode === "WEB_FALLBACK"
+      ? input.graph.candidateProducts.slice(0, requestedCount)
+      : [];
 
-    for (const line of lines) {
+    if (input.mode === "CATALOG_ONLY") for (const line of lines) {
+      if (allCandidates.length >= requestedCount) break;
       const queryParts = [
         input.locale === "ar" ? line.itemNameAr : line.itemNameEn,
         preferredBrand,
@@ -203,134 +225,84 @@ export class PrismaSolutionCandidateResolver
           }];
         });
 
-      let componentCandidates =
-        mergeDistinct([], catalogCandidates);
-
-      if (
-        componentCandidates.length < TARGET_OPTIONS &&
-        input.allowResearchFallback &&
-        this.research &&
-        input.graph.system
-      ) {
-        researchAttempted = true;
-
-        const remaining =
-          TARGET_OPTIONS - componentCandidates.length;
-
-        const searchIntent = [
-          `Component key: ${line.id}. Find up to ${Math.max(remaining, TARGET_OPTIONS)} distinct real current product, brand, or model alternatives for: ${line.itemNameEn}.`,
-          jurisdiction
-            ? `Project market/jurisdiction: ${jurisdiction}.`
-            : "",
-          qualityTier
-            ? `Requested quality tier: ${qualityTier}.`
-            : "",
-          origin
-            ? `Preferred origin when suitable: ${origin}.`
-            : "",
-          preferredBrand
-            ? `Preferred brand context: ${preferredBrand}.`
-            : "",
-          "Search broadly but truthfully.",
-          "Use official manufacturer product pages first.",
-          "Also search local distributors, suppliers, dealers, marketplaces, and public business/social pages when useful for market availability discovery.",
-          "Public Facebook, Instagram, LinkedIn, YouTube, TikTok or similar pages may be used only for discovery/availability evidence, never as sole technical specification authority.",
-          "Prefer sources relevant to the project country.",
-          "Return genuinely different alternatives, not multiple pages for the same brand.",
-          "Do not invent products, models, prices, availability, or compliance.",
-        ].filter(Boolean).join(" ");
-
-        const model = await this.research.researchSystem({
-          companyId: input.companyId,
-          query: searchIntent,
-          locale: input.locale,
-          jurisdiction,
-        });
-
-        if (model) {
-          researchModels.push(model);
-          const researched = (model.productAlternatives ?? [])
-            .filter((product) => normalize(product.componentKey) === normalize(line.id))
-            .sort((a, b) => b.confidence - a.confidence)
-            .map((product, index) => researchCandidate(product, index))
-            .filter((candidate): candidate is CandidateProduct => candidate !== null);
-
-          componentCandidates = mergeDistinct(
-            componentCandidates,
-            researched,
-          );
-        }
-      }
-
-      allCandidates.push(
-        ...componentCandidates.slice(0, TARGET_OPTIONS),
-      );
-      if (componentCandidates.length < TARGET_OPTIONS) everyComponentComplete = false;
+      allCandidates = mergeDistinct(allCandidates, catalogCandidates, requestedCount);
     }
 
-    const hasResearch =
-      allCandidates.some(
-        (candidate) => candidate.source === "RESEARCHED",
-      );
+    if (input.mode === "CATALOG_ONLY") {
+      return {
+        graph: {
+          ...input.graph,
+          candidateProducts: allCandidates,
+          catalogResolution: allCandidates.length >= requestedCount ? "CATALOG_MATCHED" as const : "CATALOG_INSUFFICIENT" as const,
+        },
+      };
+    }
 
-    const catalogResolution: SystemConfigurationGraph["catalogResolution"] =
-      allCandidates.length === 0 || (!hasResearch && !everyComponentComplete)
-        ? "CATALOG_INSUFFICIENT"
-        : hasResearch
-          ? "RESEARCHED_SUGGESTIONS"
-          : "CATALOG_MATCHED";
+    const remaining = requestedCount - allCandidates.length;
+    let model: ResearchResult | null = null;
+    let diagnostic: ResearchDiagnosticCode | null = null;
+    if (remaining > 0 && this.research && input.graph.system) {
+      const requestedComponents = lines.map((line) => ({ componentKey: line.id, product: line.itemNameEn }));
+      const explicitSpecifications = input.graph.requirements.map((item) => `${item.labelEn}: ${item.value}`).join(", ");
+      const searchIntent = [
+        input.query,
+        requestedComponents.map((item) => item.product).join("; "),
+        explicitSpecifications ? `Required specifications: ${explicitSpecifications}.` : "",
+        `Find up to ${remaining} distinct real current product alternatives total for these exact component keys: ${JSON.stringify(requestedComponents)}.`,
+        jurisdiction ? `Target market: ${jurisdiction}. Prefer manufacturer, authorized distributor, or reputable supplier serving ${jurisdiction}; include local availability and listed market-price evidence when explicit.` : "",
+        qualityTier ? `Requested quality tier: ${qualityTier}.` : "",
+        origin ? `Preferred origin when suitable: ${origin}.` : "",
+        preferredBrand ? `Preferred brand context: ${preferredBrand}.` : "",
+        "Use official manufacturer product pages first and local market sources only as supporting availability evidence.",
+        "Return genuinely different products, never page titles or publisher names as product identities.",
+        "Do not invent products, models, prices, availability, or compliance.",
+      ].filter(Boolean).join(" ");
+      const researchInput = { companyId: input.companyId, query: searchIntent, locale: input.locale, jurisdiction };
+      if (this.research.researchSystemWithDiagnostic) {
+        const result = await this.research.researchSystemWithDiagnostic(researchInput);
+        model = result.model; diagnostic = result.diagnostic;
+      } else model = await this.research.researchSystem(researchInput);
+    }
 
-    const researchEvidence =
-      researchModels.flatMap((model) => model.evidence);
-
-    const researchObservation =
-      researchAttempted
-        ? {
-            kind: "RESEARCH" as const,
-            status:
-              researchModels.length > 0
-                ? "COMPLETED" as const
-                : "UNAVAILABLE" as const,
-            summary: JSON.stringify({
-              type: "PRODUCT_MARKET_OPTIONS",
-              jurisdiction,
-              qualityTier,
-              options: allCandidates.slice(0, 12).map((candidate) => ({
-                componentKey: candidate.componentKey,
-                name: candidate.name,
-                brand: candidate.brand,
-                model: candidate.model,
-                source: candidate.source,
-                sourceUrl: candidate.sourceUrl ?? null,
-              })),
-            }).slice(0, 2_000),
-            evidence: researchEvidence
-              .filter(
-                (source, index, all) =>
-                  all.findIndex(
-                    (candidate) =>
-                      candidate.url === source.url,
-                  ) === index,
-              )
-              .slice(0, 10)
-              .map(({ title, url, publisher }) => ({
-                title,
-                url,
-                publisher,
-              })),
-            createdAt: this.now(),
-          }
-        : undefined;
+    const componentKeys = new Set(lines.map((line) => normalize(line.id)));
+    const candidatesBeforeResearch = new Set(allCandidates.map((candidate) => candidate.id));
+    const researched = (model?.productAlternatives ?? [])
+      .filter((product) => componentKeys.has(normalize(product.componentKey)))
+      .sort((a, b) => localRank(b, jurisdiction) - localRank(a, jurisdiction) || b.confidence - a.confidence)
+      .map((product, index) => researchCandidate(product, index))
+      .filter((candidate): candidate is CandidateProduct => candidate !== null);
+    allCandidates = mergeDistinct(allCandidates, researched, requestedCount);
+    const usableResearchCount = allCandidates.filter((candidate) => candidate.source === "RESEARCHED" && !candidatesBeforeResearch.has(candidate.id)).length;
+    const evidence = (model?.evidence ?? [])
+      .filter((source, index, values) => values.findIndex((candidate) => candidate.url === source.url) === index)
+      .slice(0, 10)
+      .map(({ title, url, publisher }) => ({ title, url, publisher }));
+    const researchObservation = {
+      kind: "RESEARCH" as const,
+      status: usableResearchCount > 0 ? "COMPLETED" as const : "UNAVAILABLE" as const,
+      summary: usableResearchCount > 0
+        ? JSON.stringify({ type: "PRODUCT_MARKET_OPTIONS", candidateCount: allCandidates.length, researchedCandidateCount: usableResearchCount }).slice(0, 2_000)
+        : diagnostic ?? (model?.productAlternatives?.length ? "WEB_SEARCH_ALL_CANDIDATES_REJECTED" : model ? "WEB_SEARCH_NO_NORMALIZABLE_PRODUCTS" : "WEB_SEARCH_PROVIDER_FAILURE"),
+      evidence,
+      createdAt: this.now(),
+    };
 
     return {
       graph: {
         ...input.graph,
         candidateProducts: allCandidates,
-        catalogResolution,
+        catalogResolution: usableResearchCount > 0 ? "RESEARCHED_SUGGESTIONS" as const : "CATALOG_INSUFFICIENT" as const,
       },
-      ...(researchObservation
-        ? { researchObservation }
-        : {}),
+      researchObservation,
     };
   }
+}
+
+function localRank(product: NonNullable<ResearchResult["productAlternatives"]>[number], jurisdiction: string | null) {
+  if (!jurisdiction) return product.evidenceRole === "GLOBAL_PRODUCT_AUTHORITY" ? 20 : 0;
+  const relevant = normalize(product.jurisdictionRelevance).includes(normalize(jurisdiction));
+  if (product.evidenceRole === "LOCAL_SUPPLIER_EVIDENCE" && relevant) return 100;
+  if ((product.evidenceRole === "AVAILABILITY" || product.evidenceRole === "TECHNICAL_AND_AVAILABILITY") && relevant) return 75;
+  if (product.evidenceRole === "GLOBAL_PRODUCT_AUTHORITY") return 35;
+  return relevant ? 45 : 0;
 }

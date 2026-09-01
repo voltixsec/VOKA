@@ -13,6 +13,7 @@ import type {
   GovernedWorkspaceState,
   SystemConfigurationGraph,
 } from "./types";
+import type { CommercialDefaultsProfile } from "./commercial-defaults";
 
 export type NormalizedFlexibleTurnProposal = FlexibleTurnProposal & { legacyFactProposals: import("./types").BrainFactProposal[] };
 
@@ -52,7 +53,7 @@ export class StrictBrain {
     return applyWorkspacePatches(workspace, proposal.patches, userMessage, now);
   }
 
-  applyDefaults(workspace: GovernedWorkspaceState, defaults: { currencyCode: string; termsAr: string | null; termsEn: string | null }, scope: string | null) {
+  applyDefaults(workspace: GovernedWorkspaceState, defaults: CommercialDefaultsProfile, scope: string | null) {
     return applyWorkspaceDefaults(workspace, defaults, scope);
   }
 

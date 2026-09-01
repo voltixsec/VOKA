@@ -1,6 +1,7 @@
 export * from "./dto/CreateQuotationDto";
 
 export * from "./repositories/IQuotationRepository";
+export * from "./repositories/IQuotationNumberGenerator";
 export * from "./repositories/IQuotationRevisionRepository";
 export * from "./repositories/IQuotationReferenceValidator";
 export * from "./repositories/IQuotationCancellationRepository";

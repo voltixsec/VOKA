@@ -18,6 +18,7 @@ import {
 
 import { PrismaQuotationRepository } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository';
 import { PrismaQuotationReferenceValidator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator';
+import { PrismaQuotationNumberGenerator } from '@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationNumberGenerator';
 
 import { QuotationLocalizationJobRunner } from "@/src/infrastructure/translation/quotation/QuotationLocalizationJobRunner";
 
@@ -33,6 +34,7 @@ const createQuotation =
   new CreateQuotationUseCase(
     quotationRepository,
     quotationReferenceValidator,
+    new PrismaQuotationNumberGenerator(),
   );
 const localizationJobRunner =
   new QuotationLocalizationJobRunner(quotationRepository);
@@ -236,20 +238,6 @@ export const POST = withCompanyAuth(
     }
 
     if (
-      typeof body.quotationNumber !==
-        'string' ||
-      !body.quotationNumber.trim()
-    ) {
-      throw ApiError.badRequest(
-        'QUOTATION_NUMBER_REQUIRED',
-        'quotationNumber is required.',
-        {
-          field: 'quotationNumber',
-        },
-      );
-    }
-
-    if (
       typeof body.customer !== 'object' ||
       body.customer === null ||
       Array.isArray(body.customer)
@@ -334,9 +322,8 @@ export const POST = withCompanyAuth(
       ...(body as unknown as CreateQuotationDto),
       companyId: company.companyId,
       customerId: body.customerId.trim(),
-      quotationNumber:
-        body.quotationNumber.trim(),
-
+      quotationNumber: undefined,
+      familyId: undefined,
       priceListId: parseOptionalString(
         body.priceListId,
       ),

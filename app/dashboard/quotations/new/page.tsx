@@ -204,10 +204,6 @@ export default function NewQuotationPage() {
   const [proposedCustomerName, setProposedCustomerName] = useState<string | null>(null);
   const [aiEngineeringLines, setAiEngineeringLines] = useState<Array<EngineeringReviewLine & { priceSource?: string; unitPrice?: number | null }>>([]);
   const [aiEngineeringRules, setAiEngineeringRules] = useState<EngineeringRuleSnapshot | undefined>();
-  const [number, setNumber] = useState(
-    "QT-" + Date.now().toString().slice(-6),
-  );
-
   const [expiryDate, setExpiryDate] =
     useState("");
 
@@ -927,7 +923,6 @@ export default function NewQuotationPage() {
             localizationSourceLocale:
               isArabic ? "ar" : "en",
             customerId,
-            quotationNumber: number,
             currencyCode,
 
             ...(expiryDate
@@ -1092,25 +1087,20 @@ export default function NewQuotationPage() {
               /> : <CustomerPicker customers={customers} value={customerId} isArabic={isArabic} onChange={(id) => { setCustomerId(id); setDirty(true); }} onCreated={(customer) => setCustomers((current) => [...current, customer])} />}
             </div>
 
-            <label className="space-y-2">
+            <div className="space-y-2">
               <span className="text-sm text-slate-400">
                 {t(
                   "\u0631\u0642\u0645 \u0627\u0644\u0639\u0631\u0636",
                   "Quotation number",
                 )}
               </span>
-
-              <Input
-                required
-                value={number}
-                onChange={(event) => {
-                  setNumber(
-                    event.target.value,
-                  );
-                  setDirty(true);
-                }}
-              />
-            </label>
+              <div className="flex min-h-11 items-center rounded-xl border border-white/10 bg-slate-950/70 px-4 text-sm text-slate-400">
+                {t(
+                  "يُخصص تلقائياً عند حفظ المسودة",
+                  "Assigned automatically when the draft is saved",
+                )}
+              </div>
+            </div>
 
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">

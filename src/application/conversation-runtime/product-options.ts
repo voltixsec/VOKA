@@ -4,10 +4,16 @@ import type {
 } from "./types";
 
 const OPTION_REQUEST =
-  /(?:\u0628\u062f\u0627\u0626\u0644|\u062e\u064a\u0627\u0631\u0627\u062a|\u0627\u062e\u062a\u064a\u0627\u0631\u0627\u062a|\u0645\u0627\u0631\u0643\u0627\u062a|\u0628\u0631\u0627\u0646\u062f\u0627\u062a|\u0645\u0648\u062f\u064a\u0644\u0627\u062a|\u0642\u0627\u0631\u0646|\u0645\u0642\u0627\u0631\u0646\u0629|\u062f\u0648\u0631|\u062f\u0648\u0651\u0631|\u0627\u0628\u062d\u062b|\u0627\u062e\u062a\u0627\u0631\u0644\u064a|options?|alternatives?|brands?|models?|compare|search|recommend)/iu;
+  /(?:\u0628\u062f\u0627\u0626\u0644|\u062e\u064a\u0627\u0631\u0627\u062a|\u0627\u062e\u062a\u064a\u0627\u0631\u0627\u062a|\u0645\u0627\u0631\u0643\u0627\u062a|\u0628\u0631\u0627\u0646\u062f\u0627\u062a|\u0645\u0648\u062f\u064a\u0644\u0627\u062a|\u0642\u0627\u0631\u0646|\u0645\u0642\u0627\u0631\u0646\u0629|\u062f\u0648\u0631|\u062f\u0648\u0651\u0631|\u0627\u0628\u062d\u062b|\u0627\u062e\u062a\u0627\u0631\u0644\u064a|\u0634\u0648\u0641\s+(?:\u0644\u064a\s+)?(?:\u0627\u0644\u0645\u0648\u062c\u0648\u062f|\u0645\u0627\u0631\u0643\u0627\u062a|\u0623\u0641\u0636\u0644)|options?|alternatives?|brands?|models?|compare|search|recommend)/iu;
 
 export function asksForProductOptions(message: string) {
   return OPTION_REQUEST.test(message.normalize("NFKC"));
+}
+
+const FRESH_RESEARCH_REQUEST = /(?:\u062f\u0648\u0631|\u062f\u0648\u0651\u0631|\u0627\u0628\u062d\u062b|\u0647\u0627\u062a(?:\u0644\u064a|\s+\u0644\u064a)|\u0634\u0648\u0641(?:\u0644\u064a|\s+\u0644\u064a|\s+\u0627\u0644\u0645\u0648\u062c\u0648\u062f)|search|find|look\s+up)/iu;
+
+export function asksForFreshProductResearch(message: string) {
+  return FRESH_RESEARCH_REQUEST.test(message.normalize("NFKC"));
 }
 
 export function renderProductOptionsReply(
@@ -56,8 +62,12 @@ export function renderProductOptionsReply(
       candidate.brand,
       candidate.model,
     ].filter(Boolean).join(" - ");
+    const component = graph.salesBom.find((line) => line.id === candidate.componentKey);
+    const componentLabel = component
+      ? (locale === "ar" ? component.itemNameAr : component.itemNameEn)
+      : (locale === "ar" ? "خيار النظام" : "System option");
 
-    return `${candidate.componentKey} · ${index + 1}) ${title}${identity ? ` - ${identity}` : ""} [${sourceLabel(candidate.source)}]`;
+    return `${componentLabel} · ${index + 1}) ${title}${identity ? ` - ${identity}` : ""} [${sourceLabel(candidate.source)}]`;
   });
 
   if (locale === "ar") {

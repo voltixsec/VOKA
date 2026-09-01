@@ -14,14 +14,14 @@ function createRepository(): IQuotationRepository {
       Quotation.restore({
         id: "saved-quotation-1",
         companyId: quotation.companyId,
-        customerId: quotation.customerId,
+        customerId: quotation.customerIdOrNull,
         priceListId: quotation.priceListId,
         number: quotation.number.toString(),
         status: quotation.status,
         issueDate: quotation.issueDate,
         expiryDate: quotation.expiryDate,
         currencyCode: quotation.currencyCode,
-        customer: quotation.customer.toJSON(),
+        customer: quotation.customerOrNull?.toJSON() ?? null,
         lines: [...quotation.lines],
         discount: quotation.discount,
         notes: quotation.notes,
@@ -232,5 +232,69 @@ describe("CreateQuotationUseCase reference isolation", () => {
         totalAmount: 88,
       });
     }
+  });
+
+  it("uses the canonical server number generator when callers do not supply a number", async () => {
+    const repository = createRepository();
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn().mockResolvedValue({ name: "Customer" }),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map([["tax-1", 5]])),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
+    };
+    const generator = { generate: vi.fn().mockResolvedValue("QT-202609-0007") };
+    const dto = createDto();
+    delete dto.quotationNumber;
+
+    const result = await new CreateQuotationUseCase(repository, referenceValidator, generator).execute(dto);
+
+    expect(result.success).toBe(true);
+    expect(generator.generate).toHaveBeenCalledWith("company-1", expect.any(Date));
+    expect(vi.mocked(repository.save).mock.calls[0][0].number.toString()).toBe("QT-202609-0007");
+  });
+
+  it("preserves a proposed customer snapshot without creating or linking a customer record", async () => {
+    const repository = createRepository();
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn(),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map([["tax-1", 5]])),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
+    };
+    const dto = createDto();
+    dto.customerId = null;
+    dto.customer = { name: "New Confirmed Customer" };
+
+    const result = await new CreateQuotationUseCase(repository, referenceValidator).execute(dto);
+
+    expect(result.success).toBe(true);
+    expect(referenceValidator.getCustomerSnapshot).not.toHaveBeenCalled();
+    if (result.success) {
+      expect(result.data.customerIdOrNull).toBeNull();
+      expect(result.data.customerOrNull?.name).toBe("New Confirmed Customer");
+    }
+  });
+
+  it("retries a concurrent canonical number collision without accepting a client identifier", async () => {
+    const repository = createRepository();
+    const originalSave = vi.mocked(repository.save).getMockImplementation()!;
+    vi.mocked(repository.save)
+      .mockRejectedValueOnce(Object.assign(new Error("unique"), { code: "P2002" }))
+      .mockImplementation(originalSave);
+    const referenceValidator: IQuotationReferenceValidator = {
+      findInvalidReference: vi.fn().mockResolvedValue(null),
+      getCustomerSnapshot: vi.fn().mockResolvedValue({ name: "Customer" }),
+      resolveTaxRatePercentages: vi.fn().mockResolvedValue(new Map([["tax-1", 5]])),
+      listAvailableTaxRates: vi.fn().mockResolvedValue([]),
+    };
+    const generator = { generate: vi.fn().mockResolvedValueOnce("QT-202609-0001").mockResolvedValueOnce("QT-202609-0002") };
+    const dto = createDto();
+    delete dto.quotationNumber;
+
+    const result = await new CreateQuotationUseCase(repository, referenceValidator, generator).execute(dto);
+
+    expect(result.success).toBe(true);
+    expect(generator.generate).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(repository.save).mock.calls[1][0].number.toString()).toBe("QT-202609-0002");
   });
 });

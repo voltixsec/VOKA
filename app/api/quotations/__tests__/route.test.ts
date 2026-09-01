@@ -4,6 +4,7 @@ import { Quotation } from "@/src/domain/quotation";
 const mocks = vi.hoisted(() => ({
   existsByNumber: vi.fn(), save: vi.fn(), findInvalidReference: vi.fn(), getCustomerSnapshot: vi.fn(),
   resolveTaxRatePercentages: vi.fn(),
+  generateQuotationNumber: vi.fn(),
   afterCallbacks: [] as Array<() => unknown>, claimLocalization: vi.fn(), findById: vi.fn(),
   completeLocalization: vi.fn(), failLocalization: vi.fn(), translationPort: vi.fn(),
 }));
@@ -26,6 +27,9 @@ vi.mock("@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRefere
     listAvailableTaxRates = vi.fn();
   },
 }));
+vi.mock("@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationNumberGenerator", () => ({
+  PrismaQuotationNumberGenerator: class { generate = mocks.generateQuotationNumber; },
+}));
 vi.mock("@/src/infrastructure/translation/createTranslationPort", () => ({ createTranslationPort: mocks.translationPort }));
 vi.mock("@/lib/api", async () => {
   const errors = await vi.importActual<typeof import("@/lib/api/ApiError")>("@/lib/api/ApiError");
@@ -44,7 +48,7 @@ import { POST } from "../route";
 let savedQuotation: Quotation | null = null;
 
 const requestBody = {
-  customerId: "customer-1", quotationNumber: "Q-CREATE-1", customer: { name: "Ignored" },
+  customerId: "customer-1", quotationNumber: "runtime-technical-id", familyId: "client-family-id", customer: { name: "Ignored" },
   subjectEn: "English proposal", lines: [{ position: 1, type: "PRODUCT", itemName: "Camera", quantity: 1, unitPrice: 10 }],
 };
 
@@ -56,6 +60,7 @@ describe("POST /api/quotations localization resilience", () => {
     mocks.findInvalidReference.mockResolvedValue(null);
     mocks.getCustomerSnapshot.mockResolvedValue({ name: "Persisted Customer" });
     mocks.resolveTaxRatePercentages.mockResolvedValue(new Map());
+    mocks.generateQuotationNumber.mockResolvedValue("QT-202609-0001");
     savedQuotation = null;
     mocks.save.mockImplementation(async (quotation: Quotation) => {
       savedQuotation = Quotation.restore({
@@ -77,6 +82,9 @@ describe("POST /api/quotations localization resilience", () => {
     }));
     expect(response.status).toBe(201);
     expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.generateQuotationNumber).toHaveBeenCalledWith("company-1", expect.any(Date));
+    expect(savedQuotation?.number.toString()).toBe("QT-202609-0001");
+    expect(savedQuotation?.familyId).not.toBe("client-family-id");
     expect(mocks.translationPort).not.toHaveBeenCalled();
     expect(mocks.afterCallbacks).toHaveLength(1);
     expect(JSON.stringify(await response.json())).not.toContain("CUDA");

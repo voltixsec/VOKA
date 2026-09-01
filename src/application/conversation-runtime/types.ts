@@ -78,7 +78,9 @@ export type CandidateProduct = {
   jurisdictionRelevance?: string | null;
   confidence?: number | null;
   evidenceBasis?: string[];
-  evidenceRole?: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "DISCOVERY_ONLY";
+  evidenceRole?: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "LOCAL_SUPPLIER_EVIDENCE" | "GLOBAL_PRODUCT_AUTHORITY" | "DISCOVERY_ONLY";
+  imageUrl?: string | null;
+  marketPrice?: import("@/src/application/agentic-commercial-intelligence").MarketPriceEvidence | null;
 };
 
 export type SystemConfigurationGraph = {
@@ -118,7 +120,18 @@ export type GovernedWorkspaceState = {
     exclusions: string[];
     notes: string[];
   };
-  terms: { payment: string | null; delivery: string | null; warranty: string | null; validity: string | null; currencyCode: string | null; companyTermsAr: string | null; companyTermsEn: string | null; defaultsScope: string | null };
+  terms: {
+    payment: string | null;
+    delivery: string | null;
+    warranty: string | null;
+    validity: string | null;
+    sources: Record<"payment" | "delivery" | "warranty" | "validity", "EXPLICIT" | "COMPANY_DEFAULT" | null>;
+    currencyCode: string | null;
+    companyTermsAr: string | null;
+    companyTermsEn: string | null;
+    defaultsScope: string | null;
+    defaultsLoaded: boolean;
+  };
   readiness: SystemConfigurationGraph["readiness"];
   updatedAt: string;
 };

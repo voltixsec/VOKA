@@ -42,8 +42,27 @@ export type ResearchedProductAlternative = {
   jurisdictionRelevance: string | null;
   confidence: number;
   evidenceBasis: string[];
-  evidenceRole: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "DISCOVERY_ONLY";
+  evidenceRole: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "LOCAL_SUPPLIER_EVIDENCE" | "GLOBAL_PRODUCT_AUTHORITY" | "DISCOVERY_ONLY";
+  imageUrl?: string | null;
+  marketPrice?: MarketPriceEvidence | null;
 };
+
+export type MarketPriceEvidence = {
+  priceAmount: number | null;
+  priceCurrency: string;
+  priceMin: number | null;
+  priceMax: number | null;
+  priceUnit: string | null;
+  priceType: "LISTED_RETAIL" | "LISTED_WHOLESALE" | "PROMOTIONAL" | "FROM_PRICE" | "RANGE" | "UNKNOWN";
+  priceSourceUrl: string;
+  priceSourceTitle: string;
+  priceObservedAt: string;
+};
+
+export type ResearchDiagnosticCode =
+  | "WEB_SEARCH_HTTP_429" | "WEB_SEARCH_HTTP_5XX" | "WEB_SEARCH_TIMEOUT" | "WEB_SEARCH_INCOMPLETE"
+  | "WEB_SEARCH_NO_SOURCES" | "WEB_SEARCH_NO_NORMALIZABLE_PRODUCTS" | "WEB_SEARCH_ALL_CANDIDATES_REJECTED"
+  | "WEB_SEARCH_MALFORMED" | "WEB_SEARCH_PROVIDER_FAILURE";
 
 export type ProvisionalSystemInput = {
   name: string;

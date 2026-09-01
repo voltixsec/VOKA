@@ -7,4 +7,6 @@ export * from "./quotation-handoff";
 export * from "./product-selection";
 export * from "./solution-graph";
 export * from "./governed-workspace";
+export * from "./commercial-defaults";
+export * from "./scope-labels";
 export * from "./StrictBrain";

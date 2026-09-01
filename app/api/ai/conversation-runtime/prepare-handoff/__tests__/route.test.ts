@@ -37,4 +37,26 @@ describe("POST /api/ai/conversation-runtime/prepare-handoff", () => {
     expect(handoff.confirmedFacts["attention.name"]).toBeUndefined();
     expect(await response.json()).toMatchObject({ data: { handoffToken: "signed-handoff" } });
   });
+
+  it("projects the exact final governed workspace BOM without aggregating component lines", async () => {
+    const base = await mocks.verify();
+    const line = (id: string, name: string, quantity: number) => ({ id, componentKeys: [id], category: "PRODUCT", itemName: name, itemNameAr: name, itemNameEn: name, description: `${name} specification`, unitName: "pcs", quantity, quantityState: "CONFIRMED", unitPrice: null, priceState: "PENDING", type: "PRODUCT", provenance: "USER_EXPLICIT" });
+    const outdoor = line("CCTV_OUTDOOR_CAMERA", "Outdoor IP Camera", 200);
+    const indoor = line("CCTV_INDOOR_CAMERA", "Indoor IP Camera", 140);
+    mocks.verify.mockResolvedValue({ ...base, workspace: {
+      commercialContext: { customer: null, project: null, attention: null, scope: "SUPPLY_ONLY", jurisdiction: "Kuwait" },
+      requirements: {}, engineering: { system: { key: "CCTV", nameAr: "CCTV", nameEn: "CCTV" }, calculations: [], bom: [outdoor, indoor], assumptions: [] },
+      commercialSolution: { bom: [outdoor, indoor] }, products: { candidates: [], approvedCandidateIds: [] },
+      siteAndResponsibilities: { siteRequirements: [], supplierResponsibilities: [], customerResponsibilities: [], exclusions: [], notes: [] },
+      terms: { payment: null, delivery: null, warranty: null, validity: null, sources: { payment: null, delivery: null, warranty: null, validity: null }, currencyCode: "KWD", companyTermsAr: null, companyTermsEn: null, defaultsScope: "SUPPLY_ONLY", defaultsLoaded: true },
+      readiness: { draftReady: true, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: ["Pricing"] }, updatedAt: "2026-09-01T00:00:00.000Z",
+    } });
+
+    await POST(new Request("http://localhost/api/ai/conversation-runtime/prepare-handoff", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state: { stateToken: "signed-state" } }) }));
+
+    expect(mocks.sign.mock.calls[0][0].commercialLines.map((item: { itemName: string; quantity: number }) => [item.itemName, item.quantity])).toEqual([
+      ["Outdoor IP Camera", 200],
+      ["Indoor IP Camera", 140],
+    ]);
+  });
 });

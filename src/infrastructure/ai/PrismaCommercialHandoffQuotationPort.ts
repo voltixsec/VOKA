@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { PrismaCustomerRepository } from "@/features/customers/infrastructure/prisma/PrismaCustomerRepository";
 import { CreateQuotationUseCase } from "@/src/application/quotation";
-import type { CommercialHandoffQuotationPort, HandoffCustomerResolution } from "@/src/application/conversation-runtime";
+import { parseCommercialDefaultsProfile, type CommercialHandoffQuotationPort, type HandoffCustomerResolution } from "@/src/application/conversation-runtime";
 import type { QuotationScopeType } from "@/src/domain/quotation";
 import { PrismaQuotationRepository } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationRepository";
 import { PrismaQuotationReferenceValidator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationReferenceValidator";
+import { PrismaQuotationNumberGenerator } from "@/src/infrastructure/persistence/prisma/quotation/PrismaQuotationNumberGenerator";
 
 function normalizedName(value: string) {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/[\p{P}\p{S}\s]+/gu, " ").trim();
@@ -17,12 +18,16 @@ export class PrismaCommercialHandoffQuotationPort implements CommercialHandoffQu
 
   constructor(private readonly db = prisma) {
     this.quotationRepository = new PrismaQuotationRepository(db);
-    this.createQuotation = new CreateQuotationUseCase(this.quotationRepository, new PrismaQuotationReferenceValidator(db));
+    this.createQuotation = new CreateQuotationUseCase(
+      this.quotationRepository,
+      new PrismaQuotationReferenceValidator(db),
+      new PrismaQuotationNumberGenerator(db),
+    );
     this.customerRepository = new PrismaCustomerRepository(db);
   }
 
-  async findByNumber(companyId: string, quotationNumber: string) {
-    const quotation = await this.quotationRepository.findByNumber(companyId, quotationNumber);
+  async findByHandoff(companyId: string, handoffId: string) {
+    const quotation = await this.quotationRepository.findByFamilyId(companyId, handoffId);
     return quotation?.id ? { id: quotation.id, status: quotation.status, localizationPending: quotation.localizationStatus === "PENDING" } : null;
   }
 
@@ -33,22 +38,30 @@ export class PrismaCommercialHandoffQuotationPort implements CommercialHandoffQu
     if (exact.length === 1) return { status: "RESOLVED", id: exact[0].id.toString(), name: exact[0].name };
     if (exact.length > 1 || matches.length > 0) {
       const candidates = (exact.length ? exact : matches).slice(0, 5).map((customer) => ({ id: customer.id.toString(), name: customer.name }));
-      return { status: "AMBIGUOUS", candidates };
+      return { status: "AMBIGUOUS", proposedName: confirmedName.trim(), candidates };
     }
-    return { status: "PENDING" };
+    return { status: "PENDING", proposedName: confirmedName.trim() };
   }
 
-  async loadDefaults(companyId: string, scopeType: QuotationScopeType | null) {
+  async loadDefaults(companyId: string, scopeType: QuotationScopeType | null, locale?: "ar" | "en") {
     const [company, template] = await Promise.all([
       this.db.company.findUnique({ where: { id: companyId }, select: { defaultCurrency: true } }),
       scopeType ? this.db.companyQuotationTermsTemplate.findUnique({ where: { companyId_scopeType: { companyId, scopeType } }, select: { termsAr: true, termsEn: true } }) : null,
     ]);
     if (!company) throw new Error("COMPANY_NOT_FOUND");
-    return { currencyCode: company.defaultCurrency, termsAr: template?.termsAr ?? null, termsEn: template?.termsEn ?? null };
+    return parseCommercialDefaultsProfile({ currencyCode: company.defaultCurrency, termsAr: template?.termsAr ?? null, termsEn: template?.termsEn ?? null, locale });
   }
 
   async createDraft(input: Parameters<CommercialHandoffQuotationPort["createDraft"]>[0]) {
-    const result = await this.createQuotation.execute(input);
+    let result;
+    try {
+      result = await this.createQuotation.execute(input);
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+        return { success: false as const, code: "QUOTATION_ALREADY_EXISTS", message: "Quotation number or handoff family already exists." };
+      }
+      throw error;
+    }
     if (!result.success) return { success: false as const, code: result.error.code, message: result.error.message };
     if (!result.data.id) return { success: false as const, code: "QUOTATION_ID_MISSING", message: "Quotation persistence did not return an id." };
     if (result.data.status !== "DRAFT") return { success: false as const, code: "QUOTATION_NOT_DRAFT", message: "Commercial handoff may create draft quotations only." };

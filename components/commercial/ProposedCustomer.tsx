@@ -9,20 +9,21 @@ import type { CommercialCustomerOption } from './CustomerPicker';
 type Candidate = CommercialCustomerOption & { status?: string };
 type Props = {
   name: string; isArabic: boolean; disabled?: boolean;
-  onBound: (customer: CommercialCustomerOption) => void;
+  candidates?: Candidate[];
+  onBound: (customer: CommercialCustomerOption) => void | Promise<void>;
   onChange?: () => void;
   onContinue?: () => void;
 };
 
 /** In-context creation preserves the owning composer's complete, editable state. */
-export function ProposedCustomer({ name, isArabic, disabled, onBound, onChange, onContinue }: Props) {
+export function ProposedCustomer({ name, isArabic, disabled, candidates: initialCandidates = [], onBound, onChange, onContinue }: Props) {
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false);
   const [error, setError] = useState(false), [candidates, setCandidates] = useState<Candidate[]>([]);
   const inFlight = useRef(false);
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const t = (ar: string, en: string) => isArabic ? ar : en;
-  const bind = (customer: Candidate) => { setEditing(false); onBound(customer); };
+  const bind = async (customer: Candidate) => { setEditing(false); await onBound(customer); };
   async function create(payload: Record<string, unknown>) {
     if (inFlight.current || disabled) return;
     inFlight.current = true; setBusy(true); setError(false); setCandidates([]);
@@ -34,7 +35,7 @@ export function ProposedCustomer({ name, isArabic, disabled, onBound, onChange, 
       const body = await response.json();
       if (!active.current) return;
       if (!response.ok) throw new Error('CUSTOMER_CREATE_FAILED');
-      if (body.data?.customer?.id) bind(body.data.customer);
+      if (body.data?.customer?.id) await bind(body.data.customer);
       else if (body.data?.candidates?.length) setCandidates(body.data.candidates);
       else throw new Error('CUSTOMER_RESPONSE_INVALID');
     } catch { setError(true); }
@@ -42,8 +43,8 @@ export function ProposedCustomer({ name, isArabic, disabled, onBound, onChange, 
   }
   const feedback = <>
     {error && <p role="alert" className="text-sm text-rose-300">{t('تعذر إنشاء العميل. راجع البيانات وحاول مجدداً.', 'Unable to create the customer. Check the details and try again.')}</p>}
-    {candidates.length > 0 && <div className="space-y-2"><p className="text-sm">{t('وجدت عملاء مشابهين. اختر العميل الصحيح؛ لم يتم إنشاء عميل جديد.', 'Similar customers found. Choose the correct customer; no new customer was created.')}</p>
-      <div className="flex flex-wrap gap-2">{candidates.map((customer) => <button type="button" key={customer.id} disabled={busy || (customer.status !== undefined && !['ACTIVE', 'LEAD'].includes(customer.status))} onClick={() => bind(customer)} className="rounded-lg border border-sky-300/30 px-3 py-2 text-sm disabled:opacity-50">{isArabic ? customer.nameAr || customer.name : customer.nameEn || customer.name}{customer.status && !['ACTIVE', 'LEAD'].includes(customer.status) ? t(' — غير متاح للمستندات', ' — unavailable for documents') : ''}</button>)}</div>
+    {[...initialCandidates, ...candidates].filter((customer, index, all) => all.findIndex((item) => item.id === customer.id) === index).length > 0 && <div className="space-y-2"><p className="text-sm">{t('وجدت عملاء مشابهين. اختر العميل الصحيح؛ لم يتم إنشاء عميل جديد.', 'Similar customers found. Choose the correct customer; no new customer was created.')}</p>
+      <div className="flex flex-wrap gap-2">{[...initialCandidates, ...candidates].filter((customer, index, all) => all.findIndex((item) => item.id === customer.id) === index).map((customer) => <button type="button" key={customer.id} disabled={busy || (customer.status !== undefined && !['ACTIVE', 'LEAD'].includes(customer.status))} onClick={() => void bind(customer)} className="rounded-lg border border-sky-300/30 px-3 py-2 text-sm disabled:opacity-50">{isArabic ? customer.nameAr || customer.name : customer.nameEn || customer.name}{customer.status && !['ACTIVE', 'LEAD'].includes(customer.status) ? t(' — غير متاح للمستندات', ' — unavailable for documents') : ''}</button>)}</div>
     </div>}
   </>;
   return <div data-testid="proposed-customer" className="min-w-0 space-y-2 rounded-xl border border-sky-400/30 bg-sky-400/5 p-3" dir={isArabic ? 'rtl' : 'ltr'}>

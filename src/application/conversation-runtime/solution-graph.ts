@@ -50,7 +50,12 @@ function systemIdentity(value: string | null) {
 export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFact>): SystemConfigurationGraph {
   const system = systemIdentity(text(facts, "system.identity"));
   if (!system) return EMPTY_GRAPH;
-  const requirements = Object.entries(labels).flatMap(([key, label]) => facts[key] ? [{ key, labelAr: label[0], labelEn: label[1], value: facts[key].value as FactValue, provenance: facts[key].provenance }] : []);
+  const requirements = [
+    ...Object.entries(labels).flatMap(([key, label]) => facts[key] ? [{ key, labelAr: label[0], labelEn: label[1], value: facts[key].value as FactValue, provenance: facts[key].provenance }] : []),
+    ...Object.entries(facts).flatMap(([key, current]) => key.startsWith("system.specification.")
+      ? [{ key, labelAr: key.slice("system.specification.".length).replace(/_/g, " "), labelEn: key.slice("system.specification.".length).replace(/_/g, " "), value: current.value as FactValue, provenance: current.provenance }]
+      : []),
+  ];
   const graph: SystemConfigurationGraph = { ...EMPTY_GRAPH, system, requirements, readiness: { draftReady: false, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: [] } };
   const area = numeric(facts, "system.areaM2");
 
@@ -192,12 +197,32 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
     }
   }
   graph.catalogResolution = graph.salesBom.some((row) => row.type === "PRODUCT") ? "PENDING" : "NOT_REQUIRED";
+  graph.salesBom = attachExplicitSpecifications(graph.salesBom, graph.requirements);
+  graph.engineeringBom = attachExplicitSpecifications(graph.engineeringBom, graph.requirements);
   graph.salesBom = graph.salesBom.map((row) => applyApprovedProductSelection(row, facts));
   graph.engineeringBom = graph.engineeringBom.map((row) => applyApprovedProductSelection(row, facts));
   graph.readiness.pendingBeforeDraftOpen = [];
   graph.readiness.draftReady = true;
-  graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
+  graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["attention.name"] && "Attention", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
   return graph;
+}
+
+function attachExplicitSpecifications(lines: SolutionBomLine[], requirements: SystemConfigurationGraph["requirements"]) {
+  const targets: Record<string, string[]> = {
+    "system.resolutionMp": ["CCTV_CAMERAS"],
+    "system.cameraType": ["CCTV_CAMERAS"],
+    "system.storageDays": ["CCTV_STORAGE", "NVR_RECORDER"],
+    "system.tileSize": ["CERAMIC_TILES"],
+    "system.layersCount": ["GYPSUM_BOARDS"],
+  };
+  const explicit = requirements.filter((item) => ["USER_EXPLICIT", "USER_CORRECTION", "USER_APPROVED"].includes(item.provenance));
+  return lines.map((row) => {
+    const relevant = row.type === "PRODUCT" ? explicit.filter((item) => item.key.startsWith("system.specification.") || targets[item.key]?.some((id) => row.id === id || row.componentKeys.includes(id))) : [];
+    if (!relevant.length) return row;
+    const specs = relevant.map((item) => `${item.labelAr} / ${item.labelEn}: ${item.value}${item.key === "system.resolutionMp" && !/mp/i.test(String(item.value)) ? " MP" : ""}`);
+    const description = [...new Set([row.description, ...specs].filter((value): value is string => Boolean(value)))].join("; ");
+    return { ...row, description };
+  });
 }
 
 function applyApprovedProductSelection(line: SolutionBomLine, facts: Record<string, ConfirmedFact>): SolutionBomLine {

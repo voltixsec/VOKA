@@ -30,7 +30,8 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
   it("starts conversationally and creates the governed workspace", async () => {
     const brain: ConversationBrainPort = { decide: async () => proposal({ responseContent: "I can build that CCTV solution.", patches: [{ operation: "SET", path: "facts.system.identity", value: "CCTV", evidence: "CCTV", provenance: "USER_EXPLICIT" }] }) };
     const state = await run(brain, "CCTV");
-    expect(state.messages.at(-1)?.text).toBe("I can build that CCTV solution.");
+    expect(state.messages.at(-1)?.text).toContain("I can build that CCTV solution.");
+    expect(state.messages.at(-1)?.text).toContain("What is the customer name, and who should the quotation be addressed to?");
     expect(state.workspace?.engineering.system?.key).toBe("CCTV");
   });
 
@@ -95,12 +96,12 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
   });
 
   it("reloads company defaults when scope enters the workspace", async () => {
-    const defaults: WorkspaceDefaultsPort = { loadDefaults: vi.fn(async (_companyId, scope) => ({ currencyCode: "KWD", termsAr: scope + " AR", termsEn: scope + " EN" })) };
+    const defaults: WorkspaceDefaultsPort = { loadDefaults: vi.fn(async (_companyId, scope) => ({ currencyCode: "KWD", termsAr: scope + " AR", termsEn: scope + " EN", payment: null, delivery: null, warranty: null, validity: null })) };
     const brain: ConversationBrainPort = { decide: async ({ currentMessage }) => proposal({ patches: [{ operation: currentMessage.includes("change") ? "REPLACE" : "SET", path: "facts.scope.type", value: currentMessage.includes("change") ? "SUPPLY_ONLY" : "SUPPLY_AND_INSTALLATION", evidence: currentMessage, provenance: currentMessage.includes("change") ? "USER_CORRECTION" : "USER_EXPLICIT" }] }) };
     const initial = await run(brain, "Supply and installation", null, defaults);
     const state = await run(brain, "change to supply only", initial, defaults);
-    expect(defaults.loadDefaults).toHaveBeenNthCalledWith(1, "company-1", "SUPPLY_AND_INSTALLATION");
-    expect(defaults.loadDefaults).toHaveBeenCalledWith("company-1", "SUPPLY_ONLY");
+    expect(defaults.loadDefaults).toHaveBeenNthCalledWith(1, "company-1", "SUPPLY_AND_INSTALLATION", "en");
+    expect(defaults.loadDefaults).toHaveBeenCalledWith("company-1", "SUPPLY_ONLY", "en");
     expect(state.workspace?.terms).toMatchObject({ currencyCode: "KWD", companyTermsEn: "SUPPLY_ONLY EN", defaultsScope: "SUPPLY_ONLY" });
     expect(state.workspace?.terms.companyTermsEn).not.toContain("SUPPLY_AND_INSTALLATION");
   });
@@ -136,10 +137,16 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
   it("terminates a repeated tool request instead of looping indefinitely", async () => {
     let decisions = 0;
     const executeTool = vi.fn(tools.execute);
+    const base = await new ConversationRuntime({ decide: async () => proposal({ patches: [
+      { operation: "SET", path: "facts.system.identity", value: "CCTV", evidence: "CCTV", provenance: "USER_EXPLICIT" },
+      { operation: "SET", path: "facts.system.jurisdiction", value: "Kuwait", evidence: "Kuwait", provenance: "USER_EXPLICIT" },
+    ] }) }, { execute: executeTool }, () => now, ids()).execute({ state: null, message: "CCTV Kuwait", locale: "en", source: "TEXT", companyId: "company-1" });
+    executeTool.mockClear();
     const runtime = new ConversationRuntime({ decide: async () => { decisions++; return proposal({ researchRequests: [{ kind: "RESEARCH", query: "same query", attachmentId: null }] }); } }, { execute: executeTool }, () => now, ids());
-    await runtime.execute({ state: null, message: "Find options", locale: "en", source: "TEXT", companyId: "company-1" });
-    expect(executeTool).toHaveBeenCalledOnce();
-    expect(decisions).toBe(2);
+    await runtime.execute({ state: base, message: "Find options", locale: "en", source: "TEXT", companyId: "company-1" });
+    expect(executeTool).toHaveBeenCalledTimes(2);
+    expect(executeTool.mock.calls.map(([input]) => input.request.kind)).toEqual(["CATALOG_LOOKUP", "RESEARCH"]);
+    expect(decisions).toBe(3);
   });
 
   it("removes stale structured values explicitly", () => {

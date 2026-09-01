@@ -1,4 +1,4 @@
-import type { ProvisionalSystemModel } from "./types";
+import type { ProvisionalSystemModel, ResearchDiagnosticCode } from "./types";
 
 export interface CommercialSystemResearchPort {
   researchSystem(input: {
@@ -10,6 +10,7 @@ export interface CommercialSystemResearchPort {
     /** Called only when the adapter performs an external provider request. */
     onProviderCall?: () => void;
   }): Promise<ProvisionalSystemModel | null>;
+  researchSystemWithDiagnostic?(input: Parameters<CommercialSystemResearchPort["researchSystem"]>[0]): Promise<{ model: ProvisionalSystemModel | null; diagnostic: ResearchDiagnosticCode | null }>;
 }
 
 /** Future BOQ/drawing/specification adapters provide facts, never authority. */

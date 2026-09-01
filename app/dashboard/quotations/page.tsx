@@ -8,7 +8,7 @@ import { useLanguage } from "../../../components/i18n/LanguageProvider";
 import { ModuleSummaryBar } from "@/components/reporting/ModuleSummaryBar";
 import { displayLabel } from "@/lib/i18n/display-labels";
 
-type Quote = { id:string; quotationNumber:string; status:string; issueDate:string; currencyCode:string; customer:{name:string}; totals:{totalAmount:number} };
+type Quote = { id:string; quotationNumber:string; status:string; issueDate:string; currencyCode:string; customer:{name:string} | null; totals:{totalAmount:number} };
 type Pagination = { total:number; page:number; pageSize:number; totalPages:number };
 const statuses = ["DRAFT", "SENT", "APPROVED", "REJECTED", "EXPIRED", "CANCELLED"];
 
@@ -33,7 +33,7 @@ export default function QuotationsPage() {
     {loading&&<Card><div className="h-28 animate-pulse rounded-2xl bg-white/5"/></Card>}
     {!loading&&error&&<Card className="border-red-400/20 bg-red-400/5"><p className="text-red-300">{isArabic?"تعذر تحميل عروض الأسعار":"Could not load quotations"}</p><p className="mt-2 text-sm text-red-200/70">{error}</p></Card>}
     {!loading&&!error&&quotes.length===0&&<Card className="py-14 text-center"><div className="text-4xl">◇</div><h3 className="mt-4 text-lg font-semibold">{isArabic?"لا توجد عروض أسعار":"No quotations found"}</h3><p className="mt-2 text-sm text-slate-500">{isArabic?"لا توجد نتائج مطابقة حاليًا.":"There are no matching results yet."}</p></Card>}
-    {!loading&&!error&&quotes.map(q=><Card key={q.id} padding="sm" role="link" tabIndex={0} onClick={()=>window.location.href="/dashboard/quotations/"+q.id} onKeyDown={e=>{if(e.key==="Enter")window.location.href="/dashboard/quotations/"+q.id}} className="flex cursor-pointer items-center justify-between hover:border-sky-400/20"><div><p className="font-semibold text-sky-300">{q.quotationNumber}</p><p className="mt-1 text-sm text-slate-400">{q.customer.name}</p><p className="mt-1 text-xs text-slate-600">{new Date(q.issueDate).toLocaleDateString(isArabic?"ar-KW":"en-GB")}</p></div><div className="text-end"><Badge>{displayLabel(q.status,isArabic?"ar":"en")}</Badge><p className="mt-2 font-semibold">{money(q)}</p></div></Card>)}
+    {!loading&&!error&&quotes.map(q=><Card key={q.id} padding="sm" role="link" tabIndex={0} onClick={()=>window.location.href="/dashboard/quotations/"+q.id} onKeyDown={e=>{if(e.key==="Enter")window.location.href="/dashboard/quotations/"+q.id}} className="flex cursor-pointer items-center justify-between hover:border-sky-400/20"><div><p className="font-semibold text-sky-300">{q.quotationNumber}</p><p className="mt-1 text-sm text-slate-400">{q.customer?.name || (isArabic?"عميل غير مرتبط":"Customer not linked")}</p><p className="mt-1 text-xs text-slate-600">{new Date(q.issueDate).toLocaleDateString(isArabic?"ar-KW":"en-GB")}</p></div><div className="text-end"><Badge>{displayLabel(q.status,isArabic?"ar":"en")}</Badge><p className="mt-2 font-semibold">{money(q)}</p></div></Card>)}
     {!loading&&!error&&pagination.totalPages>1&&<div className="flex items-center justify-between"><Button variant="secondary" disabled={page<=1} onClick={()=>setPage(v=>v-1)}>{isArabic?"السابق":"Previous"}</Button><span className="text-sm text-slate-500">{page} / {pagination.totalPages}</span><Button variant="secondary" disabled={page>=pagination.totalPages} onClick={()=>setPage(v=>v+1)}>{isArabic?"التالي":"Next"}</Button></div>}
   </section>;
 }

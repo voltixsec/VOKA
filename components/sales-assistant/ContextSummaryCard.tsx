@@ -1,9 +1,9 @@
-import type { RuntimeSummaryView } from "@/src/application/conversation-runtime";
+import { runtimeSummaryValue, type RuntimeSummaryView } from "@/src/application/conversation-runtime";
 import { AssistantIcon } from "./AssistantIcon";
 
 export function ContextSummaryCard({ result, isArabic }: { result: RuntimeSummaryView; isArabic: boolean }) {
   const commercial = result.commercial;
-  const value = (fact: (typeof result.summary)[number]) => fact.value;
+  const value = (fact: (typeof result.summary)[number]) => runtimeSummaryValue(fact, isArabic ? "ar" : "en");
   const hasSummary = result.summary.length > 0;
   if (!hasSummary && !commercial.draftReady) return null;
 

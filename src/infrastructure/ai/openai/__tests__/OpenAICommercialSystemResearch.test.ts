@@ -31,7 +31,7 @@ describe("production commercial system research adapter", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response()), { status: 200 })); vi.stubGlobal("fetch", fetchMock);
     const result = await adapter({ maxToolCalls: 2 }).researchSystem(input(" configured"));
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body).toMatchObject({ model: "configured-model", store: false, max_tool_calls: 2, include: ["web_search_call.action.sources"], tools: [{ type: "web_search" }], tool_choice: "required" });
+    expect(body).toMatchObject({ model: "configured-model", store: false, reasoning: { effort: "low" }, max_tool_calls: 2, max_output_tokens: 3000, include: ["web_search_call.action.sources"], tools: [{ type: "web_search" }], tool_choice: "required" });
     expect(JSON.stringify(body)).not.toContain("tenant-secret");
     expect(result).toMatchObject({ systemName: "Electronic passenger elevator system", provenance: "RESEARCHED", requiresEngineeringVerification: true });
   });
@@ -140,7 +140,7 @@ describe("production commercial system research adapter", () => {
     vi.useFakeTimers(); const events: Parameters<CommercialResearchTelemetry>[0][] = [];
     vi.stubGlobal("fetch", vi.fn((_url, init: RequestInit) => new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))));
     const pending = adapter({ timeoutMs: 1000, telemetry: (event: Parameters<CommercialResearchTelemetry>[0]) => events.push(event) }).researchSystem(input(" timeout"));
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.runAllTimersAsync();
     await expect(pending).resolves.toBeNull();
     expect(events.at(-1)).toMatchObject({ event: "failed", failureCategory: "TIMEOUT", provider: "openai" });
   });
@@ -154,6 +154,21 @@ describe("production commercial system research adapter", () => {
     const second = await research.researchSystem({ ...input(" CACHE-ONCE"), companyId: "another-tenant", onProviderCall: externalCalls });
     expect(first).toEqual(second); expect(fetchMock).toHaveBeenCalledTimes(1); expect(externalCalls).toHaveBeenCalledTimes(1);
     expect(events.map((event) => event.intent)).toEqual(expect.arrayContaining([expect.stringMatching(/^v2\|/)]));
+  });
+
+  it("accepts a cited source when only tracking parameters differ while preserving the tool-returned URL", async () => {
+    const payload: any = response({
+      evidenceClaims: [{ url: "https://manufacturer.example/technical/elevators", claimSupport: ["components"], sourceType: "MANUFACTURER_TECHNICAL" }],
+      productAlternatives: [{ componentKey: "ELEVATOR_CONTROLLER", productName: "Controller X", brand: "LiftCo", model: "CX-1", sourceUrl: "https://manufacturer.example/product/cx-1", sourceTitle: "Controller X", jurisdictionRelevance: "Kuwait", confidence: .8, evidenceBasis: ["Official identity"], evidenceRole: "TECHNICAL_AND_AVAILABILITY" }],
+    });
+    payload.output[0].action.sources = [
+      { url: "https://manufacturer.example/technical/elevators?utm_source=openai", title: "Elevator technical guide" },
+      { url: "https://manufacturer.example/product/cx-1?utm_source=openai", title: "Controller X official" },
+    ];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+    const result = await adapter().researchSystem(input(" canonical-source"));
+    expect(result?.evidence[0].url).toBe("https://manufacturer.example/technical/elevators?utm_source=openai");
+    expect(result?.productAlternatives?.[0]).toMatchObject({ brand: "LiftCo", model: "CX-1", sourceUrl: "https://manufacturer.example/product/cx-1?utm_source=openai" });
   });
 
   it("returns structured real product identities and limits social evidence to discovery", async () => {
@@ -187,5 +202,46 @@ describe("production commercial system research adapter", () => {
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     await expect(adapter({ enabled: false }).researchSystem(input(" disabled"))).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a cited product when structured evidenceClaims are omitted", async () => {
+    const product = { componentKey: "CCTV_CAMERAS", productName: "VisionCam 4MP PoE", brand: "Vision", model: "VC-4P", sourceUrl: "https://manufacturer.example/products/vc-4p", sourceTitle: "VisionCam VC-4P", jurisdictionRelevance: "Available from Kuwait channel partners", confidence: .86, evidenceBasis: ["Official product identity"], evidenceRole: "GLOBAL_PRODUCT_AUTHORITY", imageUrl: null, marketPrice: null };
+    const payload: any = response({ evidenceClaims: [], productAlternatives: [product] });
+    payload.output[0].action.sources = [{ url: product.sourceUrl + "?utm_source=search", title: product.sourceTitle }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+    const result = await adapter().researchSystem(input(" product-without-claim"));
+    expect(result?.productAlternatives).toEqual([expect.objectContaining({ model: "VC-4P", sourceUrl: expect.stringContaining("utm_source") })]);
+    expect(result?.evidence).toHaveLength(1);
+  });
+
+  it("retries one retryable provider failure once and exposes a safe terminal diagnostic", async () => {
+    const success = new Response(JSON.stringify(response()), { status: 200 });
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response("busy", { status: 503 })).mockResolvedValueOnce(success);
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(adapter().researchSystem(input(" retry-success"))).resolves.not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const failed = vi.fn().mockResolvedValue(new Response("busy", { status: 503 })); vi.stubGlobal("fetch", failed);
+    const outcome = await adapter().researchSystemWithDiagnostic(input(" retry-failure"));
+    expect(failed).toHaveBeenCalledTimes(2);
+    expect(outcome).toEqual({ model: null, diagnostic: "WEB_SEARCH_HTTP_5XX" });
+  });
+
+  it("preserves trustworthy image and listed/range price evidence without creating a quotation price", async () => {
+    const sourceUrl = "https://supplier.example.kw/product/tile-6060";
+    const base = { componentKey: "CERAMIC_TILES", productName: "Ceramica 60x60", brand: "Ceramica", model: "6060-A", sourceUrl, sourceTitle: "Ceramica 60x60 Kuwait", jurisdictionRelevance: "Kuwait supplier listing", confidence: .84, evidenceBasis: ["Exact product and local listing"], evidenceRole: "LOCAL_SUPPLIER_EVIDENCE", imageUrl: "https://supplier.example.kw/images/tile-6060.jpg" };
+    const payload: any = response({ evidenceClaims: [], productAlternatives: [{ ...base, marketPrice: { priceAmount: null, priceCurrency: "KWD", priceMin: 3.9, priceMax: 4.5, priceUnit: "m²", priceType: "RANGE", priceSourceUrl: sourceUrl, priceSourceTitle: "listing" } }] });
+    payload.output[0].action.sources = [{ url: sourceUrl, title: base.sourceTitle }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+    const result = await adapter({ now: () => Date.parse("2026-09-01T00:00:00Z") }).researchSystem(input(" local-price"));
+    expect(result?.productAlternatives?.[0]).toMatchObject({ imageUrl: base.imageUrl, marketPrice: { priceAmount: null, priceMin: 3.9, priceMax: 4.5, priceCurrency: "KWD", priceUnit: "m²", priceObservedAt: "2026-09-01T00:00:00.000Z" } });
+  });
+
+  it("does not turn contact-us pricing or an unrelated image host into evidence", async () => {
+    const sourceUrl = "https://supplier.example.kw/product/camera";
+    const product = { componentKey: "CCTV_CAMERAS", productName: "Cam X", brand: "CamCo", model: "X", sourceUrl, sourceTitle: "Cam X", jurisdictionRelevance: "Kuwait", confidence: .8, evidenceBasis: ["Exact listing"], evidenceRole: "LOCAL_SUPPLIER_EVIDENCE", imageUrl: "https://stock.example/random.jpg", marketPrice: { priceAmount: null, priceCurrency: null, priceMin: null, priceMax: null, priceUnit: null, priceType: null, priceSourceUrl: null, priceSourceTitle: null } };
+    const payload: any = response({ evidenceClaims: [], productAlternatives: [product] }); payload.output[0].action.sources = [{ url: sourceUrl, title: "Cam X" }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+    expect((await adapter().researchSystem(input(" contact-us")))?.productAlternatives?.[0]).toMatchObject({ imageUrl: null, marketPrice: null });
   });
 });

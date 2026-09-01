@@ -20,7 +20,14 @@ export interface ConversationToolPort {
 }
 
 export interface SolutionCandidateResolverPort {
-  resolve(input: { graph: SystemConfigurationGraph; companyId: string; locale: ConversationLocale; allowResearchFallback: boolean }): Promise<{ graph: SystemConfigurationGraph; researchObservation?: ToolObservation }>;
+  resolve(input: {
+    graph: SystemConfigurationGraph;
+    companyId: string;
+    locale: ConversationLocale;
+    mode: "CATALOG_ONLY" | "WEB_FALLBACK";
+    query: string;
+    requestedCount: number;
+  }): Promise<{ graph: SystemConfigurationGraph; researchObservation?: ToolObservation }>;
 }
 
 export interface FlexibleBrainPort {
@@ -28,5 +35,5 @@ export interface FlexibleBrainPort {
 }
 
 export interface WorkspaceDefaultsPort {
-  loadDefaults(companyId: string, scopeType: import("@/src/domain/quotation").QuotationScopeType | null): Promise<{ currencyCode: string; termsAr: string | null; termsEn: string | null }>;
+  loadDefaults(companyId: string, scopeType: import("@/src/domain/quotation").QuotationScopeType | null, locale?: ConversationLocale): Promise<import("./commercial-defaults").CommercialDefaultsProfile>;
 }

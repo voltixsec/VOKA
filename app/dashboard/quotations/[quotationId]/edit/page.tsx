@@ -36,6 +36,7 @@ import {
 import {
   normalizeQuotationLinePositions,
 } from "../../quotation-line-order";
+import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
 
 type ScopeType =
   | "SUPPLY_ONLY"
@@ -114,6 +115,7 @@ type Quote = {
   status: string;
   currencyCode: string;
   customerId?: string | null;
+  customer?: { name: string; nameAr?: string | null; nameEn?: string | null } | null;
   issueDate: string;
   expiryDate?: string | null;
   lines: Line[];
@@ -224,6 +226,7 @@ export default function EditQuotationPage() {
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customerId, setCustomerId] = useState("");
+  const [proposedCustomerName, setProposedCustomerName] = useState<string | null>(null);
 
   const [units, setUnits] =
     useState<Unit[]>([]);
@@ -346,6 +349,7 @@ export default function EditQuotationPage() {
 
         setQuote(loaded);
         setCustomerId(loaded.customerId ?? "");
+        setProposedCustomerName(!loaded.customerId ? loaded.customer?.name?.trim() || null : null);
         setLines(
           loaded.lines.map((line) => ({
             ...line,
@@ -604,16 +608,12 @@ export default function EditQuotationPage() {
     }
   }
 
-  async function save(
-    event: React.FormEvent,
-  ) {
-    event.preventDefault();
-
+  async function persistDraft(customerOverride?: string, navigate = true) {
     if (
       !quote ||
       lines.length === 0
     ) {
-      return;
+      return false;
     }
 
     try {
@@ -630,7 +630,7 @@ export default function EditQuotationPage() {
               "application/json",
           },
           body: JSON.stringify({
-            customerId: customerId || null,
+            customerId: (customerOverride ?? customerId) || null,
             localizationSourceLocale:
               isArabic ? "ar" : "en",
 
@@ -732,19 +732,28 @@ export default function EditQuotationPage() {
 
       setDirty(false);
 
-      router.push(
-        "/dashboard/quotations/" +
-          quote.id,
-      );
+      if (navigate) {
+        router.push(
+          "/dashboard/quotations/" +
+            quote.id,
+        );
+      }
+      return true;
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
           : "Update failed",
       );
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    await persistDraft();
   }
 
   if (loading) {
@@ -831,13 +840,24 @@ export default function EditQuotationPage() {
           </h3>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">{t("العميل", "Customer")}</span>
-              <select value={customerId} onChange={(event) => { setCustomerId(event.target.value); setDirty(true); }} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4">
-                <option value="">{t("العميل لم يُحدد بعد", "Customer pending")}</option>
-                {customers.map((customer) => <option key={customer.id} value={customer.id}>{(isArabic ? customer.nameAr : customer.nameEn) || customer.name}</option>)}
-              </select>
-            </label>
+              {proposedCustomerName ? <ProposedCustomer
+                name={proposedCustomerName}
+                isArabic={isArabic}
+                disabled={saving}
+                candidates={customers.filter((customer) => `${customer.name} ${customer.nameAr ?? ""} ${customer.nameEn ?? ""}`.toLocaleLowerCase().includes(proposedCustomerName.toLocaleLowerCase())).slice(0, 5)}
+                onBound={async (customer) => {
+                  setCustomers((current) => [...current.filter((item) => item.id !== customer.id), customer]);
+                  setCustomerId(customer.id);
+                  if (await persistDraft(customer.id, false)) setProposedCustomerName(null);
+                }}
+                onChange={() => { setProposedCustomerName(null); setCustomerId(""); setDirty(true); }}
+              /> : <select value={customerId} onChange={(event) => { setCustomerId(event.target.value); setDirty(true); }} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4">
+                  <option value="">{t("العميل لم يُحدد بعد", "Customer pending")}</option>
+                  {customers.map((customer) => <option key={customer.id} value={customer.id}>{(isArabic ? customer.nameAr : customer.nameEn) || customer.name}</option>)}
+                </select>}
+            </div>
             <label className="space-y-2">
               <span className="text-sm text-slate-400">
                 {t(
