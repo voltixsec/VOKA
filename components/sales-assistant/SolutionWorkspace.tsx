@@ -1,17 +1,44 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import type { SystemConfigurationGraph } from "@/src/application/conversation-runtime";
+import type { GovernedWorkspaceState, SystemConfigurationGraph } from "@/src/application/conversation-runtime";
 import { AssistantIcon } from "./AssistantIcon";
 
-export function SolutionWorkspace({ graph, isArabic, onOpenDraft, draftLoading, error }: { graph: SystemConfigurationGraph; isArabic: boolean; onOpenDraft: () => void; draftLoading: boolean; error?: string | null }) {
+export function SolutionWorkspace({ graph, workspace, isArabic, onOpenDraft, onSync, draftLoading, syncLoading = false, error }: { graph: SystemConfigurationGraph; workspace?: GovernedWorkspaceState; isArabic: boolean; onOpenDraft: () => void; onSync?: () => void; draftLoading: boolean; syncLoading?: boolean; error?: string | null }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = (ar: string, en: string) => isArabic ? ar : en;
   if (!graph.system) return null;
   const readinessLabel = (value: string) => isArabic ? ({ Customer: "العميل", Jurisdiction: "الدولة", Quantity: "الكمية", Pricing: "التسعير", "Payment terms": "شروط الدفع", "Product selection": "اختيار المنتج", "Engineering sizing": "التصميم الهندسي" } as Record<string, string>)[value] ?? value : value;
+  const scopeLabel = (value: string | null) => value ? ({ SUPPLY_AND_INSTALLATION: t("توريد وتركيب", "Supply and installation"), SUPPLY_ONLY: t("توريد فقط", "Supply only"), INSTALLATION_ONLY: t("تركيب فقط", "Installation only") } as Record<string, string>)[value] ?? value.replace(/_/g, " ").toLocaleLowerCase() : null;
+  const contextRows = workspace ? [
+    [t("العميل", "Customer"), workspace.commercialContext.customer],
+    [t("المشروع", "Project"), workspace.commercialContext.project],
+    [t("عناية", "Attention"), workspace.commercialContext.attention],
+    [t("الدولة", "Jurisdiction"), workspace.commercialContext.jurisdiction],
+    [t("النطاق", "Scope"), scopeLabel(workspace.commercialContext.scope)],
+  ].filter((row): row is [string, string] => Boolean(row[1])) : [];
+  const siteGroups = workspace ? [
+    [t("متطلبات الموقع", "Site requirements"), workspace.siteAndResponsibilities.siteRequirements],
+    [t("مسؤوليات العميل", "Client responsibilities"), workspace.siteAndResponsibilities.customerResponsibilities],
+    [t("مسؤولياتنا", "Our responsibilities"), workspace.siteAndResponsibilities.supplierResponsibilities],
+    [t("الاستثناءات", "Exclusions"), workspace.siteAndResponsibilities.exclusions],
+    [t("ملاحظات", "Notes"), workspace.siteAndResponsibilities.notes],
+  ].filter((entry) => entry[1].length) as Array<[string, string[]]> : [];
+  const termRows = workspace ? [
+    [t("الدفع", "Payment"), workspace.terms.payment],
+    [t("التسليم", "Delivery"), workspace.terms.delivery],
+    [t("الضمان", "Warranty"), workspace.terms.warranty],
+    [t("الصلاحية", "Validity"), workspace.terms.validity],
+    [t("ملف الشروط", "Terms profile"), scopeLabel(workspace.terms.defaultsScope)],
+  ].filter((row): row is [string, string] => Boolean(row[1])) : [];
+  const requirementValue = (key: string, value: string | number | boolean) => key === "scope.type" ? scopeLabel(String(value)) : String(value);
   const body = <div className="space-y-4" data-testid="solution-workspace-content">
-    <section><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300/70">{t("الحل", "Solution")}</p><h2 className="mt-1 text-base font-semibold text-slate-100">{isArabic ? graph.system.nameAr : graph.system.nameEn}</h2>{graph.requirements.length ? <div className="mt-3 grid gap-1.5">{graph.requirements.map((item) => <div key={item.key} className="flex items-start justify-between gap-3 rounded-xl bg-white/[0.025] px-3 py-2 text-xs"><span className="text-slate-500">{isArabic ? item.labelAr : item.labelEn}</span><span className="text-end font-medium text-slate-200">{String(item.value)}</span></div>)}</div> : null}</section>
-    {graph.candidateProducts.length ? <Section title={t("خيارات المنتجات", "Product options")}><div className="space-y-2">{graph.candidateProducts.map((item) => <div key={item.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5"><p className="text-xs font-medium text-slate-200">{(isArabic ? item.nameAr : item.nameEn) || item.name}</p><p className="mt-1 text-[10px] text-slate-500">{item.source === "VERIFIED_CATALOG" ? t("من كتالوج الشركة", "Company catalog") : t("اقتراح بحثي — يحتاج اعتماد", "Research suggestion — review required")}</p></div>)}</div></Section> : null}
+    {onSync ? <button type="button" onClick={onSync} disabled={syncLoading || draftLoading} className="w-full rounded-xl border border-sky-300/20 bg-sky-300/[0.045] px-3 py-2 text-xs font-medium text-sky-100 outline-none transition hover:bg-sky-300/[0.08] focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-60">{syncLoading ? t("\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u062f\u064a\u062b...", "Syncing...") : t("\u062a\u062d\u062f\u064a\u062b \u0645\u0646 \u0627\u0644\u0645\u062d\u0627\u062f\u062b\u0629", "Sync from conversation")}</button> : null}
+    <section><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300/70">{t("الحل", "Solution")}</p><h2 className="mt-1 text-base font-semibold text-slate-100">{isArabic ? graph.system.nameAr : graph.system.nameEn}</h2>{graph.requirements.length ? <div className="mt-3 grid gap-1.5">{graph.requirements.map((item) => <div key={item.key} className="flex items-start justify-between gap-3 rounded-xl bg-white/[0.025] px-3 py-2 text-xs"><span className="text-slate-500">{isArabic ? item.labelAr : item.labelEn}</span><span className="text-end font-medium text-slate-200">{requirementValue(item.key, item.value)}</span></div>)}</div> : null}</section>
+    {contextRows.length ? <Section title={t("السياق التجاري", "Commercial context")}><CompactRows rows={contextRows} /></Section> : null}
+    {siteGroups.length ? <Section title={t("الموقع والمسؤوليات", "Site and responsibilities")}><div className="space-y-2">{siteGroups.map(([label, values]) => <div key={label} className="rounded-xl bg-white/[0.025] px-3 py-2"><p className="text-[10px] font-medium text-slate-500">{label}</p><ul className="mt-1 space-y-1 text-xs text-slate-200">{values.map((value) => <li key={value}>{value}</li>)}</ul></div>)}</div></Section> : null}
+    {termRows.length ? <Section title={t("الإعدادات التجارية", "Commercial defaults")}><CompactRows rows={termRows} /></Section> : null}
+    {graph.candidateProducts.length ? <Section title={t("خيارات المنتجات", "Product options")}><div className="space-y-2">{graph.candidateProducts.map((item) => { const approved = workspace?.products.approvedCandidateIds.includes(item.id) ?? false; const identity = [item.brand, item.model].filter(Boolean).join(" - "); const source = candidateSourceLabel(item.sourceTitle, item.sourceUrl); return <div key={item.id} className={`rounded-xl border p-2.5 ${approved ? "border-emerald-300/25 bg-emerald-300/[0.055]" : "border-white/[0.06] bg-white/[0.025]"}`}><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium text-slate-200">{(isArabic ? item.nameAr : item.nameEn) || item.name}</p><span className={`shrink-0 text-[9px] font-semibold ${approved ? "text-emerald-200" : "text-amber-200"}`}>{approved ? t("معتمد", "Approved") : t("غير معتمد", "Not approved")}</span></div>{identity ? <p className="mt-1 text-[10px] text-slate-400">{identity}</p> : null}{source ? item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[10px] text-sky-300 hover:underline">{source}</a> : <p className="mt-1 text-[10px] text-slate-500">{source}</p> : null}{item.jurisdictionRelevance ? <p className="mt-1 text-[10px] leading-4 text-slate-500">{item.jurisdictionRelevance}</p> : null}<p className="mt-1 text-[10px] text-slate-500">{item.source === "VERIFIED_CATALOG" ? t("من كتالوج الشركة", "Company catalog") : t("اقتراح بحثي — يحتاج اعتماد", "Research suggestion — review required")}</p></div>; })}</div></Section> : null}
     {graph.engineeringBom.length ? <Section title={t("قائمة التنفيذ والتوريد", "Engineering / procurement BOM")}><Bom lines={graph.engineeringBom} isArabic={isArabic} showRationale /></Section> : null}
     {graph.salesBom.length ? <Section title={t("بنود عرض السعر", "Sales BOM")}><Bom lines={graph.salesBom} isArabic={isArabic} /></Section> : null}
     {graph.unresolvedDecisions.length ? <Section title={t("قرارات مؤثرة ما زالت مفتوحة", "Meaningful open decisions")}><ul className="space-y-1.5 text-xs text-amber-100/80">{graph.unresolvedDecisions.map((item) => <li key={item.key} className="rounded-lg bg-amber-300/[0.045] px-2.5 py-2">{isArabic ? item.labelAr : item.labelEn}</li>)}</ul></Section> : null}
@@ -21,4 +48,6 @@ export function SolutionWorkspace({ graph, isArabic, onOpenDraft, draftLoading, 
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) { return <section><h3 className="mb-2 text-xs font-semibold text-slate-300">{title}</h3>{children}</section>; }
+function CompactRows({ rows }: { rows: Array<[string, string]> }) { return <div className="grid gap-1.5">{rows.map(([label, value]) => <div key={label} className="flex items-start justify-between gap-3 rounded-xl bg-white/[0.025] px-3 py-2 text-xs"><span className="text-slate-500">{label}</span><span className="text-end font-medium text-slate-200">{value}</span></div>)}</div>; }
+function candidateSourceLabel(title?: string | null, url?: string | null) { if (title?.trim()) return title.trim(); if (!url) return null; try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return null; } }
 function Bom({ lines, isArabic, showRationale = false }: { lines: SystemConfigurationGraph["salesBom"]; isArabic: boolean; showRationale?: boolean }) { const unit = (value: string | null) => !isArabic ? value ?? "" : ({ bag: "كيس", kg: "كجم", lm: "متر طولي", tile: "بلاطة", "m²": "م²" } as Record<string, string>)[value ?? ""] ?? value ?? ""; return <div className="space-y-1.5">{lines.map((item) => <div key={item.id} className="rounded-xl border border-white/[0.055] bg-white/[0.02] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium leading-5 text-slate-200">{isArabic ? item.itemNameAr : item.itemNameEn}</p><span className="shrink-0 text-[10px] text-slate-400">{item.quantityState === "PENDING" ? (isArabic ? "الكمية معلّقة" : "Quantity pending") : `${item.quantity} ${unit(item.unitName)}`}</span></div>{showRationale && item.description ? <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-500">{item.description}</p> : null}<p className="mt-1 text-[10px] text-slate-500">{item.priceState === "PENDING" ? (isArabic ? "التسعير معلّق" : "Pricing pending") : item.unitPrice}</p></div>)}</div>; }

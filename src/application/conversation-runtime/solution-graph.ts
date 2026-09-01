@@ -186,7 +186,7 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
       : { cameraCount: numeric(facts, "system.cameraCount") ?? numeric(facts, "system.quantity"), resolutionMp: numeric(facts, "system.resolutionMp"), storageDays: numeric(facts, "system.storageDays"), jurisdiction: text(facts, "system.jurisdiction"), includeInstallation: /INSTALL/i.test(text(facts, "scope.type") ?? "") };
     const calculated = smart.calculateSystem(system.key, inputs);
     if (calculated) {
-      graph.unresolvedDecisions = calculated.missingInputs.map((key) => ({ key, labelAr: key, labelEn: key, safetyCritical: false }));
+      graph.unresolvedDecisions = calculated.missingInputs.map((key) => ({ key, ...missingInputLabel(key), safetyCritical: false }));
       graph.engineeringBom = calculated.components.map((component) => line({ id: component.componentKey, itemNameAr: component.nameAr, itemNameEn: component.nameEn, type: component.itemType, quantity: component.quantity, quantityState: "CONFIRMED", unitName: component.unit, provenance: "GOVERNED_TEMPLATE", description: component.formulaExplanation ?? null }));
       graph.salesBom = calculated.components.map((component) => line({ id: component.componentKey, itemNameAr: commercialName(component.componentKey, component.nameAr, true), itemNameEn: commercialName(component.componentKey, component.nameEn, false), type: component.itemType, quantity: component.quantity, quantityState: "CONFIRMED", unitName: component.unit, provenance: "GOVERNED_TEMPLATE" }));
     }
@@ -194,9 +194,9 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
   graph.catalogResolution = graph.salesBom.some((row) => row.type === "PRODUCT") ? "PENDING" : "NOT_REQUIRED";
   graph.salesBom = graph.salesBom.map((row) => applyApprovedProductSelection(row, facts));
   graph.engineeringBom = graph.engineeringBom.map((row) => applyApprovedProductSelection(row, facts));
-  graph.readiness.pendingBeforeDraftOpen = [!facts["customer.name"] ? "Customer" : null, !facts["system.jurisdiction"] ? "Jurisdiction" : null].filter((value): value is string => value !== null);
-  graph.readiness.draftReady = graph.readiness.pendingBeforeDraftOpen.length === 0;
-  graph.readiness.pendingBeforeFinalIssue = [graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
+  graph.readiness.pendingBeforeDraftOpen = [];
+  graph.readiness.draftReady = true;
+  graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
   return graph;
 }
 
@@ -236,6 +236,17 @@ function commercialName(key: string, fallback: string, ar: boolean) {
     GYPSUM_LABOR: ["أعمال تركيب جبس بورد", "Gypsum board installation works"],
   };
   return names[key]?.[ar ? 0 : 1] ?? fallback;
+}
+
+function missingInputLabel(key: string) {
+  const known: Record<string, { labelAr: string; labelEn: string }> = {
+    cameraCount: { labelAr: "عدد الكاميرات", labelEn: "Camera count" },
+    resolutionMp: { labelAr: "دقة الكاميرات", labelEn: "Camera resolution" },
+    storageDays: { labelAr: "مدة الاحتفاظ بالتسجيل", labelEn: "Recording retention" },
+    areaM2: { labelAr: "المساحة", labelEn: "Area" },
+    layersCount: { labelAr: "عدد الطبقات", labelEn: "Number of layers" },
+  };
+  return known[key] ?? { labelAr: "بيانات هندسية إضافية", labelEn: "Additional engineering input" };
 }
 
 export function emptySystemConfigurationGraph() { return structuredClone(EMPTY_GRAPH); }

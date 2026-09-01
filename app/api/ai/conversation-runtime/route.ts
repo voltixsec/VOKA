@@ -6,10 +6,14 @@ import { signConversationState, verifyConversationState } from "@/src/infrastruc
 
 export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request, _auth, company) => {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const message = typeof body.message === "string" ? body.message.trim() : "";
+  const action = body.action === "RECONCILE" ? "RECONCILE" as const : "TURN" as const;
+  const message = action === "RECONCILE"
+    ? "Reconcile the full conversation into the governed workspace using the user's latest corrections and approvals."
+    : typeof body.message === "string" ? body.message.trim() : "";
   if (!message || message.length > 4_000) throw ApiError.badRequest("CONVERSATION_RUNTIME_MESSAGE_INVALID", "message must contain 1 to 4000 characters.");
   if (body.locale !== "ar" && body.locale !== "en") throw ApiError.badRequest("CONVERSATION_RUNTIME_LOCALE_INVALID", "locale must be ar or en.");
   if (body.source !== "TEXT" && body.source !== "VOICE" && body.source !== "CHIP") throw ApiError.badRequest("CONVERSATION_RUNTIME_SOURCE_INVALID", "source is invalid.");
+  if (action === "RECONCILE" && !body.state) throw ApiError.badRequest("CONVERSATION_STATE_REQUIRED", "A conversation state is required for reconciliation.");
   const runtime = createConversationRuntime();
   if (!runtime) throw new ApiError(503, "CONVERSATION_BRAIN_NOT_CONFIGURED", "The conversational AI runtime is not configured.");
   let priorState: ConversationRuntimeState | null = null;
@@ -19,7 +23,7 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     try { priorState = await verifyConversationState(supplied.stateToken, company.companyId); }
     catch { throw ApiError.forbidden("CONVERSATION_STATE_INVALID", "The conversation state is invalid or belongs to another company."); }
   }
-  const state = await runtime.execute({ state: priorState, message, locale: body.locale, source: body.source, attachment: body.attachment as { id?: string; name: string; type: string; size: number } | null, companyId: company.companyId });
+  const state = await runtime.execute({ state: priorState, message, locale: body.locale, source: body.source, attachment: body.attachment as { id?: string; name: string; type: string; size: number } | null, companyId: company.companyId, action });
   if (state.handoff) state.handoffToken = await signCommercialHandoff(state.handoff, company.companyId);
   state.stateToken = await signConversationState(state, company.companyId);
   return apiSuccess(state, { headers: { "Cache-Control": "private, no-store" } });

@@ -82,7 +82,7 @@ export default function SalesAssistantPage(props: any) {
       } else if (result.status === "NEEDS_COMMERCIAL_INFO") {
         const fields = result.blockingFields ?? [];
         const customerCandidates = fields.flatMap((field) => field.candidates ?? []).map((candidate) => candidate.name);
-        setHandoffError(customerCandidates.length ? (isArabic ? `حدد العميل المقصود: ${customerCandidates.join("، ")}` : `Please identify the intended customer: ${customerCandidates.join(", ")}`) : (isArabic ? "محتاج اسم العميل المؤكد قبل إنشاء مسودة العرض." : "A confirmed customer name is required before creating the quotation draft."));
+        setHandoffError(customerCandidates.length ? (isArabic ? `حدد العميل المقصود: ${customerCandidates.join("، ")}` : `Please identify the intended customer: ${customerCandidates.join(", ")}`) : (isArabic ? "توجد معلومة تجارية تحتاج مراجعة قبل متابعة المسودة." : "A commercial detail needs review before continuing the Draft."));
       } else {
         setHandoffError(result.message ?? (isArabic ? "تعذر إنشاء مسودة العرض." : "The quotation draft could not be created."));
       }
@@ -140,6 +140,19 @@ export default function SalesAssistantPage(props: any) {
     } catch { setHandoffError(isArabic ? "تعذر تجهيز المسودة. حاول مرة أخرى." : "The draft could not be prepared. Try again."); }
     finally { handoffPreparationRef.current = false; if (!quotationInFlightRef.current) setIsCreatingQuotation(false); }
   };
+  const reconcileWorkspace = async () => {
+    if (!runtimeState || turnInFlightRef.current) return;
+    const generation = ++generationRef.current;
+    turnInFlightRef.current = true; setIsGenerating(true); setError(false); setActivityStage("UNDERSTANDING");
+    try {
+      const response = await fetch("/api/ai/conversation-runtime", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: runtimeState, action: "RECONCILE", source: "CHIP", locale: isArabic ? "ar" : "en" }) });
+      const json = await response.json();
+      if (generation !== generationRef.current) return;
+      if (!response.ok || !isRuntimeState(json.data)) throw new Error("Workspace reconciliation failed");
+      setRuntimeState(json.data);
+    } catch { if (generation === generationRef.current) setError(true); }
+    finally { if (generation === generationRef.current) { turnInFlightRef.current = false; setIsGenerating(false); } }
+  };
   const primaryActionLabel = isGenerating || isVoiceProcessing ? (isArabic ? "جارٍ الفهم..." : "Understanding...") : isListening ? (isArabic ? "إيقاف وإرسال" : "Stop & Send") : hasText ? (isArabic ? "ابدأ الطلب" : "Start Request") : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice");
   const controls = <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 px-2">{!hasConversation ? <NewRequestCTA isArabic={isArabic} onClick={newRequest} /> : null}</div>;
   const voiceStatus = recorded.isSupported
@@ -157,7 +170,7 @@ export default function SalesAssistantPage(props: any) {
   return <div className={`mx-auto min-w-0 max-w-[90rem] space-y-4 overflow-x-clip pb-8 ${isArabic ? "font-[var(--font-cairo)]" : ""}`} dir={isArabic ? "rtl" : "ltr"}>
     <ChatHeader isArabic={isArabic} hasConversation={hasConversation} onNewRequest={newRequest} />
     <div data-testid="commercial-composer" data-commercial-state={isGenerating ? "UNDERSTANDING" : runtimeState?.transitionState ?? "EMPTY"} className={`relative grid min-h-[68vh] min-w-0 gap-5 ${hasSolutionWorkspace ? "xl:grid-cols-[22rem_minmax(0,1fr)]" : ""}`} dir="ltr">
-      {solutionGraph?.system ? <div dir={isArabic ? "rtl" : "ltr"}><SolutionWorkspace graph={solutionGraph} isArabic={isArabic} onOpenDraft={() => void prepareQuotation()} draftLoading={isCreatingQuotation || quotationNavigationStarted} error={handoffError} /></div> : null}
+      {solutionGraph?.system ? <div dir={isArabic ? "rtl" : "ltr"}><SolutionWorkspace graph={solutionGraph} workspace={runtimeState?.workspace} isArabic={isArabic} onOpenDraft={() => void prepareQuotation()} onSync={() => void reconcileWorkspace()} draftLoading={isCreatingQuotation || quotationNavigationStarted} syncLoading={isGenerating} error={handoffError} /></div> : null}
       <main className="flex min-h-[68vh] min-w-0 flex-col" dir={isArabic ? "rtl" : "ltr"}>
         <label htmlFor="sales-prompt-input" className="sr-only">{isArabic ? "تحدث مع فوكا" : "Talk to VOKA"}</label>
         {hasConversation ? <MessageList ref={timelineRef} messages={messages} pendingUserMessage={pendingUserMessage} isArabic={isArabic} copiedMessage={copiedMessage} onCopy={(text, index) => void copyMessage(text, index)} onScroll={handleTimelineScroll} showLatest={showLatest} onLatest={scrollToLatest} latestAssistantContent={runtimeState ? <AssistantContextCues state={runtimeState} isArabic={isArabic} /> : null} activity={isGenerating ? <ActivityIndicator stage={activityStage} isArabic={isArabic} /> : null} /> : <div className="mt-auto pb-5 pt-10 text-center"><p className="text-sm font-medium text-slate-300">{isArabic ? "ابدأ بفكرة، سؤال، أو مستند" : "Start with an idea, a question, or a document"}</p><p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">{isArabic ? "تحدث بطبيعتك، وفوكا يحافظ على السياق ويطوّر الحل معك." : "Speak naturally; VOKA keeps context and develops the solution with you."}</p><div className="mt-4 flex flex-wrap justify-center gap-2">{SAMPLES.map((sample) => <button key={sample.labelEn} type="button" onClick={() => setPrompt(isArabic ? sample.textAr : sample.textEn)} className="rounded-2xl border border-white/[0.075] bg-white/[0.03] px-3.5 py-2 text-xs text-sky-200 outline-none transition hover:border-sky-300/20 hover:bg-sky-300/[0.06] focus-visible:ring-2 focus-visible:ring-sky-400">{isArabic ? sample.labelAr : sample.labelEn}</button>)}</div></div>}

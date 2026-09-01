@@ -57,7 +57,15 @@ function localizedNotes(handoff: CommercialSolutionHandoff, locale: "ar" | "en")
     const current = fact(handoff, key);
     return current ? [`${locale === "ar" ? label[0] : label[1]}: ${String(current.value)}`] : [];
   });
-  return meaningful.join("\n") || null;
+  const workspace = handoff.workspace?.siteAndResponsibilities;
+  const structured = workspace ? [
+    [locale === "ar" ? "E*7D('* 'DEHB9" : "Site requirements", workspace.siteRequirements],
+    [locale === "ar" ? "E3$HDJ'* 'DEH1/" : "Supplier responsibilities", workspace.supplierResponsibilities],
+    [locale === "ar" ? "E3$HDJ'* 'D9EJD" : "Customer responsibilities", workspace.customerResponsibilities],
+    [locale === "ar" ? "'D'3*+F'!'*" : "Exclusions", workspace.exclusions],
+    [locale === "ar" ? "ED'-8'*" : "Notes", workspace.notes],
+  ].flatMap(([label, values]) => (values as string[]).map((value) => label + ": " + value)) : [];
+  return [...meaningful, ...structured].join("\n") || null;
 }
 
 function localizedSubject(system: string, scopeType: QuotationScopeType | null, locale: "ar" | "en") {
@@ -107,16 +115,12 @@ export class CreateQuotationFromCommercialHandoff {
     const system = textFact(input.handoff, "system.identity");
     if (!system) return { status: "INVALID_HANDOFF", code: "CONFIRMED_SYSTEM_REQUIRED", message: "A confirmed system is required." };
     const customerName = textFact(input.handoff, "customer.name");
-    const jurisdiction = textFact(input.handoff, "system.jurisdiction");
-    const missing: CommercialBlockingField[] = [];
-    if (!customerName) missing.push({ key: "customer.name" });
-    if (!jurisdiction) missing.push({ key: "system.jurisdiction" });
-    if (missing.length) return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: missing };
     const quotationNumber = commercialHandoffQuotationNumber(input.handoff);
     const existing = await this.port.findByNumber(input.companyId, quotationNumber);
     if (existing) return { status: "EXISTING", quotationId: existing.id, navigationTarget: `/dashboard/quotations/${existing.id}/edit`, localizationPending: existing.localizationPending };
-    const customer = await this.port.resolveCustomer(input.companyId, customerName!, input.locale);
-    if (customer.status !== "RESOLVED") return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: customer.status === "AMBIGUOUS" ? "customer.selection" : "customer.name", ...(customer.status === "AMBIGUOUS" ? { candidates: customer.candidates } : {}) }] };
+    const resolution = customerName ? await this.port.resolveCustomer(input.companyId, customerName, input.locale) : { status: "PENDING" as const };
+    if (resolution.status === "AMBIGUOUS") return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.selection", candidates: resolution.candidates }] };
+    const customer = resolution.status === "RESOLVED" ? resolution : null;
     const scopeValue = textFact(input.handoff, "scope.type");
     const defaults = await this.port.loadDefaults(input.companyId, isQuotationScopeType(scopeValue) ? scopeValue : null);
     const dto = adaptCommercialHandoffToQuotationDraft({ ...input, customer, defaults });

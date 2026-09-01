@@ -54,15 +54,23 @@ function primaryLines(graph: SystemConfigurationGraph) {
 function researchCandidate(
   product: NonNullable<ResearchResult["productAlternatives"]>[number],
   index: number,
-): CandidateProduct {
+): CandidateProduct | null {
+  const name = product.productName.trim();
+  const brand = product.brand?.trim() || null;
+  const model = product.model?.trim() || null;
+  let host = "";
+  try { host = new URL(product.sourceUrl).hostname.replace(/^www\./, "").split(".")[0] ?? ""; } catch { return null; }
+  const identityTokens = [normalize(name), normalize(brand), normalize(model)].filter(Boolean);
+  const forbidden = new Set([normalize(host), "facebook", "instagram", "linkedin", "youtube", "tiktok", "amazon", "noon", "google"]);
+  if (!name || (!brand && !model) || identityTokens.every((value) => forbidden.has(value))) return null;
   return {
     id: `research-${product.componentKey}-${index}-${product.sourceUrl}`,
     componentKey: product.componentKey,
-    name: product.productName,
+    name,
     nameAr: null,
     nameEn: product.productName,
-    brand: product.brand,
-    model: product.model,
+    brand,
+    model,
     sku: null,
     price: null,
     source: "RESEARCHED",
@@ -244,7 +252,8 @@ export class PrismaSolutionCandidateResolver
           const researched = (model.productAlternatives ?? [])
             .filter((product) => normalize(product.componentKey) === normalize(line.id))
             .sort((a, b) => b.confidence - a.confidence)
-            .map((product, index) => researchCandidate(product, index));
+            .map((product, index) => researchCandidate(product, index))
+            .filter((candidate): candidate is CandidateProduct => candidate !== null);
 
           componentCandidates = mergeDistinct(
             componentCandidates,

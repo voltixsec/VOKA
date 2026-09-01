@@ -27,9 +27,19 @@ export type CandidateFact = ConfirmedFact & {
 export type SolutionReadiness = "EXPLORING" | "MATURE" | "AWAITING_USER_CONFIRMATION" | "READY_FOR_HANDOFF";
 export type TransitionState = "EXPLORING" | "PROPOSED" | "TRANSITION_REQUESTED" | "COMMERCIAL_HANDOFF";
 export type ConversationToolKind = "ENGINEERING_KNOWLEDGE" | "RESEARCH" | "CATALOG_LOOKUP" | "PRICING_LOOKUP" | "CUSTOMER_LOOKUP" | "ATTACHMENT_INSPECTION" | "DRAWING_INSPECTION" | "BOQ_INSPECTION";
+export type FlexibleResponseMode = "ACK" | "QUESTION" | "RESULT" | "RESEARCH_RESULT" | "WARNING";
+export type WorkspacePatchOperation = "SET" | "REPLACE" | "REMOVE" | "PROPOSE" | "APPROVE" | "REJECT";
+export type WorkspacePatch = {
+  operation: WorkspacePatchOperation;
+  path: string;
+  value: unknown;
+  evidence: string;
+  provenance: "USER_EXPLICIT" | "USER_CORRECTION" | "AI_INFERRED" | "RESEARCHED";
+};
+export type FlexibleRecommendation = { id: string; title: string; rationale: string; candidateId: string | null };
 
 export type ToolRequest = { kind: ConversationToolKind; query: string; attachmentId: string | null };
-export type ToolObservation = { kind: ConversationToolKind; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; createdAt: string };
+export type ToolObservation = { kind: ConversationToolKind; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; createdAt: string; candidateProducts?: CandidateProduct[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
 
 export type PendingState = "CONFIRMED" | "PENDING";
 export type SolutionBomLine = {
@@ -84,6 +94,35 @@ export type SystemConfigurationGraph = {
   readiness: { draftReady: boolean; pendingBeforeDraftOpen: string[]; pendingBeforeFinalIssue: string[] };
 };
 
+export type GovernedWorkspaceState = {
+  commercialContext: {
+    customer: string | null;
+    project: string | null;
+    attention: string | null;
+    scope: string | null;
+    jurisdiction: string | null;
+  };
+  requirements: Record<string, FactValue>;
+  engineering: {
+    system: SystemConfigurationGraph["system"];
+    calculations: SystemConfigurationGraph["engineeringCalculations"];
+    bom: SolutionBomLine[];
+    assumptions: SystemConfigurationGraph["assumptions"];
+  };
+  commercialSolution: { bom: SolutionBomLine[] };
+  products: { candidates: CandidateProduct[]; approvedCandidateIds: string[] };
+  siteAndResponsibilities: {
+    siteRequirements: string[];
+    supplierResponsibilities: string[];
+    customerResponsibilities: string[];
+    exclusions: string[];
+    notes: string[];
+  };
+  terms: { payment: string | null; delivery: string | null; warranty: string | null; validity: string | null; currencyCode: string | null; companyTermsAr: string | null; companyTermsEn: string | null; defaultsScope: string | null };
+  readiness: SystemConfigurationGraph["readiness"];
+  updatedAt: string;
+};
+
 export type ConfirmedCommercialLine = {
   catalogItemId: string | null;
   itemName: string;
@@ -108,6 +147,7 @@ export type CommercialSolutionHandoff = {
   commercialLines: ConfirmedCommercialLine[];
   toolEvidence: ToolObservation[];
   createdAt: string;
+  workspace?: GovernedWorkspaceState;
 };
 
 export type ConversationRuntimeState = {
@@ -130,10 +170,27 @@ export type ConversationRuntimeState = {
   stateToken?: string | null;
   /** Added after runtime v1 launch; absent only in safely hydrated legacy session state. */
   solutionGraph?: SystemConfigurationGraph;
+  /** Authoritative state. solutionGraph is a compatibility projection of this workspace. */
+  workspace?: GovernedWorkspaceState;
 };
 
 export type BrainFactProposal = { key: string; value: FactValue; provenance: "USER_EXPLICIT" | "USER_CORRECTION" | "AI_INFERRED" | "RESEARCHED"; evidence: string };
-export type ConversationBrainDecision = {
+export type FlexibleTurnProposal = {
+  responseMode: FlexibleResponseMode;
+  intent: string;
+  patches: WorkspacePatch[];
+  researchRequests: ToolRequest[];
+  recommendations: FlexibleRecommendation[];
+  assumptions: string[];
+  blockingQuestion: string | null;
+  responseContent: string;
+  unresolvedImportantQuestions: string[];
+  solutionReadiness: SolutionReadiness;
+  transition: "NONE" | "PROPOSE" | "CONFIRM" | "REOPEN";
+  compactMemory: string;
+  suggestedReplies: string[];
+};
+export type LegacyConversationBrainDecision = {
   reply: string;
   factProposals: BrainFactProposal[];
   unresolvedImportantQuestions: string[];
@@ -143,6 +200,7 @@ export type ConversationBrainDecision = {
   compactMemory: string;
   suggestedReplies: string[];
 };
+export type ConversationBrainDecision = FlexibleTurnProposal | LegacyConversationBrainDecision;
 
 export type ConversationTurnInput = {
   state: ConversationRuntimeState | null;
@@ -151,4 +209,5 @@ export type ConversationTurnInput = {
   source: ConversationMessageSource;
   attachment?: { id?: string; name: string; type: string; size: number } | null;
   companyId: string;
+  action?: "TURN" | "RECONCILE";
 };

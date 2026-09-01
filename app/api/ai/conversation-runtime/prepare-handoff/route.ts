@@ -1,5 +1,5 @@
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
-import { buildSystemConfigurationGraph, type CommercialSolutionHandoff, type ConfirmedFact, type ConversationRuntimeState } from "@/src/application/conversation-runtime";
+import { buildSystemConfigurationGraph, projectWorkspaceGraph, type CommercialSolutionHandoff, type ConfirmedFact, type ConversationRuntimeState } from "@/src/application/conversation-runtime";
 import { signCommercialHandoff } from "@/src/infrastructure/ai/CommercialHandoffToken";
 import { verifyConversationState } from "@/src/infrastructure/ai/ConversationStateToken";
 
@@ -21,11 +21,10 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     return true;
   }));
   if (!confirmedFacts["system.identity"]) throw ApiError.badRequest("CONFIRMED_SYSTEM_REQUIRED", "A confirmed system is required.");
-  if (!confirmedFacts["customer.name"]) throw ApiError.badRequest("CONFIRMED_CUSTOMER_REQUIRED", "A confirmed customer is required before opening a quotation Draft.");
-  if (!confirmedFacts["system.jurisdiction"]) throw ApiError.badRequest("CONFIRMED_JURISDICTION_REQUIRED", "A confirmed jurisdiction is required before opening a quotation Draft.");
   const target = confirmedFacts["document.target"]?.value;
   if (typeof target === "string" && target !== "QUOTATION") throw new ApiError(409, "NOT_YET_CONNECTED", `${target} persistence is not connected to the clean conversation runtime yet.`);
-  const graph = buildSystemConfigurationGraph(confirmedFacts);
+  const baseGraph = buildSystemConfigurationGraph(confirmedFacts);
+  const graph = state.workspace ? projectWorkspaceGraph(state.workspace, baseGraph) : baseGraph;
   const commercialLines = graph.salesBom.map((line) => ({
     catalogItemId: line.catalogItemId ?? null, itemName: line.itemName, itemNameAr: line.itemNameAr, itemNameEn: line.itemNameEn,
     description: line.description ?? null, unitName: line.unitName, quantity: line.quantity, unitPrice: line.unitPrice, type: line.type,
@@ -33,6 +32,6 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     quantityState: line.quantityState, priceState: line.priceState, componentKeys: line.componentKeys, brand: line.brand ?? null, model: line.model ?? null,
   }));
   const createdAt = state.messages[0]?.createdAt ?? new Date().toISOString();
-  const handoff: CommercialSolutionHandoff = { runtimeId: state.runtimeId, confirmedFacts, commercialLines, toolEvidence: state.toolResults.filter((result) => result.status === "COMPLETED"), createdAt };
+  const handoff: CommercialSolutionHandoff = { runtimeId: state.runtimeId, confirmedFacts, commercialLines, toolEvidence: state.toolResults.filter((result) => result.status === "COMPLETED"), createdAt, workspace: state.workspace };
   return apiSuccess({ handoffToken: await signCommercialHandoff(handoff, company.companyId) }, { headers: { "Cache-Control": "private, no-store" } });
 });

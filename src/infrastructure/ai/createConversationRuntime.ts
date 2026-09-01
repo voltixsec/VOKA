@@ -3,6 +3,7 @@ import { ConversationToolRegistry } from "./ConversationToolRegistry";
 import { OpenAIConversationBrain } from "./openai/OpenAIConversationBrain";
 import { OpenAISalesAssistantAdapter } from "./openai/OpenAISalesAssistantAdapter";
 import { PrismaSolutionCandidateResolver } from "./PrismaSolutionCandidateResolver";
+import { PrismaCommercialHandoffQuotationPort } from "./PrismaCommercialHandoffQuotationPort";
 
 export function createConversationRuntime() {
   const key = process.env.OPENAI_API_KEY;
@@ -11,5 +12,6 @@ export function createConversationRuntime() {
   const baseUrl = process.env.OPENAI_BASE_URL;
   const brain = new OpenAIConversationBrain(key, model, baseUrl);
   const research = process.env.VOKA_COMMERCIAL_RESEARCH_ENABLED === "false" ? null : new OpenAISalesAssistantAdapter(key, process.env.VOKA_COMMERCIAL_RESEARCH_MODEL?.trim() || model, baseUrl, { enabled: true });
-  return new ConversationRuntime(brain, new ConversationToolRegistry(research), undefined, undefined, new PrismaSolutionCandidateResolver(research));
+  const candidates = new PrismaSolutionCandidateResolver(research);
+  return new ConversationRuntime(brain, new ConversationToolRegistry(research, candidates), undefined, undefined, new PrismaCommercialHandoffQuotationPort());
 }

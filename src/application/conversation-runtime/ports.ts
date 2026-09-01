@@ -1,4 +1,4 @@
-import type { ConversationBrainDecision, ConversationLocale, ConversationRuntimeState, SystemConfigurationGraph, ToolObservation, ToolRequest } from "./types";
+import type { ConversationBrainDecision, ConversationLocale, ConversationRuntimeState, FlexibleTurnProposal, SystemConfigurationGraph, ToolObservation, ToolRequest } from "./types";
 
 export interface ConversationBrainPort {
   decide(input: {
@@ -6,6 +6,7 @@ export interface ConversationBrainPort {
     currentMessage: string;
     recentMessages: ConversationRuntimeState["messages"];
     confirmedFacts: ConversationRuntimeState["confirmedFacts"];
+    workspace: ConversationRuntimeState["workspace"];
     compactMemory: string;
     toolResults: ToolObservation[];
     attachmentAvailable: boolean;
@@ -15,9 +16,17 @@ export interface ConversationBrainPort {
 }
 
 export interface ConversationToolPort {
-  execute(input: { request: ToolRequest; companyId: string; locale: ConversationLocale }): Promise<ToolObservation>;
+  execute(input: { request: ToolRequest; companyId: string; locale: ConversationLocale; graph: SystemConfigurationGraph }): Promise<ToolObservation>;
 }
 
 export interface SolutionCandidateResolverPort {
   resolve(input: { graph: SystemConfigurationGraph; companyId: string; locale: ConversationLocale; allowResearchFallback: boolean }): Promise<{ graph: SystemConfigurationGraph; researchObservation?: ToolObservation }>;
+}
+
+export interface FlexibleBrainPort {
+  decide(input: Parameters<ConversationBrainPort["decide"]>[0]): Promise<FlexibleTurnProposal>;
+}
+
+export interface WorkspaceDefaultsPort {
+  loadDefaults(companyId: string, scopeType: import("@/src/domain/quotation").QuotationScopeType | null): Promise<{ currencyCode: string; termsAr: string | null; termsEn: string | null }>;
 }

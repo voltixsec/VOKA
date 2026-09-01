@@ -26,11 +26,11 @@ describe("POST /api/ai/conversation-runtime/quotation-draft", () => {
     expect(mocks.execute).toHaveBeenCalledWith({ companyId: "tenant-1", handoff, locale: "en" });
     expect(await response.json()).toMatchObject({ data: { status: "CREATED", quotationId: "quotation-1" } });
   });
-  it("returns typed commercial blockers without creating or approving anything", async () => {
-    mocks.execute.mockResolvedValue({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name", reason: "REQUIRED" }] });
+  it("returns an ambiguous-customer selection blocker without creating or approving anything", async () => {
+    mocks.execute.mockResolvedValue({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.selection", candidates: [{ id: "c1", name: "North Co" }] }] });
     const response = await POST(request({ handoffToken: "signed-token", locale: "ar" }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ data: { status: "NEEDS_COMMERCIAL_INFO" } });
+    expect(await response.json()).toMatchObject({ data: { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.selection" }] } });
   });
   it("rejects an invalid or cross-tenant token before the quotation service runs", async () => {
     mocks.verify.mockRejectedValue(new Error("COMMERCIAL_HANDOFF_INVALID"));

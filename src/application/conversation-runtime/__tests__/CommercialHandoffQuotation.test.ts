@@ -41,12 +41,14 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ currencyCode: "KWD", termsAndConditionsAr: "شروط الشركة" });
   });
 
-  it("blocks Draft creation when customer is missing", async () => {
+  it("opens an early Draft when customer is missing and keeps customer pending", async () => {
     const gateway = port();
     const value = handoff(); delete value.confirmedFacts["customer.name"];
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: value, locale: "ar" });
-    expect(result).toEqual({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] });
-    expect(gateway.createDraft).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: "CREATED" });
+    expect(gateway.resolveCustomer).not.toHaveBeenCalled();
+    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
+    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ projectName: null, attentionName: null });
   });
 
   it("blocks an ambiguous customer rather than guessing", async () => {
