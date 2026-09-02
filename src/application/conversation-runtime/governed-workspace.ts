@@ -11,6 +11,7 @@ import type { CommercialDefaultsProfile } from "./commercial-defaults";
 import { normalizeCommercialText } from "./commercial-defaults";
 import { projectCommercialBomLine } from "./commercial-projection";
 import { applyApprovedProductSelection } from "./solution-graph";
+import { quotationScopeLabel } from "./scope-labels";
 
 const LIST_PATHS = new Set([
   "siteAndResponsibilities.siteRequirements",
@@ -59,6 +60,12 @@ function isSafeBomLine(value: unknown): value is SolutionBomLine {
     row.unitPrice == null;
 }
 
+function unselectedProposal(line: SolutionBomLine): SolutionBomLine {
+  return { ...line, baseItemNameAr: undefined, baseItemNameEn: undefined, brand: null, model: null,
+    catalogItemId: null, capabilities: null, marketPrice: null, productSelectionStatus: "GENERIC",
+    pricingStatus: "PENDING", unitPrice: null, priceState: "PENDING" };
+}
+
 function governedBom(
   prior: SolutionBomLine[] | undefined,
   generated: SolutionBomLine[],
@@ -66,12 +73,25 @@ function governedBom(
 ) {
   if (!sameSystem || !prior?.length) return generated;
   if (!generated.length) return prior;
-  const priorIds = prior.map((line) => line.id).join("|");
-  const generatedIds = generated.map((line) => line.id).join("|");
-  const hasUserGovernedStructure = prior.some((line) =>
-    ["USER_EXPLICIT", "USER_CORRECTION", "USER_APPROVED"].includes(line.provenance),
-  );
-  return hasUserGovernedStructure && priorIds !== generatedIds ? prior : generated;
+  // Older signed workspaces predate explicit lineage. Retain their known camera split.
+  const parentOf = (line: SolutionBomLine) => line.structuralParentId
+    ?? (["CCTV_BULLET_CAMERA", "CCTV_DOME_CAMERA"].includes(line.id) ? "CCTV_CAMERAS" : null);
+  const children = prior.filter((line) => parentOf(line));
+  const result = generated.flatMap((line) => {
+    const replacements = children.filter((child) => parentOf(child) === line.id);
+    if (replacements.length) {
+      const total = replacements.reduce((sum, child) => sum + (child.quantity ?? 0), 0);
+      const conflict = line.quantity !== null && replacements.every((child) => child.quantity !== null) && total !== line.quantity;
+      return replacements.map((child) => ({ ...child, structuralParentId: line.id,
+        ...(conflict ? { engineeringStatus: "CONFLICT" as const, assumptions: ["The structural quantities do not match the current required total; review the split."] } : {}),
+      }));
+    }
+    return [line];
+  });
+  const generatedIds = new Set(generated.map((line) => line.id));
+  const resultIds = new Set(result.map((line) => line.id));
+  return [...result, ...prior.filter((line) => !resultIds.has(line.id) && !parentOf(line)
+    && !generatedIds.has(line.id) && ["USER_EXPLICIT", "USER_CORRECTION", "USER_APPROVED"].includes(line.provenance))];
 }
 
 export function synchronizeWorkspace(
@@ -113,8 +133,11 @@ export function synchronizeWorkspace(
     },
     commercialSolution: { bom: commercialBom },
     products: {
-      candidates: graph.candidateProducts.length ? graph.candidateProducts : sameSystem ? prior?.products.candidates ?? [] : [],
-      approvedCandidateIds: [...new Set([...(sameSystem ? prior?.products.approvedCandidateIds ?? [] : []), ...approvedCandidateIds])],
+      candidates: [...new Map([
+        ...(sameSystem ? prior?.products.candidates.filter((candidate) => approvedCandidateIds.includes(candidate.id)) ?? [] : []),
+        ...(graph.candidateProducts.length ? graph.candidateProducts : sameSystem ? prior?.products.candidates ?? [] : []),
+      ].map((candidate) => [candidate.id, candidate])).values()],
+      approvedCandidateIds: [...new Set(approvedCandidateIds)],
     },
     siteAndResponsibilities: sameSystem
       ? supplyOnlyAfterScopeChange
@@ -138,7 +161,9 @@ export function synchronizeWorkspace(
       defaultsScope: sameSystem ? prior?.terms.defaultsScope ?? null : null,
       defaultsLoaded: sameSystem ? prior?.terms.defaultsLoaded === true : false,
     },
-    readiness: graph.readiness,
+    readiness: commercialBom.some((line) => line.engineeringStatus === "CONFLICT")
+      ? { ...graph.readiness, pendingBeforeFinalIssue: [...new Set([...graph.readiness.pendingBeforeFinalIssue, "Compatibility review"])] }
+      : graph.readiness,
     updatedAt: now,
   };
 }
@@ -186,7 +211,7 @@ export function applyWorkspacePatches(workspace: GovernedWorkspaceState, patches
     if (patch.path === "engineering.bom" && (patch.operation === "PROPOSE" || patch.operation === "REPLACE")) {
       const canConfirmQuantity = patch.provenance === "USER_EXPLICIT" || patch.provenance === "USER_CORRECTION";
       const lines = (Array.isArray(patch.value) ? patch.value : [patch.value]).filter(isSafeBomLine).map((line) => ({
-        ...line,
+        ...unselectedProposal(line),
         quantity: canConfirmQuantity ? line.quantity ?? null : null,
         quantityState: canConfirmQuantity && line.quantity != null ? "CONFIRMED" as const : "PENDING" as const,
         unitPrice: null,
@@ -201,10 +226,15 @@ export function applyWorkspacePatches(workspace: GovernedWorkspaceState, patches
     }
     if (patch.path.startsWith("engineering.bom.") && patch.operation === "REPLACE") {
       const parentId = patch.path.slice("engineering.bom.".length).trim();
-      if (!next.engineering.bom.some((line) => line.id === parentId)) continue;
+      const parent = next.engineering.bom.find((line) => line.id === parentId);
+      if (!parent) continue;
       const canConfirmQuantity = patch.provenance === "USER_EXPLICIT" || patch.provenance === "USER_CORRECTION";
       const replacements = (Array.isArray(patch.value) ? patch.value : [patch.value]).filter(isSafeBomLine).map((line) => ({
-        ...line,
+        ...unselectedProposal(line),
+        structuralParentId: parent.structuralParentId ?? parentId,
+        commercialAttributes: { ...parent.commercialAttributes, ...line.commercialAttributes,
+          ...(parentId === "CCTV_CAMERAS" && /BULLET|DOME/.test(line.id) ? { subtype: /BULLET/.test(line.id) ? "Bullet" : "Dome" } : {}),
+        },
         quantity: canConfirmQuantity ? line.quantity ?? null : null,
         quantityState: canConfirmQuantity && line.quantity != null ? "CONFIRMED" as const : "PENDING" as const,
         unitPrice: null,
@@ -212,6 +242,10 @@ export function applyWorkspacePatches(workspace: GovernedWorkspaceState, patches
         provenance: patch.provenance,
       }));
       if (!replacements.length) continue;
+      // A structural split cannot steal another existing component's slot or lineage.
+      const otherIds = new Set(next.engineering.bom.filter((line) => line.id !== parentId).map((line) => line.id));
+      if (new Set(replacements.map((line) => line.id)).size !== replacements.length
+        || replacements.some((line) => otherIds.has(line.id) || line.componentKeys.some((key) => otherIds.has(key)))) continue;
       const replace = (lines: SolutionBomLine[]) => {
         const index = lines.findIndex((line) => line.id === parentId);
         if (index < 0) return lines;
@@ -235,16 +269,8 @@ export function applyWorkspacePatches(workspace: GovernedWorkspaceState, patches
       }
       continue;
     }
-    if (patch.path.startsWith("products.candidates.") && patch.operation === "APPROVE") {
-      const id = patch.path.slice("products.candidates.".length);
-      if (next.products.candidates.some((candidate) => candidate.id === id)) {
-        next.products.approvedCandidateIds = [...new Set([...next.products.approvedCandidateIds, id])];
-      }
-    }
-    if (patch.path.startsWith("products.candidates.") && patch.operation === "REJECT") {
-      const id = patch.path.slice("products.candidates.".length);
-      next.products.approvedCandidateIds = next.products.approvedCandidateIds.filter((candidateId) => candidateId !== id);
-    }
+    // Product approval/rejection is reduced to selection facts by the runtime.
+    // A presentation patch must never create a second approval authority.
   }
   next.updatedAt = now;
   next.commercialSolution.bom = next.commercialSolution.bom.map(projectCommercialBomLine);
@@ -264,7 +290,27 @@ export function projectWorkspaceGraph(workspace: GovernedWorkspaceState, base: S
   };
 }
 
-export function renderGovernedResponse(decision: FlexibleTurnProposal, locale: ConversationLocale) {
+export function renderGovernedResponse(decision: FlexibleTurnProposal, locale: ConversationLocale, workspace?: GovernedWorkspaceState) {
+  if (workspace?.commercialContext.scope) {
+    const redundantQuestion = (value: string) => /(?:what(?:\s+is|'s)\s+(?:the\s+)?scope|(?:supply\s+only).*(?:or|and).*installation|(?:ما\s+(?:هو\s+)?(?:نطاق|النطاق)|(?:نطاق|النطاق).*?(?:إيه|ايه)|توريد\s+فقط.*(?:ولا|أم|او|أو).*تركيب)|where.*terms.*(?:come|from)|(?:مصدر|منين).*الشروط)/iu.test(value);
+    const scopeReply = locale === "ar" ? `النطاق المحدد: ${quotationScopeLabel(workspace.commercialContext.scope, locale)}. شروط العرض من إعدادات الشركة لهذا النطاق.` : `Scope: ${quotationScopeLabel(workspace.commercialContext.scope, locale)}. Quotation terms come from Company Settings for this scope.`;
+    decision = { ...decision,
+      responseContent: redundantQuestion(decision.responseContent) && /[?؟]/u.test(decision.responseContent) ? scopeReply : decision.responseContent,
+      blockingQuestion: decision.blockingQuestion && redundantQuestion(decision.blockingQuestion) ? null : decision.blockingQuestion,
+    };
+  }
+  const proposedText = [decision.responseContent, decision.blockingQuestion, ...decision.recommendations.flatMap((item) => [item.title, item.rationale])].join(" ");
+  const approvalText = proposedText.replace(/(?:not\s+(?:yet\s+)?approved|unapproved|لم\s+(?:أعتمد|اعتمد)|غير\s+معتمد)/giu, "");
+  const approvalClaim = /(?:تم\s+اعتماد|اعتمدنا|(?:المنتج|المنتجات|الاختيار)\s+معتمد|approved\b)/iu.test(approvalText);
+  if (workspace && approvalClaim) {
+    const approved = workspace.commercialSolution.bom.filter((line) => line.productSelectionStatus === "SELECTED"
+      && workspace.products.candidates.some((candidate) => candidate.componentKey === line.id && workspace.products.approvedCandidateIds.includes(candidate.id)));
+    const names = approved.map((line) => [line.brand, line.model].filter(Boolean).join(" ") || (locale === "ar" ? line.itemNameAr : line.itemNameEn));
+    return names.length ? locale === "ar"
+      ? `المنتجات المعتمدة في الحل: ${names.join("، ")}. الكميات الهندسية والتسعير يحتفظان بحالة المراجعة الخاصة بهما.`
+      : `Approved products in the solution: ${names.join(", ")}. Engineering quantities and pricing retain their separate review states.`
+      : locale === "ar" ? "لم يتم اعتماد أي منتج في الحل بعد. يمكننا مراجعة الخيارات وتأكيد الاختيار." : "No product is approved in the solution yet. We can review the options and confirm a selection.";
+  }
   const fallback = locale === "ar" ? "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u062d\u0644." : "The solution is updated.";
   const bounded = (value: string, limit: number) => value.replace(/\s+/g, " ").trim().slice(0, limit).trim();
   const content = bounded(normalizeCommercialText(decision.responseContent) || fallback, decision.responseMode === "RESEARCH_RESULT" ? 700 : 360);

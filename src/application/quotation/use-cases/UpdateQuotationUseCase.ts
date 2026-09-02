@@ -177,6 +177,7 @@ export class UpdateQuotationUseCase {
           notesAr: quotation.notesAr,
           notesEn: quotation.notesEn,
           termsAndConditions: quotation.termsAndConditions,
+          scopeType: quotation.scopeType,
           termsAndConditionsAr: quotation.termsAndConditionsAr,
           termsAndConditionsEn: quotation.termsAndConditionsEn,
           lines: quotation.lines.map((line) => ({

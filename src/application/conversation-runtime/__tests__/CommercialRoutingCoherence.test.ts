@@ -79,7 +79,8 @@ describe("commercial routing and state coherence", () => {
     const brain: ConversationBrainPort = { decide: async () => proposal({ patches: [{ operation: "SET", path: "facts.system.identity", value: "CCTV", evidence: "CCTV", provenance: "USER_EXPLICIT" }], responseContent: "جهزت التكوين المبدئي." }) };
     const state = await new ConversationRuntime(brain, tools, () => now, ids).execute({ state: null, message: "CCTV", locale: "ar", source: "TEXT", companyId: "c1" });
     expect(state.messages.at(-1)?.text).toBe("جهزت التكوين المبدئي.\n\nاسم العميل والعرض لعناية مين؟");
-    expect(state.solutionGraph?.readiness.pendingBeforeFinalIssue).toEqual(expect.arrayContaining(["Customer", "Attention"]));
+    expect(state.solutionGraph?.readiness.pendingBeforeDraftOpen).toEqual(["Customer"]);
+    expect(state.solutionGraph?.readiness.pendingBeforeFinalIssue).toContain("Attention");
   });
 
   it("clears system-specific workspace state and company profile on a genuine system change", () => {

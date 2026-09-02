@@ -38,7 +38,7 @@ export class ConversationToolRegistry implements ConversationToolPort {
       }
       if (detailed?.diagnostic) return { kind: "RESEARCH", purpose: input.request.purpose, status: "UNAVAILABLE", summary: detailed.diagnostic, evidence: [], createdAt: this.now() };
     }
-    return { kind: input.request.kind, purpose: input.request.purpose, status: "UNAVAILABLE", summary: "This capability is not connected in the clean runtime yet.", evidence: [], createdAt: this.now() };
+    return { kind: input.request.kind, purpose: input.request.purpose, status: "UNAVAILABLE", summary: input.locale === "ar" ? "تعذر تنفيذ هذه الخطوة الآن. يمكن متابعة المحادثة وإعادة المحاولة لاحقاً." : "This step is unavailable right now. You can continue the conversation and retry later.", evidence: [], createdAt: this.now() };
   }
 }
 

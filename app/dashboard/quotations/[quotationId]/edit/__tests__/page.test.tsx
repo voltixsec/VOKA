@@ -158,6 +158,90 @@ afterEach(() => {
 });
 
 describe("EditQuotationPage dense composer UX", () => {
+  it.each([true, false])("localizes Draft unit display only (Arabic=%s), preserving identity, pending prices and header data on save", async (arabic) => {
+    isArabic = arabic;
+    const codes = ["Sheet", "LM", "Pcs", "Pair", "KG", "m²"];
+    const arabicUnits = ["لوح", "متر طولي", "قطعة", "زوج", "كجم", "م²"];
+    const loaded = { ...quotation, quotationNumber: "QT-202609-0042", customerId: "customer-1", customer: { name: "National Telecom" }, scopeType: "SUPPLY_AND_INSTALLATION", lines: codes.map((unitName, index) => ({ ...quotation.lines[0], id: `line-${index}`, position: index + 1, itemName: index === 0 ? "USG Knauf Sheetrock Standard 12.5mm" : index === 1 ? "Sheetrock All Purpose Joint Compound" : `Material ${index}`, unitName, unitNameAr: unitName, unitNameEn: unitName, quantity: index + 10, unitPrice: null, pricingStatus: "PENDING", engineeringComponentKeys: [index === 0 ? "GYPSUM_BOARDS" : index === 1 ? "JOINT_COMPOUND" : `COMPONENT_${index}`] })) };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === "/api/companies/current/quotation-terms") return response({ templates: [{ scopeType: "SUPPLY_AND_INSTALLATION", termsAr: "شروط الشركة الحالية", termsEn: "Current installation terms" }] });
+      if (input.startsWith("/api/quotations/")) return response(loaded);
+      if (input.startsWith("/api/customers")) return response({ customers: [{ id: "customer-1", name: "National Telecom" }] });
+      return fetchForEdit()(input, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(createElement(EditQuotationPage));
+    await screen.findByDisplayValue("USG Knauf Sheetrock Standard 12.5mm");
+    await screen.findByDisplayValue(arabic ? "شروط الشركة الحالية" : "Current installation terms");
+    for (const [index, code] of codes.entries()) {
+      expect(screen.getByLabelText(`${arabic ? "الوحدة" : "Unit"} ${index + 1}`)).toHaveValue(arabic ? arabicUnits[index] : code);
+      expect(screen.getByLabelText(`${arabic ? "سعر الوحدة" : "Unit price"} ${index + 1}`)).toHaveValue(null);
+    }
+    expect(screen.getByDisplayValue("Sheetrock All Purpose Joint Compound")).toBeTruthy();
+    expect(container.textContent).not.toContain("العرص");
+    expect(screen.getByText("QT-202609-0042")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: arabic ? "حفظ التعديلات" : "Save changes" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    const body = patchBody(fetchMock);
+    expect(body).toMatchObject({ customerId: "customer-1", projectName: "Project", attentionName: "Attention", scopeType: "SUPPLY_AND_INSTALLATION" });
+    expect(body).not.toHaveProperty("quotationNumber");
+    expect(body.lines.map((line: { unitName: string }) => line.unitName)).toEqual(codes);
+    expect(body.lines.map((line: { quantity: number }) => line.quantity)).toEqual([10, 11, 12, 13, 14, 15]);
+    expect(body.lines[0]).toMatchObject({ itemName: "USG Knauf Sheetrock Standard 12.5mm", unitPrice: null, pricingStatus: "PENDING", engineeringComponentKeys: ["GYPSUM_BOARDS"] });
+    expect(body.lines[1]).toMatchObject({ itemName: "Sheetrock All Purpose Joint Compound", engineeringComponentKeys: ["JOINT_COMPOUND"] });
+  });
+
+  it("refreshes exact current scope terms on reload and replaces, never merges, on scope change", async () => {
+    const installation = "1. Current installation clause\n\n  2. Preserve this indentation";
+    const supply = "Current supply-only clause";
+    const loaded = { ...quotation, scopeType: "SUPPLY_AND_INSTALLATION", termsAndConditions: "Legacy default", termsAndConditionsEn: "Stale conversation terms" };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === "/api/companies/current/quotation-terms") return response({ templates: [{ scopeType: "SUPPLY_ONLY", termsAr: "توريد", termsEn: supply }, { scopeType: "SUPPLY_AND_INSTALLATION", termsAr: "تركيب", termsEn: installation }] });
+      if (input.startsWith("/api/quotations/")) return response(loaded);
+      return fetchForEdit()(input, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+    const terms = await screen.findByRole("textbox", { name: "Terms and conditions" });
+    await waitFor(() => expect(terms).toHaveValue(installation));
+    expect(terms).toHaveAttribute("readonly");
+    fireEvent.change(screen.getByRole("combobox", { name: "Scope type" }), { target: { value: "SUPPLY_ONLY" } });
+    await waitFor(() => expect(terms).toHaveValue(supply));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(patchBody(fetchMock)).toMatchObject({ scopeType: "SUPPLY_ONLY", termsAndConditions: supply, termsAndConditionsEn: supply, termsAndConditionsAr: "توريد" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/companies/current/quotation-terms", { cache: "no-store" });
+  });
+
+  it("does not silently use stale terms after settings failure and offers retry", async () => {
+    let failed = true;
+    const loaded = { ...quotation, scopeType: "SUPPLY_ONLY", termsAndConditions: "Stale legal text" };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === "/api/companies/current/quotation-terms") return failed ? { ok: false, json: async () => ({}) } : response({ templates: [{ scopeType: "SUPPLY_ONLY", termsEn: "Recovered terms", termsAr: null }] });
+      if (input.startsWith("/api/quotations/")) return response(loaded);
+      return fetchForEdit()(input, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+    await screen.findByText("Current company terms could not be loaded.");
+    expect(screen.getByRole("textbox", { name: "Terms and conditions" })).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    failed = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByDisplayValue("Recovered terms");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+  });
+
+  it("leaves terms empty when the exact scope has no configured template", async () => {
+    const loaded = { ...quotation, scopeType: "SUPPLY_ONLY", termsAndConditions: "Legacy" };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => input === "/api/companies/current/quotation-terms" ? response({ templates: [{ scopeType: "SUPPLY_AND_INSTALLATION", termsEn: "Wrong scope" }] }) : input.startsWith("/api/quotations/") ? response(loaded) : fetchForEdit()(input, init));
+    vi.stubGlobal("fetch", fetchMock);
+    render(createElement(EditQuotationPage));
+    await screen.findByDisplayValue("Item");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
+    expect(screen.getByRole("textbox", { name: "Terms and conditions" })).toHaveValue("");
+  });
+
   it("1. Loads existing saved quotation line correctly into dense composer", async () => {
     vi.stubGlobal("fetch", fetchForEdit());
 

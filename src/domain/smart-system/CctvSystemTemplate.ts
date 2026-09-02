@@ -17,6 +17,8 @@ export interface CctvInputs {
   bitrateMbps?: number | null;
   cableMetersPerCamera?: number | null;
   resolutionMp?: number | null;
+  selectedDriveCapacityTb?: number | null;
+  recorderCount?: number | null;
   selectedRecorderCapabilities?: {
     channels?: number | null;
     diskBays?: number | null;
@@ -206,7 +208,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
     // Decimal TB = cameras * Mbps * seconds/day * days / 8 bits/byte / 1e6 MB/TB.
     const baseTbRequired = count * bitrateMbps * 86_400 * storageDays / 8 / 1_000_000;
     const estimatedTbRequired = Math.ceil(baseTbRequired * (1 + rules.snapshot.values.storageReservePercent / 100));
-    const storageDriveCapacityTb = recorder?.maxHddCapacityTb && recorder.maxHddCapacityTb > 0 ? recorder.maxHddCapacityTb : rules.snapshot.values.storageDriveCapacityTb ?? 18;
+    const selectedDriveCapacityTb = typeof rawInputs.selectedDriveCapacityTb === "number" && rawInputs.selectedDriveCapacityTb > 0 ? rawInputs.selectedDriveCapacityTb : null;
+    const storageDriveCapacityTb = selectedDriveCapacityTb ?? (recorder?.maxHddCapacityTb && recorder.maxHddCapacityTb > 0 ? recorder.maxHddCapacityTb : rules.snapshot.values.storageDriveCapacityTb ?? 18);
     const storageStatus = storageDaysProvided != null && bitrateProvided != null && typeof rawInputs.resolutionMp === "number"
       ? "EXACT" as const
       : "ESTIMATED" as const;
@@ -214,7 +217,7 @@ export class CctvSystemTemplate implements ISystemTemplate {
       ...(storageDaysProvided == null ? [`${storageDays} days retention from the resolved engineering profile`] : []),
       ...(bitrateProvided == null ? [`${bitrateMbps} Mbps per-camera planning bitrate`] : []),
       ...(typeof rawInputs.resolutionMp !== "number" ? [`${rules.snapshot.values.resolutionMp} MP planning resolution`] : []),
-      recorder?.maxHddCapacityTb ? `${storageDriveCapacityTb} TB maximum supported HDD capacity from the approved recorder` : `${storageDriveCapacityTb} TB governed generic surveillance-drive packaging`,
+      selectedDriveCapacityTb ? `${storageDriveCapacityTb} TB approved drive capacity` : recorder?.maxHddCapacityTb ? `${storageDriveCapacityTb} TB maximum supported HDD capacity from the approved recorder` : `${storageDriveCapacityTb} TB governed generic surveillance-drive packaging`,
     ];
     const storagePackaging = resolveCommercialPackaging({
       requiredQuantity: estimatedTbRequired,
@@ -227,9 +230,13 @@ export class CctvSystemTemplate implements ISystemTemplate {
     const channelRecorderCount = Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100));
     const bandwidthRecorderCount = recorder?.incomingBandwidthMbps && recorder.incomingBandwidthMbps > 0 ? Math.ceil(count * bitrateMbps / recorder.incomingBandwidthMbps) : 1;
     const storageRecorderCount = recorder?.diskBays && recorder.diskBays > 0 ? Math.ceil(storagePackaging.commercialQuantity / recorder.diskBays) : 1;
-    const recorderCount = Math.max(channelRecorderCount, bandwidthRecorderCount, storageRecorderCount);
+    const explicitRecorderCount = typeof rawInputs.recorderCount === "number" && Number.isInteger(rawInputs.recorderCount) && rawInputs.recorderCount > 0 ? rawInputs.recorderCount : null;
+    const recorderCount = explicitRecorderCount ?? Math.max(channelRecorderCount, bandwidthRecorderCount, selectedDriveCapacityTb ? 1 : storageRecorderCount);
     const recorderCapabilitiesComplete = Boolean(recorder?.channels && recorder.diskBays && recorder.maxHddCapacityTb && recorder.incomingBandwidthMbps && recorder.supportedCodec);
     const compatibilityConflicts = [
+      ...(recorder?.diskBays && storagePackaging.commercialQuantity > recorderCount * recorder.diskBays ? [{ code: "HDD_BAYS_EXCEEDED", message: `${storagePackaging.commercialQuantity} drives exceed ${recorderCount * recorder.diskBays} available bays.` }] : []),
+      ...(selectedDriveCapacityTb && recorder?.maxHddCapacityTb && selectedDriveCapacityTb > recorder.maxHddCapacityTb ? [{ code: "HDD_CAPACITY_UNSUPPORTED", message: "Selected drive capacity exceeds the approved recorder limit." }] : []),
+      ...(explicitRecorderCount && explicitRecorderCount < Math.max(channelRecorderCount, bandwidthRecorderCount) ? [{ code: "RECORDER_COUNT_INSUFFICIENT", message: "Confirmed recorder count cannot serve the required channels or bandwidth." }] : []),
       ...(recorder?.supportedCodec && recorder.supportedCodec !== rules.snapshot.values.codec ? [{ code: "RECORDER_CODEC_INCOMPATIBLE", message: `Approved recorder supports ${recorder.supportedCodec}, while the resolved calculation requires ${rules.snapshot.values.codec}.` }] : []),
       ...(recorder && recorder.diskBays === 0 ? [{ code: "RECORDER_STORAGE_INCOMPATIBLE", message: "Approved recorder has no verified disk bays for the required storage design." }] : []),
     ];

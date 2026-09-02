@@ -173,6 +173,7 @@ export class CreateQuotationUseCase {
       });
 
       const quotationSnapshot = {
+        scopeType: quotation.scopeType,
         customer: quotation.customerOrNull?.toJSON() ?? null,
         projectName: quotation.projectName,
         projectNameAr: quotation.projectNameAr,

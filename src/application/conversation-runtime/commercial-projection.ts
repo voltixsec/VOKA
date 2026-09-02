@@ -7,7 +7,7 @@ function compact(value: string | null | undefined) {
 
 function appendDistinct(base: string, parts: Array<string | null | undefined>) {
   const result = compact(base) ?? "";
-  return parts.reduce((current, raw) => {
+  return parts.reduce<string>((current, raw) => {
     const value = compact(raw);
     if (!value || current.normalize("NFKC").toLocaleLowerCase().includes(value.normalize("NFKC").toLocaleLowerCase())) return current;
     return current ? current + ", " + value : value;
@@ -33,9 +33,9 @@ function attributeParts(attributes: CommercialMaterialAttributes | undefined, ar
 
 /** Builds the single customer-facing identity used by the Workspace and Quotation handoff. */
 export function projectCommercialBomLine(line: SolutionBomLine): SolutionBomLine {
-  const identity = [compact(line.brand), compact(line.model)].filter(Boolean).join(" ");
-  const itemNameEn = appendDistinct(line.itemNameEn, [identity, ...attributeParts(line.commercialAttributes, false)]);
-  const itemNameAr = appendDistinct(line.itemNameAr, [identity, ...attributeParts(line.commercialAttributes, true)]);
+  const identity = [compact(line.brand), compact(line.model)];
+  const itemNameEn = appendDistinct(line.itemNameEn, [...identity, ...attributeParts(line.commercialAttributes, false)]);
+  const itemNameAr = appendDistinct(line.itemNameAr, [...identity, ...attributeParts(line.commercialAttributes, true)]);
   const productSelectionStatus = line.productSelectionStatus
     ?? (line.brand || line.model || line.catalogItemId ? "SELECTED" : line.type === "PRODUCT" ? "GENERIC" : "GENERIC");
   const pricingStatus = line.pricingStatus

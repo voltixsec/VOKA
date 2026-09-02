@@ -16,6 +16,7 @@ function quotation(status: "DRAFT" | "SENT"): Quotation {
     companyId: "company-1",
     customerId: "customer-1",
     number: "Q-001",
+    issueDate: new Date("2026-08-31T12:00:00.000Z"),
     status,
     customer: { name: "Customer" },
     lines: [{

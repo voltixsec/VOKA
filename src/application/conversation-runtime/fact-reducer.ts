@@ -5,6 +5,8 @@ const ALLOWED_FACTS = new Set([
   "scope.type", "customer.name", "project.name", "attention.name", "commercial.payment", "commercial.delivery", "commercial.warranty", "commercial.validity",
   "system.areaM2", "system.tileSize", "system.qualityTier", "system.cameraCount", "system.resolutionMp", "system.environment", "system.cameraType", "system.storageDays", "system.layersCount",
   "document.target",
+  "system.recorderCount",
+  "product.selection.NVR_RECORDER.capabilities.diskBays",
   "product.origin", "product.brand", "product.model",
   "ceramic.wastagePercent",
   "ceramic.adhesiveBags",
@@ -35,6 +37,10 @@ export function reduceFactProposals(
 
     if (!ALLOWED_FACTS.has(proposal.key)) {
       rejectionReason = "FACT_KEY_NOT_ALLOWED";
+      status = "REJECTED";
+    } else if (["system.recorderCount", "product.selection.NVR_RECORDER.capabilities.diskBays"].includes(proposal.key)
+      && (typeof proposal.value !== "number" || !Number.isInteger(proposal.value) || proposal.value <= 0 || proposal.value > 1024)) {
+      rejectionReason = "FACT_VALUE_INVALID";
       status = "REJECTED";
     } else if (
       !["string", "number", "boolean"].includes(typeof proposal.value) ||

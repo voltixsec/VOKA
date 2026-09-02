@@ -1,7 +1,9 @@
 import type { CreateQuotationDto } from "@/src/application/quotation";
 import { isQuotationScopeType, type QuotationScopeType } from "@/src/domain/quotation";
 import type { CommercialSolutionHandoff, ConfirmedFact } from "./types";
-import { composeQuotationTerms, normalizeCommercialText, type CommercialDefaultsProfile } from "./commercial-defaults";
+import { normalizeCommercialText, type CommercialDefaultsProfile } from "./commercial-defaults";
+import { applyApprovedProductSelection } from "./solution-graph";
+import { projectCommercialBomLine } from "./commercial-projection";
 import { resolveExpiry } from "@/src/application/ai-sales-assistant/services/commercial-field-values";
 import { quotationScopeLabel } from "./scope-labels";
 
@@ -43,7 +45,7 @@ function textFact(handoff: CommercialSolutionHandoff, key: string) {
 
 function localizedNotes(handoff: CommercialSolutionHandoff, locale: "ar" | "en") {
   const labels: Record<string, [string, string]> = {
-    "project.siteRequirement": ["متطلبات الموقع", "Site requirement"], "commercial.exclusions": ["الاستثناءات", "Exclusions"], "commercial.notes": ["ملاحظات", "Notes"],
+    "project.siteRequirement": ["متطلبات الموقع", "Site requirement"], "commercial.exclusions": ["الاستثناءات", "Exclusions"],
   };
   const meaningful = Object.entries(labels).flatMap(([key, label]) => {
     const current = fact(handoff, key);
@@ -105,9 +107,17 @@ export function adaptCommercialHandoffToQuotationDraft(input: {
     warranty: input.defaults.warranty,
     validity: input.defaults.validity,
   };
-  const terms = composeQuotationTerms(input.defaults, { payment: null, delivery: null, warranty: null, validity: null }, input.locale);
+  // Company legal text is copied verbatim, never composed from conversation clauses.
+  const terms = input.locale === "ar" ? input.defaults.termsAr : input.defaults.termsEn;
   const expiry = commercialValues.validity ? resolveExpiry(commercialValues.validity, input.handoff.createdAt.slice(0, 10)) : null;
-  const lines = input.handoff.commercialLines.map((line, index) => {
+  // Older signed handoffs may contain a stale flattened copy. Project the latest
+  // governed lines by stable identity, with approved selection facts reapplied.
+  const governed = input.handoff.workspace?.commercialSolution.bom;
+  const sourceLines: CommercialSolutionHandoff["commercialLines"] = governed ? governed.map((original) => {
+    const line = projectCommercialBomLine(applyApprovedProductSelection(original, input.handoff.confirmedFacts));
+    return { ...line, catalogItemId: line.catalogItemId ?? null, authority: line.provenance === "VERIFIED_CATALOG" ? "VERIFIED_DATABASE" : line.provenance === "RESEARCHED" ? "RESEARCHED" : "DETERMINISTIC_DERIVATION" };
+  }) : input.handoff.commercialLines;
+  const lines = sourceLines.map((line, index) => {
     const catalogVerified = ["VERIFIED_PROFILE", "VERIFIED_DATABASE"].includes(line.authority);
     const governedSelection = Boolean(line.brand || line.model);
     return { catalogItemId: catalogVerified ? line.catalogItemId?.trim() || null : null, taxRateId: null, position: index + 1, type: line.type, itemName: normalizeCommercialText(line.itemName) ?? line.itemName, itemNameAr: normalizeCommercialText(line.itemNameAr), itemNameEn: normalizeCommercialText(line.itemNameEn), description: normalizeCommercialText(line.description), unitName: line.unitName, quantity: line.quantity, unitPrice: catalogVerified ? line.unitPrice : null, quantityStatus: line.quantityState ?? (line.quantity === null ? "PENDING" as const : "CONFIRMED" as const), pricingStatus: catalogVerified && line.unitPrice !== null ? "CONFIRMED" as const : "PENDING" as const, productSelectionStatus: line.productSelectionStatus ?? ((catalogVerified && line.catalogItemId) || governedSelection ? "SELECTED" as const : "PENDING" as const), engineeringStatus: line.engineeringStatus, commercialPricingStatus: line.pricingStatus ?? (catalogVerified && line.unitPrice !== null ? "CONFIRMED" as const : line.marketPrice ? "MARKET_REFERENCE_AVAILABLE" as const : "PENDING" as const), commercialAttributes: line.commercialAttributes, brandName: governedSelection ? line.brand ?? null : null, modelNumber: governedSelection ? line.model ?? null : null, provenance: line.authority, engineeringComponentKeys: line.componentKeys ?? [], marketPrice: line.marketPrice ?? null, taxPercentage: 0 };
@@ -123,7 +133,10 @@ export function adaptCommercialHandoffToQuotationDraft(input: {
     projectName,
     attentionName,
     expiryDate: expiry ? new Date(`${expiry}T23:59:59.999Z`) : null,
-    ...(input.locale === "ar" ? { subjectAr: localizedSubject(system, scopeType, "ar"), briefAr: localizedBrief(system, scopeType, "ar"), notesAr: localizedNotes(input.handoff, "ar"), termsAndConditionsAr: terms } : { subjectEn: localizedSubject(system, scopeType, "en"), briefEn: localizedBrief(system, scopeType, "en"), notesEn: localizedNotes(input.handoff, "en"), termsAndConditionsEn: terms }),
+    termsAndConditions: terms,
+    termsAndConditionsAr: input.defaults.termsAr,
+    termsAndConditionsEn: input.defaults.termsEn,
+    ...(input.locale === "ar" ? { subjectAr: localizedSubject(system, scopeType, "ar"), briefAr: localizedBrief(system, scopeType, "ar"), notesAr: localizedNotes(input.handoff, "ar") } : { subjectEn: localizedSubject(system, scopeType, "en"), briefEn: localizedBrief(system, scopeType, "en"), notesEn: localizedNotes(input.handoff, "en") }),
     localizationSourceLocale: input.locale,
   };
 }
@@ -137,6 +150,7 @@ export class CreateQuotationFromCommercialHandoff {
     const customerName = textFact(input.handoff, "customer.name");
     const existing = await this.port.findByHandoff(input.companyId, input.handoff.runtimeId);
     if (existing) return { status: "EXISTING", quotationId: existing.id, navigationTarget: `/dashboard/quotations/${existing.id}/edit`, localizationPending: existing.localizationPending };
+    if (!customerName) return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] };
     const resolution = customerName ? await this.port.resolveCustomer(input.companyId, customerName, input.locale) : { status: "PENDING" as const };
     const customer = resolution.status === "RESOLVED"
       ? resolution

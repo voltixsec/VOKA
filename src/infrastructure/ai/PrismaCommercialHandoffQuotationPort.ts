@@ -49,7 +49,9 @@ export class PrismaCommercialHandoffQuotationPort implements CommercialHandoffQu
       scopeType ? this.db.companyQuotationTermsTemplate.findUnique({ where: { companyId_scopeType: { companyId, scopeType } }, select: { termsAr: true, termsEn: true } }) : null,
     ]);
     if (!company) throw new Error("COMPANY_NOT_FOUND");
-    return parseCommercialDefaultsProfile({ currencyCode: company.defaultCurrency, termsAr: template?.termsAr ?? null, termsEn: template?.termsEn ?? null, locale });
+    const profile = parseCommercialDefaultsProfile({ currencyCode: company.defaultCurrency, termsAr: template?.termsAr ?? null, termsEn: template?.termsEn ?? null, locale });
+    // Parsing commercial clauses must not normalize or rewrite the legal template.
+    return { ...profile, termsAr: template?.termsAr ?? null, termsEn: template?.termsEn ?? null };
   }
 
   async createDraft(input: Parameters<CommercialHandoffQuotationPort["createDraft"]>[0]) {

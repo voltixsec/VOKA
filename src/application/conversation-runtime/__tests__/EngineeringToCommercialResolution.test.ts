@@ -139,9 +139,10 @@ describe("generic engineering-to-commercial resolution", () => {
     const governedLines = initialGraph.salesBom.flatMap((line) => line.id === "CCTV_CAMERAS" ? [cameraLine("CCTV_BULLET_CAMERA", "Bullet"), cameraLine("CCTV_DOME_CAMERA", "Dome")] : [line]);
     const candidates = [bullet, dome, nvr, incompatibleHdd];
     const prior = synchronizeWorkspace(undefined, baseFacts, { ...initialGraph, salesBom: governedLines, engineeringBom: governedLines, candidateProducts: candidates }, now);
-    const first = resolveProductSelection({ graph: { ...initialGraph, candidateProducts: candidates }, confirmed: baseFacts, message: "Approve DS-2CD2T47", locale: "en", now }).confirmed;
-    const second = resolveProductSelection({ graph: { ...initialGraph, candidateProducts: candidates }, confirmed: first, message: "Approve DS-2CD2147", locale: "en", now }).confirmed;
-    const selected = resolveProductSelection({ graph: { ...initialGraph, candidateProducts: candidates }, confirmed: second, message: "Approve DS-9664NI-I16", locale: "en", now }).confirmed;
+    const selectionGraph = { ...initialGraph, salesBom: governedLines, engineeringBom: governedLines, candidateProducts: candidates };
+    const first = resolveProductSelection({ graph: selectionGraph, confirmed: baseFacts, message: "Approve DS-2CD2T47", locale: "en", now }).confirmed;
+    const second = resolveProductSelection({ graph: selectionGraph, confirmed: first, message: "Approve DS-2CD2147", locale: "en", now }).confirmed;
+    const selected = resolveProductSelection({ graph: selectionGraph, confirmed: second, message: "Approve DS-9664NI-I16", locale: "en", now }).confirmed;
     const recalculated = buildSystemConfigurationGraph(selected);
     const workspace = synchronizeWorkspace(prior, selected, { ...recalculated, candidateProducts: candidates }, now);
     const byId = (id: string) => workspace.commercialSolution.bom.find((line) => line.id === id)!;

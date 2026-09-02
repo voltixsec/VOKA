@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { useRecordedVoiceInput, useVoiceInput, type AudioTranscriber, type IRawAudioRecorder, type IVoiceRecognizer } from "@/src/infrastructure/voice/browser";
-import { buildSystemConfigurationGraph, type ConversationMessageSource, type ConversationRuntimeState } from "@/src/application/conversation-runtime";
+import { buildSystemConfigurationGraph, constrainDocumentDraftReadiness, type ConversationMessageSource, type ConversationRuntimeState } from "@/src/application/conversation-runtime";
 import { ActivityIndicator, AssistantContextCues, ChatHeader, Composer, MessageList, NewRequestCTA, SolutionWorkspace, type ActivityStage } from "@/components/sales-assistant";
 
 const RUNTIME_STORAGE_KEY = "voka_conversation_runtime_state_v1";
@@ -73,7 +73,7 @@ export default function SalesAssistantPage(props: any) {
       const response = await fetch("/api/ai/conversation-runtime/quotation-draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handoffToken, locale: isArabic ? "ar" : "en" }) });
       const json = await response.json();
       if (requestId !== quotationRequestRef.current) return;
-      if (!response.ok) { setHandoffError(json.error?.message ?? (isArabic ? "تعذر إنشاء مسودة العرض." : "The quotation draft could not be created.")); return; }
+      if (!response.ok) { setHandoffError(isArabic ? "تعذر إنشاء مسودة العرض. يمكنك المحاولة مرة أخرى." : "The quotation draft could not be created. You can try again."); return; }
       const result = json.data as { status: string; navigationTarget?: string; blockingFields?: Array<{ key: string; candidates?: Array<{ name: string }> }>; message?: string };
       if ((result.status === "CREATED" || result.status === "EXISTING") && result.navigationTarget) {
         quotationNavigationStartedRef.current = true;
@@ -84,7 +84,7 @@ export default function SalesAssistantPage(props: any) {
         const customerCandidates = fields.flatMap((field) => field.candidates ?? []).map((candidate) => candidate.name);
         setHandoffError(customerCandidates.length ? (isArabic ? `حدد العميل المقصود: ${customerCandidates.join("، ")}` : `Please identify the intended customer: ${customerCandidates.join(", ")}`) : (isArabic ? "توجد معلومة تجارية تحتاج مراجعة قبل متابعة المسودة." : "A commercial detail needs review before continuing the Draft."));
       } else {
-        setHandoffError(result.message ?? (isArabic ? "تعذر إنشاء مسودة العرض." : "The quotation draft could not be created."));
+        setHandoffError(isArabic ? "تعذر إنشاء مسودة العرض. يمكنك المحاولة مرة أخرى." : "The quotation draft could not be created. You can try again.");
       }
     } catch {
       if (requestId === quotationRequestRef.current) setHandoffError(isArabic ? "تعذر إنشاء مسودة العرض. يمكنك المحاولة مرة أخرى." : "The quotation draft could not be created. You can try again.");
@@ -124,17 +124,24 @@ export default function SalesAssistantPage(props: any) {
   const scrollToLatest = () => { const timeline = timelineRef.current; if (!timeline) return; nearBottomRef.current = true; setShowLatest(false); typeof timeline.scrollTo === "function" ? timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" }) : (timeline.scrollTop = timeline.scrollHeight); };
   const messages = runtimeState?.messages ?? [];
   const hasConversation = Boolean(messages.length || pendingUserMessage);
-  const solutionGraph = runtimeState ? runtimeState.solutionGraph ?? buildSystemConfigurationGraph(runtimeState.confirmedFacts) : null;
+  const solutionGraph = runtimeState ? constrainDocumentDraftReadiness(runtimeState.solutionGraph ?? buildSystemConfigurationGraph(runtimeState.confirmedFacts), runtimeState.confirmedFacts) : null;
   const hasSolutionWorkspace = Boolean(solutionGraph?.system);
   const prepareQuotation = async () => {
-    if (!runtimeState || handoffPreparationRef.current || quotationInFlightRef.current || quotationNavigationStartedRef.current) return;
+    if (!runtimeState || !solutionGraph?.readiness.draftReady || handoffPreparationRef.current || quotationInFlightRef.current || quotationNavigationStartedRef.current) return;
     if (typeof runtimeState.handoffToken === "string" && runtimeState.handoffToken) { await createQuotation(runtimeState.handoffToken); return; }
     handoffPreparationRef.current = true;
     setIsCreatingQuotation(true); setHandoffError(null);
     try {
       const response = await fetch("/api/ai/conversation-runtime/prepare-handoff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: runtimeState }) });
       const json = await response.json();
-      if (!response.ok || typeof json.data?.handoffToken !== "string") { setHandoffError(json.error?.message ?? (isArabic ? "تعذر تجهيز الانتقال للمسودة." : "The draft handoff could not be prepared.")); return; }
+      if (!response.ok || typeof json.data?.handoffToken !== "string") {
+        setHandoffError(json.error?.code === "DOCUMENT_TARGET_UNAVAILABLE"
+          ? isArabic ? "نوع المستند المطلوب غير متاح هنا. اطلب تجهيز عرض سعر للمتابعة." : "That document type is not available here. Ask to prepare a quotation to continue."
+          : json.error?.code === "CUSTOMER_NAME_REQUIRED"
+            ? isArabic ? "اذكر اسم العميل في المحادثة، ثم افتح المسودة." : "Tell me the customer name in chat, then open the draft."
+            : isArabic ? "تعذر تجهيز الانتقال للمسودة. يمكنك المحاولة مرة أخرى." : "The draft handoff could not be prepared. You can try again.");
+        return;
+      }
       handoffPreparationRef.current = false; setIsCreatingQuotation(false);
       await createQuotation(json.data.handoffToken);
     } catch { setHandoffError(isArabic ? "تعذر تجهيز المسودة. حاول مرة أخرى." : "The draft could not be prepared. Try again."); }

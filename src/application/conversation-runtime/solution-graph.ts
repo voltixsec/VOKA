@@ -229,7 +229,7 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
       verifiedFields: Object.keys(verifiedValues) as Array<keyof EngineeringRuleProfile["values"]>,
       values: { ...CCTV_ENGINEERING_DEFAULT.values, ...verifiedValues },
     } : null;
-    const calculated = smart.calculateSystem(system.key, { ...inputs, selectedRecorderCapabilities: recorderCapabilities }, verifiedJurisdictionProfile ? { jurisdiction: text(facts, "system.jurisdiction"), verifiedJurisdictionProfile } : undefined);
+    const calculated = smart.calculateSystem(system.key, { ...inputs, selectedRecorderCapabilities: recorderCapabilities, selectedDriveCapacityTb: numeric(facts, "product.selection.SURVEILLANCE_HDD.capabilities.capacityTb"), recorderCount: numeric(facts, "system.recorderCount") }, verifiedJurisdictionProfile ? { jurisdiction: text(facts, "system.jurisdiction"), verifiedJurisdictionProfile } : undefined);
     if (calculated) {
       graph.engineeringRuleSnapshot = calculated.engineeringRules;
       graph.compatibilityConflicts = calculated.compatibilityConflicts ?? [];
@@ -250,10 +250,24 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
   graph.engineeringBom = attachExplicitSpecifications(graph.engineeringBom, graph.requirements);
   graph.salesBom = graph.salesBom.map((row) => projectCommercialBomLine(applyApprovedProductSelection(row, facts)));
   graph.engineeringBom = graph.engineeringBom.map((row) => applyApprovedProductSelection(row, facts));
+  if (graph.compatibilityConflicts?.length) {
+    const markConflict = (row: SolutionBomLine): SolutionBomLine => ["NVR_RECORDER", "SURVEILLANCE_HDD"].includes(row.id) ? { ...row, engineeringStatus: "CONFLICT" } : row;
+    graph.salesBom = graph.salesBom.map(markConflict);
+    graph.engineeringBom = graph.engineeringBom.map(markConflict);
+  }
   graph.readiness.pendingBeforeDraftOpen = [];
   graph.readiness.draftReady = true;
   graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["attention.name"] && "Attention", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", Boolean(graph.compatibilityConflicts?.length) && "Compatibility review", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
-  return graph;
+  return constrainDocumentDraftReadiness(graph, facts);
+}
+
+/** Draft policy is independent of product selection, engineering estimates and pricing. */
+export function constrainDocumentDraftReadiness(graph: SystemConfigurationGraph, facts: Record<string, ConfirmedFact>): SystemConfigurationGraph {
+  const target = text(facts, "document.target");
+  const required = [!graph.system && "System", !text(facts, "customer.name") && "Customer", target && target !== "QUOTATION" && "Document type"].filter((value): value is string => Boolean(value));
+  return { ...graph, readiness: { ...graph.readiness, draftReady: required.length === 0, pendingBeforeDraftOpen: required,
+    pendingBeforeFinalIssue: graph.readiness.pendingBeforeFinalIssue.filter((field) => field !== "Customer"),
+  } };
 }
 
 function attachExplicitSpecifications(lines: SolutionBomLine[], requirements: SystemConfigurationGraph["requirements"]) {
@@ -275,16 +289,22 @@ function attachExplicitSpecifications(lines: SolutionBomLine[], requirements: Sy
 }
 
 export function applyApprovedProductSelection(line: SolutionBomLine, facts: Record<string, ConfirmedFact>): SolutionBomLine {
+  if (line.baseItemNameEn || line.baseItemNameAr) line = {
+    ...line, itemName: line.baseItemNameEn ?? line.itemName,
+    itemNameEn: line.baseItemNameEn ?? line.itemNameEn, itemNameAr: line.baseItemNameAr ?? line.itemNameAr,
+    brand: null, model: null, catalogItemId: null, unitPrice: null, marketPrice: null, capabilities: null,
+    productSelectionStatus: "GENERIC", pricingStatus: "PENDING", priceState: "PENDING",
+  };
   const prefix = `product.selection.${line.id}.`;
-  const selected = (field: string) => facts[prefix + field]?.provenance === "USER_APPROVED" ? facts[prefix + field] : null;
+  const selected = (field: string) => ["USER_APPROVED", "USER_CORRECTION", "USER_EXPLICIT"].includes(facts[prefix + field]?.provenance) ? facts[prefix + field] : null;
   const name = selected("name")?.value;
   const nameAr = selected("nameAr")?.value;
   const nameEn = selected("nameEn")?.value;
   const brand = selected("brand")?.value;
   const model = selected("model")?.value;
   const source = selected("source")?.value;
+  if (selected("componentKey") && selected("componentKey")!.value !== line.id) return line;
   if (typeof name !== "string" || (source !== "VERIFIED_CATALOG" && source !== "RESEARCHED")) return line;
-  const commercialIdentity = [typeof brand === "string" ? brand : null, typeof model === "string" ? model : null].filter(Boolean).join(" - ");
   const catalogItemId = selected("catalogItemId")?.value;
   const unitPrice = selected("unitPrice")?.value;
   const marketValue = (field: string) => selected(`marketPrice.${field}`)?.value;
@@ -307,6 +327,7 @@ export function applyApprovedProductSelection(line: SolutionBomLine, facts: Reco
     : null;
   const capability = (field: string) => selected(`capabilities.${field}`)?.value;
   const capabilities = {
+    capacityTb: typeof capability("capacityTb") === "number" ? capability("capacityTb") as number : undefined,
     channels: typeof capability("channels") === "number" ? capability("channels") as number : undefined,
     diskBays: typeof capability("diskBays") === "number" ? capability("diskBays") as number : undefined,
     maxHddCapacityTb: typeof capability("maxHddCapacityTb") === "number" ? capability("maxHddCapacityTb") as number : undefined,
@@ -316,9 +337,11 @@ export function applyApprovedProductSelection(line: SolutionBomLine, facts: Reco
   };
   return {
     ...line,
+    baseItemNameAr: line.baseItemNameAr ?? line.itemNameAr,
+    baseItemNameEn: line.baseItemNameEn ?? line.itemNameEn,
     itemName: name,
-    itemNameAr: typeof nameAr === "string" ? nameAr : [line.itemNameAr, commercialIdentity].filter(Boolean).join(" - "),
-    itemNameEn: typeof nameEn === "string" ? nameEn : [line.itemNameEn, commercialIdentity].filter(Boolean).join(" - "),
+    itemNameAr: typeof nameAr === "string" ? nameAr : name,
+    itemNameEn: typeof nameEn === "string" ? nameEn : name,
     brand: typeof brand === "string" ? brand : null,
     model: typeof model === "string" ? model : null,
     catalogItemId: typeof catalogItemId === "string" ? catalogItemId : null,
@@ -331,13 +354,14 @@ export function applyApprovedProductSelection(line: SolutionBomLine, facts: Reco
     capabilities: Object.values(capabilities).some((value) => value !== undefined) ? capabilities : null,
     commercialAttributes: {
       ...line.commercialAttributes,
+      capacity: capabilities.capacityTb ? `${capabilities.capacityTb}TB` : line.commercialAttributes?.capacity,
       channels: capabilities.channels ?? line.commercialAttributes?.channels,
       diskBays: capabilities.diskBays ?? line.commercialAttributes?.diskBays,
-      features: [
+      features: [...new Set([
         ...(line.commercialAttributes?.features ?? []),
         ...(capabilities.maxHddCapacityTb ? [`Maximum supported HDD capacity ${capabilities.maxHddCapacityTb}TB`] : []),
         ...(capabilities.supportedCodec ? [capabilities.supportedCodec] : []),
-      ],
+      ])],
     },
   };
 }

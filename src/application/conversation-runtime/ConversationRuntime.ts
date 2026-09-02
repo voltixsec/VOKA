@@ -38,7 +38,7 @@ export class ConversationRuntime {
     const retainedFacts = systemChanged
       ? Object.fromEntries(Object.entries(approval.confirmed).filter(([key]) =>
           !key.startsWith("product.selection.") &&
-          !["product.brand", "product.model", "product.origin", "commercial.payment", "commercial.delivery", "commercial.warranty", "commercial.validity", "commercial.exclusions", "commercial.notes", "project.siteRequirement"].includes(key),
+          !["system.recorderCount", "product.brand", "product.model", "product.origin", "commercial.payment", "commercial.delivery", "commercial.warranty", "commercial.validity", "commercial.exclusions", "commercial.notes", "project.siteRequirement"].includes(key),
         ))
       : approval.confirmed;
     let turnFacts =
@@ -51,7 +51,8 @@ export class ConversationRuntime {
             "system.identity": explicitSystem,
           }
         : retainedFacts;
-    const explicitScope = detectExplicitScopeType(message, this.now());
+    const explicitScope = detectExplicitScopeType(message, this.now()) ?? (!turnFacts["scope.type"]
+      ? [...base.messages].reverse().filter((item) => item.role === "USER").map((item) => detectExplicitScopeType(item.text, this.now())).find(Boolean) ?? null : null);
     if (explicitScope && turnFacts["scope.type"]?.value !== explicitScope.value) {
       turnFacts = { ...turnFacts, "scope.type": { ...explicitScope, provenance: turnFacts["scope.type"] ? "USER_CORRECTION" : "USER_EXPLICIT" } };
     }
@@ -129,14 +130,14 @@ export class ConversationRuntime {
       return [{ key: patch.path.slice(6), value: patch.value as string | number | boolean, provenance: patch.provenance, evidence: patch.evidence }];
     });
     const reduced = reduceFactProposals(turnFacts, [...legacyFactProposals, ...patchFacts], message, this.now(), userMessage.id);
-    const productSelection = resolveProductSelection({ graph: base.solutionGraph, confirmed: reduced.confirmed, message, locale: input.locale, now: this.now() });
+    const productSelection = resolveProductSelection({ graph: workingGraph, confirmed: reduced.confirmed, message, locale: input.locale, now: this.now(), patches: allPatches, engineeringRules: observations.flatMap((observation) => observation.engineeringRules ?? []) });
     reduced.confirmed = productSelection.confirmed;
     const engineeringRules = observations.flatMap((observation) => observation.engineeringRules ?? []);
     const proposedSystemGraph = buildSystemConfigurationGraph(reduced.confirmed, { engineeringRules });
     const resolvedSystemChanged = Boolean(base.workspace?.engineering.system?.key && proposedSystemGraph.system?.key && base.workspace.engineering.system.key !== proposedSystemGraph.system.key);
     if (resolvedSystemChanged) {
       reduced.confirmed = Object.fromEntries(Object.entries(reduced.confirmed).filter(([key, current]) => {
-        const systemSpecific = key.startsWith("product.selection.") || ["product.brand", "product.model", "product.origin", "commercial.payment", "commercial.delivery", "commercial.warranty", "commercial.validity", "commercial.exclusions", "commercial.notes", "project.siteRequirement"].includes(key);
+        const systemSpecific = key.startsWith("product.selection.") || ["system.recorderCount", "product.brand", "product.model", "product.origin", "commercial.payment", "commercial.delivery", "commercial.warranty", "commercial.validity", "commercial.exclusions", "commercial.notes", "project.siteRequirement"].includes(key);
         return !systemSpecific || approval.confirmed[key] !== current;
       }));
     }
@@ -148,7 +149,7 @@ export class ConversationRuntime {
     let solutionGraph = buildSystemConfigurationGraph(reduced.confirmed, { engineeringRules });
     const candidateObservation = [...turnObservations].reverse().find((observation) => observation.candidateProducts);
     if (candidateObservation?.candidateProducts) {
-      const componentKeys = new Set(solutionGraph.salesBom.map((line) => line.id));
+      const componentKeys = new Set([...solutionGraph.salesBom, ...workingGraph.salesBom].map((line) => line.id));
       const candidates = componentKeys.size ? candidateObservation.candidateProducts.filter((candidate) => componentKeys.has(candidate.componentKey)) : candidateObservation.candidateProducts;
       solutionGraph = { ...solutionGraph, candidateProducts: candidates, catalogResolution: candidateObservation.catalogResolution ?? solutionGraph.catalogResolution };
     }
@@ -171,6 +172,7 @@ export class ConversationRuntime {
     }
     let workspace = this.strict.synchronize(base.workspace, reduced.confirmed, solutionGraph, this.now());
     workspace = this.strict.applyProposal(workspace, { ...decision, patches: allPatches }, patchEvidence, this.now());
+    workspace = this.strict.synchronize(workspace, reduced.confirmed, solutionGraph, this.now());
     if (this.defaults) {
       const scope = workspace.commercialContext.scope;
       if (!workspace.terms.defaultsLoaded || !workspace.terms.currencyCode || workspace.terms.defaultsScope !== scope) {
@@ -178,7 +180,7 @@ export class ConversationRuntime {
         workspace = this.strict.applyDefaults(workspace, loaded, scope);
       }
     }
-    if (productSelection.reply) {
+    if (productSelection.reply && Object.keys(reduced.confirmed).some((key) => key.startsWith("product.selection.") && reduced.confirmed[key] !== turnFacts[key])) {
       const newlyApprovedIds = Object.entries(reduced.confirmed).flatMap(([key, fact]) =>
         key.startsWith("product.selection.") && key.endsWith(".id") && fact.provenance === "USER_APPROVED" && fact.evidence === message.trim() && typeof fact.value === "string"
           ? [fact.value]
@@ -187,7 +189,7 @@ export class ConversationRuntime {
       const approvalIsVisible = newlyApprovedIds.length > 0 && newlyApprovedIds.every((id) =>
         workspace.products.approvedCandidateIds.includes(id) && workspace.products.candidates.some((candidate) => candidate.id === id),
       );
-      if (!approvalIsVisible) {
+      if (newlyApprovedIds.length && !approvalIsVisible) {
         decision = {
           ...decision,
           responseMode: "WARNING",
@@ -201,17 +203,18 @@ export class ConversationRuntime {
     const missingCustomer = !workspace.commercialContext.customer;
     const missingAttention = !workspace.commercialContext.attention;
     const alreadyAsksUsefulQuestion = /[?؟]/u.test(decision.responseContent);
-    if (solutionGraph.readiness.draftReady && (missingCustomer || missingAttention) && !decision.blockingQuestion && !alreadyAsksUsefulQuestion && !researchAttempted && !productRetrievalAttempted && decision.responseMode !== "WARNING") {
+    if (solutionGraph.system && (missingCustomer || missingAttention) && !decision.blockingQuestion && !alreadyAsksUsefulQuestion && !researchAttempted && !productRetrievalAttempted && decision.responseMode !== "WARNING") {
       const question = input.locale === "ar"
         ? missingCustomer && missingAttention ? "اسم العميل والعرض لعناية مين؟" : missingCustomer ? "اسم العميل إيه؟" : "العرض لعناية مين؟"
         : missingCustomer && missingAttention ? "What is the customer name, and who should the quotation be addressed to?" : missingCustomer ? "What is the customer name?" : "Who should the quotation be addressed to?";
       decision = { ...decision, responseMode: "QUESTION", blockingQuestion: question };
     }
     const handoff: CommercialSolutionHandoff | null = null;
-    const reply = this.strict.render(decision, input.locale);
+    const reply = this.strict.render(decision, input.locale, workspace);
     if (!reply) throw new Error("CONVERSATION_RUNTIME_EMPTY_REPLY");
     const assistantMessage: RuntimeMessage = { id: this.id(), role: "ASSISTANT", text: reply, source: "AI", createdAt: this.now() };
-    return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: (resolvedSystemChanged ? reduced.candidates : [...approval.candidates, ...reduced.candidates]).slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: (resolvedSystemChanged ? turnObservations : observations).slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: decision.suggestedReplies.slice(0, 4), handoff, handoffToken: null, solutionGraph, workspace };
+    const suggestedReplies = decision.suggestedReplies.filter((reply) => solutionGraph.system?.key !== "CCTV" || !/(?:retention|storage\s*days|مدة\s*(?:التسجيل|الاحتفاظ))/iu.test(reply));
+    return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: (resolvedSystemChanged ? reduced.candidates : [...approval.candidates, ...reduced.candidates]).slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: (resolvedSystemChanged ? turnObservations : observations).slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: suggestedReplies.slice(0, 4), handoff, handoffToken: null, solutionGraph, workspace };
   }
 
   private previewGraph(base: ConversationRuntimeState, facts: ConversationRuntimeState["confirmedFacts"], proposals: FlexibleTurnProposal[], message: string, messageId: string, observations: ConversationRuntimeState["toolResults"]) {

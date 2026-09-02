@@ -59,14 +59,26 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ currencyCode: "KWD", termsAndConditionsAr: "شروط الشركة" });
   });
 
-  it("opens an early Draft when customer is missing and keeps customer pending", async () => {
+  it("loads current supply-only Company Settings at creation after a scope correction, never stale chat terms", async () => {
+    const gateway = port({ resolveCustomer: vi.fn().mockResolvedValue({ status: "PENDING", proposedName: "National Telecom" }), loadDefaults: vi.fn().mockResolvedValue({ currencyCode: "KWD", termsAr: "شروط التوريد الحالية", termsEn: "Current supply-only legal terms", payment: "cash", delivery: null, warranty: null, validity: null }) });
+    const value = handoff();
+    value.confirmedFacts["scope.type"] = confirmed("scope.type", "SUPPLY_ONLY", "USER_CORRECTION");
+    value.confirmedFacts["commercial.payment"] = confirmed("commercial.payment", "stale installation payment");
+    const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: value, locale: "en" });
+    expect(result.status).toBe("CREATED");
+    expect(gateway.loadDefaults).toHaveBeenCalledWith("company-1", "SUPPLY_ONLY", "en");
+    const draft = vi.mocked(gateway.createDraft).mock.calls[0][0];
+    expect(draft).toMatchObject({ customerId: null, customer: { name: "National Telecom" }, scopeType: "SUPPLY_ONLY", termsAndConditionsEn: "Current supply-only legal terms" });
+    expect(draft.termsAndConditionsEn).not.toContain("stale installation");
+  });
+
+  it("requires a customer name before persisting a new Draft", async () => {
     const gateway = port();
     const value = handoff(); delete value.confirmedFacts["customer.name"];
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: value, locale: "ar" });
-    expect(result).toMatchObject({ status: "CREATED" });
+    expect(result).toEqual({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] });
     expect(gateway.resolveCustomer).not.toHaveBeenCalled();
-    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
-    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ projectName: null, attentionName: null });
+    expect(gateway.createDraft).not.toHaveBeenCalled();
   });
 
   it("preserves an ambiguous proposed customer in the Draft without guessing a canonical id", async () => {

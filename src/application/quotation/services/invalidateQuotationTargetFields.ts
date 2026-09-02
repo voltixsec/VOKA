@@ -120,7 +120,11 @@ export function invalidateQuotationTargetFields(
   }
 
   // Terms and Conditions
-  const termsResult = processFieldPair(
+  // Scope templates supply two independent configured languages, not a source
+  // and an AI translation. Updating one must not invalidate the other.
+  const configuredTermsPair = Boolean(dto.scopeType ?? existingQuotation.scopeType)
+    && dto.termsAndConditionsAr !== undefined && dto.termsAndConditionsEn !== undefined;
+  const termsResult = configuredTermsPair ? { ar: norm(dto.termsAndConditionsAr), en: norm(dto.termsAndConditionsEn) } : processFieldPair(
     norm(existingQuotation.termsAndConditionsAr),
     norm(existingQuotation.termsAndConditionsEn),
     dto.termsAndConditionsAr !== undefined,

@@ -1,5 +1,17 @@
 # Resume Point
 
+## Local review handoff — 2026-09-02
+
+The subsequent [quotation Draft-only correction](../product/changes/2026-09-02-quotation-draft-only-correction.md)
+is also uncommitted: Draft labels/units, governed line identity, current scope Terms,
+and Notes mapping, with its validation limits recorded separately.
+
+The owner-requested [focused live commercial correction](../product/changes/2026-09-02-focused-live-commercial-correction.md)
+is available as uncommitted WIP on `feature/pre-staging-product-coherence`, preserving
+the preceding coherence pass. It records the current customer-required Draft policy,
+component selection fixes, validation and remaining live acceptance. Do not treat
+this local handoff as a published checkpoint or change to roadmap station order.
+
 ## Active feature execution — 2026-08-30
 
 The current owner-authorized branch is `feature/pre-staging-product-coherence`.

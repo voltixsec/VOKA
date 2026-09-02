@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import SalesAssistantPage from "../page";
 import type { ConversationRuntimeState } from "@/src/application/conversation-runtime";
 
-const mocks = vi.hoisted(() => ({ push: vi.fn() }));
+const mocks = vi.hoisted(() => ({ push: vi.fn(), isArabic: false }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
-vi.mock("@/components/i18n/LanguageProvider", () => ({ useLanguage: () => ({ isArabic: false }) }));
-afterEach(() => { cleanup(); sessionStorage.clear(); vi.restoreAllMocks(); mocks.push.mockReset(); });
+vi.mock("@/components/i18n/LanguageProvider", () => ({ useLanguage: () => ({ isArabic: mocks.isArabic }) }));
+afterEach(() => { cleanup(); sessionStorage.clear(); vi.restoreAllMocks(); mocks.push.mockReset(); mocks.isArabic = false; });
 
 const state = (reply = "That makes sense. Let’s start with the vehicle type and number of stops."): ConversationRuntimeState => ({
   runtimeId: "runtime-1", version: 1, locale: "en",
@@ -28,6 +28,40 @@ const handoffState = (): ConversationRuntimeState => ({
 });
 
 describe("Sales Assistant clean runtime UI", () => {
+  it("does not advertise Draft readiness for a non-quotation target in a hydrated session", async () => {
+    const runtime = handoffState();
+    runtime.confirmedFacts["document.target"] = { key: "document.target", value: "INVOICE", provenance: "USER_EXPLICIT", evidence: "Invoice", updatedAt: "2026-09-02" };
+    sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(runtime));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SalesAssistantPage />);
+    expect(await screen.findByRole("button", { name: "Prepare quotation" })).toBeDisabled();
+    expect(screen.queryByText("Draft-open prerequisites complete")).toBeNull();
+    expect(screen.getByText(/Required before opening Draft: Document type/)).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("keeps Arabic persistence failures localized and retryable", async () => {
+    mocks.isArabic = true;
+    sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(handoffState()));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { status: "CREATE_FAILED", message: "persistence is not connected to the clean conversation runtime yet" } }) }));
+    render(<SalesAssistantPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "جهّز العرض" }));
+    expect(await screen.findByText("تعذر إنشاء مسودة العرض. يمكنك المحاولة مرة أخرى.")).toBeTruthy();
+    expect(screen.queryByText(/persistence is not connected/)).toBeNull();
+    expect(screen.getByRole("button", { name: "جهّز العرض" })).not.toBeDisabled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("does not leak persistence diagnostics and retains retry after failure (HTTP success=%s)", async (ok) => {
+    sessionStorage.setItem("voka_conversation_runtime_state_v1", JSON.stringify(handoffState()));
+    const diagnostic = "persistence is not connected to the clean conversation runtime yet";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok, json: async () => ({ error: { message: diagnostic }, data: { status: "CREATE_FAILED", message: diagnostic } }) }));
+    render(<SalesAssistantPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Prepare quotation" }));
+    expect(await screen.findByText("The quotation draft could not be created. You can try again.")).toBeTruthy();
+    expect(screen.queryByText(diagnostic)).toBeNull();
+    expect(screen.getByRole("button", { name: "Prepare quotation" })).not.toBeDisabled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
   it("renders the AI reply verbatim and projects confirmed state through the unchanged chat shell", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: state() }) });
     vi.stubGlobal("fetch", fetchMock);
@@ -141,7 +175,8 @@ describe("Sales Assistant clean runtime UI", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<SalesAssistantPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Prepare quotation" }));
-    expect(await screen.findByText("Temporary quotation failure")).toBeTruthy();
+    expect(await screen.findByText("The quotation draft could not be created. You can try again.")).toBeTruthy();
+    expect(screen.queryByText("Temporary quotation failure")).toBeNull();
     const retry = screen.getByRole("button", { name: "Prepare quotation" });
     expect(retry).toHaveProperty("disabled", false);
     fireEvent.click(retry);

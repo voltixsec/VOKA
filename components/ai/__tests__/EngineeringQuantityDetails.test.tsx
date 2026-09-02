@@ -46,7 +46,7 @@ describe("engineering quantity explanations", () => {
     [true, "الدولة", "غير موثق من جهة حكومية"],
   ] as const)("renders pure internal rule labels without claiming Kuwait authority (Arabic=%s)", (isArabic, jurisdictionLabel, verificationLabel) => {
     const rules = { id: 'default', name: 'Engineering Default', jurisdiction: 'Kuwait', version: '1.0', trust: 'ENGINEERING_DEFAULT' as const, authoritySource: null, governmentVerified: false, resolvedAt: '2026-08-28T00:00:00.000Z', overriddenFields: [], values: { retentionDays: 30, codec: 'H.265' as const, resolutionMp: 4, fps: 15, bitrateMbps: 8, storageReservePercent: 10, nvrUtilizationPercent: 80, poeReservedPorts: 2, cableMetersPerCamera: 30, cableRollMeters: 305, rackAllowance: 1 } };
-    const { container } = render(<EngineeringQuantityDetails lines={lines} isArabic={isArabic} rules={rules} />);
+    const { container } = render(<EngineeringQuantityDetails lines={lines} isArabic={isArabic} rules={{ ...rules, fieldSources: Object.fromEntries(Object.keys(rules.values).map((key) => [key, 'ENGINEERING_DEFAULT' as const])) }} />);
     expect(screen.getByText(jurisdictionLabel)).toBeTruthy();
     expect(screen.getByText(verificationLabel)).toBeTruthy();
     expect(container.textContent).toContain('1.0');

@@ -61,7 +61,7 @@ export class StrictBrain {
     return projectWorkspaceGraph(workspace, base);
   }
 
-  render(proposal: FlexibleTurnProposal, locale: ConversationLocale) {
-    return renderGovernedResponse(proposal, locale);
+  render(proposal: FlexibleTurnProposal, locale: ConversationLocale, workspace?: GovernedWorkspaceState) {
+    return renderGovernedResponse(proposal, locale, workspace);
   }
 }

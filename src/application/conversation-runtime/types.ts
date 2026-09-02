@@ -60,6 +60,10 @@ export type CommercialMaterialAttributes = {
 };
 export type SolutionBomLine = {
   id: string;
+  /** Explicit structural replacement lineage; independent of selected-product provenance. */
+  structuralParentId?: string;
+  baseItemNameAr?: string;
+  baseItemNameEn?: string;
   componentKeys: string[];
   category: string;
   itemName: string;

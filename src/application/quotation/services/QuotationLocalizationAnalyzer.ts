@@ -184,7 +184,8 @@ export function analyzeQuotationLocalization<T extends UnknownRecord>(
     "notesEn",
     "notes",
   );
-  bind(
+  // Governed scope legal text belongs to Company Settings, never the translator.
+  if (!asText(outputRecord.scopeType)) bind(
     outputRecord,
     "terms",
     sourceText(

@@ -49,6 +49,7 @@ export type ResearchedProductAlternative = {
 };
 
 export type ProductCapabilityFacts = {
+  capacityTb?: number;
   channels?: number;
   diskBays?: number;
   maxHddCapacityTb?: number;

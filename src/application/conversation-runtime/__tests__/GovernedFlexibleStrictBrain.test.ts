@@ -102,11 +102,11 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
       unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "MATURE", transitionState: "EXPLORING",
       compactMemory: "", suggestedReplies: [], handoff: null, solutionGraph: graph, workspace,
     };
-    const brain: ConversationBrainPort = { decide: async () => proposal({ patches: [{ operation: "REJECT", path: "products.candidates.p1", value: "p1", evidence: "governed rejection", provenance: "AI_INFERRED" }] }) };
-    const result = await run(brain, "Approve Acme X1", state);
+    const brain: ConversationBrainPort = { decide: async () => proposal({ responseContent: "The product selection is approved", patches: [{ operation: "APPROVE", path: "products.candidates.p1", value: "p1", evidence: "inferred approval", provenance: "AI_INFERRED" }] }) };
+    const result = await run(brain, "Review Acme X1", state);
     expect(result.workspace?.products.candidates.map((item) => item.id)).toContain("p1");
     expect(result.workspace?.products.approvedCandidateIds).not.toContain("p1");
-    expect(result.messages.at(-1)?.text).toContain("did not persist");
+    expect(result.messages.at(-1)?.text).toContain("No product is approved");
     expect(result.messages.at(-1)?.text).not.toContain("The product selection is approved");
   });
 
@@ -154,10 +154,10 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
   });
 
   it("allows an early Draft while quantities and prices remain pending", () => {
-    const facts = { "system.identity": { key: "system.identity", value: "CCTV", provenance: "USER_EXPLICIT" as const, evidence: "CCTV", updatedAt: now } };
+    const facts = { "system.identity": { key: "system.identity", value: "CCTV", provenance: "USER_EXPLICIT" as const, evidence: "CCTV", updatedAt: now }, "customer.name": { key: "customer.name", value: "Proposed Customer", provenance: "USER_EXPLICIT" as const, evidence: "Proposed Customer", updatedAt: now } };
     const graph = buildSystemConfigurationGraph(facts);
     expect(graph.readiness).toMatchObject({ draftReady: true, pendingBeforeDraftOpen: [] });
-    expect(graph.readiness.pendingBeforeFinalIssue).toContain("Customer");
+    expect(graph.readiness.pendingBeforeFinalIssue).not.toContain("Customer");
     expect(graph.salesBom.every((line) => line.unitPrice === null)).toBe(true);
   });
 

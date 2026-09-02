@@ -187,7 +187,8 @@ export function serializeQuotation(
             line.descriptionEn,
 
           unitName:
-            pickLocalized(
+            // Draft editing must round-trip the stored code, not its display label.
+            quotation.status === "DRAFT" ? line.unitName : pickLocalized(
               locale,
               line.unitNameAr,
               line.unitNameEn,

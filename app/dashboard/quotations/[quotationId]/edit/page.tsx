@@ -37,6 +37,7 @@ import {
   normalizeQuotationLinePositions,
 } from "../../quotation-line-order";
 import { ProposedCustomer } from "@/components/commercial/ProposedCustomer";
+import { commercialUnitLabel } from "@/lib/i18n/unit-labels";
 
 type ScopeType =
   | "SUPPLY_ONLY"
@@ -273,6 +274,34 @@ export default function EditQuotationPage() {
 
   const [terms, setTerms] =
     useState("");
+  const [scopeTerms, setScopeTerms] = useState<{ scopeType: string; termsAr: string | null; termsEn: string | null } | null>(null);
+  const [termsError, setTermsError] = useState(false);
+  const [termsRetry, setTermsRetry] = useState(0);
+  const termsReady = !scopeType || scopeTerms?.scopeType === scopeType;
+  const displayedTerms = scopeType ? (termsReady ? (isArabic ? scopeTerms?.termsAr : scopeTerms?.termsEn) ?? "" : "") : terms;
+
+  useEffect(() => {
+    if (!quote?.id || !scopeType) {
+      setScopeTerms(null);
+      setTermsError(false);
+      return;
+    }
+    let cancelled = false;
+    setScopeTerms(null);
+    setTermsError(false);
+    void (async () => {
+      try {
+        const response = await fetch("/api/companies/current/quotation-terms", { cache: "no-store" });
+        const json = await response.json();
+        if (!response.ok || !Array.isArray(json.data?.templates)) throw new Error("TERMS_UNAVAILABLE");
+        const template = json.data.templates.find((item: { scopeType: string }) => item.scopeType === scopeType);
+        if (!cancelled) setScopeTerms({ scopeType, termsAr: template?.termsAr ?? null, termsEn: template?.termsEn ?? null });
+      } catch {
+        if (!cancelled) setTermsError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [quote?.id, scopeType, termsRetry]);
 
   const [discountType, setDiscountType] =
     useState<"" | "FIXED" | "PERCENTAGE">("");
@@ -327,7 +356,7 @@ export default function EditQuotationPage() {
         if (!response.ok) {
           throw new Error(
             t(
-              "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0639\u0631\u0635",
+              "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0639\u0631\u0636",
               "Unable to load quotation",
             ),
           );
@@ -395,7 +424,7 @@ export default function EditQuotationPage() {
         );
 
         setTerms(
-          loaded.termsAndConditions ??
+          (loaded.scopeType ? "" : loaded.termsAndConditions) ??
             "",
         );
 
@@ -612,7 +641,7 @@ export default function EditQuotationPage() {
   async function persistDraft(customerOverride?: string, navigate = true) {
     if (
       !quote ||
-      lines.length === 0
+      lines.length === 0 || !termsReady || termsError
     ) {
       return false;
     }
@@ -697,15 +726,15 @@ export default function EditQuotationPage() {
                 : notes,
 
             termsAndConditions:
-              terms,
+              displayedTerms,
 
             termsAndConditionsAr:
-              isArabic
+              scopeType ? scopeTerms?.termsAr ?? null : isArabic
                 ? terms
                 : quote.termsAndConditionsAr,
 
             termsAndConditionsEn:
-              isArabic
+              scopeType ? scopeTerms?.termsEn ?? null : isArabic
                 ? quote.termsAndConditionsEn
                 : terms,
 
@@ -835,7 +864,7 @@ export default function EditQuotationPage() {
         <Card>
           <h3 className="font-semibold">
             {t(
-              "\u063a\u0644\u0627\u0641 \u0627\u0644\u0639\u0631\u0635 \u0627\u0644\u062a\u062c\u0627\u0631\u064a",
+              "\u063a\u0644\u0627\u0641 \u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u062a\u062c\u0627\u0631\u064a",
               "Commercial proposal cover",
             )}
           </h3>
@@ -943,7 +972,7 @@ export default function EditQuotationPage() {
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">
                 {t(
-                  "\u062a\u0627\u0631\u064a\u062e \u0627\u0646\u062a\u0647\u0627\u0621 \u0627\u0644\u0639\u0631\u0635",
+                  "\u062a\u0627\u0631\u064a\u062e \u0627\u0646\u062a\u0647\u0627\u0621 \u0627\u0644\u0639\u0631\u0636",
                   "Quotation expiry date",
                 )}
               </span>
@@ -964,7 +993,7 @@ export default function EditQuotationPage() {
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">
                 {t(
-                  "\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0639\u0631\u0635",
+                  "\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0639\u0631\u0636",
                   "Proposal subject",
                 )}
               </span>
@@ -994,7 +1023,7 @@ export default function EditQuotationPage() {
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-400">
                 {t(
-                  "\u0645\u0644\u062e\u0635 \u0627\u0644\u0639\u0631\u0635",
+                  "\u0645\u0644\u062e\u0635 \u0627\u0644\u0639\u0631\u0636",
                   "Proposal brief",
                 )}
               </span>
@@ -1027,7 +1056,7 @@ export default function EditQuotationPage() {
         <Card>
           <h3 className="font-semibold">
             {t(
-              "\u0628\u0646\u0648\u062f \u0627\u0644\u0639\u0631\u0635",
+              "\u0628\u0646\u0648\u062f \u0627\u0644\u0639\u0631\u0636",
               "Quotation lines",
             )}
           </h3>
@@ -1214,7 +1243,7 @@ export default function EditQuotationPage() {
                 <Input
                   className="min-h-9 rounded-lg px-2 py-1.5 text-sm"
                   aria-label={`${t("الوحدة", "Unit")} ${index + 1}`}
-                  value={line.unitName ?? ""}
+                  value={isArabic ? commercialUnitLabel({ unitName: line.unitName }, true) : line.unitName ?? ""}
                   onChange={(event) =>
                     changeLine(
                       index,
@@ -1414,7 +1443,9 @@ export default function EditQuotationPage() {
               </span>
 
               <textarea
-                value={terms}
+                value={displayedTerms}
+                aria-label={t("الشروط والأحكام", "Terms and conditions")}
+                readOnly={Boolean(scopeType)}
                 onChange={(event) => {
                   setTerms(
                     event.target.value,
@@ -1423,6 +1454,8 @@ export default function EditQuotationPage() {
                 }}
                 className="min-h-28 w-full rounded-xl border border-white/10 bg-slate-950 p-4"
               />
+              {scopeType && <span className="block text-xs text-slate-400">{t("الشروط من إعدادات الشركة للنطاق الحالي.", "Terms come from Company Settings for the current scope.")}</span>}
+              {termsError && <span role="alert" className="block text-xs text-amber-300">{t("تعذر تحميل شروط الشركة الحالية.", "Current company terms could not be loaded.")} <button type="button" className="underline" onClick={() => setTermsRetry((value) => value + 1)}>{t("إعادة المحاولة", "Retry")}</button></span>}
             </label>
           </div>
 
@@ -1464,7 +1497,7 @@ export default function EditQuotationPage() {
 
               <Button
                 type="submit"
-                disabled={saving}
+                disabled={saving || !termsReady || termsError}
               >
                 {saving
                   ? t(
