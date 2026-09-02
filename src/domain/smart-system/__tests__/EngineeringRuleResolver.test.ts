@@ -46,8 +46,8 @@ describe("jurisdiction-aware engineering rule resolution", () => {
   it("calculates storage, NVR, PoE, cable and rack from resolved profile values", () => {
     const result = new CctvSystemTemplate({ jurisdiction: "Kuwait", companyProfile: company }).calculate({ cameraCount: 64 });
     const byKey = (key: string) => result.components.find((component) => component.componentKey === key)!;
-    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY").specification).toMatchObject({ storageDays: 60, bitrateMbps: 4 });
-    expect(byKey("SURVEILLANCE_STORAGE_CAPACITY").quantity).toBe(166);
+    expect(byKey("SURVEILLANCE_HDD").specification).toMatchObject({ storageDays: 60, bitrateMbps: 4, requiredUsableTb: 166, driveCapacityTb: 18 });
+    expect(byKey("SURVEILLANCE_HDD")).toMatchObject({ quantity: 10, unit: "Unit", quantityStatus: "ESTIMATED" });
     expect(byKey("NVR_RECORDER")).toMatchObject({ quantity: 2, specification: { utilizationPercent: 80 } });
     expect(byKey("POE_SWITCH")).toMatchObject({ quantity: 2, specification: { reservedPorts: 4 } });
     expect(byKey("CAT6_CABLING")).toMatchObject({ quantity: 9, specification: { metersPerRoll: 300 } });

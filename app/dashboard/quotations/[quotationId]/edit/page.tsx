@@ -88,6 +88,7 @@ type Line = {
   quantityStatus?: "PENDING" | "CONFIRMED";
   pricingStatus?: "PENDING" | "CONFIRMED";
   productSelectionStatus?: "PENDING" | "GENERIC" | "SELECTED";
+  marketPrice?: import("@/src/domain/quotation").QuotationMarketPriceEvidence | null;
   brandName?: string | null;
   modelNumber?: string | null;
   taxPercentage?: number;

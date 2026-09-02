@@ -35,7 +35,7 @@ function state(): ConversationRuntimeState {
   const graph = buildSystemConfigurationGraph(confirmedFacts);
   return {
     runtimeId: "runtime-1", version: 1, locale: "ar", messages: [], confirmedFacts, candidateFacts: [],
-    unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "MATURE", transitionState: "EXPLORING",
+    unresolvedImportantQuestions: [], toolResults: [{ kind: "RESEARCH", purpose: "JURISDICTION_RULE", status: "UNAVAILABLE", summary: "No authoritative rule evidence found; engineering defaults remain estimated.", evidence: [], createdAt: now }], solutionReadiness: "MATURE", transitionState: "EXPLORING",
     compactMemory: "", suggestedReplies: [], handoff: null, solutionGraph: graph,
     workspace: synchronizeWorkspace(undefined, confirmedFacts, graph, now),
   };

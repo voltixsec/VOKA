@@ -19,6 +19,8 @@ export interface EngineeringRuleProfile {
   version: string;
   trust: Exclude<EngineeringRuleTrust, "USER_OVERRIDE">;
   authoritySource?: string | null;
+  /** When present, only these fields are asserted by the authority source. */
+  verifiedFields?: Array<keyof EngineeringRuleProfile["values"]>;
   values: {
     retentionDays: number;
     codec: "H.264" | "H.265";
@@ -31,6 +33,7 @@ export interface EngineeringRuleProfile {
     cableMetersPerCamera: number;
     cableRollMeters: number;
     rackAllowance: number;
+    storageDriveCapacityTb?: number;
   };
 }
 
@@ -38,6 +41,7 @@ export interface EngineeringRuleSnapshot extends EngineeringRuleProfile {
   governmentVerified: boolean;
   resolvedAt: string;
   overriddenFields: string[];
+  fieldSources: Record<string, EngineeringRuleTrust>;
 }
 
 export type SystemInputGuidance = {
@@ -81,6 +85,10 @@ export interface SystemComponent {
   /** Arabic rendering of the same calculation; never a separate calculation. */
   formulaExplanationAr?: string;
   category?: string;
+  /** Whether governed quantities are fully authoritative or use stated assumptions. */
+  quantityStatus?: "EXACT" | "ESTIMATED";
+  calculationInputs?: Record<string, number | string | boolean>;
+  assumptions?: string[];
 }
 
 export interface SystemCalculationResult {
@@ -96,6 +104,7 @@ export interface SystemCalculationResult {
   /** Internal immutable-at-creation rule evidence; never customer-facing copy. */
   engineeringRules?: EngineeringRuleSnapshot;
   ruleConflict?: { code: "RULE_CONFLICT"; messages: string[]; messagesAr: string[] };
+  compatibilityConflicts?: Array<{ code: string; message: string }>;
 }
 
 export interface ISystemTemplate {

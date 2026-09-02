@@ -3,6 +3,8 @@ import { CompleteCommercialConversation, type CompleteConversationInput } from "
 import { createAISalesAssistantService } from "@/src/infrastructure/ai/createAISalesAssistantService";
 import { salesAssistantTurnTimingOptions } from "@/src/infrastructure/ai/salesAssistantTurnTiming";
 
+/** Legacy compatibility endpoint. The current Sales Assistant dashboard is governed exclusively by /api/ai/conversation-runtime. */
+
 const choices = {
   locale: ["ar", "en"], replySource: ["TEXT", "VOICE", "CHIP"],
   operation: ["QUOTATION", "INVOICE", "CONTRACT", "SALES_ORDER", "DRAWING_TAKEOFF"],

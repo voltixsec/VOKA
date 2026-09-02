@@ -20,17 +20,25 @@ export class ConversationToolRegistry implements ConversationToolPort {
     }
     if (input.request.kind === "RESEARCH" && this.candidates && input.graph.catalogResolution === "CATALOG_INSUFFICIENT") {
       const resolved = await this.candidates.resolve({ graph: input.graph, companyId: input.companyId, locale: input.locale, mode: "WEB_FALLBACK", query: input.request.query, requestedCount: requestedCount(input.request.query) });
-      if (resolved.researchObservation) return { ...resolved.researchObservation, candidateProducts: resolved.graph.candidateProducts, catalogResolution: resolved.graph.catalogResolution };
+      if (resolved.researchObservation) return { ...resolved.researchObservation, purpose: input.request.purpose ?? "PRODUCT_RESEARCH", candidateProducts: resolved.graph.candidateProducts, catalogResolution: resolved.graph.catalogResolution };
     }
     if (input.request.kind === "RESEARCH" && this.research) {
       const jurisdiction = input.graph.requirements.find((requirement) => requirement.key === "system.jurisdiction")?.value;
       const researchInput = { companyId: input.companyId, query: input.request.query, locale: input.locale, jurisdiction: jurisdiction == null ? null : String(jurisdiction) };
       const detailed = this.research.researchSystemWithDiagnostic ? await this.research.researchSystemWithDiagnostic(researchInput) : null;
       const result = detailed ? detailed.model : await this.research.researchSystem(researchInput);
-      if (result) return { kind: "RESEARCH", status: "COMPLETED", summary: [result.purpose, ...result.limitations].filter(Boolean).join(" ").slice(0, 2_000), evidence: result.evidence.map(({ title, url, publisher }) => ({ title, url, publisher })), createdAt: this.now() };
-      if (detailed?.diagnostic) return { kind: "RESEARCH", status: "UNAVAILABLE", summary: detailed.diagnostic, evidence: [], createdAt: this.now() };
+      if (result) {
+        const engineeringRules = (result.engineeringRules ?? []).filter((rule) =>
+          rule.jurisdiction.normalize("NFKC").toLocaleLowerCase() === (jurisdiction == null ? "" : String(jurisdiction)).normalize("NFKC").toLocaleLowerCase()
+          && ["GOVERNMENT_AUTHORITY", "STANDARDS_ORGANIZATION"].includes(rule.sourceType)
+          && result.evidence.some((source) => source.url === rule.authoritySourceUrl && source.sourceType === rule.sourceType),
+        );
+        const usable = input.request.purpose === "JURISDICTION_RULE" ? engineeringRules.length > 0 : result.evidence.length > 0;
+        return { kind: "RESEARCH", purpose: input.request.purpose, status: usable ? "COMPLETED" : "UNAVAILABLE", summary: [result.purpose, ...result.limitations].filter(Boolean).join(" ").slice(0, 2_000), evidence: result.evidence.map(({ title, url, publisher }) => ({ title, url, publisher })), engineeringRules, createdAt: this.now() };
+      }
+      if (detailed?.diagnostic) return { kind: "RESEARCH", purpose: input.request.purpose, status: "UNAVAILABLE", summary: detailed.diagnostic, evidence: [], createdAt: this.now() };
     }
-    return { kind: input.request.kind, status: "UNAVAILABLE", summary: "This capability is not connected in the clean runtime yet.", evidence: [], createdAt: this.now() };
+    return { kind: input.request.kind, purpose: input.request.purpose, status: "UNAVAILABLE", summary: "This capability is not connected in the clean runtime yet.", evidence: [], createdAt: this.now() };
   }
 }
 

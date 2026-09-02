@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CreateQuotationFromCommercialHandoff, adaptCommercialHandoffToQuotationDraft, type CommercialHandoffQuotationPort, type CommercialSolutionHandoff, type FactProvenance } from "../index";
+import type { QuotationLineInput } from "@/src/domain/quotation";
 
 const confirmed = (key: string, value: string | number, provenance: FactProvenance = "USER_EXPLICIT") => ({ key, value, provenance, evidence: String(value), updatedAt: "2026-08-31T00:00:00.000Z" });
 function handoff(overrides: Partial<CommercialSolutionHandoff> = {}): CommercialSolutionHandoff {
@@ -13,6 +14,23 @@ function port(overrides: Partial<CommercialHandoffQuotationPort> = {}): Commerci
     createDraft: vi.fn().mockResolvedValue({ success: true, draft: { id: "quotation-1", status: "DRAFT", localizationPending: false } }),
     ...overrides,
   };
+}
+
+function expectLosslessCommercialProjection(governed: CommercialSolutionHandoff["commercialLines"][number], quotation: QuotationLineInput) {
+  expect(quotation).toMatchObject({
+    quantity: governed.quantity,
+    unitName: governed.unitName,
+    productSelectionStatus: governed.productSelectionStatus,
+    engineeringStatus: governed.engineeringStatus,
+    commercialPricingStatus: governed.pricingStatus,
+    brandName: governed.brand ?? null,
+    modelNumber: governed.model ?? null,
+    commercialAttributes: governed.commercialAttributes,
+  });
+  for (const value of Object.values(governed.commercialAttributes ?? {}).flatMap((item) => Array.isArray(item) ? item : [item]).filter((item) => item !== null && item !== undefined)) {
+    const structuredOrRendered = JSON.stringify(quotation.commercialAttributes ?? {}) + " " + [quotation.itemName, quotation.itemNameAr, quotation.itemNameEn, quotation.description].filter(Boolean).join(" ");
+    expect(structuredOrRendered.toLocaleLowerCase()).toContain(String(value).toLocaleLowerCase());
+  }
 }
 
 describe("Commercial handoff → authoritative quotation draft", () => {
@@ -83,11 +101,12 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(draft?.familyId).toBe("runtime-vehicle-1");
   });
 
-  it("preserves researched requirements as pending generic Draft lines without fake catalog or price truth", () => {
-    const unsafe = handoff({ commercialLines: [{ catalogItemId: "fake-sku", itemName: "Suggested cylinder", quantity: 1, unitPrice: 10, type: "PRODUCT", authority: "RESEARCHED" as never }] });
+  it("preserves researched requirements and market evidence without turning either into catalog or selling-price truth", () => {
+    const marketPrice = { priceAmount: 42, priceCurrency: "KWD", priceMin: null, priceMax: null, priceUnit: "unit", priceType: "LISTED_RETAIL" as const, priceSourceUrl: "https://supplier.example/item", priceSourceTitle: "Supplier listing", priceObservedAt: "2026-09-01T00:00:00.000Z" };
+    const unsafe = handoff({ commercialLines: [{ catalogItemId: "fake-sku", itemName: "Suggested cylinder", quantity: 1, unitPrice: 10, type: "PRODUCT", authority: "RESEARCHED" as never, marketPrice }] });
     const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: unsafe, customer: { status: "RESOLVED", id: "customer-1", name: "Customer" }, defaults: { currencyCode: "KWD", termsAr: null, termsEn: null, payment: null, delivery: null, warranty: null, validity: null }, locale: "en" });
     expect(draft?.lines).toHaveLength(1);
-    expect(draft?.lines[0]).toMatchObject({ catalogItemId: null, unitPrice: null, pricingStatus: "PENDING", productSelectionStatus: "PENDING", provenance: "RESEARCHED" });
+    expect(draft?.lines[0]).toMatchObject({ catalogItemId: null, unitPrice: null, pricingStatus: "PENDING", productSelectionStatus: "PENDING", provenance: "RESEARCHED", marketPrice });
   });
 
   it("preserves the final governed CCTV BOM as distinct 200 outdoor and 140 indoor lines", () => {
@@ -109,6 +128,21 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(draft?.customer).toEqual({ name: "New Kuwait Customer" });
   });
 
+  it("is a lossless commercial projection for rich selected NVR and generic estimated HDD lines", () => {
+    const lines: CommercialSolutionHandoff["commercialLines"] = [
+      { catalogItemId: null, itemName: "Hikvision DS-9664NI-I16 Network Video Recorder, 64 Channel, 16 HDD Bays", itemNameEn: "Hikvision DS-9664NI-I16 Network Video Recorder, 64 Channel, 16 HDD Bays", itemNameAr: "جهاز تسجيل شبكي Hikvision DS-9664NI-I16، 64 قناة، 16 فتحة قرص", quantity: 6, unitPrice: null, unitName: "Unit", type: "PRODUCT", authority: "RESEARCHED", quantityState: "CONFIRMED", priceState: "PENDING", componentKeys: ["NVR_RECORDER"], brand: "Hikvision", model: "DS-9664NI-I16", productSelectionStatus: "SELECTED", engineeringStatus: "EXACT", pricingStatus: "PENDING", commercialAttributes: { channels: 64, diskBays: 16 } },
+      { catalogItemId: null, itemName: "Surveillance hard disk drive, 18TB", itemNameEn: "Surveillance hard disk drive, 18TB", itemNameAr: "قرص صلب للمراقبة، 18TB", quantity: 49, unitPrice: null, unitName: "Unit", type: "PRODUCT", authority: "DETERMINISTIC_DERIVATION", quantityState: "CONFIRMED", priceState: "PENDING", componentKeys: ["SURVEILLANCE_HDD"], productSelectionStatus: "GENERIC", engineeringStatus: "ESTIMATED", pricingStatus: "PENDING", commercialAttributes: { capacity: "18TB" } },
+    ];
+    const value = handoff({ commercialLines: lines });
+    const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: value, customer: { status: "PROPOSED", name: "Kuwait Customer" }, defaults: { currencyCode: "KWD", termsAr: null, termsEn: null, payment: null, delivery: null, warranty: null, validity: null }, locale: "en" })!;
+
+    expect(draft.lines[0].itemName).toMatch(/Hikvision DS-9664NI-I16.*64 Channel.*16 HDD Bays/);
+    expect(draft.lines[1].itemName).toContain("18TB");
+    expectLosslessCommercialProjection(lines[0], draft.lines[0]);
+    expectLosslessCommercialProjection(lines[1], draft.lines[1]);
+    expect(draft.lines.every((line) => line.pricingStatus === "PENDING" && line.unitPrice === null)).toBe(true);
+  });
+
   it("uses current authoritative scope terms, governed notes, and a professional grounded brief", () => {
     const value = handoff({ workspace: {
       commercialContext: { customer: "National Telecom", project: "Kuwait HQ", attention: "Eng. Ahmed", scope: "SUPPLY_AND_INSTALLATION", jurisdiction: "Kuwait" },
@@ -122,9 +156,9 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: value, customer: null, defaults, locale: "en" });
 
     expect(draft?.termsAndConditionsEn).toContain("Current company installation clause");
-    expect(draft?.termsAndConditionsEn).toContain("Payment terms: 25% advance");
+    expect(draft?.termsAndConditionsEn).toContain("Payment: cash");
     expect(draft?.termsAndConditionsEn).toContain("Delivery: 14 days");
-    expect(draft?.termsAndConditionsEn).not.toMatch(/Power|Network|Civil|Builder|stale delivery|Stale installation/);
+    expect(draft?.termsAndConditionsEn).not.toMatch(/25% advance|Power|Network|Civil|Builder|stale delivery|Stale installation/);
     expect(draft?.notesEn).toMatch(/Power availability|Network readiness|Civil works and access|Builder works/);
     expect(draft?.briefEn).toMatch(/^Supply and installation of Vehicle Elevator/);
     expect(draft?.briefEn).not.toMatch(/Draft quotation|AI|```|\{/);

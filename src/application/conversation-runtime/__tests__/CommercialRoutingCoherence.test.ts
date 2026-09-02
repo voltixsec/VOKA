@@ -35,20 +35,21 @@ describe("commercial routing and state coherence", () => {
     expect(value.terms.companyTermsEn).not.toContain("Legal clause");
   });
 
-  it("routes site conditions to clean Notes and keeps Terms scope-only with overrides", () => {
+  it("routes explicit site conditions to clean Notes and keeps Terms authoritative to the current scope", () => {
     const facts = { "system.identity": fact("system.identity", "Ceramic"), "scope.type": fact("scope.type", "SUPPLY_ONLY"), "commercial.payment": fact("commercial.payment", "25% advance") };
     let value = workspace(facts);
     value = applyWorkspacePatches(value, [
-      { operation: "SET", path: "siteAndResponsibilities.customerResponsibilities", value: ["العميل يوفر الكهرباء / power"], evidence: "", provenance: "AI_INFERRED" },
-      { operation: "SET", path: "siteAndResponsibilities.exclusions", value: ["Civil works by customer"], evidence: "", provenance: "AI_INFERRED" },
-    ], "", now);
+      { operation: "SET", path: "siteAndResponsibilities.customerResponsibilities", value: ["العميل يوفر الكهرباء / power"], evidence: "العميل يوفر الكهرباء / power", provenance: "USER_EXPLICIT" },
+      { operation: "SET", path: "siteAndResponsibilities.exclusions", value: ["Civil works by customer"], evidence: "Civil works by customer", provenance: "USER_EXPLICIT" },
+    ], "العميل يوفر الكهرباء / power; Civil works by customer", now);
     const defaults = parseCommercialDefaultsProfile({ currencyCode: "KWD", locale: "en", termsAr: null, termsEn: "Payment: cash\nWarranty: 1 year\nCeramic legal terms" });
     value = applyWorkspaceDefaults(value, defaults, "SUPPLY_ONLY");
     const handoff: CommercialSolutionHandoff = { runtimeId: "r1", confirmedFacts: facts, commercialLines: [], toolEvidence: [], createdAt: now, workspace: value };
     const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "c1", handoff, customer: null, defaults, locale: "en" });
     expect(draft?.notesEn).toContain("Customer responsibilities: العميل يوفر الكهرباء / power");
     expect(draft?.notesEn).toContain("Exclusions: Civil works by customer");
-    expect(draft?.termsAndConditionsEn).toContain("Payment terms: 25% advance");
+    expect(draft?.termsAndConditionsEn).toContain("Payment: cash");
+    expect(draft?.termsAndConditionsEn).not.toContain("25% advance");
     expect(draft?.termsAndConditionsEn).not.toMatch(/power|Civil works/);
     expect(draft?.notesEn).not.toMatch(/E\*7D|```|\{\s*"/);
   });

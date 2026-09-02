@@ -38,10 +38,26 @@ export type WorkspacePatch = {
 };
 export type FlexibleRecommendation = { id: string; title: string; rationale: string; candidateId: string | null };
 
-export type ToolRequest = { kind: ConversationToolKind; query: string; attachmentId: string | null };
-export type ToolObservation = { kind: ConversationToolKind; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; createdAt: string; candidateProducts?: CandidateProduct[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
+export type ToolRequest = { kind: ConversationToolKind; query: string; attachmentId: string | null; purpose?: "JURISDICTION_RULE" | "PRODUCT_RESEARCH" };
+export type ToolObservation = { kind: ConversationToolKind; purpose?: ToolRequest["purpose"]; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; createdAt: string; candidateProducts?: CandidateProduct[]; engineeringRules?: import("@/src/application/agentic-commercial-intelligence").ResearchedEngineeringRule[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
 
 export type PendingState = "CONFIRMED" | "PENDING";
+export type ProductSelectionState = "PENDING" | "GENERIC" | "SELECTED";
+export type EngineeringCertaintyState = "EXACT" | "ESTIMATED" | "CONFLICT";
+export type CommercialPricingState = "PENDING" | "MARKET_REFERENCE_AVAILABLE" | "CONFIRMED";
+export type CommercialMaterialAttributes = {
+  subtype?: string | null;
+  resolution?: string | null;
+  capacity?: string | null;
+  channels?: number | null;
+  diskBays?: number | null;
+  ports?: number | null;
+  packageSize?: string | null;
+  material?: string | null;
+  grade?: string | null;
+  dimensions?: string | null;
+  features?: string[];
+};
 export type SolutionBomLine = {
   id: string;
   componentKeys: string[];
@@ -60,6 +76,14 @@ export type SolutionBomLine = {
   catalogItemId?: string | null;
   brand?: string | null;
   model?: string | null;
+  productSelectionStatus?: ProductSelectionState;
+  engineeringStatus?: EngineeringCertaintyState;
+  pricingStatus?: CommercialPricingState;
+  commercialAttributes?: CommercialMaterialAttributes;
+  calculationInputs?: Record<string, number | string | boolean>;
+  assumptions?: string[];
+  marketPrice?: import("@/src/application/agentic-commercial-intelligence").MarketPriceEvidence | null;
+  capabilities?: import("@/src/application/agentic-commercial-intelligence").ProductCapabilityFacts | null;
 };
 
 export type CandidateProduct = {
@@ -81,6 +105,7 @@ export type CandidateProduct = {
   evidenceRole?: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "LOCAL_SUPPLIER_EVIDENCE" | "GLOBAL_PRODUCT_AUTHORITY" | "DISCOVERY_ONLY";
   imageUrl?: string | null;
   marketPrice?: import("@/src/application/agentic-commercial-intelligence").MarketPriceEvidence | null;
+  capabilities?: import("@/src/application/agentic-commercial-intelligence").ProductCapabilityFacts | null;
 };
 
 export type SystemConfigurationGraph = {
@@ -88,12 +113,14 @@ export type SystemConfigurationGraph = {
   requirements: Array<{ key: string; labelAr: string; labelEn: string; value: FactValue; provenance: FactProvenance }>;
   unresolvedDecisions: Array<{ key: string; labelAr: string; labelEn: string; safetyCritical: boolean }>;
   assumptions: Array<{ key: string; textAr: string; textEn: string }>;
-  engineeringCalculations: Array<{ key: string; labelAr: string; labelEn: string; value: string; provenance: "DETERMINISTIC_DERIVATION" | "GOVERNED_TEMPLATE" }>;
+  engineeringCalculations: Array<{ key: string; labelAr: string; labelEn: string; value: string; provenance: "DETERMINISTIC_DERIVATION" | "GOVERNED_TEMPLATE"; status?: "EXACT" | "ESTIMATED"; inputs?: Record<string, number | string | boolean>; assumptions?: string[]; importantMissingInformation?: string[]; ruleSnapshot?: import("@/src/domain/smart-system").EngineeringRuleSnapshot }>;
   engineeringBom: SolutionBomLine[];
   salesBom: SolutionBomLine[];
   candidateProducts: CandidateProduct[];
   catalogResolution: "NOT_REQUIRED" | "PENDING" | "CATALOG_MATCHED" | "CATALOG_INSUFFICIENT" | "RESEARCHED_SUGGESTIONS";
   readiness: { draftReady: boolean; pendingBeforeDraftOpen: string[]; pendingBeforeFinalIssue: string[] };
+  engineeringRuleSnapshot?: import("@/src/domain/smart-system").EngineeringRuleSnapshot;
+  compatibilityConflicts?: Array<{ code: string; message: string }>;
 };
 
 export type GovernedWorkspaceState = {
@@ -152,6 +179,11 @@ export type ConfirmedCommercialLine = {
   componentKeys?: string[];
   brand?: string | null;
   model?: string | null;
+  productSelectionStatus?: ProductSelectionState;
+  engineeringStatus?: EngineeringCertaintyState;
+  pricingStatus?: CommercialPricingState;
+  commercialAttributes?: CommercialMaterialAttributes;
+  marketPrice?: import("@/src/application/agentic-commercial-intelligence").MarketPriceEvidence | null;
 };
 
 export type CommercialSolutionHandoff = {

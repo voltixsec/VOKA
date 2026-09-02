@@ -5,6 +5,7 @@ export * from "./ConversationRuntime";
 export * from "./summary";
 export * from "./quotation-handoff";
 export * from "./product-selection";
+export * from "./commercial-projection";
 export * from "./solution-graph";
 export * from "./governed-workspace";
 export * from "./commercial-defaults";

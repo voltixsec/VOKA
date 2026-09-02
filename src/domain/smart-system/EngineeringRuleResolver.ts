@@ -11,7 +11,7 @@ export const CCTV_ENGINEERING_DEFAULT: EngineeringRuleProfile = {
     retentionDays: 30, codec: "H.265", resolutionMp: 4, fps: 15,
     bitrateMbps: 8, storageReservePercent: 0, nvrUtilizationPercent: 100,
     poeReservedPorts: 2, cableMetersPerCamera: 30, cableRollMeters: 305,
-    rackAllowance: 1,
+    rackAllowance: 1, storageDriveCapacityTb: 18,
   },
 };
 
@@ -33,18 +33,25 @@ export function resolveEngineeringRules(input: ResolveEngineeringRulesInput): {
     && Boolean(input.verifiedJurisdictionProfile.authoritySource)
     ? input.verifiedJurisdictionProfile : null;
   const company = input.companyProfile?.trust === "COMPANY_APPROVED" ? input.companyProfile : null;
-  const base = verified ?? company ?? CCTV_ENGINEERING_DEFAULT;
+  const fallback = company ?? CCTV_ENGINEERING_DEFAULT;
+  const verifiedFields = verified?.verifiedFields?.length ? verified.verifiedFields : verified ? Object.keys(verified.values) as Array<keyof EngineeringRuleProfile["values"]> : [];
+  const verifiedValues = verified ? Object.fromEntries(verifiedFields.map((key) => [key, verified.values[key]]).filter(([, value]) => value !== undefined)) : {};
+  const base = verified ?? fallback;
   const overrides = Object.fromEntries(Object.entries(input.userOverrides ?? {}).filter(([, value]) => value !== undefined));
   const overriddenFields = Object.keys(overrides);
   const snapshot: EngineeringRuleSnapshot = {
     ...base,
     jurisdiction,
-    values: { ...base.values, ...overrides },
+    values: { ...fallback.values, ...verifiedValues, ...overrides },
     governmentVerified: Boolean(verified),
     // Callers that persist a historical snapshot provide their authoritative
     // timestamp. Pure calculations remain byte-for-byte deterministic.
     resolvedAt: input.resolvedAt ?? "NOT_PERSISTED",
     overriddenFields,
+    fieldSources: Object.fromEntries(Object.keys(fallback.values).map((key) => [
+      key,
+      overriddenFields.includes(key) ? "USER_OVERRIDE" : verifiedFields.includes(key as keyof EngineeringRuleProfile["values"]) ? "VERIFIED_AUTHORITY" : company ? "COMPANY_APPROVED" : "ENGINEERING_DEFAULT",
+    ])),
   };
   if (verified && typeof input.userOverrides?.retentionDays === "number"
     && input.userOverrides.retentionDays < verified.values.retentionDays) {

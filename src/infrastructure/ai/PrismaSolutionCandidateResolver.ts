@@ -19,6 +19,7 @@ const PRIMARY_COMPONENT_KEYS = new Set([
   "CCTV_CAMERAS",
   "GYPSUM_BOARDS",
   "NVR_RECORDER",
+  "SURVEILLANCE_HDD",
   "ACCESS_CONTROL_CONTROLLER",
   "FIRE_ALARM_PANEL",
 ]);
@@ -101,6 +102,7 @@ function researchCandidate(
     evidenceRole: product.evidenceRole,
     imageUrl: product.imageUrl ?? null,
     marketPrice: product.marketPrice ?? null,
+    capabilities: product.capabilities ?? null,
   };
 }
 

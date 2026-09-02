@@ -1,11 +1,15 @@
 import { SmartSystemBuilderService } from "@/src/application/smart-system/services/SmartSystemBuilderService";
+import { CCTV_ENGINEERING_DEFAULT, type EngineeringRuleProfile } from "@/src/domain/smart-system";
 import type { ConfirmedFact, FactValue, SolutionBomLine, SystemConfigurationGraph } from "./types";
+import { commercialAttributesFromComponent, projectCommercialBomLine } from "./commercial-projection";
 
 const EMPTY_GRAPH: SystemConfigurationGraph = {
   system: null, requirements: [], unresolvedDecisions: [], assumptions: [], engineeringCalculations: [],
   engineeringBom: [], salesBom: [], candidateProducts: [], catalogResolution: "NOT_REQUIRED",
   readiness: { draftReady: false, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: [] },
 };
+
+type GraphResolutionContext = { engineeringRules?: import("@/src/application/agentic-commercial-intelligence").ResearchedEngineeringRule[] };
 
 const labels: Record<string, [string, string]> = {
   "system.jurisdiction": ["الدولة", "Jurisdiction"], "scope.type": ["النطاق", "Scope"],
@@ -47,7 +51,7 @@ function systemIdentity(value: string | null) {
   return { key: value.toUpperCase().replace(/\s+/g, "_"), nameAr: value, nameEn: value };
 }
 
-export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFact>): SystemConfigurationGraph {
+export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFact>, context: GraphResolutionContext = {}): SystemConfigurationGraph {
   const system = systemIdentity(text(facts, "system.identity"));
   if (!system) return EMPTY_GRAPH;
   const requirements = [
@@ -76,6 +80,7 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
     const skirtingLm = numeric(facts, "ceramic.skirtingLm");
     const skirtingHeightCm = numeric(facts, "ceramic.skirtingHeightCm");
     const levelingThicknessCm = numeric(facts, "ceramic.levelingThicknessCm");
+    const packageAreaM2 = numeric(facts, "ceramic.packageAreaM2");
     graph.unresolvedDecisions = [
       ...(!area ? [{ key: "system.areaM2", labelAr: "مساحة التنفيذ", labelEn: "Installation area", safetyCritical: false }] : []),
       ...(wastagePercent == null ? [{ key: "ceramic.wastagePercent", labelAr: "\u0646\u0633\u0628\u0629 \u0627\u0644\u0647\u0627\u0644\u0643 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u0629", labelEn: "Approved wastage allowance", safetyCritical: false }] : []),
@@ -95,13 +100,17 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
         item.id === "CERAMIC_TILES"
           ? {
               ...item,
-              quantity: supplyAreaM2,
+              quantity: packageAreaM2 ? Math.ceil(supplyAreaM2 / packageAreaM2) : supplyAreaM2,
               quantityState: "CONFIRMED",
-              unitName: "m\u00B2",
+              unitName: packageAreaM2 ? "box" : "m\u00B2",
               provenance: "DETERMINISTIC_DERIVATION",
+              engineeringStatus: wastagePercent != null && packageAreaM2 ? "EXACT" : "ESTIMATED",
+              calculationInputs: packageAreaM2 ? { requiredAreaM2: supplyAreaM2, packageAreaM2 } : { requiredAreaM2: supplyAreaM2 },
+              assumptions: packageAreaM2 ? [] : ["Commercial package area is not yet known; area remains the purchasing unit."],
             }
           : item,
       );
+      if (packageAreaM2) graph.engineeringCalculations.push({ key: "ceramic.packageCount", labelAr: "عدد عبوات السيراميك", labelEn: "Ceramic package count", value: String(Math.ceil(supplyAreaM2 / packageAreaM2)), provenance: "DETERMINISTIC_DERIVATION", status: wastagePercent != null ? "EXACT" : "ESTIMATED", inputs: { requiredAreaM2: supplyAreaM2, packageAreaM2 }, assumptions: wastagePercent == null ? ["Wastage allowance remains estimated."] : [] });
     }
 
     if (wastagePercent != null && procurementTiles) {
@@ -189,28 +198,68 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
     const inputs = system.key === "GYPSUM_BOARD"
       ? { areaM2: area, layersCount: numeric(facts, "system.layersCount"), includeInstallation: /INSTALL/i.test(text(facts, "scope.type") ?? "") }
       : { cameraCount: numeric(facts, "system.cameraCount") ?? numeric(facts, "system.quantity"), resolutionMp: numeric(facts, "system.resolutionMp"), storageDays: numeric(facts, "system.storageDays"), jurisdiction: text(facts, "system.jurisdiction"), includeInstallation: /INSTALL/i.test(text(facts, "scope.type") ?? "") };
-    const calculated = smart.calculateSystem(system.key, inputs);
+    const selectedCapability = (field: string) => numeric(facts, `product.selection.NVR_RECORDER.capabilities.${field}`);
+    const selectedCodec = text(facts, "product.selection.NVR_RECORDER.capabilities.supportedCodec");
+    const selectedRaid = facts["product.selection.NVR_RECORDER.capabilities.raidSupported"]?.value;
+    const recorderCapabilityValues = system.key === "CCTV" ? {
+      channels: selectedCapability("channels"),
+      diskBays: selectedCapability("diskBays"),
+      maxHddCapacityTb: selectedCapability("maxHddCapacityTb"),
+      incomingBandwidthMbps: selectedCapability("incomingBandwidthMbps"),
+      supportedCodec: selectedCodec === "H.264" || selectedCodec === "H.265" ? selectedCodec : null,
+      raidSupported: typeof selectedRaid === "boolean" ? selectedRaid : null,
+    } : null;
+    const recorderCapabilities = recorderCapabilityValues && Object.values(recorderCapabilityValues).some((value) => value !== null) ? recorderCapabilityValues : null;
+    const researchedRule = context.engineeringRules?.find((rule) => rule.systemType.toUpperCase() === system.key && normalizeIdentity(rule.jurisdiction) === normalizeIdentity(text(facts, "system.jurisdiction")));
+    const allowedRuleFields = new Set(Object.keys(CCTV_ENGINEERING_DEFAULT.values));
+    const verifiedValues = researchedRule ? Object.fromEntries(Object.entries(researchedRule.values).filter(([key, value]) => {
+      if (!allowedRuleFields.has(key)) return false;
+      if (key === "codec") return value === "H.264" || value === "H.265";
+      if (typeof value !== "number" || !Number.isFinite(value)) return false;
+      return ["storageReservePercent", "nvrUtilizationPercent", "poeReservedPorts"].includes(key) ? value >= 0 : value > 0;
+    })) : {};
+    const verifiedJurisdictionProfile: EngineeringRuleProfile | null = researchedRule && Object.keys(verifiedValues).length ? {
+      ...CCTV_ENGINEERING_DEFAULT,
+      id: researchedRule.profileId,
+      name: researchedRule.authoritySourceTitle,
+      version: researchedRule.profileVersion,
+      jurisdiction: researchedRule.jurisdiction,
+      trust: "VERIFIED_AUTHORITY",
+      authoritySource: researchedRule.authoritySourceUrl,
+      verifiedFields: Object.keys(verifiedValues) as Array<keyof EngineeringRuleProfile["values"]>,
+      values: { ...CCTV_ENGINEERING_DEFAULT.values, ...verifiedValues },
+    } : null;
+    const calculated = smart.calculateSystem(system.key, { ...inputs, selectedRecorderCapabilities: recorderCapabilities }, verifiedJurisdictionProfile ? { jurisdiction: text(facts, "system.jurisdiction"), verifiedJurisdictionProfile } : undefined);
     if (calculated) {
+      graph.engineeringRuleSnapshot = calculated.engineeringRules;
+      graph.compatibilityConflicts = calculated.compatibilityConflicts ?? [];
       graph.unresolvedDecisions = calculated.missingInputs.map((key) => ({ key, ...missingInputLabel(key), safetyCritical: false }));
-      graph.engineeringBom = calculated.components.map((component) => line({ id: component.componentKey, itemNameAr: component.nameAr, itemNameEn: component.nameEn, type: component.itemType, quantity: component.quantity, quantityState: "CONFIRMED", unitName: component.unit, provenance: "GOVERNED_TEMPLATE", description: component.formulaExplanation ?? null }));
-      graph.salesBom = calculated.components.map((component) => line({ id: component.componentKey, itemNameAr: commercialName(component.componentKey, component.nameAr, true), itemNameEn: commercialName(component.componentKey, component.nameEn, false), type: component.itemType, quantity: component.quantity, quantityState: "CONFIRMED", unitName: component.unit, provenance: "GOVERNED_TEMPLATE" }));
+      graph.engineeringBom = calculated.components.map((component) => {
+        const engineeringStatus = component.quantityStatus ?? (component.provenance === "SUGGESTED" ? "ESTIMATED" : "EXACT");
+        return line({ id: component.componentKey, itemNameAr: component.nameAr, itemNameEn: component.nameEn, type: component.itemType, quantity: component.quantity, quantityState: component.provenance === "SUGGESTED" ? "PENDING" : "CONFIRMED", unitName: component.unit, provenance: "GOVERNED_TEMPLATE", description: component.formulaExplanation ?? null, engineeringStatus, calculationInputs: component.calculationInputs, assumptions: component.assumptions, commercialAttributes: commercialAttributesFromComponent(component) });
+      });
+      graph.salesBom = calculated.components.map((component) => {
+        const engineeringStatus = component.quantityStatus ?? (component.provenance === "SUGGESTED" ? "ESTIMATED" : "EXACT");
+        return projectCommercialBomLine(line({ id: component.componentKey, itemNameAr: commercialName(component.componentKey, component.nameAr, true), itemNameEn: commercialName(component.componentKey, component.nameEn, false), type: component.itemType, quantity: component.quantity, quantityState: component.provenance === "SUGGESTED" ? "PENDING" : "CONFIRMED", unitName: component.unit, provenance: "GOVERNED_TEMPLATE", engineeringStatus, calculationInputs: component.calculationInputs, assumptions: component.assumptions, commercialAttributes: commercialAttributesFromComponent(component) }));
+      });
+      graph.engineeringCalculations = calculated.components.flatMap((component) => component.calculationInputs ? [{ key: `${component.componentKey}.quantity`, labelAr: component.nameAr, labelEn: component.nameEn, value: `${component.quantity} ${component.unit}`, provenance: "DETERMINISTIC_DERIVATION" as const, status: component.quantityStatus ?? "EXACT" as const, inputs: component.calculationInputs, assumptions: component.assumptions ?? [], importantMissingInformation: calculated.missingInputs, ruleSnapshot: calculated.engineeringRules }] : []);
     }
   }
   graph.catalogResolution = graph.salesBom.some((row) => row.type === "PRODUCT") ? "PENDING" : "NOT_REQUIRED";
   graph.salesBom = attachExplicitSpecifications(graph.salesBom, graph.requirements);
   graph.engineeringBom = attachExplicitSpecifications(graph.engineeringBom, graph.requirements);
-  graph.salesBom = graph.salesBom.map((row) => applyApprovedProductSelection(row, facts));
+  graph.salesBom = graph.salesBom.map((row) => projectCommercialBomLine(applyApprovedProductSelection(row, facts)));
   graph.engineeringBom = graph.engineeringBom.map((row) => applyApprovedProductSelection(row, facts));
   graph.readiness.pendingBeforeDraftOpen = [];
   graph.readiness.draftReady = true;
-  graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["attention.name"] && "Attention", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
+  graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["attention.name"] && "Attention", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", Boolean(graph.compatibilityConflicts?.length) && "Compatibility review", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
   return graph;
 }
 
 function attachExplicitSpecifications(lines: SolutionBomLine[], requirements: SystemConfigurationGraph["requirements"]) {
   const targets: Record<string, string[]> = {
-    "system.resolutionMp": ["CCTV_CAMERAS"],
-    "system.cameraType": ["CCTV_CAMERAS"],
+    "system.resolutionMp": ["CCTV_CAMERAS", "CCTV_BULLET_CAMERA", "CCTV_DOME_CAMERA"],
+    "system.cameraType": ["CCTV_CAMERAS", "CCTV_BULLET_CAMERA", "CCTV_DOME_CAMERA"],
     "system.storageDays": ["CCTV_STORAGE", "NVR_RECORDER"],
     "system.tileSize": ["CERAMIC_TILES"],
     "system.layersCount": ["GYPSUM_BOARDS"],
@@ -225,10 +274,12 @@ function attachExplicitSpecifications(lines: SolutionBomLine[], requirements: Sy
   });
 }
 
-function applyApprovedProductSelection(line: SolutionBomLine, facts: Record<string, ConfirmedFact>): SolutionBomLine {
+export function applyApprovedProductSelection(line: SolutionBomLine, facts: Record<string, ConfirmedFact>): SolutionBomLine {
   const prefix = `product.selection.${line.id}.`;
   const selected = (field: string) => facts[prefix + field]?.provenance === "USER_APPROVED" ? facts[prefix + field] : null;
   const name = selected("name")?.value;
+  const nameAr = selected("nameAr")?.value;
+  const nameEn = selected("nameEn")?.value;
   const brand = selected("brand")?.value;
   const model = selected("model")?.value;
   const source = selected("source")?.value;
@@ -236,24 +287,69 @@ function applyApprovedProductSelection(line: SolutionBomLine, facts: Record<stri
   const commercialIdentity = [typeof brand === "string" ? brand : null, typeof model === "string" ? model : null].filter(Boolean).join(" - ");
   const catalogItemId = selected("catalogItemId")?.value;
   const unitPrice = selected("unitPrice")?.value;
+  const marketValue = (field: string) => selected(`marketPrice.${field}`)?.value;
+  const marketCurrency = marketValue("priceCurrency");
+  const marketSourceUrl = marketValue("priceSourceUrl");
+  const marketSourceTitle = marketValue("priceSourceTitle");
+  const marketObservedAt = marketValue("priceObservedAt");
+  const marketPrice = typeof marketCurrency === "string" && typeof marketSourceUrl === "string" && typeof marketSourceTitle === "string" && typeof marketObservedAt === "string"
+    ? {
+        priceAmount: typeof marketValue("priceAmount") === "number" ? marketValue("priceAmount") as number : null,
+        priceCurrency: marketCurrency,
+        priceMin: typeof marketValue("priceMin") === "number" ? marketValue("priceMin") as number : null,
+        priceMax: typeof marketValue("priceMax") === "number" ? marketValue("priceMax") as number : null,
+        priceUnit: typeof marketValue("priceUnit") === "string" ? marketValue("priceUnit") as string : null,
+        priceType: (typeof marketValue("priceType") === "string" ? marketValue("priceType") : "UNKNOWN") as import("@/src/application/agentic-commercial-intelligence").MarketPriceEvidence["priceType"],
+        priceSourceUrl: marketSourceUrl,
+        priceSourceTitle: marketSourceTitle,
+        priceObservedAt: marketObservedAt,
+      }
+    : null;
+  const capability = (field: string) => selected(`capabilities.${field}`)?.value;
+  const capabilities = {
+    channels: typeof capability("channels") === "number" ? capability("channels") as number : undefined,
+    diskBays: typeof capability("diskBays") === "number" ? capability("diskBays") as number : undefined,
+    maxHddCapacityTb: typeof capability("maxHddCapacityTb") === "number" ? capability("maxHddCapacityTb") as number : undefined,
+    supportedCodec: capability("supportedCodec") === "H.264" || capability("supportedCodec") === "H.265" ? capability("supportedCodec") as "H.264" | "H.265" : undefined,
+    incomingBandwidthMbps: typeof capability("incomingBandwidthMbps") === "number" ? capability("incomingBandwidthMbps") as number : undefined,
+    raidSupported: typeof capability("raidSupported") === "boolean" ? capability("raidSupported") as boolean : undefined,
+  };
   return {
     ...line,
     itemName: name,
-    itemNameAr: [line.itemNameAr, commercialIdentity].filter(Boolean).join(" - "),
-    itemNameEn: [line.itemNameEn, commercialIdentity].filter(Boolean).join(" - "),
+    itemNameAr: typeof nameAr === "string" ? nameAr : [line.itemNameAr, commercialIdentity].filter(Boolean).join(" - "),
+    itemNameEn: typeof nameEn === "string" ? nameEn : [line.itemNameEn, commercialIdentity].filter(Boolean).join(" - "),
     brand: typeof brand === "string" ? brand : null,
     model: typeof model === "string" ? model : null,
     catalogItemId: typeof catalogItemId === "string" ? catalogItemId : null,
     unitPrice: typeof unitPrice === "number" ? unitPrice : null,
     priceState: typeof unitPrice === "number" ? "CONFIRMED" : "PENDING",
     provenance: source === "VERIFIED_CATALOG" ? "VERIFIED_CATALOG" : "RESEARCHED",
+    productSelectionStatus: "SELECTED",
+    pricingStatus: typeof unitPrice === "number" ? "CONFIRMED" : marketPrice ? "MARKET_REFERENCE_AVAILABLE" : "PENDING",
+    marketPrice,
+    capabilities: Object.values(capabilities).some((value) => value !== undefined) ? capabilities : null,
+    commercialAttributes: {
+      ...line.commercialAttributes,
+      channels: capabilities.channels ?? line.commercialAttributes?.channels,
+      diskBays: capabilities.diskBays ?? line.commercialAttributes?.diskBays,
+      features: [
+        ...(line.commercialAttributes?.features ?? []),
+        ...(capabilities.maxHddCapacityTb ? [`Maximum supported HDD capacity ${capabilities.maxHddCapacityTb}TB`] : []),
+        ...(capabilities.supportedCodec ? [capabilities.supportedCodec] : []),
+      ],
+    },
   };
+}
+
+function normalizeIdentity(value: string | null | undefined) {
+  return (value ?? "").normalize("NFKC").trim().toLocaleLowerCase();
 }
 
 function commercialName(key: string, fallback: string, ar: boolean) {
   const names: Record<string, [string, string]> = {
     CCTV_CAMERAS: ["كاميرات مراقبة IP", "IP surveillance cameras"], NVR_RECORDER: ["جهاز تسجيل شبكي NVR", "NVR network recorder"],
-    CCTV_STORAGE: ["وحدات تخزين للمراقبة", "Surveillance storage drives"], CCTV_POE_SWITCH: ["مبدّل شبكة PoE", "PoE network switch"],
+    SURVEILLANCE_HDD: ["قرص صلب مخصص للمراقبة", "Surveillance hard disk drive"], CCTV_STORAGE: ["وحدات تخزين للمراقبة", "Surveillance storage drives"], CCTV_POE_SWITCH: ["مبدّل شبكة PoE", "PoE network switch"],
     CCTV_CABLE: ["كابلات شبكة للكاميرات", "CCTV network cabling"], CCTV_LABOR: ["أعمال تركيب وبرمجة نظام الكاميرات", "CCTV installation and configuration"],
     GYPSUM_BOARDS: ["ألواح جبس بورد", "Gypsum boards"], GYPSUM_STUDS: ["قطاعات جبس بورد رأسية", "Gypsum vertical studs"],
     GYPSUM_TRACKS: ["مسارات جبس بورد", "Gypsum tracks"], GYPSUM_SCREWS: ["مسامير جبس بورد", "Gypsum board screws"],

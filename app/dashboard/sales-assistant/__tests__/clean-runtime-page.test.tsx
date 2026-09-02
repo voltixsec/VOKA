@@ -38,6 +38,7 @@ describe("Sales Assistant clean runtime UI", () => {
     expect(screen.getAllByText("Vehicle Elevator").length).toBeGreaterThan(0);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/ai/conversation-runtime");
+    expect(fetchMock.mock.calls.flatMap(([calledUrl]) => [calledUrl])).not.toEqual(expect.arrayContaining(["/api/ai/commercial-conversation", "/api/ai/sales-assistant/draft"]));
     expect(JSON.parse(options.body)).toMatchObject({ source: "TEXT", state: null });
   });
 

@@ -99,29 +99,18 @@ export function adaptCommercialHandoffToQuotationDraft(input: {
   const scopeType = isQuotationScopeType(scopeValue) ? scopeValue : null;
   const projectName = normalizeCommercialText(textFact(input.handoff, "project.name"));
   const attentionName = normalizeCommercialText(textFact(input.handoff, "attention.name"));
-  const workspaceTerms = input.handoff.workspace?.terms;
-  const effectiveTerm = (key: "payment" | "delivery" | "warranty" | "validity") =>
-    workspaceTerms?.sources?.[key] === "EXPLICIT"
-      ? workspaceTerms[key]
-      : input.defaults[key];
   const commercialValues = {
-    payment: effectiveTerm("payment"),
-    delivery: effectiveTerm("delivery"),
-    warranty: effectiveTerm("warranty"),
-    validity: effectiveTerm("validity"),
+    payment: input.defaults.payment,
+    delivery: input.defaults.delivery,
+    warranty: input.defaults.warranty,
+    validity: input.defaults.validity,
   };
-  const explicitOverrides = {
-    payment: workspaceTerms?.sources?.payment === "EXPLICIT" ? workspaceTerms.payment : null,
-    delivery: workspaceTerms?.sources?.delivery === "EXPLICIT" ? workspaceTerms.delivery : null,
-    warranty: workspaceTerms?.sources?.warranty === "EXPLICIT" ? workspaceTerms.warranty : null,
-    validity: workspaceTerms?.sources?.validity === "EXPLICIT" ? workspaceTerms.validity : null,
-  };
-  const terms = composeQuotationTerms(input.defaults, explicitOverrides, input.locale);
+  const terms = composeQuotationTerms(input.defaults, { payment: null, delivery: null, warranty: null, validity: null }, input.locale);
   const expiry = commercialValues.validity ? resolveExpiry(commercialValues.validity, input.handoff.createdAt.slice(0, 10)) : null;
   const lines = input.handoff.commercialLines.map((line, index) => {
     const catalogVerified = ["VERIFIED_PROFILE", "VERIFIED_DATABASE"].includes(line.authority);
     const governedSelection = Boolean(line.brand || line.model);
-    return { catalogItemId: catalogVerified ? line.catalogItemId?.trim() || null : null, taxRateId: null, position: index + 1, type: line.type, itemName: normalizeCommercialText(line.itemName) ?? line.itemName, itemNameAr: normalizeCommercialText(line.itemNameAr), itemNameEn: normalizeCommercialText(line.itemNameEn), description: normalizeCommercialText(line.description), unitName: line.unitName, quantity: line.quantity, unitPrice: catalogVerified ? line.unitPrice : null, quantityStatus: line.quantityState ?? (line.quantity === null ? "PENDING" as const : "CONFIRMED" as const), pricingStatus: catalogVerified && line.unitPrice !== null ? "CONFIRMED" as const : "PENDING" as const, productSelectionStatus: (catalogVerified && line.catalogItemId) || governedSelection ? "SELECTED" as const : "PENDING" as const, brandName: governedSelection ? line.brand ?? null : null, modelNumber: governedSelection ? line.model ?? null : null, provenance: line.authority, engineeringComponentKeys: line.componentKeys ?? [], taxPercentage: 0 };
+    return { catalogItemId: catalogVerified ? line.catalogItemId?.trim() || null : null, taxRateId: null, position: index + 1, type: line.type, itemName: normalizeCommercialText(line.itemName) ?? line.itemName, itemNameAr: normalizeCommercialText(line.itemNameAr), itemNameEn: normalizeCommercialText(line.itemNameEn), description: normalizeCommercialText(line.description), unitName: line.unitName, quantity: line.quantity, unitPrice: catalogVerified ? line.unitPrice : null, quantityStatus: line.quantityState ?? (line.quantity === null ? "PENDING" as const : "CONFIRMED" as const), pricingStatus: catalogVerified && line.unitPrice !== null ? "CONFIRMED" as const : "PENDING" as const, productSelectionStatus: line.productSelectionStatus ?? ((catalogVerified && line.catalogItemId) || governedSelection ? "SELECTED" as const : "PENDING" as const), engineeringStatus: line.engineeringStatus, commercialPricingStatus: line.pricingStatus ?? (catalogVerified && line.unitPrice !== null ? "CONFIRMED" as const : line.marketPrice ? "MARKET_REFERENCE_AVAILABLE" as const : "PENDING" as const), commercialAttributes: line.commercialAttributes, brandName: governedSelection ? line.brand ?? null : null, modelNumber: governedSelection ? line.model ?? null : null, provenance: line.authority, engineeringComponentKeys: line.componentKeys ?? [], marketPrice: line.marketPrice ?? null, taxPercentage: 0 };
   });
   return {
     companyId: input.companyId,

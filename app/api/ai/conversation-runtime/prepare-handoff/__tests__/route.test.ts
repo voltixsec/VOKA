@@ -41,7 +41,8 @@ describe("POST /api/ai/conversation-runtime/prepare-handoff", () => {
   it("projects the exact final governed workspace BOM without aggregating component lines", async () => {
     const base = await mocks.verify();
     const line = (id: string, name: string, quantity: number) => ({ id, componentKeys: [id], category: "PRODUCT", itemName: name, itemNameAr: name, itemNameEn: name, description: `${name} specification`, unitName: "pcs", quantity, quantityState: "CONFIRMED", unitPrice: null, priceState: "PENDING", type: "PRODUCT", provenance: "USER_EXPLICIT" });
-    const outdoor = line("CCTV_OUTDOOR_CAMERA", "Outdoor IP Camera", 200);
+    const marketPrice = { priceAmount: 42, priceCurrency: "KWD", priceMin: null, priceMax: null, priceUnit: "unit", priceType: "LISTED_RETAIL", priceSourceUrl: "https://supplier.example/camera", priceSourceTitle: "Supplier camera", priceObservedAt: "2026-09-01T00:00:00.000Z" };
+    const outdoor = { ...line("CCTV_OUTDOOR_CAMERA", "Outdoor IP Camera", 200), brand: "Hikvision", model: "DS-X", marketPrice };
     const indoor = line("CCTV_INDOOR_CAMERA", "Indoor IP Camera", 140);
     mocks.verify.mockResolvedValue({ ...base, workspace: {
       commercialContext: { customer: null, project: null, attention: null, scope: "SUPPLY_ONLY", jurisdiction: "Kuwait" },
@@ -58,5 +59,6 @@ describe("POST /api/ai/conversation-runtime/prepare-handoff", () => {
       ["Outdoor IP Camera", 200],
       ["Indoor IP Camera", 140],
     ]);
+    expect(mocks.sign.mock.calls[0][0].commercialLines[0]).toMatchObject({ brand: "Hikvision", model: "DS-X", unitPrice: null, marketPrice });
   });
 });

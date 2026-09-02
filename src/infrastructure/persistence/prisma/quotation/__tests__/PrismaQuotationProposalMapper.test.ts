@@ -386,5 +386,32 @@ describe(
       } as never;
       expect(PrismaQuotationMapper.toDomain(record).documentBrandSnapshot).toEqual(snapshot);
     });
+
+    it("restores a proposed customer and versioned market-reference evidence without a canonical customer id", () => {
+      const now = new Date("2026-09-02T00:00:00.000Z");
+      const marketPrice = { priceAmount: 42, priceCurrency: "KWD", priceMin: null, priceMax: null, priceUnit: "unit", priceType: "LISTED_RETAIL", priceSourceUrl: "https://supplier.example/item", priceSourceTitle: "Supplier listing", priceObservedAt: "2026-09-01T00:00:00.000Z" };
+      const record = {
+        id: "quotation-ai", companyId: "company-1", customerId: null, priceListId: null,
+        number: "QT-202609-0001", status: "DRAFT", issueDate: now, expiryDate: null, currencyCode: "KWD",
+        customerName: "Proposed Kuwait Customer", customerNameAr: null, customerNameEn: null,
+        customerEmail: null, customerPhone: null, customerTaxNo: null, billingAddress: null,
+        subtotal: 0, discountType: null, discountValue: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0,
+        notes: null, termsAndConditions: null, sentAt: null, approvedAt: null, rejectedAt: null, cancelledAt: null,
+        isDeleted: false, deletedAt: null, createdAt: now, updatedAt: now,
+        lines: [{
+          id: "line-1", catalogItemId: null, taxRateId: null, position: 1, type: "PRODUCT", itemCode: null,
+          itemName: "Selected researched camera", itemNameAr: null, itemNameEn: "Selected researched camera",
+          description: null, descriptionAr: null, descriptionEn: null, unitName: null, unitNameAr: null, unitNameEn: null,
+          quantity: null, unitPrice: null, quantityStatus: "PENDING", pricingStatus: "PENDING", productSelectionStatus: "SELECTED",
+          brandName: "Hikvision", modelNumber: "DS-X", provenance: "RESEARCHED",
+          engineeringComponentKeys: { version: 1, componentKeys: ["CCTV_CAMERAS"], marketPrice },
+          discountType: null, discountValue: 0, discountAmount: 0, taxPercentage: 0, taxAmount: 0, subtotal: 0, totalAmount: 0,
+        }],
+      } as never;
+      const restored = PrismaQuotationMapper.toDomain(record);
+      expect(restored.customerIdOrNull).toBeNull();
+      expect(restored.customerOrNull?.toJSON().name).toBe("Proposed Kuwait Customer");
+      expect(restored.lines[0]).toMatchObject({ quantity: null, unitPrice: null, engineeringComponentKeys: ["CCTV_CAMERAS"], marketPrice });
+    });
   },
 );

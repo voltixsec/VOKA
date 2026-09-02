@@ -5,7 +5,7 @@ const RECOMMEND = /(?:اختار\s*لي|اختارلي|رشح|recommend|choose\s
 
 function selectionFacts(candidate: CandidateProduct, evidence: string, now: string) {
   const prefix = `product.selection.${candidate.componentKey}.`;
-  const values: Record<string, string | number> = {
+  const values: Record<string, string | number | boolean> = {
     id: candidate.id,
     componentKey: candidate.componentKey,
     name: candidate.name,
@@ -19,6 +19,21 @@ function selectionFacts(candidate: CandidateProduct, evidence: string, now: stri
   if (candidate.sourceTitle) values.sourceTitle = candidate.sourceTitle;
   if (candidate.source === "VERIFIED_CATALOG") values.catalogItemId = candidate.id;
   if (candidate.price !== null) values.unitPrice = candidate.price;
+  if (candidate.marketPrice) {
+    const market = candidate.marketPrice;
+    if (market.priceAmount !== null) values["marketPrice.priceAmount"] = market.priceAmount;
+    if (market.priceMin !== null) values["marketPrice.priceMin"] = market.priceMin;
+    if (market.priceMax !== null) values["marketPrice.priceMax"] = market.priceMax;
+    values["marketPrice.priceCurrency"] = market.priceCurrency;
+    if (market.priceUnit) values["marketPrice.priceUnit"] = market.priceUnit;
+    values["marketPrice.priceType"] = market.priceType;
+    values["marketPrice.priceSourceUrl"] = market.priceSourceUrl;
+    values["marketPrice.priceSourceTitle"] = market.priceSourceTitle;
+    values["marketPrice.priceObservedAt"] = market.priceObservedAt;
+  }
+  if (candidate.capabilities) {
+    for (const [key, value] of Object.entries(candidate.capabilities)) if (value !== undefined) values[`capabilities.${key}`] = value;
+  }
   return Object.fromEntries(Object.entries(values).map(([field, value]) => [prefix + field, {
     key: prefix + field, value, provenance: "USER_APPROVED", evidence, updatedAt: now,
   } satisfies ConfirmedFact]));

@@ -63,7 +63,8 @@ export class ConversationRuntime {
       ? recentMessages.filter((item) => item.role === "USER").map((item) => item.text).join("\n")
       : message;
     const attachment = input.attachment ? { id: input.attachment.id ?? null, name: input.attachment.name, type: input.attachment.type } : null;
-    const initialGraph = buildSystemConfigurationGraph(turnFacts);
+    const priorEngineeringRules = base.toolResults.flatMap((observation) => observation.engineeringRules ?? []);
+    const initialGraph = buildSystemConfigurationGraph(turnFacts, { engineeringRules: priorEngineeringRules });
     let workingGraph = this.strict.project(this.strict.synchronize(base.workspace, turnFacts, initialGraph, this.now()), initialGraph);
     const brainInput = (toolResults: typeof base.toolResults) => ({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, workspace: this.strict.synchronize(base.workspace, turnFacts, workingGraph, this.now()), compactMemory: base.compactMemory, toolResults, attachmentAvailable: Boolean(input.attachment), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] as ConversationToolKind[] });
     let decision = this.strict.normalizeProposal(await this.brain.decide(brainInput([])));
@@ -75,13 +76,23 @@ export class ConversationRuntime {
     const completedRequests = new Set<string>();
     let targetMarketRequired = false;
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      workingGraph = this.previewGraph(base, turnFacts, proposals, patchEvidence, userMessage.id);
+      workingGraph = this.previewGraph(base, turnFacts, proposals, patchEvidence, userMessage.id, observations);
       const latestCandidates = [...turnObservations].reverse().find((observation) => observation.candidateProducts);
       if (latestCandidates?.candidateProducts) workingGraph = { ...workingGraph, candidateProducts: latestCandidates.candidateProducts, catalogResolution: latestCandidates.catalogResolution ?? workingGraph.catalogResolution };
       const catalogObservation = turnObservations.find((observation) => observation.kind === "CATALOG_LOOKUP");
-      const researchObservation = turnObservations.find((observation) => observation.kind === "RESEARCH");
+      const researchObservation = turnObservations.find((observation) => observation.kind === "RESEARCH" && observation.purpose !== "JURISDICTION_RULE");
+      const jurisdictionAttempted = observations.some((observation) => observation.kind === "RESEARCH" && observation.purpose === "JURISDICTION_RULE");
+      const jurisdictionRuleNeeded = Boolean(
+        workingGraph.system
+        && workingGraph.requirements.some((item) => item.key === "system.jurisdiction" && String(item.value).trim())
+        && workingGraph.engineeringRuleSnapshot?.trust === "ENGINEERING_DEFAULT"
+        && workingGraph.engineeringCalculations.some((calculation) => calculation.status === "ESTIMATED"),
+      );
       let request: ToolRequest | null = decision.researchRequests[0] ?? null;
-      if (requiresProductRetrieval && !catalogObservation) {
+      if (jurisdictionRuleNeeded && !jurisdictionAttempted) {
+        const jurisdiction = workingGraph.requirements.find((item) => item.key === "system.jurisdiction")?.value;
+        request = { kind: "RESEARCH", purpose: "JURISDICTION_RULE", query: `Authoritative jurisdiction engineering rules for ${workingGraph.system?.nameEn} in ${jurisdiction}. Return only explicit rule values supported by government or standards authority evidence.`, attachmentId: null };
+      } else if (requiresProductRetrieval && !catalogObservation) {
         request = { kind: "CATALOG_LOOKUP", query: message, attachmentId: null };
       } else if (requiresProductRetrieval && catalogObservation?.catalogResolution === "CATALOG_INSUFFICIENT" && !researchObservation) {
         request = { kind: "RESEARCH", query: message, attachmentId: null };
@@ -97,10 +108,11 @@ export class ConversationRuntime {
         decision = { ...decision, responseMode: "QUESTION", responseContent: input.locale === "ar" ? "أقدر أبحث لك عن بدائل متاحة في السوق المناسب." : "I can research alternatives available in the relevant market.", blockingQuestion: input.locale === "ar" ? "السوق أو البلد المستهدف إيه؟" : "What is the target market or country?", researchRequests: [] };
         break;
       }
-      const requestKey = request.kind + ":" + request.query + ":" + (request.attachmentId ?? "");
+      const requestKey = request.kind + ":" + (request.purpose ?? "") + ":" + request.query + ":" + (request.attachmentId ?? "");
       if (completedRequests.has(requestKey)) break;
       completedRequests.add(requestKey);
-      const observation = await this.tools.execute({ request, companyId: input.companyId, locale: input.locale, graph: workingGraph });
+      const rawObservation = await this.tools.execute({ request, companyId: input.companyId, locale: input.locale, graph: workingGraph });
+      const observation = { ...rawObservation, purpose: rawObservation.purpose ?? request.purpose };
       observations.push(observation);
       turnObservations.push(observation);
       if (observation.candidateProducts) {
@@ -119,7 +131,8 @@ export class ConversationRuntime {
     const reduced = reduceFactProposals(turnFacts, [...legacyFactProposals, ...patchFacts], message, this.now(), userMessage.id);
     const productSelection = resolveProductSelection({ graph: base.solutionGraph, confirmed: reduced.confirmed, message, locale: input.locale, now: this.now() });
     reduced.confirmed = productSelection.confirmed;
-    const proposedSystemGraph = buildSystemConfigurationGraph(reduced.confirmed);
+    const engineeringRules = observations.flatMap((observation) => observation.engineeringRules ?? []);
+    const proposedSystemGraph = buildSystemConfigurationGraph(reduced.confirmed, { engineeringRules });
     const resolvedSystemChanged = Boolean(base.workspace?.engineering.system?.key && proposedSystemGraph.system?.key && base.workspace.engineering.system.key !== proposedSystemGraph.system.key);
     if (resolvedSystemChanged) {
       reduced.confirmed = Object.fromEntries(Object.entries(reduced.confirmed).filter(([key, current]) => {
@@ -132,7 +145,7 @@ export class ConversationRuntime {
     const transitionState = decision.transition === "CONFIRM" && canHandoff
       ? "TRANSITION_REQUESTED"
       : decision.transition === "PROPOSE" ? "PROPOSED" : decision.transition === "REOPEN" ? "EXPLORING" : base.transitionState;
-    let solutionGraph = buildSystemConfigurationGraph(reduced.confirmed);
+    let solutionGraph = buildSystemConfigurationGraph(reduced.confirmed, { engineeringRules });
     const candidateObservation = [...turnObservations].reverse().find((observation) => observation.candidateProducts);
     if (candidateObservation?.candidateProducts) {
       const componentKeys = new Set(solutionGraph.salesBom.map((line) => line.id));
@@ -165,6 +178,25 @@ export class ConversationRuntime {
         workspace = this.strict.applyDefaults(workspace, loaded, scope);
       }
     }
+    if (productSelection.reply) {
+      const newlyApprovedIds = Object.entries(reduced.confirmed).flatMap(([key, fact]) =>
+        key.startsWith("product.selection.") && key.endsWith(".id") && fact.provenance === "USER_APPROVED" && fact.evidence === message.trim() && typeof fact.value === "string"
+          ? [fact.value]
+          : [],
+      );
+      const approvalIsVisible = newlyApprovedIds.length > 0 && newlyApprovedIds.every((id) =>
+        workspace.products.approvedCandidateIds.includes(id) && workspace.products.candidates.some((candidate) => candidate.id === id),
+      );
+      if (!approvalIsVisible) {
+        decision = {
+          ...decision,
+          responseMode: "WARNING",
+          responseContent: input.locale === "ar"
+            ? "لم يثبت اعتماد المنتج في مساحة الحل، لذلك أبقيته غير معتمد للمراجعة."
+            : "The product approval did not persist in the Solution Workspace, so it remains unapproved for review.",
+        };
+      }
+    }
     solutionGraph = this.strict.project(workspace, solutionGraph);
     const missingCustomer = !workspace.commercialContext.customer;
     const missingAttention = !workspace.commercialContext.attention;
@@ -182,7 +214,7 @@ export class ConversationRuntime {
     return { ...base, locale: input.locale, messages: [...recentMessages, assistantMessage].slice(-MAX_MESSAGES), confirmedFacts: reduced.confirmed, candidateFacts: (resolvedSystemChanged ? reduced.candidates : [...approval.candidates, ...reduced.candidates]).slice(-100), unresolvedImportantQuestions: decision.unresolvedImportantQuestions.slice(0, 8), toolResults: (resolvedSystemChanged ? turnObservations : observations).slice(-12), solutionReadiness: decision.solutionReadiness, transitionState, compactMemory: decision.compactMemory.slice(0, 2_000), suggestedReplies: decision.suggestedReplies.slice(0, 4), handoff, handoffToken: null, solutionGraph, workspace };
   }
 
-  private previewGraph(base: ConversationRuntimeState, facts: ConversationRuntimeState["confirmedFacts"], proposals: FlexibleTurnProposal[], message: string, messageId: string) {
+  private previewGraph(base: ConversationRuntimeState, facts: ConversationRuntimeState["confirmedFacts"], proposals: FlexibleTurnProposal[], message: string, messageId: string, observations: ConversationRuntimeState["toolResults"]) {
     const patches = proposals.flatMap((proposal) => proposal.patches ?? []);
     const patchFacts = patches.flatMap((patch) => {
       if (!patch.path.startsWith("facts.") || !["SET", "REPLACE", "PROPOSE"].includes(patch.operation)) return [];
@@ -190,7 +222,7 @@ export class ConversationRuntime {
       return [{ key: patch.path.slice(6), value: patch.value as string | number | boolean, provenance: patch.provenance, evidence: patch.evidence }];
     });
     const proposed = reduceFactProposals(facts, patchFacts, message, this.now(), messageId).confirmed;
-    const graph = buildSystemConfigurationGraph(proposed);
+    const graph = buildSystemConfigurationGraph(proposed, { engineeringRules: observations.flatMap((observation) => observation.engineeringRules ?? []) });
     let workspace = this.strict.synchronize(base.workspace, proposed, graph, this.now());
     workspace = this.strict.applyProposal(workspace, { ...proposals.at(-1)!, patches }, message, this.now());
     return this.strict.project(workspace, graph);

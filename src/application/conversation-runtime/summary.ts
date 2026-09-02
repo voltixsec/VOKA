@@ -9,6 +9,31 @@ const PENDING = [["commercial.payment", "الدفع", "Payment"], ["commercial.d
 
 export type RuntimeSummaryView = { summary: Array<{ key: string; labelAr: string; labelEn: string; value: string }>; stillNeeded: Array<{ key: string; labelAr: string; labelEn: string }>; evidence: Array<{ title: string; url: string; publisher: string }>; commercial: { draftReady: boolean } };
 
+export function normalizeEvidenceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol)) return value.normalize("NFKC").trim();
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) if (/^(?:utm_.+|fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
+    url.hostname = url.hostname.toLocaleLowerCase().replace(/^www\./, "");
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return value.normalize("NFKC").trim();
+  }
+}
+
+export function deduplicateRuntimeEvidence(evidence: RuntimeSummaryView["evidence"]) {
+  const seen = new Set<string>();
+  return evidence.filter((item) => {
+    const key = normalizeEvidenceUrl(item.url);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function runtimeSummaryValue(fact: RuntimeSummaryView["summary"][number], locale: "ar" | "en") {
   return fact.key === "scope.type" ? quotationScopeLabel(fact.value, locale) ?? "" : fact.value;
 }
@@ -20,7 +45,7 @@ export function projectRuntimeSummary(state: ConversationRuntimeState): RuntimeS
       const workspaceKey = key.slice("commercial.".length) as "payment" | "delivery" | "warranty" | "validity";
       return state.confirmedFacts[key] || state.workspace?.terms[workspaceKey] ? [] : [{ key, labelAr, labelEn }];
     }),
-    evidence: state.toolResults.flatMap((result) => result.evidence),
+    evidence: deduplicateRuntimeEvidence(state.toolResults.flatMap((result) => result.evidence)),
     commercial: { draftReady: state.transitionState === "COMMERCIAL_HANDOFF" },
   };
 }

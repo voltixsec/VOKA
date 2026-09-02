@@ -5,6 +5,7 @@ import {
   CctvSystemTemplate,
   AccessControlSystemTemplate,
 } from "../../../domain/smart-system";
+import type { ResolveEngineeringRulesInput } from "../../../domain/smart-system/EngineeringRuleResolver";
 
 export interface SystemDetectionMatch {
   systemType: string;
@@ -126,7 +127,9 @@ export class SmartSystemBuilderService {
   public calculateSystem(
     systemType: string,
     inputs: Record<string, any>,
+    ruleContext?: ResolveEngineeringRulesInput,
   ): SystemCalculationResult | null {
+    if (systemType === "CCTV" && ruleContext) return new CctvSystemTemplate(ruleContext).calculate(inputs);
     const template = this.registry.get(systemType);
     if (!template) return null;
     return template.calculate(inputs);

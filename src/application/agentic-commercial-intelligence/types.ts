@@ -45,6 +45,27 @@ export type ResearchedProductAlternative = {
   evidenceRole: "TECHNICAL_AND_AVAILABILITY" | "AVAILABILITY" | "LOCAL_SUPPLIER_EVIDENCE" | "GLOBAL_PRODUCT_AUTHORITY" | "DISCOVERY_ONLY";
   imageUrl?: string | null;
   marketPrice?: MarketPriceEvidence | null;
+  capabilities?: ProductCapabilityFacts | null;
+};
+
+export type ProductCapabilityFacts = {
+  channels?: number;
+  diskBays?: number;
+  maxHddCapacityTb?: number;
+  supportedCodec?: "H.264" | "H.265";
+  incomingBandwidthMbps?: number;
+  raidSupported?: boolean;
+};
+
+export type ResearchedEngineeringRule = {
+  systemType: string;
+  jurisdiction: string;
+  profileId: string;
+  profileVersion: string;
+  authoritySourceUrl: string;
+  authoritySourceTitle: string;
+  sourceType: "GOVERNMENT_AUTHORITY" | "STANDARDS_ORGANIZATION";
+  values: Record<string, number | string | boolean>;
 };
 
 export type MarketPriceEvidence = {
@@ -90,6 +111,7 @@ export type ProvisionalSystemModel = {
   jurisdiction: string | null;
   evidence: ResearchEvidence[];
   productAlternatives?: ResearchedProductAlternative[];
+  engineeringRules?: ResearchedEngineeringRule[];
   provenance: "RESEARCHED" | "AI_INTERPRETED";
   requiresEngineeringVerification: true;
 };

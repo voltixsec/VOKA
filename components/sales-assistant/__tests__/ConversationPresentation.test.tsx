@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { applyWorkspaceDefaults, applyWorkspacePatches, buildSystemConfigurationGraph, synchronizeWorkspace, type ConfirmedFact } from "@/src/application/conversation-runtime";
+import { applyWorkspaceDefaults, applyWorkspacePatches, buildSystemConfigurationGraph, projectRuntimeSummary, synchronizeWorkspace, type ConfirmedFact } from "@/src/application/conversation-runtime";
 import { MessageBubble, plainConversationText } from "../MessageBubble";
 import { SolutionWorkspace } from "../SolutionWorkspace";
 import { ContextSummaryCard } from "../ContextSummaryCard";
@@ -13,6 +13,20 @@ describe("conversation presentation", () => {
     render(<ContextSummaryCard isArabic={false} result={{ summary: [{ key: "scope.type", labelAr: "النطاق", labelEn: "Scope", value: "SUPPLY_AND_INSTALLATION" }], stillNeeded: [], evidence: [], commercial: { draftReady: false } }} />);
     expect(screen.getByText("Supply and Installation")).toBeTruthy();
     expect(screen.queryByText("SUPPLY_AND_INSTALLATION")).toBeNull();
+  });
+
+  it("deduplicates equivalent evidence URLs before rendering", () => {
+    const summary = projectRuntimeSummary({
+      confirmedFacts: { "system.identity": fact("system.identity", "CCTV") },
+      toolResults: [{ evidence: [
+        { title: "Supplier", url: "https://www.utechkw.com/products/hikvision/hikvision-dvr-nvr/?utm_source=chat", publisher: "utechkw.com" },
+        { title: "Supplier duplicate", url: "https://utechkw.com/products/hikvision/hikvision-dvr-nvr", publisher: "utechkw.com" },
+      ] }],
+      transitionState: "DISCOVERY",
+    } as never);
+    expect(summary.evidence).toHaveLength(1);
+    render(<ContextSummaryCard isArabic={false} result={summary} />);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
   it("forces assistant markdown into clean conversational plain text", () => {
@@ -85,5 +99,16 @@ describe("conversation presentation", () => {
     expect(screen.getByText("Not approved")).toBeTruthy();
     rerender(<SolutionWorkspace graph={graph} workspace={{ ...workspace, products: { ...workspace.products, approvedCandidateIds: ["p1"] } }} isArabic={false} onOpenDraft={vi.fn()} draftLoading={false} />);
     expect(screen.getByText("Approved")).toBeTruthy();
+  });
+
+  it("shows product, engineering, and pricing states independently without internal persistence text", () => {
+    const facts = { "system.identity": fact("system.identity", "CCTV"), "system.cameraCount": fact("system.cameraCount", 340), "system.resolutionMp": fact("system.resolutionMp", 4) };
+    const graph = buildSystemConfigurationGraph(facts);
+    const workspace = synchronizeWorkspace(undefined, facts, graph, "2026-09-01T00:00:00.000Z");
+    render(<SolutionWorkspace graph={graph} workspace={workspace} isArabic={false} onOpenDraft={vi.fn()} draftLoading={false} />);
+    expect(screen.getByTestId("bom-status-SURVEILLANCE_HDD")).toHaveTextContent("Generic · Estimated / review · Pricing pending");
+    expect(screen.getByTestId("bom-status-RACK_CABINET")).toHaveTextContent("Generic · Estimated / review · Pricing pending");
+    expect(screen.getAllByText(/Estimated quantity: 1/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/persistence is not connected/i)).toBeNull();
   });
 });

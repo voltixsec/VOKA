@@ -22,7 +22,7 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
   }));
   if (!confirmedFacts["system.identity"]) throw ApiError.badRequest("CONFIRMED_SYSTEM_REQUIRED", "A confirmed system is required.");
   const target = confirmedFacts["document.target"]?.value;
-  if (typeof target === "string" && target !== "QUOTATION") throw new ApiError(409, "NOT_YET_CONNECTED", `${target} persistence is not connected to the clean conversation runtime yet.`);
+  if (typeof target === "string" && target !== "QUOTATION") throw new ApiError(409, "DOCUMENT_TARGET_UNAVAILABLE", "This document type is not available from the Sales Assistant yet.");
   const baseGraph = buildSystemConfigurationGraph(confirmedFacts);
   const graph = state.workspace ? projectWorkspaceGraph(state.workspace, baseGraph) : baseGraph;
   const commercialLines = graph.salesBom.map((line) => ({
@@ -30,6 +30,8 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     description: line.description ?? null, unitName: line.unitName, quantity: line.quantity, unitPrice: line.unitPrice, type: line.type,
     authority: line.provenance === "VERIFIED_CATALOG" ? "VERIFIED_DATABASE" as const : line.provenance === "RESEARCHED" ? "RESEARCHED" as const : "DETERMINISTIC_DERIVATION" as const,
     quantityState: line.quantityState, priceState: line.priceState, componentKeys: line.componentKeys, brand: line.brand ?? null, model: line.model ?? null,
+    productSelectionStatus: line.productSelectionStatus, engineeringStatus: line.engineeringStatus, pricingStatus: line.pricingStatus,
+    commercialAttributes: line.commercialAttributes, marketPrice: line.marketPrice ?? null,
   }));
   const createdAt = state.messages[0]?.createdAt ?? new Date().toISOString();
   const handoff: CommercialSolutionHandoff = { runtimeId: state.runtimeId, confirmedFacts, commercialLines, toolEvidence: state.toolResults.filter((result) => result.status === "COMPLETED"), createdAt, workspace: state.workspace };

@@ -33,4 +33,15 @@ describe("ConversationToolRegistry staged product retrieval", () => {
     expect(directResearch.researchSystem).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ kind: "RESEARCH", status: "COMPLETED", evidence: [{ url: "https://authority.gov.kw/fm200" }] });
   });
+
+  it("accepts jurisdiction rules only when the governed evidence source has matching authority classification", async () => {
+    const graph = buildSystemConfigurationGraph({ "system.identity": fact("system.identity", "CCTV"), "system.cameraCount": fact("system.cameraCount", 8), "system.jurisdiction": fact("system.jurisdiction", "Kuwait") });
+    const rule = { systemType: "CCTV", jurisdiction: "Kuwait", profileId: "kw-rule", profileVersion: "2026", authoritySourceUrl: "https://authority.gov.kw/rule", authoritySourceTitle: "Authority rule", sourceType: "GOVERNMENT_AUTHORITY" as const, values: { retentionDays: 90 } };
+    const model = (sourceType: "GOVERNMENT_AUTHORITY" | "LOCAL_DISTRIBUTOR") => ({ systemName: "CCTV", aliases: [], purpose: "Rule research", componentCategories: [], inputs: [], limitations: [], confidence: .8, jurisdiction: "Kuwait", evidence: [{ title: "Authority rule", url: rule.authoritySourceUrl, publisher: "authority.gov.kw", sourceType, provenance: "RESEARCHED" as const }], productAlternatives: [], engineeringRules: [rule], provenance: "RESEARCHED" as const, requiresEngineeringVerification: true as const });
+    const request = { request: { kind: "RESEARCH" as const, purpose: "JURISDICTION_RULE" as const, query: "Kuwait CCTV retention", attachmentId: null }, companyId: "tenant-1", locale: "en" as const, graph };
+    const valid = await new ConversationToolRegistry({ researchSystem: vi.fn().mockResolvedValue(model("GOVERNMENT_AUTHORITY")) } as never, null, () => now).execute(request);
+    const rejected = await new ConversationToolRegistry({ researchSystem: vi.fn().mockResolvedValue(model("LOCAL_DISTRIBUTOR")) } as never, null, () => now).execute(request);
+    expect(valid).toMatchObject({ status: "COMPLETED", engineeringRules: [{ profileId: "kw-rule", values: { retentionDays: 90 } }] });
+    expect(rejected).toMatchObject({ status: "UNAVAILABLE", engineeringRules: [] });
+  });
 });

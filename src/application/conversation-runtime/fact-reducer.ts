@@ -12,6 +12,7 @@ const ALLOWED_FACTS = new Set([
   "ceramic.skirtingLm",
   "ceramic.skirtingHeightCm",
   "ceramic.levelingThicknessCm",
+  "ceramic.packageAreaM2",
 ]);
 const PRECEDENCE: Record<FactProvenance, number> = { DEFAULT: 0, AI_INFERRED: 1, RESEARCHED: 2, DETERMINISTIC_DERIVATION: 3, TRUSTED_PROFILE: 4, VERIFIED_DATABASE: 5, VERIFIED_DOCUMENT: 6, USER_EXPLICIT: 7, USER_APPROVED: 8, USER_CORRECTION: 9 };
 const NON_VALUES = /(?:مش\s*عارف|ما\s*عرفش|اختارلي|إيه\s*(?:رأيك|الأنسب|المتاح)|ساعدني|i\s+don'?t\s+know|what\s+do\s+you\s+recommend|recommend|help\s+me)/iu;

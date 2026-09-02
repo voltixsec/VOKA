@@ -15,6 +15,49 @@ type QuotationRecord = Prisma.QuotationGetPayload<{
   };
 }>;
 
+function engineeringMetadata(line: QuotationLineInput): Prisma.InputJsonValue {
+  if (!line.marketPrice && !line.engineeringStatus && !line.commercialPricingStatus && !line.commercialAttributes) return line.engineeringComponentKeys ?? [];
+  return {
+    version: 2,
+    componentKeys: line.engineeringComponentKeys ?? [],
+    marketPrice: line.marketPrice ?? null,
+    engineeringStatus: line.engineeringStatus ?? null,
+    commercialPricingStatus: line.commercialPricingStatus ?? null,
+    commercialAttributes: line.commercialAttributes ?? null,
+  } as Prisma.InputJsonValue;
+}
+
+function readEngineeringMetadata(value: unknown) {
+  if (Array.isArray(value)) return { componentKeys: value.filter((key): key is string => typeof key === "string"), marketPrice: null, engineeringStatus: undefined, commercialPricingStatus: undefined, commercialAttributes: undefined };
+  if (!value || typeof value !== "object") return { componentKeys: [] as string[], marketPrice: null, engineeringStatus: undefined, commercialPricingStatus: undefined, commercialAttributes: undefined };
+  const metadata = value as { componentKeys?: unknown; marketPrice?: unknown; engineeringStatus?: unknown; commercialPricingStatus?: unknown; commercialAttributes?: unknown };
+  const componentKeys = Array.isArray(metadata.componentKeys) ? metadata.componentKeys.filter((key): key is string => typeof key === "string") : [];
+  const market = metadata.marketPrice as Record<string, unknown> | null;
+  const marketPrice = market && typeof market.priceCurrency === "string" && typeof market.priceSourceUrl === "string" && typeof market.priceSourceTitle === "string" && typeof market.priceObservedAt === "string"
+    ? {
+        priceAmount: typeof market.priceAmount === "number" ? market.priceAmount : null,
+        priceCurrency: market.priceCurrency,
+        priceMin: typeof market.priceMin === "number" ? market.priceMin : null,
+        priceMax: typeof market.priceMax === "number" ? market.priceMax : null,
+        priceUnit: typeof market.priceUnit === "string" ? market.priceUnit : null,
+        priceType: (["LISTED_RETAIL", "LISTED_WHOLESALE", "PROMOTIONAL", "FROM_PRICE", "RANGE", "UNKNOWN"].includes(String(market.priceType)) ? market.priceType : "UNKNOWN") as NonNullable<QuotationLineInput["marketPrice"]>["priceType"],
+        priceSourceUrl: market.priceSourceUrl,
+        priceSourceTitle: market.priceSourceTitle,
+        priceObservedAt: market.priceObservedAt,
+      }
+    : null;
+  const engineeringStatus = ["EXACT", "ESTIMATED", "CONFLICT"].includes(String(metadata.engineeringStatus))
+    ? metadata.engineeringStatus as NonNullable<QuotationLineInput["engineeringStatus"]>
+    : undefined;
+  const commercialPricingStatus = ["PENDING", "MARKET_REFERENCE_AVAILABLE", "CONFIRMED"].includes(String(metadata.commercialPricingStatus))
+    ? metadata.commercialPricingStatus as NonNullable<QuotationLineInput["commercialPricingStatus"]>
+    : undefined;
+  const commercialAttributes = metadata.commercialAttributes && typeof metadata.commercialAttributes === "object"
+    ? metadata.commercialAttributes as QuotationLineInput["commercialAttributes"]
+    : undefined;
+  return { componentKeys, marketPrice, engineeringStatus, commercialPricingStatus, commercialAttributes };
+}
+
 export class PrismaQuotationMapper {
 
   static toPersistence(
@@ -149,7 +192,7 @@ export class PrismaQuotationMapper {
           brandName: line.brandName ?? null,
           modelNumber: line.modelNumber ?? null,
           provenance: line.provenance ?? null,
-          engineeringComponentKeys: line.engineeringComponentKeys ?? [],
+          engineeringComponentKeys: engineeringMetadata(line),
           discountType: line.discount?.type ?? null,
           discountValue: line.discount?.value ?? 0,
           discountAmount: line.discountAmount,
@@ -172,7 +215,9 @@ export class PrismaQuotationMapper {
         }
       : null;
 
-    const lines: QuotationLineInput[] = record.lines.map((line) => ({
+    const lines: QuotationLineInput[] = record.lines.map((line) => {
+      const metadata = readEngineeringMetadata(line.engineeringComponentKeys);
+      return ({
       id: line.id,
       catalogItemId: line.catalogItemId,
       taxRateId: line.taxRateId,
@@ -198,7 +243,11 @@ export class PrismaQuotationMapper {
       brandName: line.brandName,
       modelNumber: line.modelNumber,
       provenance: line.provenance,
-      engineeringComponentKeys: Array.isArray(line.engineeringComponentKeys) ? line.engineeringComponentKeys.filter((key): key is string => typeof key === "string") : [],
+      engineeringComponentKeys: metadata.componentKeys,
+      marketPrice: metadata.marketPrice,
+      engineeringStatus: metadata.engineeringStatus,
+      commercialPricingStatus: metadata.commercialPricingStatus,
+      commercialAttributes: metadata.commercialAttributes,
       discount: line.discountType
         ? {
             type: line.discountType,
@@ -206,7 +255,8 @@ export class PrismaQuotationMapper {
           }
         : null,
       taxPercentage: Number(line.taxPercentage),
-    }));
+      });
+    });
 
     return Quotation.restore({
       id: record.id,
@@ -223,7 +273,7 @@ export class PrismaQuotationMapper {
       issueDate: record.issueDate,
       expiryDate: record.expiryDate,
       currencyCode: record.currencyCode,
-      customer: record.customerId && record.customerName ? {
+      customer: record.customerName ? {
         name: record.customerName,
         nameAr: record.customerNameAr,
         nameEn: record.customerNameEn,

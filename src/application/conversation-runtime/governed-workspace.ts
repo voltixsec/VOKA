@@ -9,6 +9,8 @@ import type {
 } from "./types";
 import type { CommercialDefaultsProfile } from "./commercial-defaults";
 import { normalizeCommercialText } from "./commercial-defaults";
+import { projectCommercialBomLine } from "./commercial-projection";
+import { applyApprovedProductSelection } from "./solution-graph";
 
 const LIST_PATHS = new Set([
   "siteAndResponsibilities.siteRequirements",
@@ -90,6 +92,10 @@ export function synchronizeWorkspace(
   );
   const emptySiteState = { siteRequirements: [], supplierResponsibilities: [], customerResponsibilities: [], exclusions: [], notes: [] };
   const commercialTerms = Object.fromEntries(TERM_KEYS.map((key) => [key, explicitTerm(prior, facts, key, Boolean(sameSystem))])) as Record<typeof TERM_KEYS[number], { value: string | null; source: "EXPLICIT" | "COMPANY_DEFAULT" | null }>;
+  const engineeringBom = governedBom(prior?.engineering.bom, graph.engineeringBom, Boolean(sameSystem))
+    .map((line) => applyApprovedProductSelection(line, facts));
+  const commercialBom = governedBom(prior?.commercialSolution.bom, graph.salesBom, Boolean(sameSystem))
+    .map((line) => projectCommercialBomLine(applyApprovedProductSelection(line, facts)));
   return {
     commercialContext: {
       customer: text(facts, "customer.name"),
@@ -102,10 +108,10 @@ export function synchronizeWorkspace(
     engineering: {
       system: graph.system,
       calculations: graph.engineeringCalculations,
-      bom: governedBom(prior?.engineering.bom, graph.engineeringBom, Boolean(sameSystem)),
+      bom: engineeringBom,
       assumptions: graph.assumptions.length ? graph.assumptions : sameSystem ? prior?.engineering.assumptions ?? [] : [],
     },
-    commercialSolution: { bom: governedBom(prior?.commercialSolution.bom, graph.salesBom, Boolean(sameSystem)) },
+    commercialSolution: { bom: commercialBom },
     products: {
       candidates: graph.candidateProducts.length ? graph.candidateProducts : sameSystem ? prior?.products.candidates ?? [] : [],
       approvedCandidateIds: [...new Set([...(sameSystem ? prior?.products.approvedCandidateIds ?? [] : []), ...approvedCandidateIds])],
@@ -174,7 +180,7 @@ export function applyWorkspacePatches(workspace: GovernedWorkspaceState, patches
     if (LIST_PATHS.has(patch.path)) {
       const key = patch.path.split(".").at(-1) as keyof GovernedWorkspaceState["siteAndResponsibilities"];
       if (patch.operation === "REMOVE" || patch.operation === "REJECT") next.siteAndResponsibilities[key] = [];
-      else next.siteAndResponsibilities[key] = stringList(patch.value);
+      else if (isUserPatch) next.siteAndResponsibilities[key] = stringList(patch.value);
       continue;
     }
     if (patch.path === "engineering.bom" && (patch.operation === "PROPOSE" || patch.operation === "REPLACE")) {
@@ -241,6 +247,7 @@ export function applyWorkspacePatches(workspace: GovernedWorkspaceState, patches
     }
   }
   next.updatedAt = now;
+  next.commercialSolution.bom = next.commercialSolution.bom.map(projectCommercialBomLine);
   return next;
 }
 

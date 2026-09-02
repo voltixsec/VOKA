@@ -194,6 +194,42 @@ describe("EditQuotationPage dense composer UX", () => {
     });
   });
 
+  it("reloads an incomplete AI-created Draft with nullable and pending fields without crashing", async () => {
+    const incomplete = {
+      ...quotation,
+      customerId: null,
+      customer: { name: "Proposed Kuwait Customer" },
+      lines: [{
+        ...quotation.lines[0],
+        catalogItemId: null,
+        itemName: "Hikvision DS-X",
+        unitName: null,
+        quantity: null,
+        unitPrice: null,
+        quantityStatus: "PENDING",
+        pricingStatus: "PENDING",
+        productSelectionStatus: "SELECTED",
+        marketPrice: { priceAmount: 42, priceCurrency: "KWD", priceSourceUrl: "https://supplier.example/item", priceSourceTitle: "Supplier listing", priceObservedAt: "2026-09-01T00:00:00.000Z" },
+      }],
+    };
+    const fetchMock = vi.fn().mockImplementation((input: string) => {
+      if (input.startsWith("/api/catalog/items")) return Promise.resolve(response([catalogItem]));
+      if (input === "/api/tax-rates") return Promise.resolve(response(taxRates));
+      if (input === "/api/units") return Promise.resolve(response(units));
+      if (input.startsWith("/api/customers")) return Promise.resolve(response({ customers: [] }));
+      return Promise.resolve(response(incomplete));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const view = render(createElement(EditQuotationPage));
+    expect(await screen.findByText("Proposed Kuwait Customer")).toBeTruthy();
+    expect(screen.getByDisplayValue("Hikvision DS-X")).toBeTruthy();
+    expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
+    view.unmount();
+    render(createElement(EditQuotationPage));
+    expect(await screen.findByDisplayValue("Hikvision DS-X")).toBeTruthy();
+  });
+
   it("2. Historical saved tax survives normal edit/save unchanged", async () => {
     const fetchMock = fetchForEdit();
     vi.stubGlobal("fetch", fetchMock);

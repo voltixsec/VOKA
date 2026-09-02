@@ -6,6 +6,8 @@ import {
 import { SALES_ASSISTANT_PROMPT_MAX_LENGTH } from "@/src/application/ai-sales-assistant/dto/AISalesAssistantDto";
 import { createAISalesAssistantService } from "@/src/infrastructure/ai/createAISalesAssistantService";
 
+/** Legacy draft endpoint retained for compatibility; it is not a fallback for the current Sales Assistant dashboard. */
+
 type RequestBody = {
   prompt?: unknown;
   sourceLocale?: unknown;

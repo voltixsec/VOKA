@@ -210,10 +210,14 @@ export function serializeQuotation(
           quantityStatus: line.quantityStatus,
           pricingStatus: line.pricingStatus,
           productSelectionStatus: line.productSelectionStatus,
+          engineeringStatus: line.engineeringStatus,
+          commercialPricingStatus: line.commercialPricingStatus,
+          commercialAttributes: line.commercialAttributes ?? null,
           brandName: line.brandName ?? null,
           modelNumber: line.modelNumber ?? null,
           provenance: line.provenance ?? null,
           engineeringComponentKeys: line.engineeringComponentKeys ?? [],
+          marketPrice: line.marketPrice ?? null,
 
           discount:
             line.discount,

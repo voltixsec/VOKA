@@ -6,6 +6,7 @@ import type {
   ProvenanceType,
 } from "./types";
 import { resolveEngineeringRules, type ResolveEngineeringRulesInput } from "./EngineeringRuleResolver";
+import { resolveCommercialPackaging } from "./CommercialPackagingResolver";
 
 export interface CctvInputs {
   cameraCount?: number | null;
@@ -16,6 +17,14 @@ export interface CctvInputs {
   bitrateMbps?: number | null;
   cableMetersPerCamera?: number | null;
   resolutionMp?: number | null;
+  selectedRecorderCapabilities?: {
+    channels?: number | null;
+    diskBays?: number | null;
+    maxHddCapacityTb?: number | null;
+    supportedCodec?: "H.264" | "H.265" | null;
+    incomingBandwidthMbps?: number | null;
+    raidSupported?: boolean | null;
+  } | null;
 }
 
 export class CctvSystemTemplate implements ISystemTemplate {
@@ -184,16 +193,46 @@ export class CctvSystemTemplate implements ISystemTemplate {
 
     const count = cameraCount!;
 
-    // NVR Dimensioning (4, 8, 16, 32, 64 channels)
+    const recorder = rawInputs.selectedRecorderCapabilities && typeof rawInputs.selectedRecorderCapabilities === "object" ? rawInputs.selectedRecorderCapabilities as NonNullable<CctvInputs["selectedRecorderCapabilities"]> : null;
+
+    // NVR Dimensioning (4, 8, 16, 32, 64 channels), replaced by approved capability facts when present.
     let nvrChannels = 4;
     if (count > 32) nvrChannels = 64;
     else if (count > 16) nvrChannels = 32;
     else if (count > 8) nvrChannels = 16;
     else if (count > 4) nvrChannels = 8;
+    if (recorder?.channels && Number.isInteger(recorder.channels) && recorder.channels > 0) nvrChannels = recorder.channels;
 
     // Decimal TB = cameras * Mbps * seconds/day * days / 8 bits/byte / 1e6 MB/TB.
     const baseTbRequired = count * bitrateMbps * 86_400 * storageDays / 8 / 1_000_000;
     const estimatedTbRequired = Math.ceil(baseTbRequired * (1 + rules.snapshot.values.storageReservePercent / 100));
+    const storageDriveCapacityTb = recorder?.maxHddCapacityTb && recorder.maxHddCapacityTb > 0 ? recorder.maxHddCapacityTb : rules.snapshot.values.storageDriveCapacityTb ?? 18;
+    const storageStatus = storageDaysProvided != null && bitrateProvided != null && typeof rawInputs.resolutionMp === "number"
+      ? "EXACT" as const
+      : "ESTIMATED" as const;
+    const storageAssumptions = [
+      ...(storageDaysProvided == null ? [`${storageDays} days retention from the resolved engineering profile`] : []),
+      ...(bitrateProvided == null ? [`${bitrateMbps} Mbps per-camera planning bitrate`] : []),
+      ...(typeof rawInputs.resolutionMp !== "number" ? [`${rules.snapshot.values.resolutionMp} MP planning resolution`] : []),
+      recorder?.maxHddCapacityTb ? `${storageDriveCapacityTb} TB maximum supported HDD capacity from the approved recorder` : `${storageDriveCapacityTb} TB governed generic surveillance-drive packaging`,
+    ];
+    const storagePackaging = resolveCommercialPackaging({
+      requiredQuantity: estimatedTbRequired,
+      requiredUnit: "TB",
+      packageQuantity: storageDriveCapacityTb,
+      packageUnit: "drive",
+      status: storageStatus,
+      assumptions: storageAssumptions,
+    });
+    const channelRecorderCount = Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100));
+    const bandwidthRecorderCount = recorder?.incomingBandwidthMbps && recorder.incomingBandwidthMbps > 0 ? Math.ceil(count * bitrateMbps / recorder.incomingBandwidthMbps) : 1;
+    const storageRecorderCount = recorder?.diskBays && recorder.diskBays > 0 ? Math.ceil(storagePackaging.commercialQuantity / recorder.diskBays) : 1;
+    const recorderCount = Math.max(channelRecorderCount, bandwidthRecorderCount, storageRecorderCount);
+    const recorderCapabilitiesComplete = Boolean(recorder?.channels && recorder.diskBays && recorder.maxHddCapacityTb && recorder.incomingBandwidthMbps && recorder.supportedCodec);
+    const compatibilityConflicts = [
+      ...(recorder?.supportedCodec && recorder.supportedCodec !== rules.snapshot.values.codec ? [{ code: "RECORDER_CODEC_INCOMPATIBLE", message: `Approved recorder supports ${recorder.supportedCodec}, while the resolved calculation requires ${rules.snapshot.values.codec}.` }] : []),
+      ...(recorder && recorder.diskBays === 0 ? [{ code: "RECORDER_STORAGE_INCOMPATIBLE", message: "Approved recorder has no verified disk bays for the required storage design." }] : []),
+    ];
 
     // PoE Switch sizing (8, 16, 24, 48 ports)
     let poePorts = 8;
@@ -224,31 +263,37 @@ export class CctvSystemTemplate implements ISystemTemplate {
       },
       {
         componentKey: "NVR_RECORDER",
-        specification: { requiredChannels: count, channelsPerRecorder: nvrChannels, utilizationPercent: rules.snapshot.values.nvrUtilizationPercent },
+        specification: { requiredChannels: count, channelsPerRecorder: nvrChannels, utilizationPercent: rules.snapshot.values.nvrUtilizationPercent, recorderCount, diskBaysPerRecorder: recorder?.diskBays ?? "not verified", incomingBandwidthMbps: recorder?.incomingBandwidthMbps ?? "not verified" },
         name: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameAr: `جهاز تسجيل شبكي NVR (${nvrChannels} قناة)`,
         nameEn: `Network Video Recorder NVR (${nvrChannels} Channels)`,
         itemType: "PRODUCT",
-        quantity: Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100)),
+        quantity: recorderCount,
         unit: "Unit",
         provenance: "CALCULATED",
-        formulaExplanation: `${Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100))} NVR(s), ${nvrChannels} channels each at ${rules.snapshot.values.nvrUtilizationPercent}% maximum utilization for ${count} cameras. Preliminary capacity only; bandwidth, disk bays and site layout require engineering review.`,
-        formulaExplanationAr: `${Math.ceil(count / (nvrChannels * rules.snapshot.values.nvrUtilizationPercent / 100))} جهاز NVR بسعة ${nvrChannels} قناة لكل جهاز وبحد استخدام ${rules.snapshot.values.nvrUtilizationPercent}% لخدمة ${count} كاميرا. سعة مبدئية فقط؛ يلزم مراجعة معدل نقل البيانات وفتحات الأقراص وتوزيع الموقع هندسياً.`,
+        formulaExplanation: `${recorderCount} NVR(s): max(channel requirement ${channelRecorderCount}, bandwidth requirement ${bandwidthRecorderCount}, storage-bay requirement ${storageRecorderCount}). ${recorder ? "Approved recorder capabilities applied." : "Preliminary capacity; bandwidth and disk bays remain unverified."}`,
+        formulaExplanationAr: `${recorderCount} جهاز NVR: الحد الأعلى بين متطلبات القنوات (${channelRecorderCount}) وعرض النطاق (${bandwidthRecorderCount}) وفتحات الأقراص (${storageRecorderCount}). ${recorder ? "تم تطبيق قدرات جهاز التسجيل المعتمد." : "سعة مبدئية؛ عرض النطاق وفتحات الأقراص غير موثقة بعد."}`,
         category: "HARDWARE",
+        quantityStatus: recorderCapabilitiesComplete ? "EXACT" : "ESTIMATED",
+        calculationInputs: { cameraCount: count, channelsPerRecorder: nvrChannels, channelRecorderCount, bandwidthRecorderCount, storageRecorderCount },
+        assumptions: recorderCapabilitiesComplete ? [] : ["One or more recorder channel, bandwidth, codec, disk-bay, or HDD-capacity capabilities remain unverified."],
       },
       {
-        componentKey: "SURVEILLANCE_STORAGE_CAPACITY",
-        specification: { requiredUsableTb: estimatedTbRequired, storageDays, bitrateMbps, codec: rules.snapshot.values.codec, resolutionMp: rules.snapshot.values.resolutionMp, fps: rules.snapshot.values.fps, storageReservePercent: rules.snapshot.values.storageReservePercent, allocation: "RAID/bays not verified" },
-        name: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
-        nameAr: `سعة تخزين مراقبة مطلوبة (${storageDays} يوم)`,
-        nameEn: `Required Surveillance Storage Capacity (${storageDays} days retention)`,
+        componentKey: "SURVEILLANCE_HDD",
+        specification: { requiredUsableTb: estimatedTbRequired, driveCapacityTb: storageDriveCapacityTb, storageDays, bitrateMbps, codec: rules.snapshot.values.codec, resolutionMp: rules.snapshot.values.resolutionMp, fps: rules.snapshot.values.fps, storageReservePercent: rules.snapshot.values.storageReservePercent, recorderCount, diskBaysPerRecorder: recorder?.diskBays ?? "not verified", allocation: recorder?.diskBays ? "Fits governed recorder bay count" : "RAID/bays not verified" },
+        name: `قرص تخزين مخصص للمراقبة ${storageDriveCapacityTb}TB`,
+        nameAr: `قرص صلب مخصص لأنظمة المراقبة بسعة ${storageDriveCapacityTb} تيرابايت`,
+        nameEn: `${storageDriveCapacityTb}TB Surveillance Hard Disk Drive`,
         itemType: "PRODUCT",
-        quantity: estimatedTbRequired,
-        unit: "TB",
+        quantity: storagePackaging.commercialQuantity,
+        unit: "Unit",
         provenance: "CALCULATED",
-        formulaExplanation: `Required capacity only; Math.ceil(${count} cameras * ${bitrateMbps} Mbps * 86400 seconds/day * ${storageDays} days / 8 / 1000000) = ${estimatedTbRequired} TB. Drive count/model requires human design confirmation.`,
-        formulaExplanationAr: `السعة المطلوبة فقط؛ تقريب لأعلى (${count} كاميرا × ${bitrateMbps} ميجابت/ثانية × 86400 ثانية/يوم × ${storageDays} يوم ÷ 8 ÷ 1000000) = ${estimatedTbRequired} تيرابايت. عدد الأقراص وطرازها يحتاجان تأكيد التصميم بشرياً.`,
+        formulaExplanation: `${estimatedTbRequired} TB required; Math.ceil(${estimatedTbRequired} TB / ${storageDriveCapacityTb} TB per drive) = ${storagePackaging.commercialQuantity} drive(s). RAID, recorder bay compatibility and final product remain subject to governed selection.`,
+        formulaExplanationAr: `السعة المطلوبة ${estimatedTbRequired} تيرابايت؛ تقريب لأعلى (${estimatedTbRequired} ÷ ${storageDriveCapacityTb} تيرابايت لكل قرص) = ${storagePackaging.commercialQuantity} قرص. يلزم اعتماد توافق مصفوفة الأقراص وفتحات جهاز التسجيل والمنتج النهائي.`,
         category: "HARDWARE",
+        quantityStatus: storageStatus,
+        calculationInputs: { cameraCount: count, bitrateMbps, storageDays, requiredUsableTb: estimatedTbRequired, driveCapacityTb: storageDriveCapacityTb },
+        assumptions: storageAssumptions,
       },
       {
         componentKey: "POE_SWITCH",
@@ -263,6 +308,8 @@ export class CctvSystemTemplate implements ISystemTemplate {
         formulaExplanation: `Math.ceil(${count} cameras / (${poePorts} ports - ${rules.snapshot.values.poeReservedPorts} reserved uplink ports)) = ${poeSwitchCount} switch(es). Assumes one port per camera; PoE power budget and network topology require review.`,
         formulaExplanationAr: `تقريب لأعلى (${count} كاميرا ÷ (${poePorts} منفذ − ${rules.snapshot.values.poeReservedPorts} منفذ ربط محجوز)) = ${poeSwitchCount} موزع. بافتراض منفذ لكل كاميرا؛ يلزم مراجعة ميزانية طاقة PoE وتصميم الشبكة.`,
         category: "NETWORKING",
+        quantityStatus: "ESTIMATED",
+        assumptions: ["PoE power budget and final network topology require review."],
       },
       {
         componentKey: "RACK_CABINET",
@@ -294,25 +341,30 @@ export class CctvSystemTemplate implements ISystemTemplate {
         formulaExplanation: `Math.ceil(${count} cameras * ${cableMetersPerCamera}m / ${rules.snapshot.values.cableRollMeters}m roll) = ${cableBoxes} roll(s)`,
         formulaExplanationAr: `تقريب لأعلى (${count} كاميرا × ${cableMetersPerCamera} متر ÷ ${rules.snapshot.values.cableRollMeters} متر/بكرة) = ${cableBoxes} بكرة`,
         category: "INFRASTRUCTURE",
+        quantityStatus: cableProvided == null ? "ESTIMATED" : "EXACT",
+        calculationInputs: { cameraCount: count, cableMetersPerCamera, cableRollMeters: rules.snapshot.values.cableRollMeters },
+        assumptions: cableProvided == null ? [`${cableMetersPerCamera} m cable allowance per camera`] : [],
       },
       {
         componentKey: "CONNECTORS_AND_ACCESSORIES",
-        name: "وصلات RJ45 وعلب تجميع الكابلات ومستلزمات التركيب",
-        nameAr: "وصلات RJ45 وعلب تجميع الكابلات ومستلزمات التركيب",
-        nameEn: "RJ45 Connectors & Weatherproof Junction Boxes Set",
+        name: "بدل عام لوصلات RJ45 وعلب التجميع المقاومة للعوامل الجوية",
+        nameAr: "بدل عام لوصلات RJ45 وعلب التجميع المقاومة للعوامل الجوية",
+        nameEn: "Generic RJ45 Connector & Weatherproof Junction Box Allowance",
         itemType: "PRODUCT",
         quantity: count,
         unit: "Set",
         provenance: "CALCULATED",
-        formulaExplanation: `1 connector & junction box set per camera (${count} sets)`,
-        formulaExplanationAr: `طقم واحد (1) من الوصلات وعلب التجميع لكل كاميرا (${count} طقم)`,
+        formulaExplanation: `Estimated commercial allowance for ${count} camera points; split into catalog connector and junction-box products before final issue.`,
+        formulaExplanationAr: `بدل تجاري تقديري لعدد ${count} نقطة كاميرا؛ يجب فصله إلى منتجات وصلات وعلب تجميع من الكتالوج قبل الإصدار النهائي.`,
         category: "ACCESSORIES",
+        quantityStatus: "ESTIMATED",
+        assumptions: ["Generic grouped allowance only; no company or catalog package has been selected."],
       },
       ...(includeInstallation ? [{
         componentKey: "INSTALLATION_COMMISSIONING",
-        name: "خدمات التوريد والتركيب والبرمجة والتمديد واختبار النظام",
-        nameAr: "خدمات التوريد والتركيب والبرمجة والتمديد واختبار النظام",
-        nameEn: "Installation, Cabling, Configuration & Commissioning Services",
+        name: "خدمات التركيب والتمديد والبرمجة والاختبار والتشغيل",
+        nameAr: "خدمات التركيب والتمديد والبرمجة والاختبار والتشغيل",
+        nameEn: "Installation, Cabling, Configuration, Testing & Commissioning Services",
         itemType: "SERVICE",
         quantity: count,
         unit: "Point",
@@ -328,13 +380,14 @@ export class CctvSystemTemplate implements ISystemTemplate {
       templateVersion: this.templateVersion,
       systemNameAr: this.displayNameAr,
       systemNameEn: this.displayNameEn,
-      status: rules.conflict ? "RULE_CONFLICT" : "COMPLETE",
+      status: rules.conflict || compatibilityConflicts.length ? "RULE_CONFLICT" : "COMPLETE",
       inputs,
       missingInputs: [],
       warnings,
       components,
       engineeringRules: rules.snapshot,
       ruleConflict: rules.conflict,
+      compatibilityConflicts,
     };
   }
 }

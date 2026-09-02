@@ -75,9 +75,39 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
   });
 
   it("promotes a specifically named product only after explicit approval", () => {
-    const candidate: CandidateProduct = { id: "p1", componentKey: "CCTV_CAMERAS", name: "Camera X", nameAr: null, nameEn: "Camera X", brand: "Acme", model: "X1", sku: null, price: null, source: "RESEARCHED" };
-    const result = resolveProductSelection({ graph: { ...emptySystemConfigurationGraph(), candidateProducts: [candidate] }, confirmed: {}, message: "Approve Acme X1", locale: "en", now });
+    const marketPrice = { priceAmount: 42, priceCurrency: "KWD", priceMin: null, priceMax: null, priceUnit: "unit", priceType: "LISTED_RETAIL" as const, priceSourceUrl: "https://supplier.example/x1", priceSourceTitle: "Supplier X1", priceObservedAt: now };
+    const candidate: CandidateProduct = { id: "p1", componentKey: "CCTV_CAMERAS", name: "Camera X", nameAr: null, nameEn: "Camera X", brand: "Acme", model: "X1", sku: null, price: null, source: "RESEARCHED", marketPrice };
+    const baseFacts = {
+      "system.identity": { key: "system.identity", value: "CCTV", provenance: "USER_EXPLICIT" as const, evidence: "CCTV", updatedAt: now },
+      "system.cameraCount": { key: "system.cameraCount", value: 1, provenance: "USER_EXPLICIT" as const, evidence: "1 camera", updatedAt: now },
+    };
+    const result = resolveProductSelection({ graph: { ...emptySystemConfigurationGraph(), candidateProducts: [candidate] }, confirmed: baseFacts, message: "Approve Acme X1", locale: "en", now });
     expect(result.confirmed["product.selection.CCTV_CAMERAS.name"].provenance).toBe("USER_APPROVED");
+    const graph = { ...buildSystemConfigurationGraph(result.confirmed), candidateProducts: [candidate] };
+    const workspace = synchronizeWorkspace(undefined, result.confirmed, graph, now);
+    expect(workspace.products.approvedCandidateIds).toEqual(["p1"]);
+    expect(workspace.commercialSolution.bom.find((line) => line.id === "CCTV_CAMERAS")).toMatchObject({ brand: "Acme", model: "X1", unitPrice: null, priceState: "PENDING", marketPrice });
+  });
+
+  it("cannot claim approval when the governed Workspace leaves the visible candidate unapproved", async () => {
+    const facts = {
+      "system.identity": { key: "system.identity", value: "CCTV", provenance: "USER_EXPLICIT" as const, evidence: "CCTV", updatedAt: now },
+      "system.cameraCount": { key: "system.cameraCount", value: 1, provenance: "USER_EXPLICIT" as const, evidence: "1 camera", updatedAt: now },
+    };
+    const candidate: CandidateProduct = { id: "p1", componentKey: "CCTV_CAMERAS", name: "Camera X", nameAr: null, nameEn: "Camera X", brand: "Acme", model: "X1", sku: null, price: null, source: "RESEARCHED" };
+    const graph = { ...buildSystemConfigurationGraph(facts), candidateProducts: [candidate] };
+    const workspace = synchronizeWorkspace(undefined, facts, graph, now);
+    const state: ConversationRuntimeState = {
+      runtimeId: "runtime-approval", version: 1, locale: "en", messages: [], confirmedFacts: facts, candidateFacts: [],
+      unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "MATURE", transitionState: "EXPLORING",
+      compactMemory: "", suggestedReplies: [], handoff: null, solutionGraph: graph, workspace,
+    };
+    const brain: ConversationBrainPort = { decide: async () => proposal({ patches: [{ operation: "REJECT", path: "products.candidates.p1", value: "p1", evidence: "governed rejection", provenance: "AI_INFERRED" }] }) };
+    const result = await run(brain, "Approve Acme X1", state);
+    expect(result.workspace?.products.candidates.map((item) => item.id)).toContain("p1");
+    expect(result.workspace?.products.approvedCandidateIds).not.toContain("p1");
+    expect(result.messages.at(-1)?.text).toContain("did not persist");
+    expect(result.messages.at(-1)?.text).not.toContain("The product selection is approved");
   });
 
   it("auto-syncs the workspace on every normal turn", async () => {
@@ -113,6 +143,14 @@ describe("Flexible Brain plus Strict Brain architecture", () => {
       { operation: "SET", path: "siteAndResponsibilities.customerResponsibilities", value: ["Provide power"], evidence: "Provide power", provenance: "USER_EXPLICIT" },
     ], "Clear access and Provide power", now);
     expect(updated.siteAndResponsibilities).toMatchObject({ siteRequirements: ["Clear access"], customerResponsibilities: ["Provide power"] });
+  });
+
+  it("does not promote AI-inferred exploratory product chatter into customer-facing Notes", () => {
+    const workspace = synchronizeWorkspace(undefined, {}, emptySystemConfigurationGraph(), now);
+    const updated = applyWorkspacePatches(workspace, [
+      { operation: "SET", path: "siteAndResponsibilities.notes", value: ["Compare NVR models and their prices"], evidence: "exploratory discussion", provenance: "AI_INFERRED" },
+    ], "Compare NVR models and their prices", now);
+    expect(updated.siteAndResponsibilities.notes).toEqual([]);
   });
 
   it("allows an early Draft while quantities and prices remain pending", () => {
