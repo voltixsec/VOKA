@@ -2,9 +2,9 @@
 
 Status: **LIVING SOURCE OF TRUTH**
 Owner: **CEO + CTO**
-Last reconciled: **2026-09-02**
+Last reconciled: **2026-09-03 — Product/UCL historical reconciliation**
 Current branch: `feature/pre-staging-product-coherence`
-Verified HEAD: `62337fb84b82adcfa6f6965c4a246d7e08a14d01`
+Verified pre-reconciliation checkpoint HEAD: `006bdc72bf0bd19098aae84e74d54a6618c6c15a`
 
 ## 1. Purpose
 
@@ -106,47 +106,253 @@ Branch:
 
 `feature/pre-staging-product-coherence`
 
-HEAD:
+Pre-reconciliation checkpoint HEAD:
 
-`62337fb84b82adcfa6f6965c4a246d7e08a14d01`
+`006bdc72bf0bd19098aae84e74d54a6618c6c15a`
 
 Checkpoint:
 
-`checkpoint(voka): preserve sales assistant and quotation draft WIP`
+`docs(product): add master acceptance ledger`
 
-At verification:
+At the start of the 2026-09-03 Product/UCL historical reconciliation:
 
-- local HEAD == origin branch HEAD;
+- local HEAD matched the pushed feature branch;
 - working tree was clean;
-- no branch divergence was present.
+- no merge to `main` had been performed;
+- the Master Product Acceptance Ledger existed at checkpoint `006bdc7`;
+- subsequent historical archaeology identified additional preserved UCL, ETIM, real-data pilot, and Smart System evidence that required this ledger reconciliation.
 
 CEO Acceptance Round 1 base:
 
 `0f380cbebbe0b50d9c8099a3dfe19f3f4b54434e`
 
-From that review checkpoint to current HEAD:
+The pre-reconciliation checkpoint is **50 commits ahead** of that Round 1 base.
 
-**49 commits ahead**
-
-This means the original implementation checklist is historically authoritative but partially stale as a current-state tracker.
+Historical implementation documents remain evidence of what was true at their respective dates. This ledger reconciles those records with the current product decision and must not reinterpret older `PENDING MERGE` or `NOT STARTED` statements as current truth when later commits prove completion.
 
 ---
-
 # 5. Current Program State
 
 ## ACTIVE NEXT PROGRAM
 
-### Catalog Closure Program
+### Product Intelligence Closure Program
 
-Status: **NEXT ACTIVE**
+Status: **ACTIVE — CEO REACTIVATED 2026-09-03**
 
-The CEO has explicitly chosen Catalog as the next product area.
+The active product program is no longer Catalog-only.
 
-Sales Assistant and Quotation Draft are paused.
+The CEO explicitly reactivated the complete Product / Catalog / Universal Commercial Library / Smart System topic after historical recovery proved that substantial architecture and implementation already existed and had previously been parked.
 
-Payment remains a known blocker but is intentionally not the active workstream until the CEO reactivates it.
+The active governed scope is now:
+
+Company Catalog
+→ Universal Commercial Library
+→ governed external product population
+→ taxonomy/classification
+→ commercial retrieval
+→ explicit tenant adoption
+→ Smart System deterministic coverage
+→ Catalog-to-commercial-document acceptance.
+
+### Critical Resume Rule
+
+**DO NOT create a second Catalog, UCL, ingestion, retrieval, acquisition, or Smart System foundation.**
+
+Historical archaeology performed on 2026-09-03 proved that these foundations already exist.
+
+Future work must resume from the preserved implementation lineage and close remaining population, coverage, integration, live-acceptance, and product-governance gaps.
+
+Sales Assistant and Quotation Draft remain preserved/paused unless required for Product integration acceptance.
+
+Payment remains a known blocker but is not automatically reactivated by this program.
 
 ---
+
+## Product Intelligence Historical Recovery — Authoritative Resume Evidence
+
+The following evidence supersedes any earlier interpretation that Product Intelligence required a new architecture or foundation.
+
+### Universal Commercial Library preserved lineage
+
+- `83cc3b4` — `docs(architecture): define Universal Commercial Library`
+  - ADR-011 established the canonical separation between shared Universal commercial knowledge and tenant-owned Company Catalog commercial truth.
+
+- `fb1ac46` — `feat(ucl): implement Universal Commercial Library foundation`
+  - UCL-1 foundation.
+
+- `3834be9` — `feat(ucl): expand Universal Commercial Library identity model`
+  - UCL-2 manufacturers, brands, product families, aliases, identifiers and structured attributes.
+
+- `e3622bfd4677bd5a3fe66488fab0a94ee2ba896a` — UCL-3 ingestion and normalization pipeline.
+  - source-isolated staging;
+  - payload hashing;
+  - bounded batch processing;
+  - normalization;
+  - conservative identity resolution;
+  - review routing;
+  - provenance;
+  - canonical publication boundaries.
+
+- `d372952de9cd14dfe26b8e4c184e408be4333b03` — UCL-4 hybrid commercial retrieval.
+  - Company Catalog + Universal Library retrieval while preserving tenant authority.
+
+- `7db31ed5c0dfece93ea4603155c01f837504fa0e` — UCL-5 search intelligence and scale validation.
+  - lexical/hybrid strategy;
+  - provider-neutral semantic boundary;
+  - deterministic exact-identity precedence;
+  - bounded caching and observability;
+  - synthetic 10k / 50k / 100k retrieval validation.
+  - This was synthetic scale validation, not a production PostgreSQL/vector benchmark.
+
+- `42832749399ca9c9c22e2a8a908f4ea5c88b57c6` — UCL-6 controlled external data acquisition.
+  - governed source approval;
+  - licensing/commercial-use states;
+  - bounded acquisition;
+  - SSRF/access safety;
+  - retries;
+  - dry-run;
+  - quota accounting;
+  - acquisition audit;
+  - UCL-3 provenance linkage.
+
+### Real external source pilots — 2026-08-23
+
+Real-data qualification was completed after UCL-6.
+
+#### Wikidata
+
+Two bounded product dry runs requested 100 records each and returned 0 product records.
+
+Decision:
+
+`NOT_PREFERRED_PRIMARY_SOURCE`
+
+Preserved role:
+
+- taxonomy enrichment;
+- knowledge graph references;
+- manufacturer relationships.
+
+Do not repeat Wikidata primary-product qualification.
+
+#### Open Icecat
+
+Technical API access was successfully proven using:
+
+`https://live.icecat.biz/api`
+
+Building & Construction vertical `4776`:
+
+- requested: 100;
+- successful: 99;
+- restricted: 1;
+- commercially useful: 88.9%;
+- ACCEPT: 48;
+- NEEDS_REVIEW: 40;
+- REJECT: 11.
+
+Lighting vertical `2332`:
+
+- requested: 100;
+- successful: 100;
+- ACCEPT: 17%;
+- REJECT: 76%;
+- 76% of the sample was off-market/stale.
+
+Decision:
+
+`ICECAT_RECOMMEND_SUPPLEMENTARY_SOURCE_ONLY`
+
+Approved strategic role:
+
+- brand identity;
+- MPN/product-code verification;
+- GTIN/barcode enrichment;
+- descriptions;
+- structured technical specification enrichment.
+
+Open Icecat is not approved as the sole global Product population source, and production generative-AI use still requires licensing/commercial clarification.
+
+A local pilot review console was also built and preserved historically at:
+
+`C:\Dev\VOKA-worktrees\ucl-icecat-pilot-ui-lighting`
+
+It read local pilot JSON only and performed zero Prisma/UCL/Company Catalog writes.
+
+### ETIM taxonomy population — 2026-08-25
+
+Commit:
+
+`76352b3 — feat(ucl): import governed ETIM taxonomy`
+
+Official ETIM 10.0 English master taxonomy was imported locally through the existing governed UCL source model.
+
+Verified local result:
+
+- ETIM groups: **159**
+- ETIM product classes: **5,640**
+- Total Universal Categories: **5,799**
+
+The importer is bounded, local-development-only, explicit-apply, hierarchy-validating and idempotent.
+
+ETIM is authoritative taxonomy/classification evidence only.
+
+It did **not** create products, prices, manufacturers, brands, Company Catalog records, tenant adoption records or commercial truth.
+
+Historical checkpoint status:
+
+`TAXONOMY_POPULATED / PRODUCT_POPULATION_EXTERNAL_SOURCE_PENDING`
+
+### Smart System preserved implementation
+
+The deterministic Smart System architecture also already exists.
+
+Foundation proof systems:
+
+- Gypsum Board
+- CCTV
+
+Additional bounded implemented system:
+
+- Access Control `1.0.0`
+
+Core invariant:
+
+**AI identifies/proposes. Deterministic rules calculate. Human confirms commercial truth.**
+
+AI must not invent engineering quantities, brands, models or prices.
+
+Known remaining candidate deterministic packs include:
+
+- Structured Cabling
+- Wi-Fi
+- Fire Alarm
+- Ceiling
+- Painting
+- Tiles
+- Electrical
+- Lighting
+- HVAC
+- Plumbing
+
+These candidates are NOT represented as implemented until separately evidenced.
+
+### Historical stop point
+
+The project did not stop because Product Intelligence architecture was missing.
+
+The proven historical stop point was:
+
+1. UCL architecture/foundation complete through UCL-6;
+2. real source pilots complete;
+3. ETIM taxonomy populated;
+4. Smart System proof architecture implemented and expanded to Access Control;
+5. broad authoritative product population still pending an approved source strategy;
+6. additional deterministic Smart System coverage still pending;
+7. real production-style database/search performance validation still pending;
+8. final Catalog/UCL/Commercial live acceptance still pending.
+
+This is the authoritative resume point.
 
 # 6. Paused Work
 
@@ -886,14 +1092,14 @@ Remaining:
 
 ---
 
-## CEO-R1-039 — Deferred Major Workstreams
+## CEO-R1-039 — Major Workstreams / Reactivation State
 
-Status: ⚪ **DEFERRED**
+Status: 🟡 **PARTIALLY REACTIVATED BY CEO — 2026-09-03**
 
-Deferred:
+The original Round-1 decision deferred several major workstreams.
 
-- full UCL population;
-- full System Intelligence population;
+Historical deferral remains valid for:
+
 - live WhatsApp;
 - live Email;
 - Google Cloud production infrastructure;
@@ -906,8 +1112,16 @@ Deferred:
 - Advanced Account Manager;
 - deep CAD expansion.
 
----
+The following two items are **NO LONGER DEFERRED** after explicit CEO reactivation on 2026-09-03:
 
+- Universal Commercial Library / governed product population completion;
+- Smart System / System Intelligence coverage expansion.
+
+Reactivation does not authorize architectural replacement.
+
+Both must resume from the preserved UCL-1 through UCL-6, ETIM, Company Catalog, and deterministic Smart System foundations documented in this ledger.
+
+---
 ## CEO-R1-040 — Workflow-Based Acceptance
 
 Status: 🟢 **PERMANENT GOVERNANCE RULE**
@@ -1012,174 +1226,223 @@ Do not create a second Catalog implementation.
 
 ---
 
-# 12. Catalog Closure Program
+# 12. Product / Catalog / UCL / Smart Systems Closure Program
 
-Status: **NEXT ACTIVE PROGRAM**
+Status: **ACTIVE**
 
-## CAT-00 — Master Baseline
+This program replaces the earlier Catalog-only execution interpretation.
 
-Status: 🟡 IN PROGRESS
+It preserves the existing Company Catalog architecture and expands closure to the already-built Universal Commercial Library and deterministic Smart System foundations.
 
-Goal:
+## PIC-00 — Historical Baseline Reconciliation
 
-Freeze this Master Ledger and current Catalog truth before modification.
+Status: 🟡 **IN PROGRESS**
 
-## CAT-01 — Deep Catalog Truth Audit
+Evidence recovered:
+
+- Catalog canonical implementation exists;
+- UCL-1 through UCL-6 exist;
+- Open Icecat and Wikidata real pilots exist;
+- ETIM taxonomy population exists;
+- Gypsum, CCTV and Access Control deterministic system implementations exist.
+
+Required before new architecture work:
+
+- reconcile current code with historical evidence;
+- identify regressions or missing integration;
+- distinguish implemented vs population-pending vs live-acceptance-pending;
+- preserve all existing boundaries.
+
+No greenfield architecture is authorized.
+
+## PIC-01 — Current-Code Integrity Audit
 
 READ-ONLY first.
 
-Audit:
+Verify current HEAD still preserves:
 
-- Prisma/data model;
-- domain;
-- application;
-- infrastructure;
-- APIs;
-- UI;
-- tests;
-- tenant safety;
-- localization;
-- units;
-- categories;
-- taxes;
-- prices;
-- SKU/code/barcode identity;
-- deletion/deactivation;
-- duplicates;
-- search;
-- UCL boundaries;
-- quotation integration.
+- Company Catalog canonical domain/application/infrastructure/API/UI;
+- UCL schemas/entities/repositories/use cases;
+- ingestion and normalization;
+- hybrid retrieval;
+- search intelligence;
+- controlled acquisition;
+- ETIM taxonomy and importer;
+- explicit UCL → Company Catalog adoption;
+- Smart System registry/templates;
+- Quotation/commercial integration;
+- tenant isolation;
+- localization and authoritative pricing boundaries.
 
 Output:
 
-`DONE / PARTIAL / BROKEN / NOT IMPLEMENTED / DEFERRED / LIVE ACCEPTANCE REQUIRED`
+`DONE / PARTIAL / REGRESSED / BROKEN / NOT IMPLEMENTED / LIVE ACCEPTANCE REQUIRED`
 
-No coding before this matrix is complete.
+## PIC-02 — Governed Product Source Strategy
 
-## CAT-02 — CEO Catalog Acceptance Round
+Do not select a single global source by assumption.
 
-Hands-on screenshot-driven review.
+Evaluate current authoritative/supplementary source options using:
 
-Test at minimum:
+- legal/commercial-use rights;
+- redistribution rights;
+- generative-AI rights;
+- API/feed availability;
+- freshness;
+- identity quality;
+- MPN/GTIN coverage;
+- technical specification coverage;
+- taxonomy compatibility;
+- Middle East relevance;
+- update frequency;
+- cost;
+- manufacturer authority.
 
-- list;
-- search;
-- filters;
-- pagination;
-- create Product;
-- create Service;
-- edit;
-- AR mode;
-- EN mode;
-- localization/fallback;
-- code/SKU;
-- unit;
-- tax;
-- sale/purchase price;
-- Active/Inactive;
-- quotation product selection/use.
+Preserved historical roles:
 
-Findings use IDs:
+- ETIM → taxonomy/classification;
+- Wikidata → taxonomy/relationships enrichment;
+- Open Icecat → supplementary identity/spec enrichment;
+- Manufacturer Direct Feeds → preferred authoritative product-detail candidate.
 
-`CAT-R1-001`
-`CAT-R1-002`
-`CAT-R1-003`
-...
+## PIC-03 — Governed Product Population
 
-Do not repair while still discovering unless a blocker prevents further review.
+Resume through the existing UCL acquisition → staging → normalization → identity resolution → review/publication pipeline.
 
-## CAT-03 — Core Integrity Corrections
+Do not bypass UCL governance.
 
-Fix only evidence-backed issues from CAT-01/CAT-02.
+Required:
 
-Priority:
+- approved sources only;
+- bounded ingestion;
+- provenance;
+- deduplication;
+- identifier integrity;
+- review-required routing;
+- canonical publication;
+- no automatic Company Catalog mutation.
 
-1. data integrity;
-2. tenant safety;
-3. identity;
-4. localization;
-5. unit/tax/pricing correctness;
-6. UX.
+## PIC-04 — Company Catalog Adoption & Commercial Truth
 
-## CAT-04 — ERP Import Foundation
+Prove:
 
-Implements the first bounded part of `CEO-R1-018`.
+Universal Library
+→ explicit tenant adoption
+→ Company Catalog
+→ tenant-governed unit
+→ tenant-governed price/tax/inventory
+→ localized identity
+→ quotation/commercial snapshot.
 
-Initial slice:
+Universal data must never overwrite tenant commercial truth.
+
+## PIC-05 — ERP Catalog Import / Export
+
+Preserve the existing CEO-R1-018 requirement.
+
+Import:
 
 Official XLSX Template
 → Upload
+→ Mapping
 → deterministic Validation
-→ Preview.
+→ Preview
+→ row errors
+→ duplicate/conflict strategy
+→ explicit safe batch commit.
 
-**No database commit during the first slice.**
-
-## CAT-05 — Safe Import Commit
-
-Add:
-
-- mapping where required;
-- duplicate/conflict strategy;
-- transactional/batched writes;
-- partial-failure policy;
-- tenant isolation;
-- audit evidence.
-
-## CAT-06 — Catalog Export
+Export:
 
 Server-authoritative genuine XLSX.
 
 No renamed CSV.
 
-## CAT-07 — Catalog → Commercial Acceptance
+## PIC-06 — Smart System Coverage Expansion
 
-Prove Catalog data enters commercial workflows correctly:
+Resume the existing deterministic Smart System engine.
 
-Catalog
-→ product selection
-→ localized identity
-→ governed unit
-→ governed price source
-→ Quotation/commercial document snapshot.
+Existing evidence-backed systems:
 
-AI must not overwrite authoritative commercial truth.
+- Gypsum Board;
+- CCTV;
+- Access Control.
 
-## CAT-08 — Catalog Closure
+Candidate future packs must each use a bounded versioned deterministic rule set and require separately evidenced engineering rules.
+
+No AI-authored engineering quantities.
+
+## PIC-07 — Search / Scale / Performance Validation
+
+Preserve UCL-5 synthetic scale evidence but do not misrepresent it as production database benchmarking.
+
+Required before scale closure:
+
+- real PostgreSQL query-plan/latency validation;
+- realistic populated corpus;
+- bounded retrieval;
+- tenant isolation;
+- lexical fallback;
+- optional semantic provider behavior;
+- cache invalidation policy for mutable commercial truth.
+
+## PIC-08 — Live Product Acceptance
+
+CEO hands-on review must cover at minimum:
+
+- Product/Service list;
+- search/filter/pagination;
+- create/edit;
+- AR/EN;
+- localization/fallback;
+- code/SKU/barcode identity;
+- unit/tax/pricing;
+- Active/Inactive;
+- UCL search;
+- UCL item review;
+- explicit adoption;
+- quotation selection;
+- commercial snapshot;
+- Smart System request;
+- deterministic component derivation;
+- clarification where engineering input is missing.
+
+## PIC-09 — Closure
 
 Required:
 
-- TypeScript;
-- focused tests;
-- integration tests;
-- tenant tests;
+- current-code evidence;
+- automated gates;
+- tenant/security tests;
+- population/governance evidence;
+- real performance evidence where applicable;
 - AR/EN acceptance;
 - responsive acceptance;
-- diff check;
-- updated Catalog ledger;
+- live commercial workflow evidence;
 - CEO/CTO acceptance;
-- checkpoint.
+- preserved checkpoint.
 
-Only then may Catalog become 🟢 CLOSED.
+Only then may the integrated Product Intelligence program become 🟢 CLOSED.
 
----
+# 13. Current Product Intelligence Boundaries
 
-# 13. Catalog Non-Goals for Current Program
+The current program now explicitly includes governed UCL population and deterministic Smart System coverage expansion.
 
-Do not expand scope into:
+It does **not** authorize unrelated expansion into:
 
-- product image discovery;
-- variants redesign;
-- full UCL population;
-- deep AI engineering;
+- product-image discovery as a separate visual-product program;
+- variants redesign without evidence;
+- unconstrained web crawling;
+- unlicensed or legally ambiguous production data use;
+- automatic Universal Library → Company Catalog mutation;
+- AI-authored engineering quantities;
+- AI-authored tenant prices/taxes/inventory;
 - Payment repair;
 - Drawing redesign;
-- VOKA branding;
+- VOKA corporate branding;
 - subscription/billing;
 - production deployment.
 
-Any such expansion requires explicit CEO authorization.
-
----
+Any architectural replacement of Catalog, UCL, ingestion, retrieval, acquisition, adoption, or Smart System foundations requires an explicit new CEO/CTO architecture decision supported by evidence that the existing architecture cannot satisfy the requirement.
 
 # 14. Safety Rules
 
@@ -1238,25 +1501,49 @@ If live evidence contradicts code evidence, live evidence wins and the item rema
 
 # 16. Resume Point
 
-Current product decision:
+Authoritative product decision as of 2026-09-03:
 
-**Complete Catalog next.**
+**Complete the entire Product / Catalog / UCL / Smart Systems topic from the existing implementation lineage.**
 
-Current active sequence:
+Do not restart from Catalog foundation or UCL architecture.
 
-`CAT-00 → CAT-01 → CAT-02 → evidence-backed Catalog slices → CAT-08`
+Current execution sequence:
 
-Paused:
+`PIC-00 Historical Reconciliation`
+→ `PIC-01 Current-Code Integrity Audit`
+→ `PIC-02 Governed Product Source Strategy`
+→ `PIC-03 Governed Product Population`
+→ `PIC-04 Catalog Adoption & Commercial Truth`
+→ `PIC-05 ERP Import / Export`
+→ `PIC-06 Smart System Coverage Expansion`
+→ `PIC-07 Real Scale / Performance Validation`
+→ `PIC-08 Live Product Acceptance`
+→ `PIC-09 Closure`
 
-- Sales Assistant
-- Quotation Draft
+Preserved architecture:
 
-Known blocker retained for later:
+- Company Catalog = tenant-owned governed commercial truth;
+- UCL = shared governed commercial/product knowledge;
+- UCL acquisition/normalization/retrieval foundations already exist;
+- explicit adoption controls movement into Company Catalog;
+- ETIM taxonomy is already populated locally as classification evidence;
+- AI may understand/propose;
+- deterministic rules calculate;
+- human approval governs consequential commercial truth.
 
-- Payment E2E
+Historical resume frontier:
 
-After Catalog Closure:
+**authoritative product population + system coverage expansion + integrated live acceptance**
 
-The CEO chooses the next workstream.
+—not architecture reconstruction.
 
-No next module is to be selected automatically.
+Paused unless required for integration acceptance:
+
+- Sales Assistant;
+- Quotation Draft.
+
+Known blocker retained for later unless CEO reactivates it:
+
+- Payment E2E.
+
+No next unrelated module is selected automatically.
