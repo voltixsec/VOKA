@@ -1,5 +1,5 @@
-import type { PrismaClient } from "../../../../lib/generated/prisma/client";
-import { CatalogItem, CatalogItemType } from "../../../catalog";
+import type { PrismaClient, UniversalItemType as PrismaUniversalItemType } from "../../../../lib/generated/prisma/client";
+import { CatalogItem, CatalogItemType as CompanyCatalogItemType } from "../../../catalog";
 import { UniqueEntityID } from "../../../../lib/core";
 import {
   AdoptUniversalItemParams,
@@ -13,6 +13,7 @@ import {
   SearchUniversalLibraryParams,
   SearchUniversalLibraryResult,
   UniversalCatalogItem,
+  UniversalItemType,
   UniversalCategory,
   UniversalItemAdoption,
   UniversalItemProvenance,
@@ -435,6 +436,10 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
           where: { id: params.universalItemId, isActive: true },
         });
         if (!universalItem) throw new UniversalAdoptionError("UNIVERSAL_ITEM_NOT_ADOPTABLE");
+
+        if (universalItem.type === "SYSTEM" || universalItem.type === "SOLUTION") {
+          throw new UniversalAdoptionError("UNIVERSAL_ITEM_NOT_ADOPTABLE");
+        }
 
         if (params.unitId) {
           const unit = await tx.unit.findFirst({
@@ -918,7 +923,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         isNewItem = true;
         targetItem = await tx.universalCatalogItem.create({
           data: {
-            type: normalizedPayload.type as CatalogItemType,
+            type: normalizedPayload.type as PrismaUniversalItemType,
             name: normalizedPayload.name,
             nameAr: normalizedPayload.nameAr,
             nameEn: normalizedPayload.nameEn,
@@ -1137,7 +1142,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
   private mapItemToDomain(record: any): UniversalCatalogItem {
     return new UniversalCatalogItem({
       id: record.id,
-      type: record.type as CatalogItemType,
+      type: record.type as UniversalItemType,
       name: record.name,
       nameAr: record.nameAr,
       nameEn: record.nameEn,
@@ -1377,7 +1382,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         categoryId: record.categoryId,
         unitId: record.unitId,
         taxRateId: record.taxRateId,
-        type: record.type as CatalogItemType,
+        type: record.type as CompanyCatalogItemType,
         code: record.code,
         sku: record.sku,
         barcode: record.barcode,

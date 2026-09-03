@@ -73,3 +73,21 @@ Permanent boundaries:
 
 Canonical decision document:
 `docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.
+
+
+## 2026-09-03 — Universal Item Type Separation and System/Solution Boundary
+
+Approved.
+
+- `UniversalItemType` is the UCL classification contract.
+- UCL supports PRODUCT, SERVICE, SYSTEM, SOLUTION, SHIPPING, LABOR, DISCOUNT and CUSTOM.
+- `CatalogItemType` remains the six-value commercial contract.
+- SYSTEM/SOLUTION are valid UCL discovery/publication/search records.
+- SYSTEM/SOLUTION are excluded from default Commercial Hybrid Retrieval.
+- SYSTEM/SOLUTION are not currently adoptable into Company Catalog.
+- Future commercial conversion requires a separately approved governed policy.
+- Smart System remains separate deterministic engineering/calculation execution.
+- Library population is a separate governed OpenAI/Web research and ingestion flow.
+- The Sales Assistant consumes governed published knowledge; it does not build the library.
+- AI discovery is not canonical authority; provenance, validation, review and publication govern UCL truth.
+- Permanent scaling invariant: **Huge Library, Small Working Set.**

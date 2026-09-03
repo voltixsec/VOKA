@@ -132,3 +132,42 @@ Never implement full-library browser loading or full-library AI context.
 
 Canonical architecture:
 `docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.
+
+
+## Resume Guard — 2026-09-03 Product Intelligence Boundary
+
+Do not re-merge the Universal Library type model into the commercial Catalog
+type model.
+
+`UniversalItemType`
+= PRODUCT | SERVICE | SYSTEM | SOLUTION | SHIPPING | LABOR | DISCOUNT | CUSTOM
+
+`CatalogItemType`
+= PRODUCT | SERVICE | SHIPPING | LABOR | DISCOUNT | CUSTOM
+
+SYSTEM/SOLUTION are UCL knowledge records only at the current commercial
+frontier. They are excluded from default Commercial Hybrid Retrieval and
+Company Catalog adoption.
+
+Do not widen commercial documents merely because UCL supports SYSTEM/SOLUTION.
+
+Smart System remains separate deterministic engineering/calculation execution.
+
+Library population is separate from the Sales Assistant:
+
+OpenAI/Web Research
+-> governed discovery/structuring
+-> evidence/provenance
+-> validation/staging/review
+-> UCL publication
+-> bounded product consumption.
+
+The Sales Assistant consumes governed published knowledge; it is not the
+library-building engine.
+
+Permanent scale invariant:
+
+**Huge Library, Small Working Set.**
+
+Canonical architecture:
+`docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.

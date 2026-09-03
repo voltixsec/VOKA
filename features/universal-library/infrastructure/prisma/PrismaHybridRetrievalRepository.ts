@@ -73,7 +73,9 @@ export class PrismaHybridRetrievalRepository implements IHybridRetrievalReposito
   ): Promise<CommercialCandidate[]> {
     const search = params.query?.trim();
     const baseWhere: any = {
-      ...(params.type ? { type: params.type } : {}),
+      type: params.type ?? {
+        in: ["PRODUCT", "SERVICE", "SHIPPING", "LABOR", "DISCOUNT", "CUSTOM"],
+      },
       ...(params.categoryId ? { categoryId: params.categoryId } : {}),
       ...(params.manufacturerId ? { manufacturerId: params.manufacturerId } : {}),
       ...(params.brandId ? { brandId: params.brandId } : {}),

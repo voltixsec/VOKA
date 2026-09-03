@@ -809,3 +809,36 @@ Commercial documents use tenant commercial truth and preserve historical
 snapshots.
 
 The entire global library is never loaded into the browser or sent to the AI.
+
+
+## 2026-09-03 Clarification — Universal Item Classification Boundary
+
+The Universal Commercial Library owns a classification contract that is
+intentionally broader than the tenant commercial catalog.
+
+`UniversalItemType`
+= PRODUCT | SERVICE | SYSTEM | SOLUTION | SHIPPING | LABOR | DISCOUNT | CUSTOM
+
+`CatalogItemType`
+= PRODUCT | SERVICE | SHIPPING | LABOR | DISCOUNT | CUSTOM
+
+SYSTEM represents discoverable knowledge about a complete commercial or
+engineered system.
+
+SOLUTION represents higher-level integrated commercial solution knowledge that
+may compose systems, products and services.
+
+SYSTEM and SOLUTION may be discovered, ingested, normalized, reviewed,
+published and searched in the Universal Library.
+
+They MUST NOT enter default Commercial Hybrid Retrieval or Company Catalog
+adoption until an explicit governed conversion/adoption policy is separately
+approved and implemented.
+
+Universal Library SYSTEM/SOLUTION records do not replace Smart System.
+Smart System remains separate deterministic engineering/calculation execution
+logic whose commercial components resolve through governed commercial items.
+
+Permanent scaling invariant:
+
+**Huge Library, Small Working Set.**

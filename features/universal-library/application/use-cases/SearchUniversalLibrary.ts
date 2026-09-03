@@ -1,4 +1,4 @@
-import { CatalogItemType } from "../../../catalog";
+import type { UniversalItemType } from "../../domain";
 import type { UniversalIdentifierType } from "@/lib/generated/prisma/client";
 import {
   DEFAULT_UNIVERSAL_SEARCH_LIMIT,
@@ -9,7 +9,7 @@ import {
 
 export interface SearchUniversalLibraryInput {
   query?: string;
-  type?: CatalogItemType;
+  type?: UniversalItemType;
   categoryId?: string;
   manufacturerId?: string;
   brandId?: string;

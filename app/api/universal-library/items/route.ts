@@ -1,4 +1,4 @@
-import { CatalogItemType } from "../../../../features/catalog";
+import type { UniversalItemType } from "../../../../features/universal-library";
 import type { UniversalIdentifierType } from "../../../../lib/generated/prisma/client";
 import {
   PrismaUniversalLibraryRepository,
@@ -16,9 +16,11 @@ export const dynamic = "force-dynamic";
 const repository = new PrismaUniversalLibraryRepository(prisma);
 const searchUniversalLibrary = new SearchUniversalLibrary(repository);
 
-const allowedTypes: CatalogItemType[] = [
+const allowedTypes: UniversalItemType[] = [
   "PRODUCT",
   "SERVICE",
+  "SYSTEM",
+  "SOLUTION",
   "SHIPPING",
   "LABOR",
   "DISCOUNT",
@@ -60,7 +62,7 @@ export const GET = withCompanyAuth(
     const searchParams = new URL(request.url).searchParams;
     const rawType = searchParams.get("type");
 
-    if (rawType && !allowedTypes.includes(rawType as CatalogItemType)) {
+    if (rawType && !allowedTypes.includes(rawType as UniversalItemType)) {
       throw ApiError.badRequest(
         "INVALID_CATALOG_ITEM_TYPE",
         "Catalog item type is invalid.",
@@ -104,7 +106,7 @@ export const GET = withCompanyAuth(
     try {
       result = await searchUniversalLibrary.execute({
         query,
-        type: rawType as CatalogItemType | undefined,
+        type: rawType as UniversalItemType | undefined,
         categoryId,
         manufacturerId,
         brandId,

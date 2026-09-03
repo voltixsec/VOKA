@@ -390,6 +390,17 @@ enum CatalogItemType {
   CUSTOM
 }
 
+enum UniversalItemType {
+  PRODUCT
+  SERVICE
+  SYSTEM
+  SOLUTION
+  SHIPPING
+  LABOR
+  DISCOUNT
+  CUSTOM
+}
+
 model CatalogCategory {
   id          String  @id @default(cuid())
   companyId   String
@@ -1574,7 +1585,7 @@ model UniversalIngestionRecord {
 
 model UniversalCatalogItem {
   id            String          @id @default(cuid())
-  type          CatalogItemType
+  type          UniversalItemType
   name          String
   nameAr        String?
   nameEn        String?

@@ -1,7 +1,8 @@
-import { CatalogItem, CatalogItemType } from "../../../catalog";
+import { CatalogItem } from "../../../catalog";
 import type { UniversalIdentifierType } from "@/lib/generated/prisma/client";
 import {
   UniversalCatalogItem,
+  UniversalItemType,
   UniversalCategory,
   UniversalItemAdoption,
   UniversalManufacturer,
@@ -21,7 +22,7 @@ export const DEFAULT_INGESTION_BATCH_LIMIT = 50;
 
 export interface SearchUniversalLibraryParams {
   query?: string;
-  type?: CatalogItemType;
+  type?: UniversalItemType;
   categoryId?: string;
   manufacturerId?: string;
   brandId?: string;

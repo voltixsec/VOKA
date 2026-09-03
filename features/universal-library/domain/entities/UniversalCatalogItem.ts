@@ -1,4 +1,3 @@
-import { CatalogItemType } from "../../../catalog";
 import { UniversalCategory } from "./UniversalCategory";
 import { UniversalItemProvenance } from "./UniversalItemProvenance";
 import { UniversalManufacturer } from "./UniversalManufacturer";
@@ -8,9 +7,19 @@ import { UniversalItemAlias } from "./UniversalItemAlias";
 import { UniversalItemIdentifier } from "./UniversalItemIdentifier";
 import { UniversalItemAttributeValue } from "./UniversalItemAttributeValue";
 
+export type UniversalItemType =
+  | "PRODUCT"
+  | "SERVICE"
+  | "SYSTEM"
+  | "SOLUTION"
+  | "SHIPPING"
+  | "LABOR"
+  | "DISCOUNT"
+  | "CUSTOM";
+
 export interface UniversalCatalogItemProps {
   id: string;
-  type: CatalogItemType;
+  type: UniversalItemType;
   name: string;
   nameAr?: string | null;
   nameEn?: string | null;
@@ -42,7 +51,7 @@ export interface UniversalCatalogItemProps {
 
 export class UniversalCatalogItem {
   public readonly id: string;
-  public readonly type: CatalogItemType;
+  public readonly type: UniversalItemType;
   public readonly name: string;
   public readonly nameAr: string | null;
   public readonly nameEn: string | null;

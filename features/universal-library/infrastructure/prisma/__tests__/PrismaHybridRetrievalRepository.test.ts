@@ -31,6 +31,40 @@ describe("PrismaHybridRetrievalRepository integrity", () => {
     }));
   });
 
+  it("excludes SYSTEM and SOLUTION from default commercial Universal retrieval", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const repository = new PrismaHybridRetrievalRepository({
+      universalCatalogItem: { findMany },
+    } as any);
+
+    await repository.fetchUniversalCandidates({
+      isActive: true,
+      limit: 20,
+    });
+
+    expect(findMany).toHaveBeenCalledTimes(1);
+
+    const call = findMany.mock.calls[0][0];
+
+    expect(call.where).toEqual(
+      expect.objectContaining({
+        type: {
+          in: [
+            "PRODUCT",
+            "SERVICE",
+            "SHIPPING",
+            "LABOR",
+            "DISCOUNT",
+            "CUSTOM",
+          ],
+        },
+        isActive: true,
+      })
+    );
+
+    expect(call.where.type.in).not.toContain("SYSTEM");
+    expect(call.where.type.in).not.toContain("SOLUTION");
+  });
   it("performs a bounded exact Universal pass and caps loaded identifiers and aliases", async () => {
     const findMany = vi.fn().mockResolvedValue([]);
     const repository = new PrismaHybridRetrievalRepository({ universalCatalogItem: { findMany } } as any);

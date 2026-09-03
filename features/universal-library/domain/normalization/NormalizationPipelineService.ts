@@ -50,7 +50,7 @@ export interface NormalizedIngestionPayload {
   description: string | null;
   descriptionAr: string | null;
   descriptionEn: string | null;
-  type: "PRODUCT" | "SERVICE" | "SHIPPING" | "LABOR" | "DISCOUNT" | "CUSTOM";
+  type: "PRODUCT" | "SERVICE" | "SYSTEM" | "SOLUTION" | "SHIPPING" | "LABOR" | "DISCOUNT" | "CUSTOM";
   categoryCode: string | null;
   categoryName: string | null;
   manufacturerName: string | null;
@@ -153,7 +153,7 @@ export class NormalizationPipelineService {
     let type: NormalizedIngestionPayload["type"] = "PRODUCT";
     if (payload.type) {
       const upperType = payload.type.trim().toUpperCase();
-      if (["PRODUCT", "SERVICE", "SHIPPING", "LABOR", "DISCOUNT", "CUSTOM"].includes(upperType)) {
+      if (["PRODUCT", "SERVICE", "SYSTEM", "SOLUTION", "SHIPPING", "LABOR", "DISCOUNT", "CUSTOM"].includes(upperType)) {
         type = upperType as any;
       } else {
         throw new Error(`Unsupported catalog item type '${payload.type}'.`);

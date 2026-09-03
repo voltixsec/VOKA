@@ -1547,3 +1547,50 @@ Known blocker retained for later unless CEO reactivates it:
 - Payment E2E.
 
 No next unrelated module is selected automatically.
+
+
+## 2026-09-03 Product Intelligence Architecture Decision
+
+OpenAI/Web research is the approved primary bootstrapping and broad global
+discovery mechanism for UCL population.
+
+AI output is discovery/structuring input, not canonical authority.
+
+Governed population:
+
+OpenAI/Web Research
+-> Discover
+-> Analyze
+-> Structure
+-> Research
+-> Validate
+-> Stage
+-> Review
+-> Publish to UCL.
+
+Evidence, provenance, confidence, source/legal governance, normalization and
+review remain mandatory.
+
+Current canonical classification boundary:
+
+`UniversalItemType`
+= PRODUCT | SERVICE | SYSTEM | SOLUTION | SHIPPING | LABOR | DISCOUNT | CUSTOM
+
+`CatalogItemType`
+= PRODUCT | SERVICE | SHIPPING | LABOR | DISCOUNT | CUSTOM
+
+SYSTEM/SOLUTION:
+
+- are valid UCL discovery/publication/search records;
+- are excluded from default Commercial Hybrid Retrieval;
+- are not currently adoptable into Company Catalog;
+- require separately approved conversion/adoption policy before becoming tenant commercial truth.
+
+Smart System remains a separate deterministic engineering/calculation layer.
+
+The Sales Assistant is a downstream consumer of governed library knowledge and
+has no direct role in building the Universal Library.
+
+Permanent scaling rule:
+
+**Huge Library, Small Working Set.**
