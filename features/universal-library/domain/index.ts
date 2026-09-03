@@ -11,3 +11,4 @@ export * from "./embeddings/SemanticVectorService";
 export * from "./cache/RetrievalCache";
 export * from "./observability/RetrievalObservability";
 export * from "./acquisition";
+export * from "./discovery";
