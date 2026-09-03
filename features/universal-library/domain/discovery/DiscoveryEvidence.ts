@@ -1,3 +1,5 @@
+import { DISCOVERY_COLLECTION_BOUNDS } from "./MarketRelevanceTarget";
+
 export type ResearchSourceType =
   | "GOVERNMENT_AUTHORITY"
   | "MANUFACTURER_TECHNICAL"
@@ -32,7 +34,21 @@ export class DiscoveryEvidence {
     if (!input.url || typeof input.url !== "string" || !input.url.trim()) {
       throw new Error("DiscoveryEvidence requires a non-empty url");
     }
-    this.url = input.url.trim();
+
+    const rawUrl = input.url.trim();
+    let parsedUrl: URL;
+
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      throw new Error("DiscoveryEvidence url must be a valid HTTP or HTTPS URL");
+    }
+
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      throw new Error("DiscoveryEvidence url must use HTTP or HTTPS");
+    }
+
+    this.url = rawUrl;
     this.title = typeof input.title === "string" && input.title.trim() ? input.title.trim() : null;
     this.publisher = typeof input.publisher === "string" && input.publisher.trim() ? input.publisher.trim() : null;
     this.sourceType =
@@ -41,6 +57,14 @@ export class DiscoveryEvidence {
     if (input.claimSupport !== undefined && input.claimSupport !== null) {
       if (!Array.isArray(input.claimSupport)) {
         throw new Error("claimSupport must be an array of strings");
+      }
+      if (
+        input.claimSupport.length >
+        DISCOVERY_COLLECTION_BOUNDS.MAX_CLAIM_SUPPORT_PER_EVIDENCE
+      ) {
+        throw new Error(
+          `claimSupport collection bound exceeded (${input.claimSupport.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_CLAIM_SUPPORT_PER_EVIDENCE})`
+        );
       }
       const support: string[] = [];
       for (const item of input.claimSupport) {

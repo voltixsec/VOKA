@@ -24,6 +24,16 @@ function countPopulatedIdentityHints(comp: SystemComponent): number {
 }
 
 function canonicalPayloadSignature(comp: SystemComponent): string {
+  const canonicalEvidence = comp.evidence
+    .map((evidence) => ({
+      url: evidence.url,
+      title: evidence.title,
+      publisher: evidence.publisher,
+      sourceType: evidence.sourceType,
+      claimSupport: [...evidence.claimSupport].sort(),
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+
   return JSON.stringify({
     key: comp.key,
     type: comp.componentType,
@@ -31,14 +41,13 @@ function canonicalPayloadSignature(comp: SystemComponent): string {
     nameAr: comp.nameAr,
     purpose: comp.purpose,
     category: comp.categoryHint,
-    specs: comp.specificationHints,
-    deps: comp.dependencyHints,
+    specs: [...comp.specificationHints].sort(),
+    deps: [...comp.dependencyHints].sort(),
     identity: comp.identityHints,
-    evidenceCount: comp.evidence.length,
+    evidence: canonicalEvidence,
     confidence: comp.confidence,
   });
 }
-
 /**
  * Compare two component candidates for deterministic duplicate resolution.
  * Precedence:

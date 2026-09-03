@@ -1,3 +1,4 @@
+import { DISCOVERY_COLLECTION_BOUNDS } from "../../domain/discovery";
 import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
@@ -741,5 +742,106 @@ describe("PIC-03A1 System/Solution Discovery Decomposition & Population Planner 
         expect(content).not.toMatch(pattern);
       }
     }
+  });
+  it("37. duplicate tie-break uses actual evidence content and remains order-independent", () => {
+    const evidenceA = new DiscoveryEvidence({
+      url: "https://manufacturer-a.example/camera",
+      title: "Camera evidence A",
+      publisher: "Manufacturer A",
+      sourceType: "MANUFACTURER_PRODUCT",
+      claimSupport: ["4MP", "PoE"],
+    });
+
+    const evidenceB = new DiscoveryEvidence({
+      url: "https://manufacturer-b.example/camera",
+      title: "Camera evidence B",
+      publisher: "Manufacturer B",
+      sourceType: "MANUFACTURER_PRODUCT",
+      claimSupport: ["4MP", "PoE"],
+    });
+
+    const compA = new SystemComponent({
+      key: "camera",
+      componentType: "PRODUCT",
+      nameEn: "IP Camera",
+      confidence: 0.9,
+      evidence: [evidenceA],
+    });
+
+    const compB = new SystemComponent({
+      key: "CAMERA",
+      componentType: "PRODUCT",
+      nameEn: "IP Camera",
+      confidence: 0.9,
+      evidence: [evidenceB],
+    });
+
+    const buildSeed = (components: SystemComponent[]) =>
+      new SystemDiscoverySeed({
+        id: "seed-evidence-content-tie",
+        seedType: "SYSTEM",
+        nameEn: "CCTV",
+        evidence: [evidenceA],
+        confidence: 0.9,
+        components,
+      });
+
+    const planner = new SystemPopulationPlanner();
+
+    const forward = planner.plan(buildSeed([compA, compB]))[0];
+    const reverse = planner.plan(buildSeed([compB, compA]))[0];
+
+    expect(forward).toEqual(reverse);
+    expect(forward.componentEvidence[0].url).toBe(
+      reverse.componentEvidence[0].url
+    );
+  });
+
+  it("38. claimSupport accepts the exact configured bound", () => {
+    const max = DISCOVERY_COLLECTION_BOUNDS.MAX_CLAIM_SUPPORT_PER_EVIDENCE;
+
+    const evidence = new DiscoveryEvidence({
+      url: "https://example.com/product",
+      claimSupport: Array.from({ length: max }, (_, index) => `claim-${index}`),
+    });
+
+    expect(evidence.claimSupport).toHaveLength(max);
+  });
+
+  it("39. claimSupport rejects values above the configured bound", () => {
+    const max = DISCOVERY_COLLECTION_BOUNDS.MAX_CLAIM_SUPPORT_PER_EVIDENCE;
+
+    expect(
+      () =>
+        new DiscoveryEvidence({
+          url: "https://example.com/product",
+          claimSupport: Array.from(
+            { length: max + 1 },
+            (_, index) => `claim-${index}`
+          ),
+        })
+    ).toThrow(/claimSupport collection bound exceeded/);
+  });
+
+  it("40. evidence URL validation accepts HTTP and HTTPS only", () => {
+    expect(
+      new DiscoveryEvidence({ url: "https://example.com/product" }).url
+    ).toBe("https://example.com/product");
+
+    expect(
+      new DiscoveryEvidence({ url: "http://example.com/product" }).url
+    ).toBe("http://example.com/product");
+
+    expect(
+      () => new DiscoveryEvidence({ url: "not-a-url" })
+    ).toThrow(/HTTP or HTTPS URL/);
+
+    expect(
+      () => new DiscoveryEvidence({ url: "file:///tmp/test" })
+    ).toThrow(/HTTP or HTTPS/);
+
+    expect(
+      () => new DiscoveryEvidence({ url: "javascript:alert(1)" })
+    ).toThrow(/HTTP or HTTPS/);
   });
 });
