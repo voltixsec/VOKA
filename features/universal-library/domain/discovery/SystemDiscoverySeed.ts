@@ -4,6 +4,7 @@ import {
   CANONICAL_SCOPE_GLOBAL,
   DISCOVERY_COLLECTION_BOUNDS,
   validateMarketRelevanceTargets,
+  validateStringCollection,
 } from "./MarketRelevanceTarget";
 import { SystemComponent, SystemComponentInput } from "./SystemComponent";
 
@@ -46,11 +47,14 @@ export class SystemDiscoverySeed {
   public readonly marketRelevanceTargets: MarketRelevanceTarget[];
 
   constructor(input: SystemDiscoverySeedInput) {
-    if (!input || !input.id || typeof input.id !== "string" || !input.id.trim()) {
+    if (!input || typeof input !== "object") {
+      throw new Error("SystemDiscoverySeed input must be a valid object");
+    }
+    if (!input.id || typeof input.id !== "string" || !input.id.trim()) {
       throw new Error("SystemDiscoverySeed id cannot be empty");
     }
     if (input.seedType !== "SYSTEM" && input.seedType !== "SOLUTION") {
-      throw new Error(`Invalid seedType: ${input.seedType}`);
+      throw new Error(`Invalid seedType: ${String(input.seedType)}`);
     }
     if (!input.nameEn || typeof input.nameEn !== "string" || !input.nameEn.trim()) {
       throw new Error("SystemDiscoverySeed nameEn cannot be empty");
@@ -77,40 +81,55 @@ export class SystemDiscoverySeed {
     this.id = input.id.trim();
     this.seedType = input.seedType;
     this.nameEn = input.nameEn.trim();
-    this.nameAr = input.nameAr && input.nameAr.trim() ? input.nameAr.trim() : null;
+    this.nameAr = typeof input.nameAr === "string" && input.nameAr.trim() ? input.nameAr.trim() : null;
 
-    const aliasesEn = Array.isArray(input.aliasesEn) ? input.aliasesEn : [];
-    if (aliasesEn.length > DISCOVERY_COLLECTION_BOUNDS.MAX_ALIASES) {
-      throw new Error(
-        `AliasesEn collection bound exceeded (${aliasesEn.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_ALIASES})`
-      );
-    }
-    this.aliasesEn = [...aliasesEn];
+    this.aliasesEn = validateStringCollection(
+      input.aliasesEn,
+      "AliasesEn",
+      DISCOVERY_COLLECTION_BOUNDS.MAX_ALIASES
+    );
 
-    const aliasesAr = Array.isArray(input.aliasesAr) ? input.aliasesAr : [];
-    if (aliasesAr.length > DISCOVERY_COLLECTION_BOUNDS.MAX_ALIASES) {
-      throw new Error(
-        `AliasesAr collection bound exceeded (${aliasesAr.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_ALIASES})`
-      );
-    }
-    this.aliasesAr = [...aliasesAr];
+    this.aliasesAr = validateStringCollection(
+      input.aliasesAr,
+      "AliasesAr",
+      DISCOVERY_COLLECTION_BOUNDS.MAX_ALIASES
+    );
 
-    this.descriptionEn = input.descriptionEn && input.descriptionEn.trim() ? input.descriptionEn.trim() : null;
-    this.descriptionAr = input.descriptionAr && input.descriptionAr.trim() ? input.descriptionAr.trim() : null;
-    this.domainHint = input.domainHint && input.domainHint.trim() ? input.domainHint.trim() : null;
-    this.categoryHint = input.categoryHint && input.categoryHint.trim() ? input.categoryHint.trim() : null;
+    this.descriptionEn =
+      typeof input.descriptionEn === "string" && input.descriptionEn.trim() ? input.descriptionEn.trim() : null;
+    this.descriptionAr =
+      typeof input.descriptionAr === "string" && input.descriptionAr.trim() ? input.descriptionAr.trim() : null;
+    this.domainHint = typeof input.domainHint === "string" && input.domainHint.trim() ? input.domainHint.trim() : null;
+    this.categoryHint =
+      typeof input.categoryHint === "string" && input.categoryHint.trim() ? input.categoryHint.trim() : null;
 
-    this.evidence = input.evidence.map((e) => (e instanceof DiscoveryEvidence ? e : new DiscoveryEvidence(e)));
+    this.evidence = input.evidence.map((e) => {
+      if (e instanceof DiscoveryEvidence) return e;
+      if (!e || typeof e !== "object") throw new Error("Seed evidence contains malformed item");
+      return new DiscoveryEvidence(e);
+    });
+
     this.confidence = input.confidence;
     this.discoveredAt = input.discoveredAt instanceof Date ? input.discoveredAt : new Date();
 
-    const rawComponents = Array.isArray(input.components) ? input.components : [];
-    if (rawComponents.length > DISCOVERY_COLLECTION_BOUNDS.MAX_COMPONENTS_PER_SEED) {
-      throw new Error(
-        `Components collection bound exceeded (${rawComponents.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_COMPONENTS_PER_SEED})`
-      );
+    const rawComponents = input.components;
+    if (rawComponents !== undefined && rawComponents !== null) {
+      if (!Array.isArray(rawComponents)) {
+        throw new Error("Components must be an array");
+      }
+      if (rawComponents.length > DISCOVERY_COLLECTION_BOUNDS.MAX_COMPONENTS_PER_SEED) {
+        throw new Error(
+          `Components collection bound exceeded (${rawComponents.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_COMPONENTS_PER_SEED})`
+        );
+      }
+      this.components = rawComponents.map((c) => {
+        if (c instanceof SystemComponent) return c;
+        if (!c || typeof c !== "object") throw new Error("Components array contains malformed item");
+        return new SystemComponent(c);
+      });
+    } else {
+      this.components = [];
     }
-    this.components = rawComponents.map((c) => (c instanceof SystemComponent ? c : new SystemComponent(c)));
 
     this.marketRelevanceTargets = validateMarketRelevanceTargets(input.marketRelevanceTargets);
   }

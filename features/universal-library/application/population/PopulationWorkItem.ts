@@ -29,7 +29,6 @@ export interface PopulationWorkItemInput {
   confidence: number;
   marketRelevanceTargets: MarketRelevanceTarget[];
   requiresArabicLocalization: boolean;
-  createdAt?: Date;
 }
 
 export class PopulationWorkItem {
@@ -54,7 +53,6 @@ export class PopulationWorkItem {
   public readonly canonicalScope: typeof CANONICAL_SCOPE_GLOBAL = CANONICAL_SCOPE_GLOBAL;
   public readonly marketRelevanceTargets: MarketRelevanceTarget[];
   public readonly requiresArabicLocalization: boolean;
-  public readonly createdAt: Date;
 
   constructor(input: PopulationWorkItemInput) {
     this.id = input.id;
@@ -80,6 +78,5 @@ export class PopulationWorkItem {
     this.confidence = input.confidence;
     this.marketRelevanceTargets = [...input.marketRelevanceTargets];
     this.requiresArabicLocalization = input.requiresArabicLocalization;
-    this.createdAt = input.createdAt || new Date();
   }
 }

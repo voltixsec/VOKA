@@ -1,5 +1,5 @@
 import { DiscoveryEvidence, DiscoveryEvidenceInput } from "./DiscoveryEvidence";
-import { DISCOVERY_COLLECTION_BOUNDS } from "./MarketRelevanceTarget";
+import { DISCOVERY_COLLECTION_BOUNDS, validateStringCollection } from "./MarketRelevanceTarget";
 
 export type ComponentType = "PRODUCT" | "SERVICE";
 
@@ -41,14 +41,17 @@ export class SystemComponent {
   public readonly identityHints: ComponentIdentityHints | null;
 
   constructor(input: SystemComponentInput) {
-    if (!input || !input.key || typeof input.key !== "string" || !input.key.trim()) {
+    if (!input || typeof input !== "object") {
+      throw new Error("SystemComponent input must be a valid object");
+    }
+    if (!input.key || typeof input.key !== "string" || !input.key.trim()) {
       throw new Error("SystemComponent key cannot be empty");
     }
     if (!input.nameEn || typeof input.nameEn !== "string" || !input.nameEn.trim()) {
       throw new Error("SystemComponent nameEn cannot be empty");
     }
     if (input.componentType !== "PRODUCT" && input.componentType !== "SERVICE") {
-      throw new Error(`Invalid componentType: ${input.componentType}`);
+      throw new Error(`Invalid componentType: ${String(input.componentType)}`);
     }
     if (
       typeof input.confidence !== "number" ||
@@ -62,47 +65,55 @@ export class SystemComponent {
     this.key = input.key.trim();
     this.componentType = input.componentType;
     this.nameEn = input.nameEn.trim();
-    this.nameAr = input.nameAr && input.nameAr.trim() ? input.nameAr.trim() : null;
-    this.purpose = input.purpose && input.purpose.trim() ? input.purpose.trim() : null;
-    this.categoryHint = input.categoryHint && input.categoryHint.trim() ? input.categoryHint.trim() : null;
+    this.nameAr = typeof input.nameAr === "string" && input.nameAr.trim() ? input.nameAr.trim() : null;
+    this.purpose = typeof input.purpose === "string" && input.purpose.trim() ? input.purpose.trim() : null;
+    this.categoryHint = typeof input.categoryHint === "string" && input.categoryHint.trim() ? input.categoryHint.trim() : null;
 
-    const specHints = Array.isArray(input.specificationHints) ? input.specificationHints : [];
-    if (specHints.length > DISCOVERY_COLLECTION_BOUNDS.MAX_SPECIFICATION_HINTS) {
-      throw new Error(
-        `Specification hints collection bound exceeded (${specHints.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_SPECIFICATION_HINTS})`
-      );
-    }
-    this.specificationHints = [...specHints];
+    this.specificationHints = validateStringCollection(
+      input.specificationHints,
+      "Specification hints",
+      DISCOVERY_COLLECTION_BOUNDS.MAX_SPECIFICATION_HINTS
+    );
 
-    const depHints = Array.isArray(input.dependencyHints) ? input.dependencyHints : [];
-    if (depHints.length > DISCOVERY_COLLECTION_BOUNDS.MAX_DEPENDENCY_HINTS) {
-      throw new Error(
-        `Dependency hints collection bound exceeded (${depHints.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_DEPENDENCY_HINTS})`
-      );
-    }
-    this.dependencyHints = [...depHints];
+    this.dependencyHints = validateStringCollection(
+      input.dependencyHints,
+      "Dependency hints",
+      DISCOVERY_COLLECTION_BOUNDS.MAX_DEPENDENCY_HINTS
+    );
 
-    const rawEvidence = Array.isArray(input.evidence) ? input.evidence : [];
-    if (rawEvidence.length > DISCOVERY_COLLECTION_BOUNDS.MAX_EVIDENCE) {
-      throw new Error(
-        `Component evidence collection bound exceeded (${rawEvidence.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_EVIDENCE})`
-      );
+    const rawEvidence = input.evidence;
+    if (rawEvidence !== undefined && rawEvidence !== null) {
+      if (!Array.isArray(rawEvidence)) {
+        throw new Error("Component evidence must be an array");
+      }
+      if (rawEvidence.length > DISCOVERY_COLLECTION_BOUNDS.MAX_EVIDENCE) {
+        throw new Error(
+          `Component evidence collection bound exceeded (${rawEvidence.length} > ${DISCOVERY_COLLECTION_BOUNDS.MAX_EVIDENCE})`
+        );
+      }
+      this.evidence = rawEvidence.map((e) => {
+        if (e instanceof DiscoveryEvidence) return e;
+        if (!e || typeof e !== "object") throw new Error("Component evidence contains malformed item");
+        return new DiscoveryEvidence(e);
+      });
+    } else {
+      this.evidence = [];
     }
-    this.evidence = rawEvidence.map((e) => (e instanceof DiscoveryEvidence ? e : new DiscoveryEvidence(e)));
 
     this.confidence = input.confidence;
 
     // IDENTITY HINTS MUST BE PRESERVED BYTE-FOR-BYTE!
     // Do NOT alter, uppercase, lowercase, or trim identity hints.
-    if (input.identityHints) {
+    if (input.identityHints && typeof input.identityHints === "object") {
+      const h = input.identityHints;
       this.identityHints = {
-        manufacturerHint: input.identityHints.manufacturerHint ?? null,
-        brandHint: input.identityHints.brandHint ?? null,
-        familyHint: input.identityHints.familyHint ?? null,
-        modelNumber: input.identityHints.modelNumber ?? null,
-        mpn: input.identityHints.mpn ?? null,
-        sku: input.identityHints.sku ?? null,
-        gtin: input.identityHints.gtin ?? null,
+        manufacturerHint: typeof h.manufacturerHint === "string" ? h.manufacturerHint : null,
+        brandHint: typeof h.brandHint === "string" ? h.brandHint : null,
+        familyHint: typeof h.familyHint === "string" ? h.familyHint : null,
+        modelNumber: typeof h.modelNumber === "string" ? h.modelNumber : null,
+        mpn: typeof h.mpn === "string" ? h.mpn : null,
+        sku: typeof h.sku === "string" ? h.sku : null,
+        gtin: typeof h.gtin === "string" ? h.gtin : null,
       };
     } else {
       this.identityHints = null;
