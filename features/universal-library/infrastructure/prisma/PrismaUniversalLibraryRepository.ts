@@ -545,9 +545,24 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
   // --- Ingestion Repository Extensions ---
 
   public async getSourceById(sourceId: string): Promise<UniversalSource | null> {
-    const record = await this.prisma.universalSource.findUnique({
+    let record = await this.prisma.universalSource.findUnique({
       where: { id: sourceId },
     });
+
+    if (!record && sourceId === "web_search_discovery") {
+      record = await this.prisma.universalSource.upsert({
+        where: { id: "web_search_discovery" },
+        create: {
+          id: "web_search_discovery",
+          name: "Web Search Discovery",
+          type: "AI_WEB_SEARCH",
+          verificationStatus: "SOURCE_VERIFIED",
+          isActive: true,
+        },
+        update: {},
+      });
+    }
+
     return record ? this.mapSourceToDomain(record) : null;
   }
 
