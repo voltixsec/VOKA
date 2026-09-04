@@ -279,7 +279,7 @@ describe("OpenAiWebDiscoveryAdapter", () => {
     }
   });
 
-  it("rejects payload when provider returns no usable web-search evidence", async () => {
+  it("stages payload with empty evidence when provider returns no usable web-search evidence", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -316,12 +316,11 @@ describe("OpenAiWebDiscoveryAdapter", () => {
       fetchFn: mockFetch,
     });
 
-    await expect(adapter.discoverSystem({ prompt: "CCTV System" })).rejects.toThrow(
-      /returned no usable web-search evidence citations/i
-    );
+    const seed = await adapter.discoverSystem({ prompt: "CCTV System" });
+    expect(seed.evidence).toEqual([]);
   });
 
-  it("rejects structured payload URLs not present in provider web-search citations", async () => {
+  it("filters structured payload URLs not present in provider web-search citations", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -366,9 +365,8 @@ describe("OpenAiWebDiscoveryAdapter", () => {
       fetchFn: mockFetch,
     });
 
-    await expect(adapter.discoverSystem({ prompt: "CCTV System" })).rejects.toThrow(
-      /not traceable to actual web-search citations/i
-    );
+    const seed = await adapter.discoverSystem({ prompt: "CCTV System" });
+    expect(seed.evidence).toEqual([]);
   });
 
   it("accepts multiple legitimate URLs traceable to provider citations", async () => {
@@ -668,7 +666,7 @@ describe("OpenAiWebDiscoveryAdapter", () => {
     );
   });
 
-  it("throws error when returned payload fails seed evidence validation", async () => {
+  it("allows missing seed evidence and stages it for later review", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -705,9 +703,8 @@ describe("OpenAiWebDiscoveryAdapter", () => {
       fetchFn: mockFetch,
     });
 
-    await expect(adapter.discoverSystem({ prompt: "Fire alarm system" })).rejects.toThrow(
-      /missing required evidence array/i
-    );
+    const seed = await adapter.discoverSystem({ prompt: "Fire alarm system" });
+    expect(seed.evidence).toEqual([]);
   });
 
   it("preserves exact model and MPN casing and special characters without mutation", () => {
@@ -777,7 +774,7 @@ describe("OpenAiWebDiscoveryAdapter", () => {
     );
   });
 
-  it("rejects payload with missing id", () => {
+  it("generates deterministic technical id when provider id is missing", () => {
     const rawPayload = {
       seedType: "SYSTEM",
       nameEn: "Test",
@@ -793,9 +790,8 @@ describe("OpenAiWebDiscoveryAdapter", () => {
       ],
     };
 
-    expect(() => OpenAiWebDiscoveryAdapter.parseAndValidateSeed(rawPayload)).toThrow(
-      /missing required id/i
-    );
+    const seed = OpenAiWebDiscoveryAdapter.parseAndValidateSeed(rawPayload);
+    expect(seed.id).toBe("discovered-system-test");
   });
 
   it("rejects payload with missing nameEn", () => {
@@ -990,7 +986,7 @@ describe("OpenAiWebDiscoveryAdapter", () => {
     );
   });
 
-  it("rejects payload with invalid component confidence", () => {
+  it("normalizes invalid component confidence to zero", () => {
     const rawPayload = {
       id: "seed-bad",
       seedType: "SYSTEM",
@@ -1015,8 +1011,7 @@ describe("OpenAiWebDiscoveryAdapter", () => {
       ],
     };
 
-    expect(() => OpenAiWebDiscoveryAdapter.parseAndValidateSeed(rawPayload)).toThrow(
-      /confidence must be between 0 and 1/i
-    );
+    const seed = OpenAiWebDiscoveryAdapter.parseAndValidateSeed(rawPayload);
+    expect(seed.components[0].confidence).toBe(0);
   });
 });
