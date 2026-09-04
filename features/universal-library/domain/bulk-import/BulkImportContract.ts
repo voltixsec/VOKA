@@ -1,19 +1,23 @@
 ﻿export const BULK_IMPORT_SCHEMA_VERSION = "1.0" as const;
 
+export const BULK_IMPORT_ENTITY_TYPES = [
+  "DOMAIN",
+  "CATEGORY",
+  "SYSTEM",
+  "MANUFACTURER",
+  "BRAND",
+  "PRODUCT_FAMILY",
+  "PRODUCT_MODEL",
+  "ITEM",
+  "SERVICE",
+  "RELATION",
+  "EVIDENCE",
+  "SOURCE",
+  "MARKET_RELEVANCE",
+] as const;
+
 export type BulkImportEntityType =
-  | "DOMAIN"
-  | "CATEGORY"
-  | "SYSTEM"
-  | "MANUFACTURER"
-  | "BRAND"
-  | "PRODUCT_FAMILY"
-  | "PRODUCT_MODEL"
-  | "ITEM"
-  | "SERVICE"
-  | "RELATION"
-  | "EVIDENCE"
-  | "SOURCE"
-  | "MARKET_RELEVANCE";
+  (typeof BULK_IMPORT_ENTITY_TYPES)[number];
 
 export type BulkImportDeltaOutcome =
   | "NEW"
@@ -88,7 +92,3 @@ export interface BulkImportRecordEnvelope {
   marketRelevance?: BulkImportMarketRelevance[];
   evidence?: BulkImportEvidence[];
 }
-
-
-
-
