@@ -2,13 +2,11 @@ import { OpenAiWebDiscoveryAdapter } from "../features/universal-library/infrast
 import { SystemPopulationPipeline } from "../features/universal-library/application/population/SystemPopulationPipeline";
 import { PrismaUniversalLibraryRepository } from "../features/universal-library/infrastructure/prisma/PrismaUniversalLibraryRepository";
 import { prisma } from "../lib/prisma";
-import { SystemDiscoverySeed, DiscoveryEvidence, SystemComponent } from "../features/universal-library/domain/discovery";
 
 async function main() {
   const args = process.argv.slice(2);
   let prompt = "CCTV IP Surveillance System";
   let domainHint = "Security Equipment";
-  let isLive = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--query" && args[i + 1]) {
@@ -17,8 +15,6 @@ async function main() {
     } else if (args[i] === "--domain" && args[i + 1]) {
       domainHint = args[i + 1];
       i++;
-    } else if (args[i] === "--live") {
-      isLive = true;
     }
   }
 
@@ -27,91 +23,20 @@ async function main() {
   console.log("=========================================================================");
   console.log(`Query:        "${prompt}"`);
   console.log(`Domain Hint:  "${domainHint}"`);
-  console.log(`Mode:         ${isLive ? "LIVE OpenAI + Web Search" : "CI Mock Fixture"}`);
-  console.log("-------------------------------------------------------------------------");
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
 
-  let provider;
+if (!apiKey) {
+  console.error(
+    "ERROR: OPENAI_API_KEY is not configured. Real web discovery requires OPENAI_API_KEY."
+  );
+  process.exit(1);
+}
 
-  if (isLive && process.env.OPENAI_API_KEY) {
-    provider = new OpenAiWebDiscoveryAdapter();
-  } else {
-    if (isLive && !process.env.OPENAI_API_KEY) {
-      console.warn("WARNING: --live requested but OPENAI_API_KEY is missing. Falling back to mock fixture.");
-    }
+console.log(`Mode:         LIVE OpenAI + Web Search`);
+console.log("-------------------------------------------------------------------------");
 
-    provider = {
-      async discoverSystem() {
-        return new SystemDiscoverySeed({
-          id: "cli-cctv-seed-01",
-          seedType: "SYSTEM",
-          nameEn: "Commercial IP CCTV Surveillance Architecture",
-          confidence: 0.95,
-          domainHint,
-          evidence: [
-            new DiscoveryEvidence({
-              url: "https://www.hikvision.com/en/products/IP-Products/",
-              title: "Hikvision Enterprise IP Cameras",
-              publisher: "Hikvision",
-              sourceType: "MANUFACTURER_DATASHEET",
-              claimSupport: ["Commercial camera models and specs"],
-            }),
-          ],
-          components: [
-            new SystemComponent({
-              key: "hikvision_4k_dome",
-              componentType: "PRODUCT",
-              nameEn: "Hikvision 4K Vandal Dome Camera",
-              purpose: "Outdoor optical surveillance",
-              categoryHint: "IP_CAMERAS",
-              identityHints: {
-                manufacturerHint: "Hikvision",
-                brandHint: "Pro Series",
-                modelNumber: "DS-2CD2143G0-I",
-                mpn: "DS-2CD2143G0-I-4MM",
-              },
-              specificationHints: ["4K Resolution", "30m IR", "IP67"],
-              confidence: 0.94,
-              evidence: [
-                new DiscoveryEvidence({
-                  url: "https://www.hikvision.com/en/products/IP-Products/Network-Cameras/DS-2CD2143G0-I/",
-                  title: "DS-2CD2143G0-I Datasheet",
-                  publisher: "Hikvision",
-                  sourceType: "MANUFACTURER_DATASHEET",
-                  claimSupport: ["Exact model and MPN"],
-                }),
-              ],
-            }),
-            new SystemComponent({
-              key: "dahua_32ch_nvr",
-              componentType: "PRODUCT",
-              nameEn: "Dahua 32-Channel 4K NVR",
-              purpose: "Centralized video recording",
-              categoryHint: "RECORDERS",
-              identityHints: {
-                manufacturerHint: "Dahua",
-                brandHint: "Ultra Series",
-                modelNumber: "NVR5432-16P-I",
-                mpn: "NVR5432-16P-I",
-              },
-              specificationHints: ["32 Channels", "16 PoE", "AI Face Recognition"],
-              confidence: 0.92,
-              evidence: [
-                new DiscoveryEvidence({
-                  url: "https://www.dahuasecurity.com/products/All-Products/Network-Recorders/NVR5432-16P-I",
-                  title: "Dahua NVR5432-16P-I Datasheet",
-                  publisher: "Dahua",
-                  sourceType: "MANUFACTURER_DATASHEET",
-                  claimSupport: ["Exact Dahua model"],
-                }),
-              ],
-            }),
-          ],
-        });
-      },
-    };
-  }
-
-  const repository = new PrismaUniversalLibraryRepository(prisma);
+const provider = new OpenAiWebDiscoveryAdapter();
+const repository = new PrismaUniversalLibraryRepository(prisma);
   const pipeline = new SystemPopulationPipeline(provider, repository);
 
   console.log("Initiating population run...");

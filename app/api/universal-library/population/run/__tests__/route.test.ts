@@ -37,6 +37,7 @@ function request(url: string, body: string, role = "OWNER") {
 describe("Population Discovery Run API Route", () => {
   beforeEach(() => {
     mocks.runPopulationExecute.mockReset();
+    vi.unmock("process.env");
   });
 
   it("restricts endpoint to OWNER and ADMIN", async () => {
@@ -50,43 +51,64 @@ describe("Population Discovery Run API Route", () => {
     expect(body.error).toBe("prompt is required.");
   });
 
-  it("executes population pipeline and returns 200 with summary", async () => {
-    mocks.runPopulationExecute.mockResolvedValue({
-      runId: "run-123",
-      status: "COMPLETED",
-      query: { prompt: "CCTV System", domainHint: "Security", targetMarket: null },
-      seed: { id: "seed-1", nameEn: "CCTV System", seedType: "SYSTEM", confidence: 0.95 },
-      counts: {
-        discoveredComponentsCount: 1,
-        plannedWorkItemsCount: 1,
-        stagedRecordsCount: 1,
-        duplicateRecordsCount: 0,
-        needsReviewCount: 1,
-        rejectedCount: 0,
-        publishedCount: 0,
-      },
-      evidenceUrls: ["https://example.com/datasheet"],
-      stagedCandidates: [],
-      errors: [],
-    });
-
+  it("returns 500 when OPENAI_API_KEY is not configured", async () => {
     const res = await runPost(
       request(
         "http://test/run",
-        JSON.stringify({ prompt: "CCTV System", domainHint: "Security", useLive: false }),
+        JSON.stringify({ prompt: "CCTV System", domainHint: "Security" }),
         "OWNER"
       )
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.data.runId).toBe("run-123");
-    expect(body.data.counts.publishedCount).toBe(0);
-    expect(mocks.runPopulationExecute).toHaveBeenCalledWith({
-      prompt: "CCTV System",
-      domainHint: "Security",
-      categoryHint: null,
-      targetMarket: null,
-    });
+    expect(body.error).toMatch(/OPENAI_API_KEY is not configured/i);
+  });
+
+  it("executes population pipeline and returns 200 with summary when API key is present", async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-openai-key";
+
+    try {
+      mocks.runPopulationExecute.mockResolvedValue({
+        runId: "run-123",
+        status: "COMPLETED",
+        query: { prompt: "CCTV System", domainHint: "Security", targetMarket: null },
+        seed: { id: "seed-1", nameEn: "CCTV System", seedType: "SYSTEM", confidence: 0.95 },
+        counts: {
+          discoveredComponentsCount: 1,
+          plannedWorkItemsCount: 1,
+          stagedRecordsCount: 1,
+          duplicateRecordsCount: 0,
+          needsReviewCount: 1,
+          rejectedCount: 0,
+          publishedCount: 0,
+        },
+        evidenceUrls: ["https://example.com/datasheet"],
+        stagedCandidates: [],
+        errors: [],
+      });
+
+      const res = await runPost(
+        request(
+          "http://test/run",
+          JSON.stringify({ prompt: "CCTV System", domainHint: "Security" }),
+          "OWNER"
+        )
+      );
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.runId).toBe("run-123");
+      expect(body.data.counts.publishedCount).toBe(0);
+      expect(mocks.runPopulationExecute).toHaveBeenCalledWith({
+        prompt: "CCTV System",
+        domainHint: "Security",
+        categoryHint: null,
+        targetMarket: null,
+      });
+    } finally {
+      process.env.OPENAI_API_KEY = originalKey;
+    }
   });
 });

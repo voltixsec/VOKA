@@ -46,7 +46,6 @@ interface PopulationRunSummary {
 export default function PopulationObservabilityPage() {
   const [prompt, setPrompt] = useState("CCTV IP Surveillance System");
   const [domainHint, setDomainHint] = useState("Security Equipment");
-  const [useLive, setUseLive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [runSummary, setRunSummary] = useState<PopulationRunSummary | null>(null);
@@ -65,7 +64,6 @@ export default function PopulationObservabilityPage() {
         body: JSON.stringify({
           prompt: prompt.trim(),
           domainHint: domainHint.trim() || undefined,
-          useLive,
         }),
       });
 
@@ -84,7 +82,6 @@ export default function PopulationObservabilityPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
       <div className="border-b pb-4">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           Governed Universal Library Population Engine
@@ -94,7 +91,6 @@ export default function PopulationObservabilityPage() {
         </p>
       </div>
 
-      {/* Control Panel / Run Form */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <h2 className="text-lg font-semibold text-slate-800">Start Population Run</h2>
         <form onSubmit={handleStartRun} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -125,21 +121,6 @@ export default function PopulationObservabilityPage() {
             />
           </div>
 
-          <div className="flex items-center pt-5">
-            <label className="inline-flex items-center cursor-pointer text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={useLive}
-                onChange={(e) => setUseLive(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              <span className="ms-3 text-sm font-medium text-slate-900">
-                Live OpenAI + Web Search Mode (requires OPENAI_API_KEY)
-              </span>
-            </label>
-          </div>
-
           <div className="md:col-span-2 pt-2">
             <button
               type="submit"
@@ -165,10 +146,8 @@ export default function PopulationObservabilityPage() {
         )}
       </div>
 
-      {/* Population Run Observability Surface */}
       {runSummary && (
         <div className="space-y-6">
-          {/* Status Header */}
           <div className="bg-slate-900 text-white p-6 rounded-xl shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <div className="flex items-center gap-3">
@@ -192,7 +171,6 @@ export default function PopulationObservabilityPage() {
             </div>
           </div>
 
-          {/* Counts Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
             <div className="bg-white p-4 rounded-lg border border-slate-200 text-center">
               <span className="block text-2xl font-bold text-slate-800">
@@ -246,7 +224,6 @@ export default function PopulationObservabilityPage() {
             </div>
           </div>
 
-          {/* Source Evidence URLs */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">
               Discovered Web Evidence URLs ({runSummary.evidenceUrls.length})
@@ -272,7 +249,6 @@ export default function PopulationObservabilityPage() {
             )}
           </div>
 
-          {/* Staged Candidate Items Table */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50">
               <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">
@@ -341,7 +317,6 @@ export default function PopulationObservabilityPage() {
             </div>
           </div>
 
-          {/* Error Summary */}
           {runSummary.errors.length > 0 && (
             <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-sm text-red-700 space-y-1">
               <h4 className="font-semibold text-red-800">Pipeline Errors / Candidate Rejections:</h4>

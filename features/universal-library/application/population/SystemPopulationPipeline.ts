@@ -147,7 +147,7 @@ export class SystemPopulationPipeline {
     // 3. Stage work items via bridge
     const stagingOptions: StagingBridgeOptions = {
       sourceId: input.sourceId || "web_search_discovery",
-      acquisitionRunId: runId,
+      acquisitionRunId: undefined,
     };
 
     const bridgeResults = await this.bridge.stageWorkItems(workItems, stagingOptions);

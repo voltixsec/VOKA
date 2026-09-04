@@ -35,7 +35,7 @@ describe("SystemPopulationPipeline", () => {
           return ingestionStore.get(`${sourceId}:${extId}`) || null;
         }),
       saveIngestionRecord: vi.fn().mockImplementation(async (input: any) => {
-        const id = `ir-${Date.now()}-${Math.random()}`;
+        const id = `ir-${input.sourceExternalId}`;
         const record = new UniversalIngestionRecord({
           id,
           sourceId: input.sourceId,
@@ -149,7 +149,7 @@ describe("SystemPopulationPipeline", () => {
     expect(summary.counts.discoveredComponentsCount).toBe(2);
     expect(summary.counts.plannedWorkItemsCount).toBe(2);
     expect(summary.counts.stagedRecordsCount).toBe(2);
-    expect(summary.counts.publishedCount).toBe(0); // STRICTLY ZERO IN VARIANT!
+    expect(summary.counts.publishedCount).toBe(0);
 
     expect(summary.evidenceUrls).toContain(
       "https://www.example-surveillance.com/solutions/enterprise"
@@ -163,8 +163,19 @@ describe("SystemPopulationPipeline", () => {
     expect(summary.stagedCandidates[0].modelNumber).toBe("VT-4K-D32");
     expect(summary.stagedCandidates[0].mpn).toBe("VT-4K-D32-IR");
 
-    // Verify stored ingestion record
     expect(mockRepo.saveIngestionRecord).toHaveBeenCalledTimes(2);
+    const calls = (mockRepo.saveIngestionRecord as any).mock.calls;
+    for (const call of calls) {
+      const rawPayload = call[0].rawPayload;
+      expect(rawPayload.componentEvidence).toBeDefined();
+      expect(rawPayload.componentEvidence.length).toBeGreaterThan(0);
+      expect(rawPayload.seedEvidence).toBeDefined();
+      expect(rawPayload.seedEvidence.length).toBeGreaterThan(0);
+      expect(rawPayload.componentEvidence[0].url).toBeDefined();
+      expect(rawPayload.componentEvidence[0].title).toBeDefined();
+      expect(rawPayload.componentEvidence[0].publisher).toBeDefined();
+      expect(rawPayload.componentEvidence[0].claimSupport).toBeDefined();
+    }
   });
 
   it("handles duplicate execution idempotently without corrupting staging", async () => {
@@ -173,12 +184,10 @@ describe("SystemPopulationPipeline", () => {
       mockRepo as IUniversalLibraryRepository
     );
 
-    // First run
     const summary1 = await pipeline.runPopulation({ prompt: "CCTV System" });
     expect(summary1.counts.stagedRecordsCount).toBe(2);
     expect(summary1.counts.duplicateRecordsCount).toBe(0);
 
-    // Second identical run
     const summary2 = await pipeline.runPopulation({ prompt: "CCTV System" });
     expect(summary2.counts.stagedRecordsCount).toBe(0);
     expect(summary2.counts.duplicateRecordsCount).toBe(2);
@@ -198,5 +207,96 @@ describe("SystemPopulationPipeline", () => {
     expect(summary.status).toBe("FAILED");
     expect(summary.counts.discoveredComponentsCount).toBe(0);
     expect(summary.errors[0]).toMatch(/Network timeout/);
+  });
+
+  it("returns null ingestionRecordId and explicit error when bridge staging fails", async () => {
+    const failingRepo = {
+      ...mockRepo,
+      getSourceById: vi.fn().mockRejectedValue(new Error("Database connection lost")),
+    };
+
+    const pipeline = new SystemPopulationPipeline(
+      mockProvider,
+      failingRepo as IUniversalLibraryRepository
+    );
+
+    const summary = await pipeline.runPopulation({ prompt: "CCTV System" });
+    expect(summary.status).toBe("FAILED");
+    expect(summary.counts.rejectedCount).toBe(2);
+    expect(summary.counts.stagedRecordsCount).toBe(0);
+    expect(summary.stagedCandidates).toHaveLength(2);
+    for (const candidate of summary.stagedCandidates) {
+      expect(candidate.ingestionRecordId).toBeNull();
+      expect(candidate.status).toBe("FAILED");
+      expect(candidate.errorMessage).toBeTruthy();
+    }
+  });
+
+  it("preserves exact identity strings without mutation", async () => {
+    const exactSeed = new SystemDiscoverySeed({
+      id: "exact-identity-seed",
+      seedType: "SYSTEM",
+      nameEn: "Exact Identity System",
+      confidence: 0.9,
+      evidence: [
+        new DiscoveryEvidence({
+          url: "https://example.com/spec",
+          title: "Spec Sheet",
+          publisher: "Vendor",
+          sourceType: "MANUFACTURER_DATASHEET",
+          claimSupport: ["Valid evidence"],
+        }),
+      ],
+      components: [
+        new SystemComponent({
+          key: "exact-comp",
+          componentType: "PRODUCT",
+          nameEn: "Exact Component",
+          purpose: "Test",
+          confidence: 0.9,
+          identityHints: {
+            manufacturerHint: "Acme Corp",
+            brandHint: "Pro-line",
+            modelNumber: "ACME-CAM/v2.1_4K-x10",
+            mpn: "ACME-CAM-4K-x10-EU#01",
+            sku: "SKU-123",
+            gtin: "GTIN-456",
+          },
+          evidence: [
+            new DiscoveryEvidence({
+              url: "https://example.com/cam-spec",
+              title: "Cam Spec",
+              publisher: "Vendor",
+              sourceType: "MANUFACTURER_DATASHEET",
+              claimSupport: ["Valid evidence"],
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const exactProvider = {
+      discoverSystem: vi.fn().mockResolvedValue(exactSeed),
+    };
+
+    const pipeline = new SystemPopulationPipeline(
+      exactProvider,
+      mockRepo as IUniversalLibraryRepository
+    );
+
+    const summary = await pipeline.runPopulation({ prompt: "Exact test" });
+    expect(summary.stagedCandidates[0].modelNumber).toBe("ACME-CAM/v2.1_4K-x10");
+    expect(summary.stagedCandidates[0].mpn).toBe("ACME-CAM-4K-x10-EU#01");
+  });
+
+  it("maintains truthful publishedCount of zero with no direct publication path", async () => {
+    const pipeline = new SystemPopulationPipeline(
+      mockProvider,
+      mockRepo as IUniversalLibraryRepository
+    );
+
+    const summary = await pipeline.runPopulation({ prompt: "CCTV System" });
+    expect(summary.counts.publishedCount).toBe(0);
+    expect(summary.stagedCandidates.every((c) => c.status !== "PUBLISHED")).toBe(true);
   });
 });

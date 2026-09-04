@@ -14,7 +14,7 @@ export interface StagingBridgeResultItem {
   componentKey: string;
   disposition: "NEW" | "DUPLICATE" | "CHANGED" | "REJECTED";
   ingestionStatus: IngestionStatus;
-  ingestionRecordId: string;
+  ingestionRecordId: string | null;
   errorMessage?: string | null;
 }
 
@@ -35,7 +35,6 @@ export class SystemPopulationBridge {
     const results: StagingBridgeResultItem[] = [];
 
     for (const item of workItems) {
-      // 1. Convert PopulationWorkItem into RawIngestionPayloadInput
       const identifiers: Array<{ identifierType: string; value: string; source?: string | null }> = [];
 
       if (item.identityHints?.mpn) {
@@ -58,7 +57,10 @@ export class SystemPopulationBridge {
         value: spec,
       }));
 
-      const rawPayload: RawIngestionPayloadInput = {
+      const rawPayload: RawIngestionPayloadInput & {
+        componentEvidence?: Array<{ url: string; title: string | null; publisher: string | null; sourceType: string | null; claimSupport: string[] }>;
+        seedEvidence?: Array<{ url: string; title: string | null; publisher: string | null; sourceType: string | null; claimSupport: string[] }>;
+      } = {
         name: item.nameEn,
         nameEn: item.nameEn,
         nameAr: item.nameAr,
@@ -71,28 +73,58 @@ export class SystemPopulationBridge {
         modelNumber: item.identityHints?.modelNumber || null,
         identifiers: identifiers.length > 0 ? identifiers : undefined,
         attributes: attributes.length > 0 ? attributes : undefined,
+        componentEvidence: item.componentEvidence.map((e) => ({
+          url: e.url,
+          title: e.title,
+          publisher: e.publisher,
+          sourceType: e.sourceType,
+          claimSupport: e.claimSupport,
+        })),
+        seedEvidence: item.seedEvidence.map((e) => ({
+          url: e.url,
+          title: e.title,
+          publisher: e.publisher,
+          sourceType: e.sourceType,
+          claimSupport: e.claimSupport,
+        })),
       };
 
-      // 2. Resolve primary canonical evidence URL and attribution
       const primaryEvidence = item.componentEvidence[0] || item.seedEvidence[0];
       const canonicalSourceUrl = primaryEvidence?.url || undefined;
       const attributionText = primaryEvidence
         ? `${primaryEvidence.publisher} - ${primaryEvidence.title}`
         : "Web Search Discovery";
 
-      // 3. Invoke governed IngestSourceRecord use case
       try {
         const ingestResult = await this.ingestUseCase.execute({
           sourceId,
           sourceExternalId: item.id,
-          entityType: item.componentType,
+          entityType: "ITEM",
           rawPayload,
           acquisitionRunId,
           canonicalSourceUrl,
           attributionText,
         });
 
-        const disposition = ingestResult.isDuplicatePayload
+        let stagedRecord = ingestResult.ingestionRecord;
+    const hasEvidence =
+      item.componentEvidence.length > 0 || item.seedEvidence.length > 0;
+
+    if (
+      !hasEvidence &&
+      (stagedRecord.status === "NORMALIZED" || stagedRecord.status === "MATCHED")
+    ) {
+      stagedRecord = await this.repository.updateIngestionRecordStatus(
+        stagedRecord.id,
+        "NEEDS_REVIEW",
+        {
+          errorMessage:
+            "Discovery staged without grounded evidence and requires manual review",
+        }
+      );
+    }
+
+    const disposition = ingestResult.isDuplicatePayload
           ? "DUPLICATE"
           : ingestResult.isNewRecord
           ? "NEW"
@@ -101,10 +133,10 @@ export class SystemPopulationBridge {
         results.push({
           workItemId: item.id,
           componentKey: item.componentKey,
-          disposition: ingestResult.ingestionRecord.status === "REJECTED" ? "REJECTED" : disposition,
-          ingestionStatus: ingestResult.ingestionRecord.status,
-          ingestionRecordId: ingestResult.ingestionRecord.id,
-          errorMessage: ingestResult.ingestionRecord.errorMessage,
+          disposition: stagedRecord.status === "REJECTED" ? "REJECTED" : disposition,
+          ingestionStatus: stagedRecord.status,
+          ingestionRecordId: stagedRecord.id,
+          errorMessage: stagedRecord.errorMessage,
         });
       } catch (err: any) {
         results.push({
@@ -112,7 +144,7 @@ export class SystemPopulationBridge {
           componentKey: item.componentKey,
           disposition: "REJECTED",
           ingestionStatus: "FAILED",
-          ingestionRecordId: `failed-${Date.now()}`,
+          ingestionRecordId: null,
           errorMessage: err.message || "Failed to stage work item",
         });
       }
