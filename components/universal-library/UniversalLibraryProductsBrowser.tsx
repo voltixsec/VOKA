@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import {
@@ -126,8 +126,8 @@ const emptyFilters: FilterState = {
 
 const tabs = [
   { label: "Overview", href: "/dashboard/universal-library", enabled: false },
-  { label: "Batches", href: "#", enabled: false },
-  { label: "Systems", href: "#", enabled: false },
+  { label: "Batches", href: "/dashboard/universal-library/batches", enabled: true },
+  { label: "Systems", href: "/dashboard/universal-library/systems", enabled: true },
   {
     label: "Products",
     href: "/dashboard/universal-library/products",

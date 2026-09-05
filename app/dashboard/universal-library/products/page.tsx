@@ -1,5 +1,7 @@
-﻿import UniversalLibraryProductsBrowser from "@/components/universal-library/UniversalLibraryProductsBrowser";
+import UniversalLibraryStagedProductsBrowser from "@/components/universal-library/UniversalLibraryStagedProductsBrowser";
 
 export default function UniversalLibraryProductsPage() {
-  return <UniversalLibraryProductsBrowser />;
+  return (
+    <UniversalLibraryStagedProductsBrowser />
+  );
 }
