@@ -59,8 +59,8 @@ export class SystemDiscoverySeed {
     if (!input.nameEn || typeof input.nameEn !== "string" || !input.nameEn.trim()) {
       throw new Error("SystemDiscoverySeed nameEn cannot be empty");
     }
-    if (!Array.isArray(input.evidence) || input.evidence.length === 0) {
-      throw new Error("SystemDiscoverySeed requires at least one genuine evidence reference");
+    if (!Array.isArray(input.evidence)) {
+      throw new Error("SystemDiscoverySeed evidence must be an array");
     }
     if (input.evidence.length > DISCOVERY_COLLECTION_BOUNDS.MAX_EVIDENCE) {
       throw new Error(

@@ -12,3 +12,4 @@ export * from "./cache/RetrievalCache";
 export * from "./observability/RetrievalObservability";
 export * from "./acquisition";
 export * from "./discovery";
+export * from "./bulk-import/BulkImportContract";

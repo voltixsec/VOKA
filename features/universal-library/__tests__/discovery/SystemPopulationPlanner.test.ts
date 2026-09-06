@@ -360,17 +360,16 @@ describe("PIC-03A1 System/Solution Discovery Decomposition & Population Planner 
     ).toThrow("nameEn cannot be empty");
   });
 
-  it("15. zero seed evidence fails", () => {
-    expect(
-      () =>
-        new SystemDiscoverySeed({
-          id: "s1",
-          seedType: "SYSTEM",
-          nameEn: "CCTV",
-          evidence: [],
-          confidence: 0.9,
-        })
-    ).toThrow("requires at least one genuine evidence reference");
+  it("15. zero seed evidence is allowed for governed review staging", () => {
+    const seed = new SystemDiscoverySeed({
+      id: "s1",
+      seedType: "SYSTEM",
+      nameEn: "CCTV",
+      evidence: [],
+      confidence: 0.9,
+    });
+
+    expect(seed.evidence).toEqual([]);
   });
 
   it("16. empty component key fails", () => {

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// These tests inject their own persistence doubles; never initialize the runtime DB.
+vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 
 import { parseCustomerCreate } from '../../app/api/customers/customer-api';
 import { CreateCustomer } from '../../features/customers/application/commands/CreateCustomer';

@@ -1,13 +1,22 @@
 # Resume Point
 
+## Release stabilization local review — 2026-09-06
+
+Phase 1 was validated locally against baseline `338a168` before CTO approval.
+See the [Release War Room Phase 1 handoff](../product/changes/2026-09-06-release-war-room-phase-1.md)
+for validation evidence, the subsequent bounded CTO corrections, and acceptance limits.
+The validation branch was
+`feature/pre-staging-product-coherence-2978252134715781250`.
+This verified baseline supersedes older local-WIP descriptions below for this task.
+
 ## Local review handoff — 2026-09-02
 
 The subsequent [quotation Draft-only correction](../product/changes/2026-09-02-quotation-draft-only-correction.md)
-is also uncommitted: Draft labels/units, governed line identity, current scope Terms,
+was recorded as uncommitted at that checkpoint: Draft labels/units, governed line identity, current scope Terms,
 and Notes mapping, with its validation limits recorded separately.
 
 The owner-requested [focused live commercial correction](../product/changes/2026-09-02-focused-live-commercial-correction.md)
-is available as uncommitted WIP on `feature/pre-staging-product-coherence`, preserving
+was recorded as uncommitted WIP on `feature/pre-staging-product-coherence`, preserving
 the preceding coherence pass. It records the current customer-required Draft policy,
 component selection fixes, validation and remaining live acceptance. Do not treat
 this local handoff as a published checkpoint or change to roadmap station order.
