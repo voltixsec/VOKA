@@ -99,7 +99,7 @@ export class IngestSourceRecord {
         entityType: entityType || "ITEM",
         rawPayload: rawPayloadJson,
         payloadHash,
-        status: "REJECTED",
+        status: "FAILED",
         errorMessage: normalizeError || "Invalid raw payload",
         ...acquisitionMetadata,
       });

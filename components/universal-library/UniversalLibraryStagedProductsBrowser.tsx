@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
@@ -48,6 +47,10 @@ const tabs = [
     href: "/dashboard/universal-library/batches",
   },
   {
+    label: "Review",
+    href: "/dashboard/universal-library/review",
+  },
+  {
     label: "Population",
     href: "/dashboard/universal-library/population",
   },
@@ -71,6 +74,9 @@ function extractResult(
     root.data ?? root,
   );
 
+  const globalTotals =
+    objectValue(data.globalTotals);
+
   return {
     items: Array.isArray(data.items)
       ? (data.items as StagedProductSummary[])
@@ -84,6 +90,24 @@ function extractResult(
       "string"
         ? data.nextCursor
         : null,
+    globalTotals: {
+      totalStagedCommercialRecords:
+        typeof globalTotals.totalStagedCommercialRecords === "number"
+          ? globalTotals.totalStagedCommercialRecords
+          : 0,
+      totalProductModels:
+        typeof globalTotals.totalProductModels === "number"
+          ? globalTotals.totalProductModels
+          : 0,
+      totalItems:
+        typeof globalTotals.totalItems === "number"
+          ? globalTotals.totalItems
+          : 0,
+      totalServices:
+        typeof globalTotals.totalServices === "number"
+          ? globalTotals.totalServices
+          : 0,
+    },
   };
 }
 
@@ -364,6 +388,14 @@ export default function UniversalLibraryStagedProductsBrowser() {
   const [total, setTotal] =
     useState(0);
 
+  const [globalTotals, setGlobalTotals] =
+    useState<StagedProductsResult["globalTotals"]>({
+      totalStagedCommercialRecords: 0,
+      totalProductModels: 0,
+      totalItems: 0,
+      totalServices: 0,
+    });
+
   const [nextCursor, setNextCursor] =
     useState<string | null>(null);
 
@@ -437,6 +469,9 @@ for (const [
 
         setItems(result.items);
         setTotal(result.total);
+        setGlobalTotals(
+          result.globalTotals,
+        );
 
         setNextCursor(
           result.nextCursor ?? null,
@@ -444,6 +479,12 @@ for (const [
 } catch (caught) {
         setItems([]);
         setTotal(0);
+        setGlobalTotals({
+          totalStagedCommercialRecords: 0,
+          totalProductModels: 0,
+          totalItems: 0,
+          totalServices: 0,
+        });
 
         setNextCursor(null);
 setError(
@@ -470,58 +511,6 @@ setError(
         timeout,
       );
   }, [loadProducts]);
-
-  const metrics =
-    useMemo(() => {
-      const productModels =
-        items.filter(
-          (item) =>
-            item.entityType ===
-            "PRODUCT_MODEL",
-        ).length;
-
-      const itemCount =
-        items.filter(
-          (item) =>
-            item.entityType ===
-            "ITEM",
-        ).length;
-
-      const services =
-        items.filter(
-          (item) =>
-            item.entityType ===
-            "SERVICE",
-        ).length;
-
-      const manufacturers =
-        new Set(
-          items
-            .map(
-              (item) =>
-                item.manufacturer,
-            )
-            .filter(Boolean),
-        ).size;
-
-      const families =
-        new Set(
-          items
-            .map(
-              (item) =>
-                item.family,
-            )
-            .filter(Boolean),
-        ).size;
-
-      return {
-        productModels,
-        itemCount,
-        services,
-        manufacturers,
-        families,
-      };
-    }, [items]);
 
   const updateFilter = (
     key: keyof Filters,
@@ -596,39 +585,39 @@ setFilters(
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <MetricCard
+            label="Total Staged Commercial Records"
+            value={globalTotals.totalStagedCommercialRecords.toLocaleString()}
+            detail="Global governed staging"
+          />
+
+          <MetricCard
+            label="Total Product Models"
+            value={globalTotals.totalProductModels.toLocaleString()}
+            detail="Global governed staging"
+          />
+
+          <MetricCard
+            label="Total Items"
+            value={globalTotals.totalItems.toLocaleString()}
+            detail="Global governed staging"
+          />
+
+          <MetricCard
+            label="Total Services"
+            value={globalTotals.totalServices.toLocaleString()}
+            detail="Global governed staging"
+          />
+
+          <MetricCard
             label="Matching Records"
             value={total.toLocaleString()}
-            detail="Current server result"
+            detail="Current filtered server result"
           />
 
           <MetricCard
-            label="Loaded"
+            label="Loaded / Current Page"
             value={items.length}
-            detail="Current bounded page"
-          />
-
-          <MetricCard
-            label="Product Models"
-            value={metrics.productModels}
-            detail="Loaded page"
-          />
-
-          <MetricCard
-            label="Items / Services"
-            value={`${metrics.itemCount} / ${metrics.services}`}
-            detail="Loaded page"
-          />
-
-          <MetricCard
-            label="Manufacturers"
-            value={metrics.manufacturers}
-            detail="Resolved on page"
-          />
-
-          <MetricCard
-            label="Families"
-            value={metrics.families}
-            detail="Resolved on page"
+            detail="Current bounded page only"
           />
         </section>
 

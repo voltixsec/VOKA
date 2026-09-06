@@ -104,8 +104,14 @@ export interface SaveIngestionRecordInput {
 
 export interface PublishIngestionRecordInput {
   ingestionRecordId: string;
-  normalizedPayload: NormalizedIngestionPayload;
-  matchedItemId?: string | null;
+  reviewedByUserId: string;
+  reviewNote?: string | null;
+}
+
+export interface RejectIngestionRecordInput {
+  ingestionRecordId: string;
+  reviewedByUserId: string;
+  reviewNote?: string | null;
 }
 
 export interface IUniversalLibraryRepository {
@@ -136,4 +142,5 @@ export interface IUniversalLibraryRepository {
     extra?: { normalizedData?: Record<string, unknown> | null; matchedItemId?: string | null; errorMessage?: string | null; processedAt?: Date | null }
   ): Promise<UniversalIngestionRecord>;
   publishIngestionRecord(input: PublishIngestionRecordInput): Promise<{ item: UniversalCatalogItem; isNewItem: boolean }>;
+  rejectIngestionRecord(input: RejectIngestionRecordInput): Promise<UniversalIngestionRecord>;
 }

@@ -3,6 +3,7 @@ import type { PrismaClient } from "@/lib/generated/prisma/client";
 import type {
   IStagedProductsRepository,
   StagedProductSummary,
+  StagedProductsGlobalTotals,
   StagedProductsQuery,
   StagedProductsResult,
 } from "../../application/staging-products/GetStagedProducts";
@@ -12,7 +13,24 @@ type RawRow = {
   sourceExternalId: string;
   entityType: string;
   status: string;
+
   rawPayload: unknown;
+  normalizedData: unknown;
+  matchedItemId: string | null;
+
+  sourceId: string;
+  canonicalSourceUrl: string | null;
+  fetchedAt: Date | null;
+  attributionText: string | null;
+
+  source: {
+    name: string;
+    type: string;
+    verificationStatus: string;
+    trustScore: unknown;
+    url: string | null;
+    licenseReferenceUrl: string | null;
+  };
 };
 
 type RelationKind =
@@ -37,6 +55,40 @@ function stringValue(
   return typeof value === "string" &&
     value.trim().length > 0
     ? value.trim()
+    : null;
+}
+
+function trustScoreValue(
+  value: unknown,
+): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    typeof (value as { toNumber?: unknown }).toNumber === "function"
+  ) {
+    const result =
+      (value as { toNumber(): number }).toNumber();
+
+    return Number.isFinite(result)
+      ? result
+      : null;
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric)
+    ? numeric
     : null;
 }
 
@@ -74,69 +126,84 @@ function baseProduct(
 
   return {
     id: row.id,
-    externalKey:
-      row.sourceExternalId,
+    externalKey: row.sourceExternalId,
+
     entityType:
       row.entityType as StagedProductSummary["entityType"],
+
     status: row.status,
 
     name:
-      stringValue(
-        payload.name,
-      ) ??
-      stringValue(
-        payload.model,
-      ) ??
-      stringValue(
-        payload.modelNumber,
-      ),
+      stringValue(payload.name) ??
+      stringValue(payload.model) ??
+      stringValue(payload.modelNumber),
 
     description:
-      stringValue(
-        payload.description,
-      ) ??
-      stringValue(
-        payload.technicalDescription,
-      ),
+      stringValue(payload.description) ??
+      stringValue(payload.technicalDescription),
 
     modelNumber:
-      stringValue(
-        payload.modelNumber,
-      ) ??
-      stringValue(
-        payload.model,
-      ),
+      stringValue(payload.modelNumber) ??
+      stringValue(payload.model),
 
     manufacturer:
-      stringValue(
-        payload.manufacturer,
-      ),
+      stringValue(payload.manufacturer),
 
     brand:
-      stringValue(
-        payload.brand,
-      ),
+      stringValue(payload.brand),
 
     family:
-      stringValue(
-        payload.family,
-      ),
+      stringValue(payload.family),
 
     system:
-      stringValue(
-        payload.system,
-      ) ??
-      stringValue(
-        payload.systemRole,
-      ),
+      stringValue(payload.system) ??
+      stringValue(payload.systemRole),
 
     lifecycle:
-      stringValue(
-        payload.lifecycle,
-      ) ??
-      stringValue(
-        payload.lifecycleStatus,
+      stringValue(payload.lifecycle) ??
+      stringValue(payload.lifecycleStatus),
+
+    matchedItemId:
+      row.matchedItemId,
+
+    normalizedData:
+      row.normalizedData
+        ? objectValue(row.normalizedData)
+        : null,
+
+    sourceId:
+      row.sourceId,
+
+    sourceName:
+      row.source.name,
+
+    sourceType:
+      row.source.type,
+
+    sourceVerificationStatus:
+      row.source.verificationStatus,
+
+    sourceTrustScore:
+      trustScoreValue(
+        row.source.trustScore,
       ),
+
+    sourceUrl:
+      row.source.url,
+
+    sourceLicenseReferenceUrl:
+      row.source.licenseReferenceUrl,
+
+    canonicalSourceUrl:
+      row.canonicalSourceUrl,
+
+    fetchedAt:
+      row.fetchedAt
+        ? row.fetchedAt.toISOString()
+        : null,
+
+    attributionText:
+      row.attributionText,
 
     rawPayload:
       envelopeOf(row),
@@ -167,6 +234,63 @@ export class PrismaStagedProductsRepository
     private readonly prisma:
       PrismaClient,
   ) {}
+
+  private async getGlobalTotals(): Promise<StagedProductsGlobalTotals> {
+    const [
+      totalProductModels,
+      totalItems,
+      totalServices,
+    ] = await Promise.all([
+      this.prisma.universalIngestionRecord.count({
+        where: {
+          entityType: "PRODUCT_MODEL",
+          status: {
+            notIn: [
+              "PUBLISHED",
+              "REJECTED",
+              "FAILED",
+            ],
+          },
+        } as never,
+      }),
+
+      this.prisma.universalIngestionRecord.count({
+        where: {
+          entityType: "ITEM",
+          status: {
+            notIn: [
+              "PUBLISHED",
+              "REJECTED",
+              "FAILED",
+            ],
+          },
+        } as never,
+      }),
+
+      this.prisma.universalIngestionRecord.count({
+        where: {
+          entityType: "SERVICE",
+          status: {
+            notIn: [
+              "PUBLISHED",
+              "REJECTED",
+              "FAILED",
+            ],
+          },
+        } as never,
+      }),
+    ]);
+
+    return {
+      totalStagedCommercialRecords:
+        totalProductModels +
+        totalItems +
+        totalServices,
+      totalProductModels,
+      totalItems,
+      totalServices,
+    };
+  }
 
   private async resolveEntityKeysByName(
     entityType:
@@ -418,6 +542,9 @@ export class PrismaStagedProductsRepository
         "limit"
       >,
   ): Promise<StagedProductsResult> {
+    const globalTotals =
+      await this.getGlobalTotals();
+
     const entityTypes =
       query.entityType
         ? [query.entityType]
@@ -442,6 +569,7 @@ export class PrismaStagedProductsRepository
         items: [],
         total: 0,
         nextCursor: null,
+        globalTotals,
       };
     }
 
@@ -552,9 +680,11 @@ export class PrismaStagedProductsRepository
             )
           : {
               notIn: [
+                "PUBLISHED",
                 "REJECTED",
                 "FAILED",
               ] as (
+                | "PUBLISHED"
                 | "REJECTED"
                 | "FAILED"
               )[],
@@ -602,16 +732,34 @@ export class PrismaStagedProductsRepository
             : {}),
 
           take:
-            query.limit + 1,
+          query.limit + 1,
 
-          select: {
-            id: true,
-            sourceExternalId:
-              true,
-            entityType: true,
-            status: true,
-            rawPayload: true,
+        select: {
+          id: true,
+          sourceExternalId: true,
+          entityType: true,
+          status: true,
+
+          rawPayload: true,
+          normalizedData: true,
+          matchedItemId: true,
+
+          sourceId: true,
+          canonicalSourceUrl: true,
+          fetchedAt: true,
+          attributionText: true,
+
+          source: {
+            select: {
+              name: true,
+              type: true,
+              verificationStatus: true,
+              trustScore: true,
+              url: true,
+              licenseReferenceUrl: true,
+            },
           },
+        },
         }),
     ]);
 
@@ -642,6 +790,7 @@ export class PrismaStagedProductsRepository
         items: [],
         total,
         nextCursor: null,
+        globalTotals,
       };
     }
 
@@ -925,6 +1074,8 @@ export class PrismaStagedProductsRepository
               ?.id ??
             null
           : null,
+
+      globalTotals,
     };
   }
 }

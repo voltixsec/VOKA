@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { apiSuccess, withCompanyAuth } from "@/lib/api";
+import { apiSuccess, withPlatformAdminAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { PrismaUniversalLibraryRepository } from "@/features/universal-library/infrastructure/prisma/PrismaUniversalLibraryRepository";
 import { OpenAiWebDiscoveryAdapter } from "@/features/universal-library/infrastructure/discovery/OpenAiWebDiscoveryAdapter";
 import { SystemPopulationPipeline } from "@/features/universal-library/application/population/SystemPopulationPipeline";
 
-export const POST = withCompanyAuth(
+export const POST = withPlatformAdminAuth(
   ["OWNER", "ADMIN"],
   async (request: Request) => {
     try {

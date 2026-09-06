@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", () => ({
   apiSuccess: (data: unknown, init?: ResponseInit) => Response.json({ data }, init),
-  withCompanyAuth: (roles: string[], handler: (request: Request) => Promise<Response>) => {
+  withPlatformAdminAuth: (roles: string[], handler: (request: Request) => Promise<Response>) => {
     mocks.roleSets.push(roles);
     return async (request: Request) => {
       const role = request.headers.get("x-test-role") || "VIEWER";

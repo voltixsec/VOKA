@@ -7,7 +7,7 @@ import {
 import { PrismaStagedProductsRepository } from "@/features/universal-library/infrastructure/staging-products/PrismaStagedProductsRepository";
 import {
   apiSuccess,
-  withCompanyAuth,
+  withPlatformAdminAuth,
 } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
@@ -52,7 +52,7 @@ function errorResponse(
   );
 }
 
-export const GET = withCompanyAuth(
+export const GET = withPlatformAdminAuth(
   ["OWNER", "ADMIN"],
   async (request: Request) => {
     const url = new URL(request.url);

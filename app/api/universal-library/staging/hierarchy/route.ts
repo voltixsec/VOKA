@@ -4,7 +4,7 @@ import { GetStagedHierarchy } from "@/features/universal-library/application/sta
 import { PrismaStagedHierarchyRepository } from "@/features/universal-library/infrastructure/staging/PrismaStagedHierarchyRepository";
 import {
   apiSuccess,
-  withCompanyAuth,
+  withPlatformAdminAuth,
 } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
@@ -34,7 +34,7 @@ function errorResponse(
 }
 
 export const GET =
-  withCompanyAuth(
+  withPlatformAdminAuth(
     ["OWNER", "ADMIN"],
     async (request: Request) => {
       const url =

@@ -114,9 +114,7 @@ const tabs = [
     enabled: false,
   },
   {
-    label: "Review",
-    href: "#",
-    enabled: false,
+    label: "Review", href: "/dashboard/universal-library/review", enabled: true,
   },
   {
     label: "Population",

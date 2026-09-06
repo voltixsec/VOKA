@@ -26,7 +26,7 @@ vi.mock("@/lib/api", () => ({
       init,
     ),
 
-  withCompanyAuth: (
+  withPlatformAdminAuth: (
     roles: string[],
     handler: (
       request: Request,

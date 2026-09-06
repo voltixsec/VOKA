@@ -1347,6 +1347,11 @@ enum UniversalIngestionStatus {
   FAILED
 }
 
+enum UniversalIngestionReviewDecision {
+  APPROVED
+  REJECTED
+}
+
 enum UniversalSourceApprovalState {
   DRAFT
   APPROVED
@@ -1574,6 +1579,7 @@ model UniversalIngestionRecord {
   source         UniversalSource          @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   matchedItem    UniversalCatalogItem?    @relation(fields: [matchedItemId], references: [id], onDelete: SetNull)
   acquisitionRun UniversalAcquisitionRun? @relation(fields: [acquisitionRunId], references: [id], onDelete: SetNull)
+  reviewEvents   UniversalIngestionReviewEvent[]
 
   @@unique([sourceId, sourceExternalId])
   @@index([sourceId])
@@ -1581,6 +1587,21 @@ model UniversalIngestionRecord {
   @@index([payloadHash])
   @@index([matchedItemId])
   @@index([acquisitionRunId])
+}
+
+model UniversalIngestionReviewEvent {
+  id                String                           @id @default(cuid())
+  ingestionRecordId String
+  decision          UniversalIngestionReviewDecision
+  actorUserId       String
+  note              String?
+  createdAt         DateTime                         @default(now())
+
+  ingestionRecord UniversalIngestionRecord @relation(fields: [ingestionRecordId], references: [id], onDelete: Restrict)
+
+  @@index([ingestionRecordId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([decision, createdAt])
 }
 
 model UniversalCatalogItem {

@@ -17,7 +17,7 @@ import { PrismaBulkImportRunRepository } from "@/features/universal-library/infr
 import { PrismaUniversalLibraryRepository } from "@/features/universal-library/infrastructure/prisma/PrismaUniversalLibraryRepository";
 import {
   apiSuccess,
-  withCompanyAuth,
+  withPlatformAdminAuth,
 } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
@@ -246,7 +246,7 @@ async function countRecords(
 }
 
 export const POST =
-  withCompanyAuth(
+  withPlatformAdminAuth(
     ["OWNER", "ADMIN"],
     async (
       request,

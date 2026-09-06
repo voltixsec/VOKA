@@ -19,6 +19,17 @@
 
 ## Current Release Baseline
 
+Session closure checkpoint — **2026-09-07**:
+
+- Pre-session remote baseline: `50fb05ab46a8f80278a00f880fa6cddca4a66956`.
+- **UCL-CLOSE-01 through UCL-CLOSE-04 = 🟢 CLOSED / ACCEPTED** by the CEO.
+- Exact next slice: **UCL-CLOSE-05 — Explicit Adoption / Commercial Truth**.
+- UCL-CLOSE-06 remains open; UCL as a whole is not yet declared closed.
+- [Closure evidence, migrations and validation](../checkpoints/2026-09-07-ucl-close04-session-close.md).
+- Data Factory remains PAUSED at System008 / `SEC-SYS008-B004`.
+- `LIVE-FAIL-001 / CEO-R1-030` remains RED/BLOCKER;
+  `AUTH-DIRECT-ROUTE-GATE` remains OPEN for Phase 4C.
+
 Branch:
 
 `feature/pre-staging-product-coherence`
@@ -342,64 +353,161 @@ with historical UCL-1 through UCL-6.
 
 Status:
 
-🟡 **OPEN / FINAL UI CLOSURE**
+🟢 **CLOSED — IMPLEMENTATION + REGRESSION + LIVE UI ACCEPTED**
 
-Known review concern:
+Closure date:
 
-global staged totals and current loaded/page counts were visually mixed.
+**2026-09-06**
 
-The operator UI must distinguish at minimum:
+Accepted truth:
 
-- Total Staged Commercial Records;
-- Total Product Models;
-- Total Items;
-- Total Services;
-- Loaded / Current Page records.
+- Total Staged Commercial Records is global governed staging truth;
+- Total Product Models is global governed staging truth;
+- Total Items is global governed staging truth;
+- Total Services is global governed staging truth;
+- Matching Records is the current filtered server result;
+- Loaded / Current Page is explicitly bounded page state;
+- PUBLISHED / REJECTED / FAILED records are excluded from staged global totals.
 
-Do not present page counts as global library truth.
+Evidence:
+
+- focused UCL suite before targeted regression: 44 files / 392 tests PASS;
+- targeted metrics regression: 2 files / 2 tests PASS;
+- TypeScript PASS;
+- live CEO browser acceptance at `/dashboard/universal-library/products`;
+- live values: 3,248 Product Models + 40 Items + 48 Services = 3,336 Total Staged Commercial Records;
+- Loaded / Current Page = 50.
+
+**UCL-CLOSE-01 = 🟢 CLOSED**
 
 ## UCL-CLOSE-02 — Staged vs Published Clarity
 
 Status:
 
-🟡 **OPEN / FINAL UI CLOSURE**
+🟢 **CLOSED — LIVE UI ACCEPTED**
 
-Required operator truth:
+Closure date:
+
+**2026-09-06**
+
+Accepted operator truth:
 
 **Staged record != Published Canonical Library record.**
 
-The UI must not imply that staged population is already canonical published
-library content.
+Live evidence at
+`/dashboard/universal-library/population`:
+
+- Mode: Governed Staging;
+- Publication: Review Required;
+- population copy explicitly states staging occurs without direct publication;
+- governance copy states Evidence before publication;
+- the operator console does not represent discovered candidates as already canonical.
+
+No code correction was required for this closure.
+
+**UCL-CLOSE-02 = 🟢 CLOSED**
 
 ## UCL-CLOSE-03 — Platform Admin / Control-Plane Boundary
 
 Status:
 
-🟡 **SECURITY / PRODUCT ACCEPTANCE REQUIRED**
+🟢 **CLOSED — PLATFORM CONTROL-PLANE BOUNDARY ACCEPTED**
 
-Population, Batches, Imports, Sources, Duplicates, Review and Publish/Reject are
-global platform/Data Factory control-plane capabilities.
+Closure date:
 
-They must not become ordinary tenant governance powers.
+**2026-09-06**
 
-Temporary OWNER/ADMIN + operational-secret infrastructure does not by itself
-prove the final tenant-facing product boundary.
+Accepted security boundary:
+
+Global UCL operator capabilities are not granted merely because a tenant
+membership has OWNER or ADMIN role.
+
+Implementation:
+
+- dedicated server-side platform-admin authorization boundary;
+- explicit platform allowlist via authenticated user id/email;
+- configured through `VOKA_PLATFORM_ADMIN_USER_IDS` / `VOKA_PLATFORM_ADMIN_EMAILS`, independently of CompanyRole;
+- fail-closed when no platform allowlist matches;
+- UCL operator dashboard is server-gated;
+- global acquisition, population, ingestion, staging and bulk-import control-plane routes require platform-admin authorization;
+- no Prisma schema or database migration was required.
+
+Automated evidence:
+
+- dedicated platform authorization tests: 6 / 6 PASS;
+- full UCL + Auth regression: 50 / 50 test files PASS;
+- full UCL + Auth regression: 409 / 409 tests PASS;
+- TypeScript PASS;
+- git diff check contains line-ending warnings only.
+
+Live CEO security acceptance:
+
+1. authenticated company administrator without platform allowlist:
+   `/api/universal-library/staging/products?limit=1`
+   returned `403 PLATFORM_ADMIN_REQUIRED`;
+
+2. after explicitly allowlisting
+   `admin@voka.local` as a platform administrator:
+   the same API returned `success: true` and governed UCL data;
+
+3. the server-gated
+   `/dashboard/universal-library/products`
+   operator UI opened successfully for that explicitly allowlisted user.
+
+Therefore:
+
+**Company OWNER/ADMIN != VOKA Platform Admin**
+
+and the global UCL control plane is no longer an ordinary tenant governance power.
+
+**UCL-CLOSE-03 = 🟢 CLOSED**
+
+Additional final live acceptance: a logged-in company administrator without
+platform allowlisting was redirected from `/dashboard/universal-library/review`
+to `/dashboard`. Published reads and explicit tenant adoption remain tenant scoped.
 
 ## UCL-CLOSE-04 — Review → Approve/Reject → Publish
 
 Status:
 
-🟡 **OPERATIONAL ACCEPTANCE REQUIRED**
+🟢 **CLOSED / ACCEPTED — 2026-09-07**
 
-Prove the actual governed operational path.
+Accepted implementation:
 
-Staging/browser existence alone does not close governance.
+- Processing routes valid normalized candidates to `NEEDS_REVIEW`, never directly
+  to publication. Automated malformed/normalization failures use `FAILED`.
+- Explicit `ReviewIngestionRecord` APPROVE/REJECT decisions use the authenticated
+  server actor; client reviewer identity is not authoritative.
+- Publication uses persisted staged state. Publish and reject both require
+  `NEEDS_REVIEW`; transactional state guards prevent double decisions.
+- Review decisions append `UniversalIngestionReviewEvent` history with actor,
+  decision, note and time. `REJECTED` is reserved for explicit reviewer decisions.
+- The operator sees source/type/verification/trust, source and canonical links,
+  attribution/fetch metadata when available, publication target, normalized
+  candidate and raw payload before publication.
+
+CEO-supplied final live acceptance evidence:
+
+- `VOKA-UCL-CLOSE04-LIVE-APPROVE-20260907`: `PUBLISHED`, matched item
+  `cmtqc2k8k0003i8t1z4etlzwh`, latest decision `APPROVED`.
+- `VOKA-UCL-CLOSE04-LIVE-REJECT-20260907`: `REJECTED`, matched item null,
+  latest decision `REJECTED`.
+- Both latest decisions carry authenticated actor `cmsaa0wym00000ct1nju00h2l`
+  (`admin@voka.local`). Preserve both synthetic records as acceptance evidence.
+- A separate manual browser-console 403 call to `/api/universal-library/review`
+  was **not executed** in the final pass. Denial is covered by route tests,
+  the earlier shared platform-gate live proof and the Review UI redirect proof.
+
+Final closure validation: 57 files / 426 tests PASS; typecheck PASS; Prisma
+validation PASS; all 45 repository migrations applied / database up to date.
+See the [bounded checkpoint](../checkpoints/2026-09-07-ucl-close04-session-close.md)
+for migration names, build result and acceptance limitations.
 
 ## UCL-CLOSE-05 — Explicit Adoption / Commercial Truth
 
 Status:
 
-🟡 **LIVE ACCEPTANCE REQUIRED**
+🟡 **OPEN — EXACT NEXT SLICE / LIVE ACCEPTANCE REQUIRED**
 
 Prove:
 
@@ -504,7 +612,7 @@ with remaining live acceptance items.
 Status:
 
 🟢 **IMPLEMENTED FOUNDATION**
-with `UCL-CLOSE-01` through `UCL-CLOSE-06` remaining before implementation
+with `UCL-CLOSE-05` and `UCL-CLOSE-06` remaining before implementation
 freeze.
 
 ## PHASE 4 — Final Product Closure
@@ -517,7 +625,8 @@ Execution order:
 
 ### 4A — UCL Final Closure
 
-Close `UCL-CLOSE-01` through `UCL-CLOSE-06`.
+UCL-CLOSE-01 through UCL-CLOSE-04 are accepted. Next close UCL-CLOSE-05,
+then UCL-CLOSE-06.
 
 ### 4B — Sales Assistant + Quotation Final Acceptance
 

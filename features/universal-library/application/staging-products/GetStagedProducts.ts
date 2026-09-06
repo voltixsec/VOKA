@@ -16,6 +16,22 @@ export interface StagedProductSummary {
   family: string | null;
   system: string | null;
   lifecycle: string | null;
+
+  matchedItemId: string | null;
+  normalizedData: Record<string, unknown> | null;
+
+  sourceId: string;
+  sourceName: string;
+  sourceType: string;
+  sourceVerificationStatus: string;
+  sourceTrustScore: number | null;
+  sourceUrl: string | null;
+  sourceLicenseReferenceUrl: string | null;
+
+  canonicalSourceUrl: string | null;
+  fetchedAt: string | null;
+  attributionText: string | null;
+
   rawPayload: Record<string, unknown>;
 }
 
@@ -31,10 +47,18 @@ export interface StagedProductsQuery {
   cursor?: string;
 }
 
+export interface StagedProductsGlobalTotals {
+  totalStagedCommercialRecords: number;
+  totalProductModels: number;
+  totalItems: number;
+  totalServices: number;
+}
+
 export interface StagedProductsResult {
   items: StagedProductSummary[];
   total: number;
   nextCursor: string | null;
+  globalTotals: StagedProductsGlobalTotals;
 }
 
 export interface IStagedProductsRepository {

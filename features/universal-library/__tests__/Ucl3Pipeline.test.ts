@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   IngestSourceRecord,
   ProcessIngestionBatch,
+  ReviewIngestionRecord,
   NormalizationPipelineService,
   IdentityResolutionService,
   UniversalSource,
@@ -83,43 +84,103 @@ class InMemoryUniversalLibraryRepository implements Partial<IUniversalLibraryRep
 
   async publishIngestionRecord(input: any) {
     const rec = this.ingestionRecords.get(input.ingestionRecordId);
-    if (!rec) throw new Error("Record not found");
+
+    if (!rec) {
+      throw new Error("Record not found");
+    }
+
+    if (rec.status !== "NEEDS_REVIEW") {
+      throw new Error("Record is not awaiting review");
+    }
+
+    if (!input.reviewedByUserId?.trim()) {
+      throw new Error("Explicit review actor is required");
+    }
+
+    if (!rec.normalizedData) {
+      throw new Error("Normalized payload is required");
+    }
+
+    const normalizedPayload =
+      rec.normalizedData as any;
 
     let isNewItem = false;
-    let item = input.matchedItemId ? this.items.get(input.matchedItemId) : null;
+    let item = rec.matchedItemId
+      ? this.items.get(rec.matchedItemId)
+      : null;
 
     if (!item) {
       isNewItem = true;
+
       item = new UniversalCatalogItem({
-        id: `item-${Date.now()}`,
-        type: "PRODUCT",
-        name: input.normalizedPayload.name,
-        nameAr: input.normalizedPayload.nameAr,
-        nameEn: input.normalizedPayload.nameEn,
-        searchName: input.normalizedPayload.name.toLowerCase(),
-        description: input.normalizedPayload.description,
-        descriptionAr: input.normalizedPayload.descriptionAr,
-        descriptionEn: input.normalizedPayload.descriptionEn,
+        id: `item-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 7)}`,
+        type: normalizedPayload.type || "PRODUCT",
+        name: normalizedPayload.name,
+        nameAr: normalizedPayload.nameAr,
+        nameEn: normalizedPayload.nameEn,
+        searchName: normalizedPayload.name.toLowerCase(),
+        description: normalizedPayload.description,
+        descriptionAr: normalizedPayload.descriptionAr,
+        descriptionEn: normalizedPayload.descriptionEn,
         categoryId: null,
         manufacturerId: null,
         brandId: null,
         familyId: null,
-        modelNumber: input.normalizedPayload.modelNumber,
-        variantName: input.normalizedPayload.variantName,
+        modelNumber: normalizedPayload.modelNumber,
+        variantName: normalizedPayload.variantName,
         parentId: null,
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+
       this.items.set(item.id, item);
     }
 
-    await this.updateIngestionRecordStatus(rec.id, "PUBLISHED", {
-      matchedItemId: item.id,
-      processedAt: new Date(),
-    });
+    await this.updateIngestionRecordStatus(
+      rec.id,
+      "PUBLISHED",
+      {
+        matchedItemId: item.id,
+        processedAt: new Date(),
+        errorMessage: null,
+      },
+    );
 
-    return { item, isNewItem };
+    return {
+      item,
+      isNewItem,
+    };
+  }
+
+  async rejectIngestionRecord(input: any) {
+    const rec =
+      this.ingestionRecords.get(
+        input.ingestionRecordId,
+      );
+
+    if (!rec) {
+      throw new Error("Record not found");
+    }
+
+    if (rec.status !== "NEEDS_REVIEW") {
+      throw new Error("Record is not awaiting review");
+    }
+
+    if (!input.reviewedByUserId?.trim()) {
+      throw new Error("Explicit review actor is required");
+    }
+
+    return this.updateIngestionRecordStatus(
+      rec.id,
+      "REJECTED",
+      {
+        processedAt: new Date(),
+        errorMessage: null,
+      },
+    );
   }
 
   async lookupByIdentifier() { return null; }
@@ -299,25 +360,63 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
     expect(res.confidenceReason).toBe("AMBIGUOUS_MULTIPLE_MATCHES");
   });
 
-  it("7. ProcessIngestionBatch processes pending records and publishes canonically", async () => {
-    const ingestUseCase = new IngestSourceRecord(repo as any);
-    const processBatchUseCase = new ProcessIngestionBatch(repo as any);
+  it("7. processing stops at review and explicit approval publishes canonically", async () => {
+    const ingestUseCase =
+      new IngestSourceRecord(repo as any);
+
+    const processBatchUseCase =
+      new ProcessIngestionBatch(repo as any);
 
     await ingestUseCase.execute({
       sourceId: activeSource.id,
       sourceExternalId: "ext-batch-1",
-      rawPayload: { name: "Batch Product 1", modelNumber: "MOD-1" },
+      rawPayload: {
+        name: "Batch Product 1",
+        modelNumber: "MOD-1",
+      },
     });
 
-    const summary = await processBatchUseCase.execute({ batchSize: 10 });
+    const summary =
+      await processBatchUseCase.execute({
+        batchSize: 10,
+      });
 
     expect(summary.processedCount).toBe(1);
-    expect(summary.publishedCount).toBe(1);
+    expect(summary.publishedCount).toBe(0);
+    expect(summary.needsReviewCount).toBe(1);
     expect(summary.recordIds).toHaveLength(1);
 
-    const publishedRecord = repo.ingestionRecords.get(summary.recordIds[0]);
-    expect(publishedRecord?.status).toBe("PUBLISHED");
-    expect(publishedRecord?.matchedItemId).toBeDefined();
+    const awaitingReview =
+      repo.ingestionRecords.get(
+        summary.recordIds[0],
+      );
+
+    expect(awaitingReview?.status)
+      .toBe("NEEDS_REVIEW");
+
+    const review =
+      new ReviewIngestionRecord(repo as any);
+
+    await review.execute({
+      ingestionRecordId:
+        summary.recordIds[0],
+      decision: "APPROVE",
+      reviewedByUserId:
+        "platform-admin-1",
+      reviewNote:
+        "Synthetic approval",
+    });
+
+    const publishedRecord =
+      repo.ingestionRecords.get(
+        summary.recordIds[0],
+      );
+
+    expect(publishedRecord?.status)
+      .toBe("PUBLISHED");
+
+    expect(publishedRecord?.matchedItemId)
+      .toBeDefined();
   });
 
   it("8. hashes semantically identical objects independently of property order", async () => {
@@ -336,19 +435,53 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
     expect(second.ingestionRecord.payloadHash).toBe(first.ingestionRecord.payloadHash);
   });
 
-  it("9. routes changes to an already published source record to review", async () => {
-    const ingest = new IngestSourceRecord(repo as any);
-    const process = new ProcessIngestionBatch(repo as any);
-    await ingest.execute({ sourceId: activeSource.id, sourceExternalId: "published-change", rawPayload: { name: "Original" } });
-    await process.execute({ batchSize: 1 });
+  it("9. routes changes to an explicitly published source record back to review", async () => {
+    const ingest =
+      new IngestSourceRecord(repo as any);
 
-    const changed = await ingest.execute({
-      sourceId: activeSource.id,
-      sourceExternalId: "published-change",
-      rawPayload: { name: "Changed by source" },
+    const process =
+      new ProcessIngestionBatch(repo as any);
+
+    const first =
+      await ingest.execute({
+        sourceId: activeSource.id,
+        sourceExternalId:
+          "published-change",
+        rawPayload: {
+          name: "Original",
+        },
+      });
+
+    await process.execute({
+      batchSize: 1,
     });
-    expect(changed.ingestionRecord.status).toBe("NEEDS_REVIEW");
-    expect(changed.ingestionRecord.errorMessage).toContain("manual review");
+
+    await new ReviewIngestionRecord(
+      repo as any,
+    ).execute({
+      ingestionRecordId:
+        first.ingestionRecord.id,
+      decision: "APPROVE",
+      reviewedByUserId:
+        "platform-admin-1",
+    });
+
+    const changed =
+      await ingest.execute({
+        sourceId: activeSource.id,
+        sourceExternalId:
+          "published-change",
+        rawPayload: {
+          name: "Changed by source",
+        },
+      });
+
+    expect(changed.ingestionRecord.status)
+      .toBe("NEEDS_REVIEW");
+
+    expect(
+      changed.ingestionRecord.errorMessage,
+    ).toContain("manual review");
   });
 
   it("10. rejects malformed or out-of-range batch limits", async () => {
@@ -358,22 +491,91 @@ describe("UCL-3 Pipeline Core Suite (Synthetic Data)", () => {
     await expect(process.execute({ batchSize: 1.5 })).rejects.toThrow("between 1 and 100");
   });
 
-  it("11. isolates publication failure and keeps unrelated records processable", async () => {
-    const ingest = new IngestSourceRecord(repo as any);
-    await ingest.execute({ sourceId: activeSource.id, sourceExternalId: "fail-one", rawPayload: { name: "Failure" } });
-    await ingest.execute({ sourceId: activeSource.id, sourceExternalId: "pass-two", rawPayload: { name: "Success" } });
-    const originalPublish = repo.publishIngestionRecord.bind(repo);
-    let calls = 0;
-    repo.publishIngestionRecord = async (input: any) => {
-      calls++;
-      if (calls === 1) throw new Error("synthetic rollback");
-      return originalPublish(input);
-    };
+  it("11. isolates an explicit approval failure and leaves unrelated review records publishable", async () => {
+    const ingest =
+      new IngestSourceRecord(repo as any);
 
-    const summary = await new ProcessIngestionBatch(repo as any).execute({ batchSize: 2 });
-    expect(summary.failedCount).toBe(1);
-    expect(summary.publishedCount).toBe(1);
-    expect([...repo.ingestionRecords.values()].map((record) => record.status)).toContain("FAILED");
-    expect([...repo.ingestionRecords.values()].map((record) => record.status)).toContain("PUBLISHED");
+    const first =
+      await ingest.execute({
+        sourceId: activeSource.id,
+        sourceExternalId: "fail-one",
+        rawPayload: {
+          name: "Failure",
+        },
+      });
+
+    const second =
+      await ingest.execute({
+        sourceId: activeSource.id,
+        sourceExternalId: "pass-two",
+        rawPayload: {
+          name: "Success",
+        },
+      });
+
+    const summary =
+      await new ProcessIngestionBatch(
+        repo as any,
+      ).execute({
+        batchSize: 2,
+      });
+
+    expect(summary.publishedCount).toBe(0);
+    expect(summary.needsReviewCount).toBe(2);
+
+    const originalPublish =
+      repo.publishIngestionRecord.bind(repo);
+
+    let calls = 0;
+
+    repo.publishIngestionRecord =
+      async (input: any) => {
+        calls++;
+
+        if (calls === 1) {
+          throw new Error(
+            "synthetic rollback",
+          );
+        }
+
+        return originalPublish(input);
+      };
+
+    const review =
+      new ReviewIngestionRecord(
+        repo as any,
+      );
+
+    await expect(
+      review.execute({
+        ingestionRecordId:
+          first.ingestionRecord.id,
+        decision: "APPROVE",
+        reviewedByUserId:
+          "platform-admin-1",
+      }),
+    ).rejects.toThrow(
+      "synthetic rollback",
+    );
+
+    await review.execute({
+      ingestionRecordId:
+        second.ingestionRecord.id,
+      decision: "APPROVE",
+      reviewedByUserId:
+        "platform-admin-1",
+    });
+
+    expect(
+      repo.ingestionRecords.get(
+        first.ingestionRecord.id,
+      )?.status,
+    ).toBe("NEEDS_REVIEW");
+
+    expect(
+      repo.ingestionRecords.get(
+        second.ingestionRecord.id,
+      )?.status,
+    ).toBe("PUBLISHED");
   });
 });

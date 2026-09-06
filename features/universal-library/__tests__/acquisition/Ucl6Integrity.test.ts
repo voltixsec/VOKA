@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+﻿import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -35,7 +35,8 @@ describe("UCL-6 schema and API integrity", () => {
     expect(repository).toContain('where: { dryRun: false');
     expect(repository).toContain("UCL6_GLOBAL_PILOT_LIMIT");
   });
-  it("requires OWNER or ADMIN", () => expect(runRoute).toContain('withCompanyAuth(["OWNER", "ADMIN"]'));
+  it("requires platform-admin authorization with the existing company-role gate", () =>
+    expect(runRoute).toContain('withPlatformAdminAuth(["OWNER", "ADMIN"]'));
   it("rejects browser-supplied target URLs", () => expect(runRoute).toContain("ARBITRARY_URL_FORBIDDEN"));
   it("bounds API limits at the hard pilot maximum", () => expect(runRoute).toContain("> 1000"));
   it("does not expose internal exceptions", () => expect(runRoute).toContain("Acquisition run could not be completed."));

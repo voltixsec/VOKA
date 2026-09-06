@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { AcquisitionPolicyError, HttpJsonAcquisitionAdapter, PrismaAcquisitionRepository, PrismaUniversalLibraryRepository, RunControlledAcquisition, Ucl3AcquisitionStager } from "@/features/universal-library";
-import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
+import { ApiError, apiSuccess, withPlatformAdminAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs"; export const dynamic = "force-dynamic";
 
-export const POST = withCompanyAuth(["OWNER", "ADMIN"], async (request, auth) => {
+export const POST = withPlatformAdminAuth(["OWNER", "ADMIN"], async (request, auth) => {
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 16_384) throw ApiError.badRequest("PAYLOAD_TOO_LARGE", "Request payload is too large.");
   let body: unknown; try { body = await request.json(); } catch { throw ApiError.badRequest("INVALID_JSON", "Request body must be valid JSON."); }

@@ -1,5 +1,4 @@
 import { IUniversalLibraryRepository, DEFAULT_INGESTION_BATCH_LIMIT, MAX_INGESTION_BATCH_LIMIT } from "../../domain/repositories/UniversalLibraryRepository";
-import { NormalizedIngestionPayload } from "../../domain/normalization/NormalizationPipelineService";
 
 export interface ProcessIngestionBatchParams {
   batchSize?: number;
@@ -39,28 +38,33 @@ export class ProcessIngestionBatch {
       summary.recordIds.push(record.id);
 
       if (!record.normalizedData) {
-        await this.repository.updateIngestionRecordStatus(record.id, "REJECTED", {
+        await this.repository.updateIngestionRecordStatus(record.id, "FAILED", {
           errorMessage: "Record lacks normalizedData payload",
           processedAt: new Date(),
         });
-        summary.rejectedCount++;
+        summary.failedCount++;
         continue;
       }
 
       try {
-        const normalizedPayload = record.normalizedData as unknown as NormalizedIngestionPayload;
-        await this.repository.publishIngestionRecord({
-          ingestionRecordId: record.id,
-          normalizedPayload,
-          matchedItemId: record.matchedItemId,
-        });
+        await this.repository.updateIngestionRecordStatus(
+          record.id,
+          "NEEDS_REVIEW",
+          {
+            errorMessage:
+              "Awaiting explicit platform review before canonical publication",
+            processedAt: null,
+          },
+        );
 
-        summary.publishedCount++;
+        summary.needsReviewCount++;
       } catch (err: any) {
         await this.repository.updateIngestionRecordStatus(record.id, "FAILED", {
-          errorMessage: err.message || "Failed during transactional publication",
+          errorMessage:
+            err.message || "Failed while routing record to review",
           processedAt: new Date(),
         });
+
         summary.failedCount++;
       }
     }

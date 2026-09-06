@@ -136,7 +136,11 @@ const tabs = [
   { label: "Manufacturers", href: "#", enabled: false },
   { label: "Families", href: "#", enabled: false },
   { label: "Evidence", href: "#", enabled: false },
-  { label: "Review", href: "#", enabled: false },
+  {
+    label: "Review",
+    href: "/dashboard/universal-library/review",
+    enabled: true,
+  },
   {
     label: "Population",
     href: "/dashboard/universal-library/population",

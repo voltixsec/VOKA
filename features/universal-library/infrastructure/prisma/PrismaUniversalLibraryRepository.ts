@@ -29,6 +29,7 @@ import {
   IngestionStatus,
   SaveIngestionRecordInput,
   PublishIngestionRecordInput,
+  NormalizedIngestionPayload,
   VerificationStatus,
   normalizeUniversalIdentifier,
 } from "../../domain";
@@ -737,26 +738,118 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
     return this.mapIngestionRecordToDomain(record);
   }
 
+  public async rejectIngestionRecord(input: {
+    ingestionRecordId: string;
+    reviewedByUserId: string;
+    reviewNote?: string | null;
+  }): Promise<UniversalIngestionRecord> {
+    const actorUserId = input.reviewedByUserId.trim();
+
+    if (!actorUserId) {
+      throw new Error("Explicit review actor is required.");
+    }
+
+    const record = await this.prisma.$transaction(async (tx) => {
+      const rejected =
+        await tx.universalIngestionRecord.updateMany({
+          where: {
+            id: input.ingestionRecordId,
+            status: "NEEDS_REVIEW",
+          },
+          data: {
+            status: "REJECTED",
+            processedAt: new Date(),
+            processingStartedAt: null,
+            errorMessage:
+            input.reviewNote?.trim() ||
+            "Rejected by explicit platform review",
+          },
+        });
+
+      if (rejected.count !== 1) {
+        throw new Error(
+          "Ingestion record is not awaiting review.",
+        );
+      }
+
+      await tx.universalIngestionReviewEvent.create({
+        data: {
+          ingestionRecordId: input.ingestionRecordId,
+          decision: "REJECTED",
+          actorUserId,
+          note: input.reviewNote?.trim() || null,
+        },
+      });
+
+      return tx.universalIngestionRecord.findUnique({
+        where: {
+          id: input.ingestionRecordId,
+        },
+      });
+    });
+
+    if (!record) {
+      throw new Error("Rejected ingestion record was not found.");
+    }
+
+    return this.mapIngestionRecordToDomain(record);
+  }
+
   public async publishIngestionRecord(input: PublishIngestionRecordInput): Promise<{ item: UniversalCatalogItem; isNewItem: boolean }> {
-    const { ingestionRecordId, normalizedPayload, matchedItemId } = input;
+    const {
+      ingestionRecordId,
+      reviewedByUserId,
+      reviewNote,
+    } = input;
+
+    const actorUserId =
+      reviewedByUserId.trim();
+
+    if (!actorUserId) {
+      throw new Error("Explicit review actor is required.");
+    }
 
     return await this.prisma.$transaction(async (tx) => {
       const lock = await tx.universalIngestionRecord.updateMany({
-        where: { id: ingestionRecordId, status: "PROCESSING" },
+        where: { id: ingestionRecordId, status: "NEEDS_REVIEW" },
         data: { processingStartedAt: new Date() },
       });
+
       if (lock.count !== 1) {
-        throw new Error("Ingestion record is not in a publishable processing state.");
+        throw new Error(
+          "Ingestion record is not awaiting explicit publication approval.",
+        );
       }
+
       const ingestionRecord = await tx.universalIngestionRecord.findUnique({
         where: { id: ingestionRecordId },
         include: { source: true },
       });
+
       if (!ingestionRecord || !ingestionRecord.source.isActive) {
         throw new Error("Ingestion source is unavailable or inactive.");
       }
 
-      let resolvedMatchedItemId = matchedItemId ?? null;
+      if (!ingestionRecord.normalizedData) {
+        throw new Error(
+          "Reviewed ingestion record has no normalized payload.",
+        );
+      }
+
+      const normalizedPayload =
+        ingestionRecord.normalizedData as unknown as NormalizedIngestionPayload;
+
+      await tx.universalIngestionReviewEvent.create({
+        data: {
+          ingestionRecordId,
+          decision: "APPROVED",
+          actorUserId,
+          note: reviewNote?.trim() || null,
+        },
+      });
+
+      let resolvedMatchedItemId =
+        ingestionRecord.matchedItemId ?? null;
       const globalTypes = ["GTIN", "GTIN_8", "GTIN_12", "GTIN_13", "GTIN_14", "EAN", "UPC"] as const;
       const globalIdentifiers = normalizedPayload.identifiers.filter((identifier) =>
         globalTypes.includes(identifier.identifierType as (typeof globalTypes)[number])
@@ -1091,7 +1184,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 
       // 10. Mark published only after every canonical write succeeds.
       const published = await tx.universalIngestionRecord.updateMany({
-        where: { id: ingestionRecordId, status: "PROCESSING" },
+        where: { id: ingestionRecordId, status: "NEEDS_REVIEW" },
         data: {
           status: "PUBLISHED",
           matchedItemId: targetItem.id,

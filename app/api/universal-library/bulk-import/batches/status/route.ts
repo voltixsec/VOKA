@@ -10,7 +10,7 @@ import { GetBulkImportBatchStatus } from "@/features/universal-library/applicati
 import { PrismaBulkImportBatchStatusRepository } from "@/features/universal-library/infrastructure/bulk-import/PrismaBulkImportBatchStatusRepository";
 import {
   apiSuccess,
-  withCompanyAuth,
+  withPlatformAdminAuth,
 } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
@@ -57,7 +57,7 @@ function errorResponse(
 }
 
 export const GET =
-  withCompanyAuth(
+  withPlatformAdminAuth(
     ["OWNER", "ADMIN"],
     async (
       request,

@@ -2,3 +2,4 @@
 export * from './get-current-user';
 export * from './require-company-role';
 export * from './token-service';
+export * from './platform-admin';

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { apiSuccess, withCompanyAuth } from "@/lib/api";
+import { apiSuccess, withPlatformAdminAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
   PrismaUniversalLibraryRepository,
   IngestSourceRecord,
 } from "@/features/universal-library";
 
-export const POST = withCompanyAuth(
+export const POST = withPlatformAdminAuth(
   ["OWNER", "ADMIN"],
   async (request: Request) => {
     try {

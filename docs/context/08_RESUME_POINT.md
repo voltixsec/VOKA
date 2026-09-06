@@ -1,5 +1,42 @@
 <!-- VOKA-CANONICAL-RELEASE-STATUS-2026-09-06 -->
 
+## Phase 4A UCL Session Closure — 2026-09-07
+
+Accepted:
+
+- 🟢 UCL-CLOSE-01 — Global Metrics Truth
+- 🟢 UCL-CLOSE-02 — Staged vs Published Clarity
+- 🟢 UCL-CLOSE-03 — Platform Admin / Control-Plane Boundary
+- 🟢 UCL-CLOSE-04 — Review → Approve/Reject → Publish
+
+Latest validation:
+
+- full UCL + Auth regression: 57 / 57 test files PASS;
+- 426 / 426 tests PASS;
+- TypeScript PASS;
+- Prisma validate PASS; all 45 repository migrations applied / database up to date;
+- production build PASS; diff check PASS (CRLF conversion notices only);
+- UCL control plane fails closed for an ordinary tenant OWNER/ADMIN;
+- explicit platform allowlisting is required before global operator access is granted.
+
+Pre-session remote baseline: `50fb05ab46a8f80278a00f880fa6cddca4a66956` on
+`feature/pre-staging-product-coherence`. Commit and push of this bounded closure
+were authorized; no merge to main or tag is authorized.
+See the [session checkpoint](../checkpoints/2026-09-07-ucl-close04-session-close.md)
+for final validation and live acceptance evidence. Its containing commit is the
+durable closure checkpoint; do not infer a later publication or deployment.
+
+Exact next execution slice:
+
+**UCL-CLOSE-05 — Explicit Adoption / Commercial Truth**
+
+UCL-CLOSE-06 remains OPEN. Data Factory remains PAUSED; future harvesting resumes
+at **System008 — IP Video / SEC-SYS008-B004 — Hikvision IP fixed/network cameras**.
+`LIVE-FAIL-001 / CEO-R1-030` Payment Registration remains RED/BLOCKER.
+`AUTH-DIRECT-ROUTE-GATE` remains OPEN for Phase 4C.
+Preserve the two CLOSE04 synthetic DB acceptance records. No manual Review API
+403 call was executed in the final live pass; the API gate has automated proof.
+
 ## Canonical Release Status — 2026-09-06
 
 The canonical current VOKA product/release acceptance source is:

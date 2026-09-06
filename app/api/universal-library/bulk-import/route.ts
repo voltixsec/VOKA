@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { RunBulkImportFile } from "@/features/universal-library/application/bulk-import/RunBulkImportFile";
 import { PrismaBulkImportRunRepository } from "@/features/universal-library/infrastructure/bulk-import/PrismaBulkImportRunRepository";
 import { PrismaUniversalLibraryRepository } from "@/features/universal-library/infrastructure/prisma/PrismaUniversalLibraryRepository";
-import { apiSuccess, withCompanyAuth } from "@/lib/api";
+import { apiSuccess, withPlatformAdminAuth } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -127,7 +127,7 @@ async function persistBody(
   };
 }
 
-export const POST = withCompanyAuth(
+export const POST = withPlatformAdminAuth(
   ["OWNER", "ADMIN"],
   async (request, auth) => {
     const configuredSecret =
