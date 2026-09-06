@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 import { Quotation } from "../../../../domain/quotation";
 import { LocalizedContent } from "../../../../domain/localization/entities/LocalizedContent";
 import { LocalizedContentStatus } from "../../../../domain/localization/types/LocalizedContentStatus";
