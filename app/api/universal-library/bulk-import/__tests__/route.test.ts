@@ -286,7 +286,15 @@ describe("UCL bulk import API", () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
-  it("streams a JSONL upload into the governed bulk runner", async () => {
+  it.each([
+    "security-batch-001.jsonl",
+    "..\\security-batch-001.jsonl",
+    "../security-batch-001.jsonl",
+    "C:\\temp\\security-batch-001.jsonl",
+    "C:/temp/security-batch-001.jsonl",
+    "/tmp/security-batch-001.jsonl",
+    "foo\\bar/security-batch-001.jsonl",
+  ])("streams a JSONL upload into the governed bulk runner (%s)", async (fileName) => {
     mocks.execute.mockResolvedValue({
       runs: [
         {
@@ -332,8 +340,7 @@ describe("UCL bulk import API", () => {
         {
           secret: "test-bulk-secret",
           sourceId: "source-1",
-          fileName:
-            "..\\security-batch-001.jsonl",
+          fileName,
           batchExternalKey:
             "SECURITY_BATCH_001",
           sourceNamespace:

@@ -1,7 +1,7 @@
 ﻿import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join, win32 } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { tmpdir } from "node:os";
@@ -188,7 +188,8 @@ export const POST = withCompanyAuth(
       boundedHeader(request, "x-voka-file-name", 255) ??
       "bulk-import.jsonl";
 
-    const fileName = basename(rawFileName);
+    // Client paths may use either separator, independently of the server OS.
+    const fileName = win32.basename(rawFileName);
 
     const batchExternalKey = boundedHeader(
       request,

@@ -1,7 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join, win32 } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -226,7 +226,7 @@ export const POST = withCompanyAuth(
         200,
       );
 
-      fileName = basename(
+      fileName = win32.basename(
         header(
           request,
           "x-voka-file-name",
