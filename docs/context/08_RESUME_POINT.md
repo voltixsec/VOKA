@@ -1,3 +1,55 @@
+<!-- VOKA-CANONICAL-RELEASE-STATUS-2026-09-06 -->
+
+## Canonical Release Status — 2026-09-06
+
+The canonical current VOKA product/release acceptance source is:
+
+`docs/product/MASTER_PRODUCT_ACCEPTANCE_LEDGER.md`
+
+Future CTO/release sessions MUST read and update that ledger instead of
+reconstructing current state from disconnected historical checkpoints.
+
+Current release baseline before this documentation update:
+
+- Branch: `feature/pre-staging-product-coherence`
+- HEAD: `de3e1ce8cfdd90236f8ef25b7a89cac651f563a3`
+- PR #83: merged
+- GitHub Quality/verify: green
+- Current phase: **Phase 4 — Final Product Closure**
+
+Immediate execution order:
+
+`4A UCL Final Closure`
+→ `4B Sales Assistant + Quotation Acceptance`
+→ `4C Authentication / Tenant / Security`
+→ `4D Remaining Visible V1 Modules`
+→ `4E Full AR/EN Responsive Sweep`
+→ `Phase 5 Production Hardening`
+→ `Phase 6 Release Candidate`
+→ `Phase 7 Sep 15 Launch`.
+
+Mandatory acceptance item:
+
+`AUTH-DIRECT-ROUTE-GATE`
+
+A logged-out user must not be able to access protected dashboard UI/data by
+entering a direct nested URL. API-level 401 proof alone is insufficient.
+
+Known canonical live failure must also remain visible until closed or explicitly
+removed from V1 scope:
+
+`LIVE-FAIL-001 / CEO-R1-030 — Payment Registration End-to-End`.
+
+Supporting Release War Room Phase 2 evidence:
+
+`docs/product/changes/2026-09-06-release-war-room-phase-2-audit.md`
+
+That audit is supporting evidence only and does not replace the Master Product
+Acceptance Ledger.
+
+Historical sections below remain evidence, not competing current status.
+
+---
 # Resume Point
 
 ## Release stabilization local review — 2026-09-06

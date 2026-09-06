@@ -1,8 +1,631 @@
 ﻿# VOKA — Master Product Acceptance Ledger
 
+<!-- VOKA-RELEASE-WAR-ROOM-2026-09-06 -->
+
+# CURRENT RELEASE WAR ROOM RECONCILIATION — 2026-09-06
+
+> **CURRENT OPERATIONAL AUTHORITY**
+>
+> This section supersedes older "active program" labels for current execution
+> priority only. Historical sections below remain immutable evidence.
+>
+> Current program:
+>
+> **PHASE 4 — FINAL PRODUCT CLOSURE**
+>
+> Release target:
+>
+> **VOKA V1 — Production Launch / Early Access — 2026-09-15**
+
+## Current Release Baseline
+
+Branch:
+
+`feature/pre-staging-product-coherence`
+
+Verified release baseline before this documentation-only reconciliation:
+
+`de3e1ce8cfdd90236f8ef25b7a89cac651f563a3`
+
+PR #83 is merged into this baseline.
+
+Important merged release-stabilization lineage:
+
+- `17897e9` — restore capacity-based storage commercialization;
+- `0031402` — isolate injected persistence tests from runtime Prisma;
+- `3f10a92` — record Release War Room Phase 1 validation;
+- `4256089` — normalize bulk-upload filenames across Windows/Linux boundaries;
+- `de3e1ce` — merge PR #83 into the integration/release baseline.
+
+GitHub `Quality/verify` passed after the cross-platform filename correction.
+
+Current operating rule:
+
+**Do not build more VOKA. Close VOKA for release.**
+
+---
+
+# CURRENT STATUS PRIORITY
+
+The historical CEO Acceptance Round 1 remains authoritative.
+
+Do not replace its 40 findings with a newer audit.
+
+Current-state reconciliation model:
+
+CEO Acceptance Round 1
++
+later implementation / PR evidence
++
+Product Intelligence / UCL evidence
++
+Sales Assistant approved rules
++
+Release War Room findings
+=
+this single Master Product Acceptance Ledger.
+
+Automated tests alone do not close browser/manual workflow findings.
+
+---
+
+# 🔴 CONFIRMED LIVE RELEASE BLOCKER
+
+## LIVE-FAIL-001 / CEO-R1-030 — Payment Registration End-to-End
+
+Status:
+
+🔴 **BROKEN LIVE / BLOCKER — REMAINS OPEN**
+
+The pre-existing Master Ledger records a CEO-observed live failure in the
+Invoice → Payment commercial lifecycle.
+
+No later live CEO acceptance has been recorded that closes it.
+
+Required governed journey:
+
+Issued Invoice
+→ valid governed payment
+→ immutable payment record
+→ invoice recalculation
+→ invoice history
+→ Payments register
+→ Customer Statement
+→ Dashboard / summaries
+→ audit event
+→ meaningful notification where applicable.
+
+A code implementation or isolated passing test is not sufficient for closure.
+
+This blocker may leave V1 only through one of two explicit paths:
+
+1. successful live end-to-end acceptance; or
+2. explicit CEO decision to remove/hide/defer the affected Payment workflow from V1.
+
+Do not silently downgrade it.
+
+---
+
+# 🟡 NEW MANDATORY AUTHENTICATION ACCEPTANCE GATE
+
+## AUTH-DIRECT-ROUTE-GATE
+
+Status:
+
+🟡 **OPEN / ACCEPTANCE REQUIRED**
+
+Scenario:
+
+A fully logged-out user manually enters a protected nested URL directly, e.g.:
+
+`/dashboard/sales-assistant`
+
+`/dashboard/quotations/...`
+
+`/dashboard/customers/...`
+
+`/dashboard/settings/...`
+
+`/dashboard/sales-orders/...`
+
+`/dashboard/invoices/...`
+
+Required behavior:
+
+Logged out
+→ protected page and protected data do not render
+→ authentication gate/login is enforced
+→ valid safe `returnTo` may restore navigation after authentication.
+
+API-level 401 evidence alone does NOT close this finding.
+
+Manual browser acceptance must include:
+
+- clean incognito/logged-out session;
+- direct nested protected URLs;
+- stale/expired cookies;
+- logout then browser-back behavior;
+- no protected-data flash before redirect;
+- safe `returnTo`;
+- protected APIs remain unauthorized.
+
+Escalation rule:
+
+If protected UI/data is available without authentication:
+
+🔴 **P0 RELEASE BLOCKER**
+
+This finding must remain in the Master Ledger until directly accepted.
+
+---
+
+# RELEASE WAR ROOM PHASE 2 AUDIT — EVIDENCE RECONCILIATION
+
+Evidence document:
+
+`docs/product/changes/2026-09-06-release-war-room-phase-2-audit.md`
+
+The audit reported:
+
+- readiness estimate: 78/100;
+- P0: 0;
+- P1: 3;
+- P2: 12;
+- Post Release: 8.
+
+The audit is preserved as supporting evidence only.
+
+It is NOT the canonical product status because its execution was incomplete and
+several conclusions conflict with stronger existing evidence.
+
+## KILO-AUDIT-DELTA-01 — React Hook Warnings
+
+The audit labeled hook warnings both P1 and P2.
+
+Canonical release treatment:
+
+🟡/P2 **NON-BLOCKING unless a concrete live functional failure is proven.**
+
+Missing React hook dependencies can create stale behavior or incorrect effects,
+but warning existence alone is not evidence of a release-blocking memory leak.
+
+The audit table lists nine hook dependency warnings, despite the executive text
+referring to eight, plus one ARIA combobox warning.
+
+Do not make "zero hook warnings" a Sep 14 release criterion unless one is tied to
+an actual release-critical defect.
+
+## KILO-AUDIT-DELTA-02 — Tenant Isolation
+
+The audit did not prove a tenant leak.
+
+It recorded tenant isolation as unverified.
+
+Canonical treatment:
+
+🟡 **SECURITY ACCEPTANCE GATE**
+
+Required:
+representative tenant-isolation verification across customers, quotations,
+orders, invoices/payments, Company Catalog, settings, and global UCL boundaries.
+
+If any credible cross-tenant exposure is found:
+
+🔴 **P0 RELEASE BLOCKER**
+
+## KILO-AUDIT-DELTA-03 — Sales Assistant Rules
+
+The audit did not prove the Sales Assistant rules are absent.
+
+It recorded them as unverified and even listed paths as unknown/search required.
+
+Canonical treatment:
+
+🟡 **COMPLIANCE / FINAL ACCEPTANCE REQUIRED**
+
+Do not rewrite or implement all rules from scratch.
+
+Verify current implementation against approved behavior and correct only real
+divergences.
+
+## KILO-AUDIT-DELTA-04 — Audit Completeness Limit
+
+The Phase 2 audit itself contains unresolved audit gaps:
+
+- skipped-test register was not completed;
+- deployment readiness remained UNKNOWN;
+- core-journey evidence was largely "components exist";
+- tenant proof was not executed;
+- Sales Assistant rules were not inventoried;
+- test execution was described as partial;
+- severity classification duplicated hook warnings;
+- report final Git state said clean even though the report itself remained an
+  untracked file in the actual repository state.
+
+Therefore its `78/100` is an auditor estimate, not the canonical VOKA release
+readiness authority.
+
+---
+
+# 🟡 SALES ASSISTANT FINAL ACCEPTANCE
+
+Substantial governed implementation exists.
+
+Do not rebuild its foundation.
+
+Final acceptance must verify at minimum:
+
+- conversation → workspace synchronization after every turn;
+- corrections replace stale governed facts;
+- rejected facts do not remain active;
+- explicit approval promotes governed state;
+- Draft can be created without Customer Name;
+- Draft can be created without Attention/Contact;
+- Company Terms & Conditions load from current scope/request defaults;
+- SUPPLY vs SUPPLY_AND_INSTALLATION behavior is correct;
+- site readiness goes to Notes;
+- responsibility boundaries go to Notes;
+- exclusions go to Notes;
+- access requirements go to Notes;
+- jurisdiction remains governed;
+- catalog-first product retrieval;
+- bounded web fallback only when necessary;
+- governed ranked options;
+- unknown price remains null/pending, never fabricated zero;
+- engineering requirements do not become invented commercial products;
+- ambiguous catalog matches remain ambiguous;
+- no cross-tenant product binding;
+- inactive/stale product binding is rejected;
+- stale approved selection is not replayed;
+- provenance survives commercial projection;
+- no raw enums leak to the user;
+- Arabic UI does not display raw `SUPPLY_AND_INSTALLATION`;
+- CTA/readiness statements remain truthful;
+- Chat → Workspace → Draft/Quotation remains coherent;
+- Arabic/English locale integrity is maintained.
+
+Status remains:
+
+🟡 **IMPLEMENTED / FINAL ACCEPTANCE PENDING**
+
+---
+
+# 🟡 QUOTATION FINAL ACCEPTANCE
+
+Required end-to-end browser journey:
+
+Sales Request
+→ Sales Assistant
+→ Product / Solution
+→ Quotation Draft
+→ Edit
+→ Save
+→ Preview / PDF
+→ Retrieve later
+→ Revise
+→ Commercial output.
+
+Acceptance includes:
+
+- Customer optionality at Draft;
+- Attention optionality at Draft;
+- scope;
+- current Terms;
+- governed Notes;
+- line identity;
+- units;
+- quantities;
+- pricing / unknown-price behavior;
+- tax;
+- totals;
+- Arabic;
+- English;
+- PDF;
+- persisted historical truth;
+- reopen / continue.
+
+Status:
+
+🟡 **FINAL LIVE ACCEPTANCE REQUIRED**
+
+---
+
+# UNIVERSAL COMMERCIAL LIBRARY — FINAL CLOSURE
+
+Historical UCL-1 through UCL-6 architecture/foundation remain preserved and
+must NOT be rebuilt.
+
+The items below use the prefix `UCL-CLOSE-*` deliberately to avoid confusion
+with historical UCL-1 through UCL-6.
+
+## UCL-CLOSE-01 — Global Metrics Truth
+
+Status:
+
+🟡 **OPEN / FINAL UI CLOSURE**
+
+Known review concern:
+
+global staged totals and current loaded/page counts were visually mixed.
+
+The operator UI must distinguish at minimum:
+
+- Total Staged Commercial Records;
+- Total Product Models;
+- Total Items;
+- Total Services;
+- Loaded / Current Page records.
+
+Do not present page counts as global library truth.
+
+## UCL-CLOSE-02 — Staged vs Published Clarity
+
+Status:
+
+🟡 **OPEN / FINAL UI CLOSURE**
+
+Required operator truth:
+
+**Staged record != Published Canonical Library record.**
+
+The UI must not imply that staged population is already canonical published
+library content.
+
+## UCL-CLOSE-03 — Platform Admin / Control-Plane Boundary
+
+Status:
+
+🟡 **SECURITY / PRODUCT ACCEPTANCE REQUIRED**
+
+Population, Batches, Imports, Sources, Duplicates, Review and Publish/Reject are
+global platform/Data Factory control-plane capabilities.
+
+They must not become ordinary tenant governance powers.
+
+Temporary OWNER/ADMIN + operational-secret infrastructure does not by itself
+prove the final tenant-facing product boundary.
+
+## UCL-CLOSE-04 — Review → Approve/Reject → Publish
+
+Status:
+
+🟡 **OPERATIONAL ACCEPTANCE REQUIRED**
+
+Prove the actual governed operational path.
+
+Staging/browser existence alone does not close governance.
+
+## UCL-CLOSE-05 — Explicit Adoption / Commercial Truth
+
+Status:
+
+🟡 **LIVE ACCEPTANCE REQUIRED**
+
+Prove:
+
+Universal Library item
+→ explicit tenant adoption
+→ Company Catalog
+→ tenant-owned mutable commercial fields
+→ quotation uses tenant Catalog snapshot.
+
+Universal data must never overwrite tenant commercial truth.
+
+## UCL-CLOSE-06 — End-to-End Batch Wizard
+
+Status:
+
+🟡 **CEO OPERATOR ACCEPTANCE REQUIRED**
+
+Prove a bounded real operator journey:
+
+File
+→ Upload
+→ Batch
+→ Process
+→ Staging
+→ Hierarchy
+→ Products
+→ Review
+→ Publish
+→ Status / History.
+
+Also prove:
+
+- error state;
+- partial/failure state;
+- retry;
+- resume.
+
+When `UCL-CLOSE-01` through `UCL-CLOSE-06` are all accepted:
+
+**UCL V1 IMPLEMENTATION = 🟢 CLOSED / FROZEN**
+
+After that, do not reopen UCL engineering for V1 except for a confirmed blocker
+or regression.
+
+Normal future activity becomes controlled data population.
+
+---
+
+# DATA FACTORY — PAUSED DURABLE RESUME
+
+Status:
+
+⚪ **PAUSED BY RELEASE DECISION**
+
+Do not restart broad harvesting during Release Closure.
+
+Latest preserved production direction:
+
+Systems002–007 production pass completed.
+
+Current unfinished system:
+
+**System008 — IP Video**
+
+Exact future resume:
+
+**SEC-SYS008-B004 — Hikvision IP fixed/network cameras**
+
+B004 research/validation progress existed but was not durably
+produced/merged/checkpointed.
+
+Do not invent a later durable checkpoint.
+
+Recent cumulative Data Factory artifacts include:
+
+- `VOKA_UCL_LIBRARY_CURRENT.jsonl`
+- `VOKA_UCL_LIBRARY_CURRENT_MANIFEST.json`
+- `VOKA_UCL_IDENTITY_INDEX.json`
+
+Older source-data filenames must be recovered from physical evidence rather than
+guessed.
+
+---
+
+# CURRENT RELEASE EXECUTION PLAN
+
+## PHASE 1 — Core Commercial Foundation
+
+Status:
+
+🟢 **IMPLEMENTED FOUNDATION**
+
+## PHASE 2 — AI Sales OS Foundation
+
+Status:
+
+🟢 **IMPLEMENTED FOUNDATION**
+with remaining live acceptance items.
+
+## PHASE 3 — Universal Commercial Library Foundation
+
+Status:
+
+🟢 **IMPLEMENTED FOUNDATION**
+with `UCL-CLOSE-01` through `UCL-CLOSE-06` remaining before implementation
+freeze.
+
+## PHASE 4 — Final Product Closure
+
+Status:
+
+🚧 **CURRENT PHASE**
+
+Execution order:
+
+### 4A — UCL Final Closure
+
+Close `UCL-CLOSE-01` through `UCL-CLOSE-06`.
+
+### 4B — Sales Assistant + Quotation Final Acceptance
+
+Close governed conversational/commercial journey.
+
+### 4C — Authentication / Tenant / Security Acceptance
+
+Mandatory:
+`AUTH-DIRECT-ROUTE-GATE`
+plus representative tenant-isolation proof.
+
+### 4D — Remaining Visible V1 Modules
+
+Any visible module must be usable or explicitly hidden/deferred.
+
+Includes review of:
+
+Customer
+Company Settings
+Sales Order
+Invoice
+Payments
+Shared Documents / Delivery
+Authorized Signatories
+Branding
+Dashboard
+Drawing / Takeoff scope.
+
+### 4E — Full Responsive Arabic / English Sweep
+
+Final user-facing acceptance across AR/EN, RTL/LTR, states, terminology and
+responsive behavior.
+
+## PHASE 5 — Production Hardening
+
+Required:
+
+- production DB/migration rehearsal;
+- backup/restore proof;
+- tenant isolation;
+- secrets/env;
+- production providers;
+- failure/timeouts/fallback;
+- observability;
+- production performance;
+- deployment configuration.
+
+## PHASE 6 — Release Candidate
+
+Required:
+
+- clean production-style deployment;
+- smoke tests;
+- critical journey acceptance;
+- blocker-only corrections;
+- Sep 14 Go / No-Go.
+
+## PHASE 7 — Launch
+
+Target:
+
+**2026-09-15**
+
+VOKA V1 — Production Launch / Early Access.
+
+Sep 15–20:
+marketing launch execution.
+
+---
+
+# SEP 14 GO / NO-GO
+
+GO requires:
+
+- zero active 🔴 blockers;
+- all launch-critical yellow/P1 items closed or explicitly CEO-waived;
+- CI green;
+- typecheck/build green;
+- production migration rehearsal green;
+- critical manual journey green;
+- `AUTH-DIRECT-ROUTE-GATE` green;
+- tenant-isolation smoke test green;
+- production provider configuration proven;
+- critical PDF/output proven.
+
+---
+
+# RELEASE GOVERNANCE UPDATE RULE
+
+After every CEO acceptance, bounded correction, PR closure or release slice:
+
+1. update this same Master Product Acceptance Ledger;
+2. preserve historical findings;
+3. attach exact automated evidence where applicable;
+4. attach live/manual CEO evidence where required;
+5. record commit/PR/checkpoint if published;
+6. update `docs/context/08_RESUME_POINT.md`;
+7. never create a competing current-status ledger;
+8. never downgrade a known live failure from code inspection alone.
+
+This document remains the canonical current operational acceptance source.
+
+---
+
+
 Status: **LIVING SOURCE OF TRUTH**
 Owner: **CEO + CTO**
-Last reconciled: **2026-09-03 — Product/UCL historical reconciliation**
+Last reconciled: **2026-09-06 — Release War Room / UCL final closure reconciliation**
 Current branch: `feature/pre-staging-product-coherence`
 Verified pre-reconciliation checkpoint HEAD: `006bdc72bf0bd19098aae84e74d54a6618c6c15a`
 
