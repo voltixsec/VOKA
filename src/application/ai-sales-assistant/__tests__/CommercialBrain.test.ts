@@ -85,7 +85,8 @@ describe("Commercial Brain", () => {
     expect(derived.every((line) => Boolean(line.formulaExplanationAr))).toBe(true);
     expect(derived.every((line) => Boolean(line.itemNameAr && line.itemNameEn))).toBe(true);
     const byKey = (key: string) => proposal.lines.find((line) => line.componentKey === key)!;
-    expect(byKey("NVR_RECORDER").formulaExplanation).toContain("64 channels");
+    expect(byKey("NVR_RECORDER").commercialRequirement?.specification.channelsPerRecorder).toBe(64);
+    expect(byKey("NVR_RECORDER").formulaExplanation).toContain("max(channel requirement");
     expect(byKey("POE_SWITCH").formulaExplanation).toContain("48 ports - 2 reserved uplink ports");
     expect(byKey("SURVEILLANCE_STORAGE_CAPACITY")).toMatchObject({ requestedUnitText: "Package", quantity: 1, commercializationPending: true, catalogItemId: null });
     expect(proposal.smartSystem?.requirements?.find((item) => item.componentKey === "SURVEILLANCE_STORAGE_CAPACITY")?.formulaExplanation).toContain("30 days");

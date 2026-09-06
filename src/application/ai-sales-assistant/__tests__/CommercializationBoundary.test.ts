@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AISalesAssistantService } from "../services/AISalesAssistantService";
 import { AISalesAssistantExtractor } from "../services/AISalesAssistantExtractor";
 import { CompleteCommercialConversation } from "../../commercial-conversation/CompleteCommercialConversation";
-import { commercializeSystemComponent } from "../services/commercialize-system-component";
-import { CctvSystemTemplate } from "../../../domain/smart-system";
+import { commercializeSystemComponent, salesEngineeringRequirement } from "../services/commercialize-system-component";
+import { CctvSystemTemplate, type SystemComponent } from "../../../domain/smart-system";
 
 const prompt = "اعمل عرض سعر توريد وتركيب 130 كاميرا مراقبة";
 
@@ -20,6 +20,64 @@ function service() {
 }
 
 describe("engineering to commercial boundary", () => {
+  const engineDrive = () => new CctvSystemTemplate().calculate({ cameraCount: 130 })
+    .components.find((item) => item.componentKey === "SURVEILLANCE_HDD")!;
+
+  it("projects proven capacity with governed context and preserves the original source", () => {
+    const drive = engineDrive();
+    const before = structuredClone(drive);
+    const projected = salesEngineeringRequirement(drive);
+    expect(projected).toMatchObject({ componentKey: "SURVEILLANCE_STORAGE_CAPACITY", quantity: 337, unit: "TB", provenance: drive.provenance });
+    expect(projected.formulaExplanation).toBe("130 cameras, 8 Mbps, 30 days: 337 TB required.");
+    expect(projected).not.toBe(drive);
+    expect(projected.specification).toBe(drive.specification);
+    expect(commercializeSystemComponent(drive, "en").commercialRequirement?.source.requirement).toBe(drive);
+    expect(drive).toEqual(before);
+  });
+
+  const invalidSpecifications: Array<[string, unknown]> = [
+    ["missing specification", undefined],
+    ["missing capacity", {}],
+    ...[undefined, null, "invalid", "337", NaN, Infinity, -Infinity, 0, -1, true]
+      .map((value): [string, unknown] => [`capacity ${String(value)}`, { requiredUsableTb: value }]),
+  ];
+  it.each(invalidSpecifications)("preserves the original component for %s without fabricating capacity", (_label, specification) => {
+    const drive = { ...engineDrive(), specification: specification as SystemComponent["specification"] };
+    const before = structuredClone(drive);
+    const result = salesEngineeringRequirement(drive);
+    expect(result).toBe(drive);
+    expect(result.componentKey).toBe("SURVEILLANCE_HDD");
+    expect(Number.isNaN(result.quantity)).toBe(false);
+    expect(result.formulaExplanation).not.toMatch(/undefined|null|NaN/);
+    expect(drive).toEqual(before);
+  });
+
+  it.each([undefined, null, NaN, Infinity, "undefined", "null", "NaN"])("omits unavailable governed context (%s) from the capacity explanation", (value) => {
+    const drive = {
+      ...engineDrive(),
+      specification: { requiredUsableTb: 337, bitrateMbps: value, storageDays: value },
+      calculationInputs: { cameraCount: value },
+      formulaExplanation: undefined,
+    } as unknown as SystemComponent;
+    const before = structuredClone(drive);
+    const result = salesEngineeringRequirement(drive);
+    expect(result.quantity).toBe(337);
+    expect(result.formulaExplanation).toBe("337 TB required.");
+    expect(result.formulaExplanation).not.toMatch(/undefined|null|NaN/);
+    expect(drive).toEqual(before);
+  });
+
+  it("projects current engine drive packaging to capacity without mutating its provenance", () => {
+    const engineering = new CctvSystemTemplate().calculate({ cameraCount: 130 });
+    const drive = engineering.components.find((item) => item.componentKey === "SURVEILLANCE_HDD")!;
+    const before = structuredClone(drive);
+    const line = commercializeSystemComponent(drive, "en", engineering);
+    expect(line).toMatchObject({ componentKey: "SURVEILLANCE_STORAGE_CAPACITY", quantity: 1, requestedUnitText: "Package", requestedPrice: null, commercializationPending: true });
+    expect(line.commercialRequirement?.specification.requiredUsableTb).toBe(337);
+    expect(line.commercialRequirement?.source.requirement).toEqual(before);
+    expect(drive).toEqual(before);
+    expect(drive).toMatchObject({ quantity: 19, unit: "Unit", specification: { driveCapacityTb: 18 } });
+  });
   it.each(["ar", "en"] as const)("keeps storage TB internal and quotes a provisional package, not a made-up drive design (%s)", async (locale) => {
     const { brain, estimatePrices } = service();
     const proposal = await brain.generateDraftProposal({ companyId: "tenant", prompt, sourceLocale: locale });

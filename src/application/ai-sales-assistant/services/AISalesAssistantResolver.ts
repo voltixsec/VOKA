@@ -1,4 +1,5 @@
 import type { CatalogItemType } from "@/features/catalog/domain/entities/CatalogItem";
+import { salesEngineeringRequirement } from "./commercialize-system-component";
 import type { CatalogItemRepository } from "@/features/catalog/domain/repositories/CatalogItemRepository";
 import type { UnitRepository } from "@/features/catalog/domain/repositories/UnitRepository";
 import type { CompanyRepository } from "@/features/company/domain/repositories/CompanyRepository";
@@ -236,7 +237,9 @@ export class AISalesAssistantResolver {
           systemNameEn: intent.smartSystem.systemNameEn,
           status: intent.smartSystem.status,
           inputs: intent.smartSystem.inputs,
-          requirements: intent.smartSystem.components,
+          requirements: intent.smartSystem.systemType === "CCTV"
+            ? intent.smartSystem.components.map(salesEngineeringRequirement)
+            : intent.smartSystem.components,
           missingInputs: intent.smartSystem.missingInputs,
           warnings: intent.smartSystem.warnings,
           engineeringRules: intent.smartSystem.engineeringRules,

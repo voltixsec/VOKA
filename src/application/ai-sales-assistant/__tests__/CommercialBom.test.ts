@@ -46,7 +46,7 @@ describe("CCTV engineering → commercial BOM", () => {
     for (const line of proposal.lines) {
       expect(line.itemName).not.toMatch(/required|capacity|retention|assumption|ceil|مطلوبة|احتياج|حساب|337|467|TB/i);
       expect(line.description).toBeNull();
-      expect(line.commercialRequirement).toMatchObject({ category: line.componentKey, reviewRequired: true, source: { ruleVersion: "1.2.0", requirement: { componentKey: line.componentKey } } });
+      expect(line.commercialRequirement).toMatchObject({ category: line.componentKey, reviewRequired: true, source: { ruleVersion: "1.2.0", requirement: { componentKey: line.componentKey === "SURVEILLANCE_STORAGE_CAPACITY" ? "SURVEILLANCE_HDD" : line.componentKey } } });
       expect(line.commercialRequirement?.source.inputs.find((input) => input.name === "cameraCount")?.value).toBe(180);
       expect(line.itemName.replace(/IP|CCTV|NVR|PoE|CAT6|RJ45|\d+MP|H\.265|PTZ/gi, '')).not.toMatch(sourceLocale === 'ar' ? /[a-z]/i : /[\u0600-\u06ff]/);
     }

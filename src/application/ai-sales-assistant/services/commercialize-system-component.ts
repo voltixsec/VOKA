@@ -1,13 +1,39 @@
 import type { SystemComponent, SystemCalculationResult } from "../../../domain/smart-system";
 import type { ExtractedLineItem, SalesAssistantSourceLocale } from "../dto/AISalesAssistantDto";
 
+/** Sales proposals consume capacity facts, not the engine's provisional drive packaging. */
+export function salesEngineeringRequirement(component: SystemComponent): SystemComponent {
+  if (component.componentKey !== "SURVEILLANCE_HDD") return component;
+  const requiredUsableTb = component.specification?.requiredUsableTb;
+  const isPositiveFiniteNumber = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0;
+  if (!isPositiveFiniteNumber(requiredUsableTb)) return component;
+  const governedInputs = [
+    [component.calculationInputs?.cameraCount, "cameras"],
+    [component.specification?.bitrateMbps, "Mbps"],
+    [component.specification?.storageDays, "days"],
+  ] as const;
+  const context = governedInputs
+    .filter(([value]) => isPositiveFiniteNumber(value))
+    .map(([value, unit]) => `${value} ${unit}`)
+    .join(", ");
+  return {
+    ...component,
+    componentKey: "SURVEILLANCE_STORAGE_CAPACITY",
+    quantity: requiredUsableTb,
+    unit: "TB",
+    formulaExplanation: `${context ? `${context}: ` : ""}${requiredUsableTb} TB required.`,
+  };
+}
+
 /** Boundary adapter only: engineering templates/calculations remain unchanged. */
-export function commercializeSystemComponent(component: SystemComponent, locale: SalesAssistantSourceLocale, system?: SystemCalculationResult): ExtractedLineItem {
+export function commercializeSystemComponent(sourceComponent: SystemComponent, locale: SalesAssistantSourceLocale, system?: SystemCalculationResult): ExtractedLineItem {
+  const component = !system || system.systemType === "CCTV" ? salesEngineeringRequirement(sourceComponent) : sourceComponent;
   const line: ExtractedLineItem = {
     commercialRequirement: !system || system.systemType === "CCTV" ? {
       category: component.componentKey, preferredType: component.itemType,
       quantity: component.quantity, unit: component.unit, specification: { ...component.specification },
-      source: { requirement: component, inputs: system?.inputs ?? [], ruleVersion: system?.templateVersion ?? null },
+      source: { requirement: sourceComponent, inputs: system?.inputs ?? [], ruleVersion: system?.templateVersion ?? null },
       matchStatus: "COMMERCIAL_ITEM_TEMPORARY", reviewRequired: true,
     } : undefined,
     text: locale === "ar" ? component.nameAr : component.nameEn,
