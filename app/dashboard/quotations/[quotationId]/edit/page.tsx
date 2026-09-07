@@ -53,7 +53,7 @@ type Item = {
   name: string;
   code: string;
   type: QuotationLineType;
-  salePrice: number;
+  salePrice: number | null;
   unitId?: string | null;
   taxRateId?: string | null;
   description?: string | null;
@@ -1178,7 +1178,7 @@ export default function EditQuotationPage() {
                                 : localizedName;
                             })(),
                             unitPrice: item.salePrice,
-                            pricingStatus: "CONFIRMED",
+                            pricingStatus: item.salePrice === null ? "PENDING" : "CONFIRMED",
                             productSelectionStatus: "SELECTED",
                             taxRateId: catalogTaxRate?.id ?? null,
                             taxPercentage:
@@ -1578,7 +1578,7 @@ export default function EditQuotationPage() {
                 description: savedItem.description ?? candidate.description ?? "",
                 unitName: localizedUnitName,
                 unitPrice: savedItem.salePrice,
-                pricingStatus: "CONFIRMED",
+                pricingStatus: savedItem.salePrice === null ? "PENDING" : "CONFIRMED",
                 productSelectionStatus: "SELECTED",
                 taxRateId: catalogTaxRate?.id ?? null,
                 taxPercentage: catalogTaxRate?.percentage ?? 0,

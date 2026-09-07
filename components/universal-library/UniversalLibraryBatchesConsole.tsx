@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import UniversalLibraryBulkImportExecutionControl from "./UniversalLibraryBulkImportExecutionControl";
 import {
   useCallback,
@@ -47,51 +46,6 @@ type BatchHistoryResult = {
   total: number;
 };
 
-const tabs = [
-  {
-    label: "Overview",
-    href: "/dashboard/universal-library",
-    enabled: false,
-  },
-  {
-    label: "Batches",
-    href: "/dashboard/universal-library/batches",
-    enabled: true,
-  },
-  {
-    label: "Systems",
-    href: "/dashboard/universal-library/systems",
-    enabled: true,
-  },
-  {
-    label: "Products",
-    href: "/dashboard/universal-library/products",
-    enabled: true,
-  },
-  {
-    label: "Manufacturers",
-    href: "#",
-    enabled: false,
-  },
-  {
-    label: "Families",
-    href: "#",
-    enabled: false,
-  },
-  {
-    label: "Evidence",
-    href: "#",
-    enabled: false,
-  },
-  {
-    label: "Review", href: "/dashboard/universal-library/review", enabled: true,
-  },
-  {
-    label: "Population",
-    href: "/dashboard/universal-library/population",
-    enabled: true,
-  },
-] as const;
 
 function extractResult(
   payload: unknown,
@@ -462,40 +416,7 @@ export default function UniversalLibraryBatchesConsole() {
             </div>
           </div>
 
-          <div className="overflow-x-auto border-b border-[#222a45] px-6">
-            <div className="flex min-w-max gap-1">
-              {tabs.map(
-                (tab) =>
-                  tab.enabled ? (
-                    <Link
-                      key={
-                        tab.label
-                      }
-                      href={
-                        tab.href
-                      }
-                      className={`border-b-2 px-3 py-3 text-xs font-semibold transition ${
-                        tab.label ===
-                        "Batches"
-                          ? "border-indigo-400 text-indigo-300"
-                          : "border-transparent text-slate-500 hover:text-slate-200"
-                      }`}
-                    >
-                      {tab.label}
-                    </Link>
-                  ) : (
-                    <span
-                      key={
-                        tab.label
-                      }
-                      className="cursor-not-allowed border-b-2 border-transparent px-3 py-3 text-xs font-semibold text-slate-700"
-                    >
-                      {tab.label}
-                    </span>
-                  ),
-              )}
-            </div>
-          </div>
+
 
           <div className="grid gap-3 px-6 py-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl border border-[#222a45] bg-[#10182d] px-4 py-3">

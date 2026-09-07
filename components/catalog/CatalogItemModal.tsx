@@ -36,7 +36,7 @@ export type CatalogItemModalItem = {
     description?: string | null;
     source: "HUMAN" | "GOVERNED" | "LEGACY";
   }>;
-  salePrice: number;
+  salePrice: number | null;
   purchasePrice?: number | null;
   unitId?: string | null;
   taxRateId?: string | null;
@@ -100,7 +100,7 @@ export function CatalogItemModal({
   const [formSku, setFormSku] =
     useState("");
   const [formSalePrice, setFormSalePrice] =
-    useState(0);
+    useState<number | "">("");
   const [
     formPurchasePrice,
     setFormPurchasePrice,
@@ -138,7 +138,7 @@ export function CatalogItemModal({
       setLocalizedName(activeLocalization?.name ?? (isArabic ? initialItem.nameAr : initialItem.nameEn) ?? "");
       setFormSku(initialItem.sku ?? "");
       setFormSalePrice(
-        initialItem.salePrice,
+        initialItem.salePrice ?? "",
       );
       setFormPurchasePrice(
         initialItem.purchasePrice ?? "",
@@ -172,7 +172,7 @@ export function CatalogItemModal({
     setFormName(initialName);
     setLocalizedName(initialName);
     setFormSku("");
-    setFormSalePrice(0);
+    setFormSalePrice("");
     setFormPurchasePrice("");
     setFormUnitId("");
     setFormTaxRateId("");
@@ -196,7 +196,7 @@ export function CatalogItemModal({
     if (
       !formCode.trim() ||
       !formName.trim() ||
-      formSalePrice < 0
+      Number(formSalePrice) < 0
     ) {
       setModalError(
         t(
@@ -221,8 +221,7 @@ export function CatalogItemModal({
           ? [{ locale: language, name: localizedName.trim(), description: localizedDescription.trim() || null }]
           : [],
         sku: formSku.trim() || null,
-        salePrice:
-          Number(formSalePrice),
+        salePrice: formSalePrice === "" ? null : Number(formSalePrice),
         purchasePrice:
           formPurchasePrice === ""
             ? null
@@ -434,14 +433,9 @@ export function CatalogItemModal({
               type="number"
               step="0.001"
               min="0"
-              required
               value={formSalePrice}
               onChange={(event) =>
-                setFormSalePrice(
-                  Number(
-                    event.target.value,
-                  ),
-                )
+                setFormSalePrice(event.target.value === "" ? "" : Number(event.target.value))
               }
             />
           </label>

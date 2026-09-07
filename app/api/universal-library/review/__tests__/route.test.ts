@@ -120,6 +120,32 @@ describe(
         .mockReset();
     });
 
+    it.each([
+      ["Reviewed ingestion record has no normalized payload.", 422, "REVIEW_PAYLOAD_REQUIRED"],
+      ["Ingestion source is unavailable or inactive.", 409, "REVIEW_SOURCE_UNAVAILABLE"],
+    ])("returns an actionable governed failure for %s", async (message, status, code) => {
+      mocks.reviewExecute.mockRejectedValue(new Error(message));
+      const response = await POST(request(JSON.stringify({ ingestionRecordId: "record-1", decision: "APPROVE" })));
+      expect(response.status).toBe(status);
+      expect(await response.json()).toMatchObject({ success: false, error: { code } });
+    });
+
+    it("logs unexpected infrastructure errors server-side without exposing details", async () => {
+      const error = Object.assign(new Error("internal database detail"), { code: "P2010" });
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        mocks.reviewExecute.mockRejectedValue(error);
+        const response = await POST(request(JSON.stringify({ ingestionRecordId: "record-1", decision: "APPROVE" })));
+        expect(response.status).toBe(500);
+        const body = await response.json();
+        expect(body.error.code).toBe("UCL_REVIEW_FAILED");
+        expect(JSON.stringify(body)).not.toContain("internal database detail");
+        expect(log).toHaveBeenCalledWith("UCL governed review failed:", error);
+      } finally {
+        log.mockRestore();
+      }
+    });
+
     it(
       "requires platform administration",
       async () => {
@@ -217,6 +243,7 @@ describe(
                   "APPROVE",
                 reviewNote:
                   " Evidence accepted ",
+                reviewedByUserId: "untrusted-client-actor",
               }),
             ),
           );

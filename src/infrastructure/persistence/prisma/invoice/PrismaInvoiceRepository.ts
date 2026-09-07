@@ -104,12 +104,14 @@ export class PrismaInvoiceRepository implements IInvoiceRepository {
         }) : null;
         if (taxRateId && !tax) throw new InvoiceDomainError("Tax rate not found.");
         const listed = request.priceListId ? await tx.priceListItem.findFirst({ where: { priceListId: request.priceListId, catalogItemId: item.id } }) : null;
+        const price = listed?.price ?? item.salePrice;
+        if (price == null) throw new InvoiceDomainError("Set a commercial price before creating this line.");
         lines.push({
           position: requested.position, type: item.type, catalogItemId: item.id, taxRateId,
           itemCode: item.code, itemName: item.name, itemNameAr: item.nameAr, itemNameEn: item.nameEn,
           description: requested.description ?? item.description,
           unitName: item.unit?.name ?? null, quantity: requested.quantity,
-          unitPrice: Number(listed?.price ?? item.salePrice), discount: requested.discount,
+          unitPrice: Number(price), discount: requested.discount,
           taxPercentage: Number(tax?.percentage ?? 0),
         });
       } else {

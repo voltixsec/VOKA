@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -77,51 +76,6 @@ type HierarchyResult =
       details: SystemDetails;
     };
 
-const tabs = [
-  {
-    label: "Overview",
-    href: "/dashboard/universal-library",
-    enabled: false,
-  },
-  {
-    label: "Batches",
-    href: "/dashboard/universal-library/batches",
-    enabled: true,
-  },
-  {
-    label: "Systems",
-    href: "/dashboard/universal-library/systems",
-    enabled: true,
-  },
-  {
-    label: "Products",
-    href: "/dashboard/universal-library/products",
-    enabled: true,
-  },
-  {
-    label: "Manufacturers",
-    href: "#",
-    enabled: false,
-  },
-  {
-    label: "Families",
-    href: "#",
-    enabled: false,
-  },
-  {
-    label: "Evidence",
-    href: "#",
-    enabled: false,
-  },
-  {
-    label: "Review", href: "/dashboard/universal-library/review", enabled: true,
-  },
-  {
-    label: "Population",
-    href: "/dashboard/universal-library/population",
-    enabled: true,
-  },
-] as const;
 
 function extractResult(
   payload: unknown,
@@ -547,32 +501,7 @@ export default function UniversalLibraryStagedHierarchyBrowser() {
             </div>
           </div>
 
-          <div className="mt-6 flex gap-2 overflow-x-auto pb-0">
-            {tabs.map(
-              (tab) =>
-                tab.enabled ? (
-                  <Link
-                    key={tab.label}
-                    href={tab.href}
-                    className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition ${
-                      tab.label ===
-                      "Systems"
-                        ? "border-indigo-400 text-white"
-                        : "border-transparent text-slate-500 hover:text-slate-200"
-                    }`}
-                  >
-                    {tab.label}
-                  </Link>
-                ) : (
-                  <span
-                    key={tab.label}
-                    className="cursor-not-allowed whitespace-nowrap border-b-2 border-transparent px-4 py-3 text-sm font-medium text-slate-700"
-                  >
-                    {tab.label}
-                  </span>
-                ),
-            )}
-          </div>
+
         </div>
       </div>
 

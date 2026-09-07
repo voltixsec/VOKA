@@ -24,7 +24,7 @@ type Item = {
   name: string;
   code: string;
   type: QuotationLineType;
-  salePrice: number;
+  salePrice: number | null;
   unitId?: string | null;
   taxRateId?: string | null;
   description?: string | null;
@@ -638,7 +638,9 @@ export default function NewContractPage() {
                     onSelectItem={(id: string) => {
                       const item = items.find((candidate) => candidate.id === id);
                       if (!item) return;
+                      if (item.salePrice === null) { setError(t("حدد سعر الصنف في الكتالوج قبل إضافته", "Set the catalog item price before adding it.")); return; }
 
+                      const catalogPrice = item.salePrice;
                       const catalogTaxRate = item.taxRateId
                         ? taxRates.find((rate) => rate.id === item.taxRateId)
                         : undefined;
@@ -656,7 +658,7 @@ export default function NewContractPage() {
                             itemName: item.name,
                             description: itemDesc,
                             unitName: "PCS",
-                            unitPrice: item.salePrice,
+                            unitPrice: catalogPrice,
                             taxRateId: catalogTaxRate?.id ?? null,
                             taxPercentage: catalogTaxRate?.percentage ?? 0,
                             ...activeLocalizedText(item.name, itemDesc),
@@ -916,6 +918,8 @@ export default function NewContractPage() {
           setCatalogItemModalInitialName("");
         }}
         onSaved={(savedItem: CatalogItemModalItem) => {
+          const savedPrice = savedItem.salePrice;
+          if (savedPrice === null) { setError(t("حدد سعر الصنف في الكتالوج قبل إضافته", "Set the catalog item price before adding it.")); return; }
           const targetLineKey = catalogItemModalLineKey;
           if (!targetLineKey) {
             setCatalogItemModalOpen(false);
@@ -941,7 +945,7 @@ export default function NewContractPage() {
                 itemName: savedItem.name,
                 description: savedItem.description ?? "",
                 unitName: "PCS",
-                unitPrice: savedItem.salePrice,
+                unitPrice: savedPrice,
                 taxRateId: catalogTaxRate?.id ?? null,
                 taxPercentage: catalogTaxRate?.percentage ?? 0,
                 ...activeLocalizedText(savedItem.name, savedItem.description ?? ""),

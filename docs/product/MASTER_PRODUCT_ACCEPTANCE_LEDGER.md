@@ -2326,3 +2326,51 @@ has no direct role in building the Universal Library.
 Permanent scaling rule:
 
 **Huge Library, Small Working Set.**
+
+## UCL-CLOSE-05 — CLOSED / ACCEPTED — 2026-09-07
+
+**Explicit Adoption / Commercial Truth:** CLOSED / ACCEPTED.
+
+Accepted governed flow:
+
+Universal Library → explicit tenant adoption → Company Catalog → tenant-owned commercial truth → quotation snapshot.
+
+Evidence:
+- `CatalogItem.salePrice` is nullable.
+- `null` means price unknown / not set; explicit `0` remains a legitimate zero price.
+- Adoption without a price persisted `null` and displayed `Price not set`.
+- Explicit zero adoption displayed `0.000`, proving `null != 0`.
+- Re-adoption did not overwrite existing tenant-owned Company Catalog commercial truth.
+- `companyId` and `adoptedByUserId` remain server-derived.
+- A catalog item with unresolved price produced `Price required` in quotation creation and blocked completion until a numeric price was supplied.
+- Live quotation snapshot acceptance: quotation persisted at `KWD 180.000`; Company Catalog price was later changed to `222.222`; the existing quotation remained `KWD 180.000`.
+- Platform Admin UCL console navigation was normalized to Overview / Batches / Hierarchy / Staging / Review / Published / Population.
+- Published operator surface: `/dashboard/universal-library/published`.
+- Tenant adoption surface: `/dashboard/products/universal-library`.
+
+Review/publish regressions found and fixed during live acceptance:
+1. `pg_advisory_xact_lock(...)` used through Prisma `$queryRaw` caused P2010 because PostgreSQL returns `void`; lock execution now uses `$executeRaw`.
+2. Inactive nullable JSON attribute values used JavaScript `null`, which Prisma represented as JSON null rather than SQL NULL and violated `UniversalItemAttributeValue_exactly_one_value_check`; inactive JSON values now use `Prisma.DbNull`.
+
+Live review/publish retest:
+- Ingestion record: `cmtrhemke0001dst1ybsiabmd`
+- Final status: `PUBLISHED`
+- Review decision: `APPROVED`
+- Actor user: `cmsaa0wym00000ct1nju00h2l`
+- Canonical item: `cmtrmxbp400066wt19it84slc`
+- Canonical name: `VOKA-UCL-REVIEW-RETEST-20260907 — Synthetic acceptance evidence`
+- Live API: `POST /api/universal-library/review` → HTTP 200.
+- Observed post-acceptance counts: review queue `34`, published items `2`. No unsupported before/after delta is claimed.
+
+Migration:
+- `20260907010000_catalog_nullable_sale_price`
+- Applied successfully.
+- `CatalogItem.salePrice` verified nullable `numeric(18,3)`.
+
+**UCL-CLOSE-06 — E2E Batch Wizard remains OPEN and is the exact next UCL closure slice.**
+
+Existing release gates remain unchanged, including:
+- `LIVE-FAIL-001` Payment Registration — RED / BLOCKER.
+- `AUTH-DIRECT-ROUTE-GATE` — OPEN for Phase 4C.
+
+Do not claim UCL V1 fully closed until UCL-CLOSE-06 is accepted.

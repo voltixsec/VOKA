@@ -51,7 +51,7 @@ type Item = {
   name: string;
   code: string;
   type: QuotationLineType;
-  salePrice: number;
+  salePrice: number | null;
   unitId?: string | null;
   taxRateId?: string | null;
   description?: string | null;

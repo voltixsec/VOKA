@@ -93,7 +93,7 @@ export const PATCH = withCompanyAuth(
       categoryId: optionalString(body.categoryId),
       sku: optionalString(body.sku),
       barcode: optionalString(body.barcode),
-      salePrice: optionalNumber(body.salePrice) ?? undefined,
+      salePrice: optionalNumber(body.salePrice),
       purchasePrice: optionalNumber(body.purchasePrice),
       trackInventory: optionalBoolean(body.trackInventory),
       allowDiscount: optionalBoolean(body.allowDiscount),

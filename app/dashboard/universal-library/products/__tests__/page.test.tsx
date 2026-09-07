@@ -10,6 +10,16 @@ afterEach(() => {
 });
 
 describe("UniversalLibraryProductsBrowser", () => {
+  it('renders the current published API data/meta envelope', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'published', name: 'Published API camera', type: 'PRODUCT', isActive: true, modelNumber: 'CAM-API' }],
+      meta: { total: 1, nextCursor: null },
+    })));
+    render(<UniversalLibraryProductsBrowser />);
+    await screen.findByText('Published API camera');
+    expect(fetchMock).toHaveBeenCalledWith('/api/universal-library/items?limit=50&isActive=true', expect.any(Object));
+    expect(screen.queryByText('No published products yet')).not.toBeInTheDocument();
+  });
   it("renders the real library browser and empty state", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(

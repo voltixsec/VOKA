@@ -30,7 +30,7 @@ export type CatalogItemProps = {
   descriptionAr: string | null;
   descriptionEn: string | null;
   purchasePrice: number | null;
-  salePrice: number;
+  salePrice: number | null;
   trackInventory: boolean;
   allowDiscount: boolean;
   imageUrl: string | null;
@@ -45,7 +45,7 @@ export type CreateCatalogItemProps = {
   type: CatalogItemType;
   code: string;
   name: string;
-  salePrice: number;
+  salePrice: number | null;
   nameAr?: string | null;
   nameEn?: string | null;
   categoryId?: string | null;
@@ -132,7 +132,7 @@ export class CatalogItem extends Entity<CatalogItemProps> {
     return this.props.purchasePrice;
   }
 
-  public get salePrice(): number {
+  public get salePrice(): number | null {
     return this.props.salePrice;
   }
 
@@ -225,8 +225,8 @@ export class CatalogItem extends Entity<CatalogItemProps> {
     }
 
     if (
-      !Number.isFinite(input.salePrice) ||
-      input.salePrice < 0
+      input.salePrice !== null &&
+      (!Number.isFinite(input.salePrice) || input.salePrice < 0)
     ) {
       return Result.failure(
         new DomainError(
@@ -316,7 +316,7 @@ export class CatalogItem extends Entity<CatalogItemProps> {
     categoryId?: string | null;
     sku?: string | null;
     barcode?: string | null;
-    salePrice?: number;
+    salePrice?: number | null;
     purchasePrice?: number | null;
     trackInventory?: boolean;
     allowDiscount?: boolean;
@@ -363,7 +363,7 @@ export class CatalogItem extends Entity<CatalogItemProps> {
       this.props.barcode = CatalogItem.normalizeOptional(input.barcode);
     }
     if (input.salePrice !== undefined) {
-      if (!Number.isFinite(input.salePrice) || input.salePrice < 0) {
+      if (input.salePrice !== null && (!Number.isFinite(input.salePrice) || input.salePrice < 0)) {
         return Result.failure(
           new DomainError('Catalog item sale price must be a non-negative number.', 'INVALID_CATALOG_ITEM_SALE_PRICE'),
         );
@@ -415,9 +415,9 @@ export class CatalogItem extends Entity<CatalogItemProps> {
   }
 
   public changeSalePrice(
-    salePrice: number,
+    salePrice: number | null,
   ): Result<void, DomainError> {
-    if (!Number.isFinite(salePrice) || salePrice < 0) {
+    if (salePrice !== null && (!Number.isFinite(salePrice) || salePrice < 0)) {
       return Result.failure(
         new DomainError(
           'Catalog item sale price must be a non-negative number.',

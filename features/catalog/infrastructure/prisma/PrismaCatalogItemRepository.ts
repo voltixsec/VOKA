@@ -30,7 +30,7 @@ type CatalogItemRecord = {
   descriptionAr: string | null;
   descriptionEn: string | null;
   purchasePrice: DecimalLike | null;
-  salePrice: DecimalLike;
+  salePrice: DecimalLike | null;
   trackInventory: boolean;
   allowDiscount: boolean;
   imageUrl: string | null;
@@ -365,7 +365,7 @@ export class PrismaCatalogItemRepository
         descriptionEn: record.descriptionEn,
         purchasePrice:
           record.purchasePrice?.toNumber() ?? null,
-        salePrice: record.salePrice.toNumber(),
+        salePrice: record.salePrice?.toNumber() ?? null,
         trackInventory: record.trackInventory,
         allowDiscount: record.allowDiscount,
         imageUrl: record.imageUrl,

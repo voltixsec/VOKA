@@ -1,6 +1,7 @@
 import type {
   ReactNode,
 } from "react";
+import UniversalLibraryOperatorNav from "@/components/universal-library/UniversalLibraryOperatorNav";
 import {
   redirect,
 } from "next/navigation";
@@ -22,5 +23,5 @@ export default async function UniversalLibraryOperatorLayout({
     redirect("/dashboard");
   }
 
-  return children;
+  return <><UniversalLibraryOperatorNav />{children}</>;
 }

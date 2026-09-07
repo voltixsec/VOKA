@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import DashboardLayout from "../layout";
-import { getCurrentUser } from "../../../lib/auth";
+import { getCurrentUser, isPlatformAdmin } from "../../../lib/auth";
 import { ApiError } from "../../../lib/api/ApiError";
 import { redirect } from "next/navigation";
 
@@ -13,6 +13,7 @@ vi.mock("next/font/google", () => ({
 
 vi.mock("../../../lib/auth", () => ({
   getCurrentUser: vi.fn(),
+  isPlatformAdmin: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -26,6 +27,15 @@ vi.mock("next/headers", () => ({
 }));
 
 describe("DashboardLayout Server Auth Gate", () => {
+  it.each([true, false])('passes only the server-derived platform flag %s to Sidebar', async (allowed) => {
+    const auth = { user: { id: 'user-1' } } as any;
+    vi.mocked(getCurrentUser).mockResolvedValue(auth);
+    vi.mocked(isPlatformAdmin).mockReturnValue(allowed);
+    const element = await DashboardLayout({ children: 'Content' });
+    expect(isPlatformAdmin).toHaveBeenCalledWith(auth);
+    const sidebar = element.props.children.props.children[0];
+    expect(sidebar.props).toEqual({ isPlatformAdmin: allowed });
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });

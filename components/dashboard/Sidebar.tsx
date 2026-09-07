@@ -188,7 +188,7 @@ function isActive(
   return pathname.startsWith(href);
 }
 
-export function Sidebar() {
+export function Sidebar({ isPlatformAdmin = false }: { isPlatformAdmin?: boolean }) {
   const pathname = usePathname();
   const { isArabic } = useLanguage();
 
@@ -210,7 +210,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-5">
-        {navigationItems.map((item) => {
+        {[...navigationItems, ...(isPlatformAdmin ? [{ labelEn: "Universal Library", labelAr: "المكتبة العالمية", descriptionEn: "Platform control", descriptionAr: "إدارة المنصة", href: "/dashboard/universal-library", icon: <Icon><path d="M4 3h16v18H4z" /><path d="M8 7h8M8 12h8M8 17h5" /></Icon> }] : [])].map((item) => {
           const active = isActive(
             pathname,
             item.href

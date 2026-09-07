@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+
 import {
   useCallback,
   useEffect,
@@ -33,28 +33,6 @@ const emptyFilters: Filters = {
   status: "",
 };
 
-const tabs = [
-  {
-    label: "Systems",
-    href: "/dashboard/universal-library/systems",
-  },
-  {
-    label: "Products",
-    href: "/dashboard/universal-library/products",
-  },
-  {
-    label: "Batches",
-    href: "/dashboard/universal-library/batches",
-  },
-  {
-    label: "Review",
-    href: "/dashboard/universal-library/review",
-  },
-  {
-    label: "Population",
-    href: "/dashboard/universal-library/population",
-  },
-];
 
 function objectValue(
   value: unknown,
@@ -565,22 +543,7 @@ setFilters(
             </div>
           </div>
 
-          <nav className="mt-6 flex flex-wrap gap-2 border-t border-[#222a45] pt-5">
-            {tabs.map((tab) => (
-              <Link
-                key={tab.label}
-                href={tab.href}
-                className={`rounded-xl px-3.5 py-2 text-xs font-medium transition ${
-                  tab.label ===
-                  "Products"
-                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-950/20"
-                    : "border border-[#313a5a] bg-[#10182d] text-slate-300 hover:border-indigo-400/40"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            ))}
-          </nav>
+
         </header>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">

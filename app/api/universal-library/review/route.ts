@@ -166,6 +166,23 @@ export const POST =
           );
         }
 
+        if (message === "Reviewed ingestion record has no normalized payload.") {
+          return errorResponse(
+            422,
+            "REVIEW_PAYLOAD_REQUIRED",
+            "This record has no normalized publication payload. Complete governed normalization before approving it.",
+          );
+        }
+
+        if (message === "Ingestion source is unavailable or inactive.") {
+          return errorResponse(
+            409,
+            "REVIEW_SOURCE_UNAVAILABLE",
+            "The ingestion source must be available and active before publication.",
+          );
+        }
+
+        console.error("UCL governed review failed:", error);
         return errorResponse(
           500,
           "UCL_REVIEW_FAILED",

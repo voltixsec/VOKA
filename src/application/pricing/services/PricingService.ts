@@ -1,3 +1,4 @@
+import { DomainError } from "../../../../lib/core";
 import type { ResolvePriceRequest } from "../dto/ResolvePriceRequest";
 import type { ResolvePriceResult } from "../dto/ResolvePriceResult";
 
@@ -46,6 +47,9 @@ export class PricingService {
       });
 
       if (catalogItem !== null && catalogItem !== undefined) {
+        if (catalogItem.salePrice == null) {
+          throw new DomainError("Set a commercial price before creating this line.", "CATALOG_PRICE_REQUIRED");
+        }
         resolvedPrice = Number(catalogItem.salePrice);
         source = "CATALOG";
       }

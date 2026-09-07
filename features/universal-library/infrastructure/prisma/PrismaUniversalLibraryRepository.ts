@@ -1,4 +1,8 @@
-import type { PrismaClient, UniversalItemType as PrismaUniversalItemType } from "../../../../lib/generated/prisma/client";
+import {
+  Prisma,
+  type PrismaClient,
+  type UniversalItemType as PrismaUniversalItemType,
+} from "../../../../lib/generated/prisma/client";
 import { CatalogItem, CatalogItemType as CompanyCatalogItemType } from "../../../catalog";
 import { UniqueEntityID } from "../../../../lib/core";
 import {
@@ -469,7 +473,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 
         const code =
           params.code?.trim().toUpperCase() || `UCL-${universalItem.id.toUpperCase()}`;
-        const salePrice = params.salePrice ?? 0;
+        const salePrice = params.salePrice ?? null;
         const createdCatalogItem = await tx.catalogItem.create({
           data: {
             companyId: params.companyId,
@@ -855,7 +859,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         globalTypes.includes(identifier.identifierType as (typeof globalTypes)[number])
       );
       for (const identifier of globalIdentifiers) {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ucl-global:${identifier.normalizedValue}`}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ucl-global:${identifier.normalizedValue}`}, 0))`;
         const candidates = await tx.universalItemIdentifier.findMany({
           where: {
             identifierType: { in: [...globalTypes] },
@@ -880,7 +884,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       let mfrId: string | null = null;
       if (!resolvedMatchedItemId && normalizedPayload.manufacturerName) {
         const manufacturerLockKey = `ucl-manufacturer:${(normalizedPayload.manufacturerCode || normalizedPayload.manufacturerName).toUpperCase()}`;
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${manufacturerLockKey}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${manufacturerLockKey}, 0))`;
         const existingMfrs = await tx.universalManufacturer.findMany({
           where: {
             OR: [
@@ -912,7 +916,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         );
         for (const identifier of scopedIdentifiers) {
           const scopedLockKey = `ucl-scoped:${mfrId}:${identifier.identifierType}:${identifier.normalizedValue}`;
-          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${scopedLockKey}, 0))`;
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${scopedLockKey}, 0))`;
           const candidates = await tx.universalItemIdentifier.findMany({
             where: {
               identifierType: identifier.identifierType,
@@ -931,7 +935,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
 
         if (!resolvedMatchedItemId && normalizedPayload.normalizedModelNumber) {
           const modelLockKey = `ucl-model:${mfrId}:${normalizedPayload.normalizedModelNumber}`;
-          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${modelLockKey}, 0))`;
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${modelLockKey}, 0))`;
           const candidates = await tx.universalCatalogItem.findMany({
             where: {
               manufacturerId: mfrId,
@@ -951,7 +955,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       let brandId: string | null = null;
       if (!resolvedMatchedItemId && normalizedPayload.brandName) {
         const brandLockKey = `ucl-brand:${mfrId || "none"}:${(normalizedPayload.brandCode || normalizedPayload.brandName).toUpperCase()}`;
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${brandLockKey}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${brandLockKey}, 0))`;
         const existingBrands = await tx.universalBrand.findMany({
           where: {
             manufacturerId: mfrId,
@@ -983,7 +987,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       let familyId: string | null = null;
       if (!resolvedMatchedItemId && normalizedPayload.familyName) {
         const familyLockKey = `ucl-family:${brandId || "none"}:${(normalizedPayload.familyCode || normalizedPayload.familyName).toUpperCase()}`;
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${familyLockKey}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${familyLockKey}, 0))`;
         const existingFamilies = await tx.universalProductFamily.findMany({
           where: {
             brandId,
@@ -1136,7 +1140,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
       // 9. Persist typed attributes without bypassing UCL-2 value integrity.
       for (const attribute of normalizedPayload.attributes) {
         const attributeLockKey = `ucl-attribute:${attribute.code}`;
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attributeLockKey}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${attributeLockKey}, 0))`;
         let definition = await tx.universalAttributeDefinition.findFirst({
           where: { code: { equals: attribute.code, mode: "insensitive" } },
         });
@@ -1158,13 +1162,43 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
           valueString: null,
           valueNumber: null,
           valueBoolean: null,
-          valueJson: null,
+          valueJson: Prisma.DbNull,
           unit: attribute.unit,
         };
-        if (attribute.dataType === "NUMBER" || attribute.dataType === "DECIMAL") valueData.valueNumber = attribute.value;
-        else if (attribute.dataType === "BOOLEAN") valueData.valueBoolean = attribute.value;
-        else if (attribute.dataType === "JSON") valueData.valueJson = attribute.value;
-        else valueData.valueString = attribute.value;
+
+        if (
+          attribute.dataType === "NUMBER" ||
+          attribute.dataType === "DECIMAL"
+        ) {
+          if (
+            typeof attribute.value !== "number" ||
+            !Number.isFinite(attribute.value)
+          ) {
+            throw new Error(
+              `Attribute '${attribute.code}' requires a finite numeric value.`,
+            );
+          }
+
+          valueData.valueNumber = attribute.value;
+        } else if (attribute.dataType === "BOOLEAN") {
+          if (typeof attribute.value !== "boolean") {
+            throw new Error(
+              `Attribute '${attribute.code}' requires a boolean value.`,
+            );
+          }
+
+          valueData.valueBoolean = attribute.value;
+        } else if (attribute.dataType === "JSON") {
+          valueData.valueJson = attribute.value;
+        } else {
+          if (typeof attribute.value !== "string") {
+            throw new Error(
+              `Attribute '${attribute.code}' requires a string value.`,
+            );
+          }
+
+          valueData.valueString = attribute.value;
+        }
 
         await tx.universalItemAttributeValue.upsert({
           where: {
@@ -1501,7 +1535,7 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         descriptionAr: record.descriptionAr,
         descriptionEn: record.descriptionEn,
         purchasePrice: record.purchasePrice?.toNumber() ?? null,
-        salePrice: record.salePrice.toNumber(),
+        salePrice: record.salePrice?.toNumber() ?? null,
         trackInventory: record.trackInventory,
         allowDiscount: record.allowDiscount,
         imageUrl: record.imageUrl,

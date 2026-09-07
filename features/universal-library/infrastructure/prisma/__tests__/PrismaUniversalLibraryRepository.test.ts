@@ -49,6 +49,45 @@ function adoptionRepository(tx: ReturnType<typeof transaction>) {
 }
 
 describe("PrismaUniversalLibraryRepository", () => {
+  it.each([undefined, 0, 125])('persists and returns adoption price %s without a fabricated zero', async (salePrice) => {
+    const tx = transaction();
+    tx.catalogItem.create.mockImplementation(async ({ data }) => ({
+      ...catalog(), ...data, salePrice: data.salePrice === null ? null : { toNumber: () => data.salePrice },
+    }));
+    const result = await adoptionRepository(tx).adoptItem({ companyId: 'company-1', universalItemId: 'item-1', salePrice });
+    expect(tx.catalogItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ salePrice: salePrice ?? null }) }));
+    expect(result.catalogItem.salePrice).toBe(salePrice ?? null);
+  });
+
+  it('keeps tenant adoptions independent and preserves existing commercial truth on readoption', async () => {
+    const records = new Map<string, any>();
+    const tx = transaction();
+    const findUnique = vi.fn(async ({ where }) => records.get(where.companyId_universalItemId.companyId) ?? null);
+    tx.universalItemAdoption.findUnique = findUnique;
+    tx.catalogItem.create.mockImplementation(async ({ data }) => ({
+      ...catalog(), ...data, id: `catalog-${data.companyId}`, salePrice: data.salePrice === null ? null : { toNumber: () => data.salePrice },
+    }));
+    tx.universalItemAdoption.create.mockImplementation(async ({ data }) => {
+      const created = await tx.catalogItem.create.mock.results.at(-1)!.value;
+      const record = { ...adoption(), ...data, catalogItem: created };
+      records.set(data.companyId, record);
+      return record;
+    });
+    const repository = new PrismaUniversalLibraryRepository({ universalItemAdoption: { findUnique }, $transaction: async (callback: any) => callback(tx) } as any);
+    const first = await repository.adoptItem({ companyId: 'tenant-a', universalItemId: 'item-1', salePrice: 125, code: 'TENANT-CAM' });
+    const second = await repository.adoptItem({ companyId: 'tenant-b', universalItemId: 'item-1' });
+    expect(first.catalogItem.companyId).toBe('tenant-a');
+    expect(first.catalogItem.salePrice).toBe(125);
+    expect(second.catalogItem.companyId).toBe('tenant-b');
+    expect(second.catalogItem.salePrice).toBeNull();
+    const saved = records.get('tenant-a').catalogItem;
+    Object.assign(saved, { name: 'Tenant name', description: 'Tenant description', sku: 'TENANT-SKU', unitId: 'tenant-unit', taxRateId: 'tenant-tax', purchasePrice: { toNumber: () => 75 } });
+    tx.universalCatalogItem.findFirst.mockResolvedValue({ ...item('item-1'), name: 'Changed UCL name' });
+    const again = await repository.adoptItem({ companyId: 'tenant-a', universalItemId: 'item-1', salePrice: 0, code: 'REPLACEMENT' });
+    expect(again.isNewAdoption).toBe(false);
+    expect(again.catalogItem).toMatchObject({ companyId: 'tenant-a', salePrice: 125, purchasePrice: 75, code: 'TENANT-CAM', name: 'Tenant name', description: 'Tenant description', sku: 'TENANT-SKU', unitId: 'tenant-unit', taxRateId: 'tenant-tax' });
+    expect(tx.catalogItem.create).toHaveBeenCalledTimes(2);
+  });
   it("continues after the last returned row with deterministic equal-timestamp ordering", async () => {
     const findMany = vi.fn()
       .mockResolvedValueOnce([item("A"), item("B"), item("C")])
@@ -236,7 +275,7 @@ describe("PrismaUniversalLibraryRepository", () => {
     });
     expect(result.isNewAdoption).toBe(true);
     expect(tx.catalogItem.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ salePrice: 0 }),
+      data: expect.objectContaining({ salePrice: null }),
     }));
     expect(tx.unit.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "unit-1", OR: [{ companyId: "company-1" }, { companyId: null }] },

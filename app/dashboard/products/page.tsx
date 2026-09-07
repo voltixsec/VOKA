@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import {
   Badge,
@@ -37,7 +39,7 @@ type CatalogItem = {
   descriptionEn?: string | null;
   localizations?: Array<{ locale: string; name: string; description?: string | null; source: "HUMAN" | "GOVERNED" | "LEGACY" }>;
   display?: { name: string; description?: string | null; requestedLocale: string; resolvedLocale: string | null; isFallback: boolean };
-  salePrice: number;
+  salePrice: number | null;
   purchasePrice?: number | null;
   unitId?: string | null;
   taxRateId?: string | null;
@@ -101,7 +103,7 @@ export default function ProductsPage() {
   const [formNameAr, setFormNameAr] = useState("");
   const [formNameEn, setFormNameEn] = useState("");
   const [formSku, setFormSku] = useState("");
-  const [formSalePrice, setFormSalePrice] = useState(0);
+  const [formSalePrice, setFormSalePrice] = useState<number | "">("");
   const [formPurchasePrice, setFormPurchasePrice] = useState<number | "">("");
   const [formUnitId, setFormUnitId] = useState("");
   const [formTaxRateId, setFormTaxRateId] = useState("");
@@ -163,7 +165,7 @@ export default function ProductsPage() {
     setFormNameAr("");
     setFormNameEn("");
     setFormSku("");
-    setFormSalePrice(0);
+    setFormSalePrice("");
     setFormPurchasePrice("");
     setFormUnitId("");
     setFormTaxRateId("");
@@ -183,7 +185,7 @@ export default function ProductsPage() {
     setFormNameAr(item.nameAr ?? "");
     setFormNameEn(item.nameEn ?? "");
     setFormSku(item.sku ?? "");
-    setFormSalePrice(item.salePrice);
+    setFormSalePrice(item.salePrice ?? "");
     setFormPurchasePrice(item.purchasePrice ?? "");
     setFormUnitId(item.unitId ?? "");
     setFormTaxRateId(item.taxRateId ?? "");
@@ -197,7 +199,7 @@ export default function ProductsPage() {
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    if (!formCode.trim() || !formName.trim() || formSalePrice < 0) {
+    if (!formCode.trim() || !formName.trim() || Number(formSalePrice) < 0) {
       setModalError(t("يرجى تعبئة كافة الحقول المطلوبة بشكل صحيح", "Please fill in all required fields correctly"));
       return;
     }
@@ -213,7 +215,7 @@ export default function ProductsPage() {
         nameAr: formNameAr.trim() || null,
         nameEn: formNameEn.trim() || null,
         sku: formSku.trim() || null,
-        salePrice: Number(formSalePrice),
+        salePrice: formSalePrice === "" ? null : Number(formSalePrice),
         purchasePrice: formPurchasePrice === "" ? null : Number(formPurchasePrice),
         unitId: formUnitId || null,
         taxRateId: formTaxRateId || null,
@@ -274,6 +276,7 @@ export default function ProductsPage() {
         )}
       />
 
+      <Link href="/dashboard/products/universal-library" className="inline-flex rounded-xl border border-sky-400/30 px-4 py-2 text-sky-300">{t("المكتبة العالمية", "Universal Library")}</Link>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex rounded-xl border border-white/10 bg-slate-900 p-1">
@@ -370,7 +373,7 @@ export default function ProductsPage() {
                       {item.display?.name ?? item.name}
                       {item.display?.isFallback && <div className="text-xs font-normal text-amber-300">{catalogFallbackDisclosure(isArabic ? "ar" : "en")}</div>}
                     </TableCell>
-                    <TableCell className="font-semibold text-emerald-300">{item.salePrice.toFixed(3)}</TableCell>
+                    <TableCell className="font-semibold text-emerald-300">{item.salePrice === null ? t("السعر غير محدد", "Price not set") : item.salePrice.toFixed(3)}</TableCell>
                     <TableCell>
                       <Badge variant={item.isActive ? "success" : "neutral"}>
                         {item.isActive ? t("نشط", "Active") : t("غير نشط", "Inactive")}

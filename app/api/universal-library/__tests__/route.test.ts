@@ -84,19 +84,19 @@ vi.mock("../../../../lib/prisma", () => ({
         unit: { findFirst: vi.fn() },
         taxRate: { findFirst: vi.fn() },
         catalogItem: {
-          create: vi.fn().mockResolvedValue({
+          create: vi.fn().mockImplementation(async ({ data }: any) => ({
             id: "tenant-cat-999",
             companyId: "company-authenticated-456",
             type: "PRODUCT",
             code: "UCL-UCL-ITEM",
             name: "Global Solar Panel 400W",
-            salePrice: { toNumber: () => 120 },
+            salePrice: data.salePrice === null ? null : { toNumber: () => data.salePrice },
             isActive: true,
             trackInventory: true,
             allowDiscount: true,
             createdAt: new Date(),
             updatedAt: new Date(),
-          }),
+          })),
         },
         universalItemAdoption: {
           findUnique: vi.fn().mockResolvedValue(null),
@@ -129,6 +129,13 @@ vi.mock("../../../../lib/prisma", () => ({
 }));
 
 describe("Universal Library API Surface", () => {
+  it.each([{}, { salePrice: null }, { salePrice: 0 }])('preserves omitted/null/zero adoption request %j', async (input) => {
+    const { POST } = await import('../items/[id]/adopt/route');
+    const response = await POST(new Request('http://localhost/api/universal-library/items/ucl-item-1/adopt', { method: 'POST', body: JSON.stringify(input) }) as any);
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body.data.catalogItem.salePrice).toBe('salePrice' in input ? input.salePrice : null);
+  });
   it("does not expose internal normalized identifier values", () => {
     const timestamp = new Date("2026-08-21T00:00:00Z");
     const serialized = serializeUniversalItem(new UniversalCatalogItem({

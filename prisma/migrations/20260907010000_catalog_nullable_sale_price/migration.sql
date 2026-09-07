@@ -1,0 +1,2 @@
+ALTER TABLE "CatalogItem"
+ALTER COLUMN "salePrice" DROP NOT NULL;

@@ -182,6 +182,24 @@ function fetchForCreate() {
 }
 
 describe('proposed customer in the real quotation composer', () => {
+  it('keeps a selected unknown catalog price blank until an explicit price is entered', async () => {
+    const baseFetch = fetchForCreate();
+    vi.stubGlobal('fetch', vi.fn((input: string, init?: RequestInit) => {
+      if (input.startsWith('/api/catalog/items') && init?.method !== 'POST') {
+        return Promise.resolve(response([{ id: 'catalog-1', name: 'Taxed service', code: 'SRV-1', type: 'SERVICE', salePrice: null, isActive: true }]));
+      }
+      return baseFetch(input, init);
+    }));
+    render(<NewQuotationPage />);
+    await selectCatalogItem();
+    const price = screen.getByRole('spinbutton', { name: 'Unit price 1' });
+    expect(price).toHaveValue(null);
+    expect(screen.getByText('Enter unresolved item prices to calculate totals and save the quotation.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create proposal' })).toBeDisabled();
+    fireEvent.change(price, { target: { value: '0' } });
+    expect(price).toHaveValue(0);
+    expect(screen.queryByText('Enter unresolved item prices to calculate totals and save the quotation.')).not.toBeInTheDocument();
+  });
   it.each([true, false])('receives canonical numeric payment stages and resolved validity after actual clarification (%s)', async (arabic) => {
     isArabic = arabic;
     const { run } = quotationFieldFixture({ locale: arabic ? 'ar' : 'en', terms: null });

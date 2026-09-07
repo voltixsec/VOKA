@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { DashboardHeader } from "../../components/dashboard/DashboardHeader";
 import { Sidebar } from "../../components/dashboard/Sidebar";
 import { LanguageProvider } from "../../components/i18n/LanguageProvider";
-import { getCurrentUser } from "../../lib/auth";
+import { getCurrentUser, isPlatformAdmin } from "../../lib/auth";
 import { ApiError } from "../../lib/api/ApiError";
 import { sanitizeReturnTo } from "../../lib/auth/return-to";
 
@@ -37,8 +37,9 @@ export default async function DashboardLayout({
     // If headers read fails, default requestedPath remains /dashboard
   }
 
+  let platformAdmin = false;
   try {
-    await getCurrentUser();
+    platformAdmin = isPlatformAdmin(await getCurrentUser());
   } catch (error) {
     if (isUnauthenticatedError(error)) {
       const returnToParam = encodeURIComponent(requestedPath);
@@ -54,7 +55,7 @@ export default async function DashboardLayout({
       <div
         className="flex min-h-screen bg-slate-950 text-white"
       >
-        <Sidebar />
+        <Sidebar isPlatformAdmin={platformAdmin} />
 
         <div className="min-w-0 flex-1">
           <DashboardHeader />

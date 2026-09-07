@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { CatalogItem } from '../CatalogItem';
 
 describe('CatalogItem Entity', () => {
+  it.each([null, 0, 125])('preserves salePrice %s', (salePrice) => {
+    const result = CatalogItem.create({ companyId: 'tenant', type: 'PRODUCT', code: 'CAM', name: 'Camera', salePrice });
+    expect(result.isSuccess).toBe(true);
+    expect(result.getValue().salePrice).toBe(salePrice);
+  });
+
+  it.each([-1, NaN, Infinity, -Infinity])('rejects invalid salePrice %s', (salePrice) => {
+    const result = CatalogItem.create({ companyId: 'tenant', type: 'PRODUCT', code: 'CAM', name: 'Camera', salePrice });
+    expect(result.isSuccess).toBe(false);
+    expect(result.getError().code).toBe('INVALID_CATALOG_ITEM_SALE_PRICE');
+  });
+
+  it('can explicitly clear a price and then set an explicit zero', () => {
+    const item = CatalogItem.create({ companyId: 'tenant', type: 'PRODUCT', code: 'CAM', name: 'Camera', salePrice: 125 }).getValue();
+    expect(item.updateDetails({ salePrice: null }).isSuccess).toBe(true);
+    expect(item.salePrice).toBeNull();
+    expect(item.changeSalePrice(0).isSuccess).toBe(true);
+    expect(item.salePrice).toBe(0);
+  });
   it('creates a valid product with bilingual fields', () => {
     const result = CatalogItem.create({
       companyId: 'company-1',

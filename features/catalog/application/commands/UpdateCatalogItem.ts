@@ -21,7 +21,7 @@ export type UpdateCatalogItemInput = {
   categoryId?: string | null;
   sku?: string | null;
   barcode?: string | null;
-  salePrice?: number;
+  salePrice?: number | null;
   purchasePrice?: number | null;
   trackInventory?: boolean;
   allowDiscount?: boolean;

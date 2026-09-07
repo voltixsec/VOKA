@@ -124,29 +124,6 @@ const emptyFilters: FilterState = {
   evidence: "",
 };
 
-const tabs = [
-  { label: "Overview", href: "/dashboard/universal-library", enabled: false },
-  { label: "Batches", href: "/dashboard/universal-library/batches", enabled: true },
-  { label: "Systems", href: "/dashboard/universal-library/systems", enabled: true },
-  {
-    label: "Products",
-    href: "/dashboard/universal-library/products",
-    enabled: true,
-  },
-  { label: "Manufacturers", href: "#", enabled: false },
-  { label: "Families", href: "#", enabled: false },
-  { label: "Evidence", href: "#", enabled: false },
-  {
-    label: "Review",
-    href: "/dashboard/universal-library/review",
-    enabled: true,
-  },
-  {
-    label: "Population",
-    href: "/dashboard/universal-library/population",
-    enabled: true,
-  },
-] as const;
 
 function extractApiResult(payload: unknown): ApiResult {
   if (!payload || typeof payload !== "object") {
@@ -154,6 +131,14 @@ function extractApiResult(payload: unknown): ApiResult {
   }
 
   const root = payload as Record<string, unknown>;
+  if (Array.isArray(root.data)) {
+    const meta = root.meta as Record<string, unknown> | undefined;
+    return {
+      items: root.data as UniversalProduct[],
+      total: typeof meta?.total === "number" ? meta.total : root.data.length,
+      nextCursor: typeof meta?.nextCursor === "string" ? meta.nextCursor : null,
+    };
+  }
   const nested =
     root.data && typeof root.data === "object"
       ? (root.data as Record<string, unknown>)
@@ -824,31 +809,7 @@ export default function UniversalLibraryProductsBrowser() {
             </div>
           </div>
 
-          <nav className="mt-6 flex flex-wrap gap-2 border-t border-[#222a45] pt-5">
-            {tabs.map((tab) =>
-              tab.enabled ? (
-                <Link
-                  key={tab.label}
-                  href={tab.href}
-                  className={`rounded-xl px-3.5 py-2 text-xs font-medium transition ${
-                    tab.label === "Products"
-                      ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-950/20"
-                      : "border border-[#313a5a] bg-[#10182d] text-slate-300 hover:border-indigo-400/40"
-                  }`}
-                >
-                  {tab.label}
-                </Link>
-              ) : (
-                <span
-                  key={tab.label}
-                  title="Backend/UI slice not connected yet"
-                  className="cursor-default rounded-xl border border-[#222a45] bg-[#0a1020] px-3.5 py-2 text-xs text-slate-600"
-                >
-                  {tab.label}
-                </span>
-              ),
-            )}
-          </nav>
+
         </header>
 
         <section className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">

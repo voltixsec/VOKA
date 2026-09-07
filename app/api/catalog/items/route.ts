@@ -205,7 +205,7 @@ export const POST = withCompanyAuth(
       typeof body.type !== 'string' ||
       typeof body.code !== 'string' ||
       typeof body.name !== 'string' ||
-      typeof body.salePrice !== 'number'
+      (body.salePrice !== null && typeof body.salePrice !== 'number')
     ) {
       throw ApiError.badRequest(
         'INVALID_REQUEST_BODY',

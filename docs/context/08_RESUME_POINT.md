@@ -269,3 +269,16 @@ Permanent scale invariant:
 
 Canonical architecture:
 `docs/ADR-011-UNIVERSAL-COMMERCIAL-LIBRARY.md`.
+
+## Resume Update — UCL-CLOSE-05 CLOSED — 2026-09-07
+
+- `UCL-CLOSE-05 — Explicit Adoption / Commercial Truth` = **CLOSED / ACCEPTED**.
+- Exact next UCL slice = `UCL-CLOSE-06 — E2E Batch Wizard`.
+- Do **not** begin UCL-CLOSE-06 as part of the CLOSE-05 closure commit.
+- Data Factory remains **PAUSED**.
+- Exact future Data Factory resume remains:
+  - System008 — IP Video
+  - `SEC-SYS008-B004 — Hikvision IP fixed/network cameras`
+- `LIVE-FAIL-001 — Payment Registration End-to-End` remains RED / RELEASE BLOCKER.
+- `AUTH-DIRECT-ROUTE-GATE` remains OPEN for Phase 4C.
+- No merge or release tag has been authorized as part of this closure.

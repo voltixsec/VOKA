@@ -80,6 +80,19 @@ function request(url: string, method = 'GET', body?: unknown) {
 }
 
 describe('Catalog Item APIs', () => {
+  it('serializes unknown catalog price as null', async () => {
+    mocks.findAll.mockResolvedValue([catalogItem({ salePrice: null })]);
+    const response = await list(request('/api/catalog/items'));
+    expect(response.status).toBe(200);
+    expect((await response.json()).data[0].salePrice).toBeNull();
+  });
+
+  it.each([null, 0])('creates a catalog item with price %s', async (salePrice) => {
+    const response = await POST(request('/api/catalog/items', 'POST', { type: 'PRODUCT', code: 'CAM', name: 'Camera', salePrice }));
+    expect(response.status).toBe(201);
+    expect((await response.json()).data.salePrice).toBe(salePrice);
+    expect(mocks.save.mock.calls[0][0].salePrice).toBe(salePrice);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findByCode.mockResolvedValue(null);

@@ -17,6 +17,15 @@ function makeRepository(tx: Record<string, any>) {
 }
 
 describe("PrismaInvoiceRepository payment integrity", () => {
+  it('rejects an unknown catalog price before creating an invoice snapshot', async () => {
+    const tx = {
+      invoice: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+      customer: { findFirst: vi.fn().mockResolvedValue({ id: 'customer', name: 'Customer' }) },
+      catalogItem: { findFirst: vi.fn().mockResolvedValue({ id: 'catalog', salePrice: null, taxRateId: null }) },
+    };
+    await expect(makeRepository(tx).create({ companyId: 'tenant-a', requestKey: 'create:unknown', customerId: 'customer', actor, lines: [{ position: 1, type: 'PRODUCT', catalogItemId: 'catalog', itemName: 'Camera', quantity: 1, unitPrice: 0 }] })).rejects.toThrow('Set a commercial price');
+    expect(tx.invoice.create).not.toHaveBeenCalled();
+  });
   it("rejects overpayment before mutation and scopes the lookup to the trusted tenant", async () => {
     const tx = {
       payment: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },

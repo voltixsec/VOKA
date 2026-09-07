@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+import { createElement } from "react";
+import { render, screen } from "@testing-library/react";
+import OperatorLayout from "@/app/dashboard/universal-library/layout";
 ﻿import {
   readFileSync,
 } from "node:fs";
@@ -6,7 +10,12 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
+
+vi.mock("@/lib/auth", () => ({ getCurrentUser: vi.fn().mockResolvedValue({ user: { id: "operator" } }), isPlatformAdmin: vi.fn().mockReturnValue(true) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/universal-library/review", redirect: vi.fn() }));
+vi.mock("@/components/i18n/LanguageProvider", () => ({ useLanguage: () => ({ isArabic: false }) }));
 
 describe(
   "UCL review operator surface",
@@ -42,29 +51,12 @@ describe(
       },
     );
 
-    it(
-      "makes Review reachable from UCL operator navigation",
-      () => {
-        const paths = [
-          "components/universal-library/UniversalLibraryBatchesConsole.tsx",
-          "components/universal-library/UniversalLibraryProductsBrowser.tsx",
-          "components/universal-library/UniversalLibraryStagedHierarchyBrowser.tsx",
-          "components/universal-library/UniversalLibraryStagedProductsBrowser.tsx",
-        ];
-
-        for (const path of paths) {
-          const source =
-            readFileSync(
-              path,
-              "utf8",
-            );
-
-          expect(source)
-            .toContain(
-              "/dashboard/universal-library/review",
-            );
-        }
-      },
-    );
+    it("makes Review reachable from the shared protected operator layout", async () => {
+      render(await OperatorLayout({ children: createElement("div", null, "Operator content") }));
+      expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute("href", "/dashboard/universal-library/review");
+      expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getAllByRole("link")).toHaveLength(7);
+      expect(screen.getByText("Operator content")).toBeInTheDocument();
+    });
   },
 );

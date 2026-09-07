@@ -489,7 +489,7 @@ model CatalogItem {
   descriptionEn String?
 
   purchasePrice Decimal? @db.Decimal(18, 3)
-  salePrice     Decimal  @db.Decimal(18, 3)
+  salePrice     Decimal? @db.Decimal(18, 3)
 
   trackInventory Boolean @default(true)
   allowDiscount  Boolean @default(true)
