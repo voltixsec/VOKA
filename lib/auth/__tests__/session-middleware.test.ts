@@ -130,4 +130,50 @@ describe('session refresh middleware', () => {
 
     expect(response.cookies.getAll()).toHaveLength(0);
   });
+  it('records the requested protected dashboard path for the server auth gate as x-pathname', async () => {
+    const tokens = await tokenService().generateTokenPair({
+      userId: 'user-1',
+      email: 'user@example.com',
+    });
+    const response = await middleware(
+      new NextRequest(
+        'http://localhost/dashboard/customers/123?tab=overview',
+        {
+          headers: {
+            cookie: [
+              `voka_access_token=${tokens.accessToken}`,
+              `voka_refresh_token=${tokens.refreshToken}`,
+            ].join('; '),
+          },
+        },
+      ),
+    );
+
+    expect(
+      response.headers.get('x-middleware-request-x-pathname'),
+    ).toBe('/dashboard/customers/123?tab=overview');
+    // A still-valid access session is not rotated by the middleware.
+    expect(response.cookies.get('voka_access_token')).toBeUndefined();
+  });
+
+  it('does not inject x-pathname for non-dashboard requests', async () => {
+    const tokens = await tokenService().generateTokenPair({
+      userId: 'user-1',
+      email: 'user@example.com',
+    });
+    const response = await middleware(
+      new NextRequest('http://localhost/api/customers', {
+        headers: {
+          cookie: [
+            `voka_access_token=${tokens.accessToken}`,
+            `voka_refresh_token=${tokens.refreshToken}`,
+          ].join('; '),
+        },
+      }),
+    );
+
+    expect(
+      response.headers.get('x-middleware-request-x-pathname'),
+    ).toBeNull();
+  });
 });

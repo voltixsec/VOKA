@@ -22,6 +22,41 @@ function isAuthEndpoint(request: NextRequest): boolean {
   return request.nextUrl.pathname.startsWith('/api/auth/');
 }
 
+function isProtectedDashboardPath(pathname: string): boolean {
+  return (
+    pathname === '/dashboard' ||
+    pathname.startsWith('/dashboard/')
+  );
+}
+
+// The App Router dashboard layout cannot reliably read the requested sub-path,
+// so middleware records it as an x-pathname header for the server auth gate.
+// The header is only ever consumed by sanitizeReturnTo() as a safe /dashboard
+// fallback, never echoed back to the client. Non-dashboard requests are passed
+// through untouched (no request-header override).
+function withRequestPathnameHeader(
+  request: NextRequest,
+): NextResponse {
+  if (
+    !isProtectedDashboardPath(
+      request.nextUrl.pathname,
+    )
+  ) {
+    return NextResponse.next();
+  }
+
+  const requestHeaders = new Headers(request.headers);
+
+  requestHeaders.set(
+    'x-pathname',
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+}
+
 export async function middleware(request: NextRequest) {
   if (isAuthEndpoint(request)) {
     return NextResponse.next();
@@ -33,7 +68,7 @@ export async function middleware(request: NextRequest) {
   if (accessToken) {
     try {
       await tokenService.verifyAccessToken(accessToken);
-      return NextResponse.next();
+      return withRequestPathnameHeader(request);
     } catch {
       // A valid refresh session may recover an expired or stale access token.
     }
@@ -42,7 +77,7 @@ export async function middleware(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
 
   if (!refreshToken) {
-    return NextResponse.next();
+    return withRequestPathnameHeader(request);
   }
 
   try {
@@ -66,6 +101,13 @@ export async function middleware(request: NextRequest) {
         .join('; '),
     );
 
+    if (isProtectedDashboardPath(request.nextUrl.pathname)) {
+      requestHeaders.set(
+        'x-pathname',
+        `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      );
+    }
+
     const response = NextResponse.next({
       request: { headers: requestHeaders },
     });
@@ -83,7 +125,7 @@ export async function middleware(request: NextRequest) {
 
     return response;
   } catch {
-    const response = NextResponse.next();
+    const response = withRequestPathnameHeader(request);
 
     response.cookies.set(
       ACCESS_TOKEN_COOKIE,

@@ -253,7 +253,7 @@ export default function UniversalLibraryReviewPage() {
           </div>
 
           <h1 className="mt-3 text-3xl font-bold text-white">
-            Review â†’ Approve / Reject â†’ Publish
+            Review → Approve / Reject → Publish
           </h1>
 
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
