@@ -1,179 +1,270 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import UniversalLibraryProductsBrowser from "@/components/universal-library/UniversalLibraryProductsBrowser";
 
+const BASE_URL =
+  "/api/universal-library/items?limit=50&isActive=true";
+
+function response(items: unknown[], total: number, status = 200): Response {
+  return new Response(
+    JSON.stringify({
+      data: items,
+      meta: { total, nextCursor: null },
+    }),
+    {
+      status,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+function product(id: string, name: string, type = "PRODUCT") {
+  return {
+    id,
+    type,
+    name,
+    isActive: true,
+    modelNumber: null,
+    identifiers: [],
+    attributeValues: [],
+    provenances: [],
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("UniversalLibraryProductsBrowser", () => {
-  it('renders the current published API data/meta envelope', async () => {
-    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-      data: [{ id: 'published', name: 'Published API camera', type: 'PRODUCT', isActive: true, modelNumber: 'CAM-API' }],
-      meta: { total: 1, nextCursor: null },
-    })));
+describe("UniversalLibraryProductsBrowser â€” server search", () => {
+  it("loads the bounded published working set without a query", async () => {
+    const fetchMock = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(
+        response([product("p1", "Published camera")], 5000),
+      );
+
     render(<UniversalLibraryProductsBrowser />);
-    await screen.findByText('Published API camera');
-    expect(fetchMock).toHaveBeenCalledWith('/api/universal-library/items?limit=50&isActive=true', expect.any(Object));
-    expect(screen.queryByText('No published products yet')).not.toBeInTheDocument();
-  });
-  it("renders the real library browser and empty state", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          items: [],
-          total: 0,
-          nextCursor: null,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      ),
+
+    await screen.findByText("Published camera");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      BASE_URL,
+      expect.any(Object),
     );
-
-    render(<UniversalLibraryProductsBrowser />);
-
     expect(
-      screen.getByText("Global Product Intelligence"),
+      screen.getByLabelText("Search published library"),
     ).toBeInTheDocument();
-
-    expect(
-      screen.getByLabelText("Search products"),
-    ).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("No published products yet"),
-      ).toBeInTheDocument();
-    });
   });
 
-  it("renders and filters real serialized universal items", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          items: [
-            {
-              id: "item-1",
-              type: "PRODUCT",
-              name: "4K Vandal Dome Camera",
-              nameAr: null,
-              nameEn: "4K Vandal Dome Camera",
-              searchName: "4k vandal dome camera",
-              description: "Network surveillance camera",
-              descriptionAr: null,
-              descriptionEn: null,
-              categoryId: "cat-1",
-              manufacturerId: "manufacturer-1",
-              brandId: "brand-1",
-              familyId: "family-1",
-              modelNumber: "DS-2CD2143G0-I",
-              variantName: null,
-              parentId: null,
-              isActive: true,
-              createdAt: "2026-09-01T00:00:00.000Z",
-              updatedAt: "2026-09-01T00:00:00.000Z",
-              category: {
-                id: "cat-1",
-                name: "IP Cameras",
-              },
-              manufacturer: {
-                id: "manufacturer-1",
-                name: "Hikvision",
-              },
-              brand: {
-                id: "brand-1",
-                name: "Hikvision",
-              },
-              family: {
-                id: "family-1",
-                name: "Pro Series",
-              },
-              identifiers: [
-                {
-                  id: "identifier-1",
-                  identifierType: "MPN",
-                  value: "DS-2CD2143G0-I",
-                },
-                {
-                  id: "identifier-2",
-                  identifierType: "GTIN_13",
-                  value: "1234567890123",
-                },
-              ],
-              attributeValues: [
-                {
-                  id: "attr-1",
-                  valueString: "8 MP",
-                  attributeDefinition: {
-                    id: "def-1",
-                    code: "RESOLUTION",
-                    name: "Resolution",
-                    dataType: "STRING",
-                  },
-                },
-              ],
-              provenances: [
-                {
-                  id: "prov-1",
-                  confidence: "HIGH",
-                  observedAt: "2026-09-01T00:00:00.000Z",
-                  source: {
-                    id: "source-1",
-                    name: "Official Manufacturer",
-                    verificationStatus: "VERIFIED",
-                  },
-                },
-              ],
-            },
-          ],
-          total: 1,
-          nextCursor: null,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      ),
-    );
+  it("finds a target outside the initial 50 by sending q to the server", async () => {
+    const target =
+      product("live-1", "VOKA CLOSE06 Live Camera One");
+
+    const fetchMock = vi
+      .spyOn(global, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+
+        if (url.includes("q=")) {
+          return response([target], 1);
+        }
+
+        return response(
+          [product("working-1", "Unrelated working-set camera")],
+          5000,
+        );
+      });
 
     render(<UniversalLibraryProductsBrowser />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText("4K Vandal Dome Camera"),
-      ).toBeInTheDocument();
-    });
-
+    await screen.findByText("Unrelated working-set camera");
     expect(
-      screen.getAllByText("Hikvision").length,
-    ).toBeGreaterThan(0);
-
-    expect(
-      screen.getByText("Model: DS-2CD2143G0-I"),
-    ).toBeInTheDocument();
+      screen.queryByText("VOKA CLOSE06 Live Camera One"),
+    ).not.toBeInTheDocument();
 
     fireEvent.change(
-      screen.getByLabelText("Search products"),
+      screen.getByLabelText("Search published library"),
       {
         target: {
-          value: "no-match-product",
+          value: "VOKA CLOSE06 Live Camera One",
         },
       },
     );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Search" }),
+    );
+
+    await screen.findByText("VOKA CLOSE06 Live Camera One");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}&q=${encodeURIComponent(
+        "VOKA CLOSE06 Live Camera One",
+      )}`,
+      expect.any(Object),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "1 result",
+    );
+  });
+
+  it("Enter executes server search", async () => {
+    const fetchMock = vi
+      .spyOn(global, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+
+        if (url.includes("q=")) {
+          return response(
+            [product("enter-1", "Enter searched camera")],
+            1,
+          );
+        }
+
+        return response([], 0);
+      });
+
+    render(<UniversalLibraryProductsBrowser />);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalled(),
+    );
+
+    const input =
+      screen.getByLabelText("Search published library");
+
+    fireEvent.change(input, {
+      target: { value: "Enter searched camera" },
+    });
+    fireEvent.keyDown(input, {
+      key: "Enter",
+      code: "Enter",
+    });
+
+    await screen.findByText("Enter searched camera");
+  });
+
+  it("clear search reloads the normal bounded working set", async () => {
+    const fetchMock = vi
+      .spyOn(global, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+
+        if (url.includes("q=")) {
+          return response(
+            [product("search-1", "Searched camera")],
+            1,
+          );
+        }
+
+        return response(
+          [product("working-1", "Working set camera")],
+          5000,
+        );
+      });
+
+    render(<UniversalLibraryProductsBrowser />);
+
+    await screen.findByText("Working set camera");
+
+    fireEvent.change(
+      screen.getByLabelText("Search published library"),
+      { target: { value: "Searched camera" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Search" }),
+    );
+
+    await screen.findByText("Searched camera");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear search" }),
+    );
+
+    await screen.findByText("Working set camera");
+
+    const lastCall =
+      fetchMock.mock.calls[
+        fetchMock.mock.calls.length - 1
+      ][0];
+
+    expect(lastCall).toBe(BASE_URL);
+  });
+
+  it("shows a truthful zero-result search state", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(
+      async (input) => {
+        const url = String(input);
+
+        if (url.includes("q=")) {
+          return response([], 0);
+        }
+
+        return response(
+          [product("working-1", "Working set camera")],
+          5000,
+        );
+      },
+    );
+
+    render(<UniversalLibraryProductsBrowser />);
+
+    await screen.findByText("Working set camera");
+
+    fireEvent.change(
+      screen.getByLabelText("Search published library"),
+      {
+        target: {
+          value: "VOKA-NO-SUCH-SEARCH-20260908",
+        },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Search" }),
+    );
+
+    await screen.findByText(
+      "No published items match this search.",
+    );
 
     expect(
-      screen.getByText(
-        "No products match the current filters.",
+      screen.queryByText("No published products yet"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Working set camera"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps existing loaded-set filters functional", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      response(
+        [
+          product("product-1", "Product camera", "PRODUCT"),
+          product("service-1", "Service camera", "SERVICE"),
+        ],
+        2,
       ),
+    );
+
+    render(<UniversalLibraryProductsBrowser />);
+
+    await screen.findByText("Product camera");
+    expect(
+      screen.getByText("Service camera"),
     ).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByLabelText("All types"),
+      { target: { value: "PRODUCT" } },
+    );
+
+    expect(
+      screen.getByText("Product camera"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Service camera"),
+    ).not.toBeInTheDocument();
   });
 });

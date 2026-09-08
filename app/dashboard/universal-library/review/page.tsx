@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -63,6 +64,15 @@ export default function UniversalLibraryReviewPage() {
   const [total, setTotal] =
     useState(0);
 
+  const [queueTotal, setQueueTotal] =
+    useState(0);
+
+  const [searchDraft, setSearchDraft] =
+    useState("");
+
+  const [appliedSearch, setAppliedSearch] =
+    useState("");
+
   const [loading, setLoading] =
     useState(true);
 
@@ -72,15 +82,28 @@ export default function UniversalLibraryReviewPage() {
   const [error, setError] =
     useState<string | null>(null);
 
+  const requestSequence = useRef(0);
+
   const load = useCallback(
     async () => {
+      const sequence =
+        ++requestSequence.current;
+      const query =
+        appliedSearch.trim();
+
       setLoading(true);
       setError(null);
 
       try {
+        const baseUrl =
+          "/api/universal-library/staging/products?status=NEEDS_REVIEW&limit=50";
+        const url = query
+          ? `${baseUrl}&search=${encodeURIComponent(query)}`
+          : baseUrl;
+
         const response =
           await fetch(
-            "/api/universal-library/staging/products?status=NEEDS_REVIEW&limit=50",
+            url,
             {
               cache: "no-store",
             },
@@ -97,24 +120,70 @@ export default function UniversalLibraryReviewPage() {
             await response.json(),
           );
 
+        if (
+          sequence !==
+          requestSequence.current
+        ) {
+          return;
+        }
+
         setItems(result.items);
         setTotal(result.total);
+
+        if (!query) {
+          setQueueTotal(result.total);
+        }
       } catch (caught) {
+        if (
+          sequence !==
+          requestSequence.current
+        ) {
+          return;
+        }
+
+        setItems([]);
+        setTotal(0);
         setError(
           caught instanceof Error
             ? caught.message
             : "Failed to load review queue.",
         );
       } finally {
-        setLoading(false);
+        if (
+          sequence ===
+          requestSequence.current
+        ) {
+          setLoading(false);
+        }
       }
     },
-    [],
+    [appliedSearch],
   );
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const submitSearch = useCallback(() => {
+    const next = searchDraft.trim();
+
+    if (next === appliedSearch) {
+      void load();
+      return;
+    }
+
+    setAppliedSearch(next);
+  }, [appliedSearch, load, searchDraft]);
+
+  const clearSearch = useCallback(() => {
+    setSearchDraft("");
+
+    if (appliedSearch) {
+      setAppliedSearch("");
+    } else {
+      void load();
+    }
+  }, [appliedSearch, load]);
 
   async function decide(
     item: StagedProductSummary,
@@ -184,31 +253,166 @@ export default function UniversalLibraryReviewPage() {
           </div>
 
           <h1 className="mt-3 text-3xl font-bold text-white">
-            Review → Approve / Reject → Publish
+            Review â†’ Approve / Reject â†’ Publish
           </h1>
 
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
             Records remain outside the canonical Universal Library until an explicit platform review decision is made.
           </p>
 
-          <div className="mt-5 inline-flex rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-            {total.toLocaleString()} records awaiting review
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <div className="inline-flex rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+              {queueTotal.toLocaleString()} records awaiting review
+            </div>
+
+            {appliedSearch ? (
+              <div className="inline-flex rounded-xl border border-indigo-400/30 bg-indigo-500/10 px-4 py-2 text-sm text-indigo-200">
+                {loading
+                  ? "Searching..."
+                  : `${total.toLocaleString()} matching record${
+                      total === 1 ? "" : "s"
+                    }`}
+              </div>
+            ) : null}
           </div>
         </header>
+
+        <section className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-4">
+          <form
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitSearch();
+            }}
+            className="flex flex-col gap-2 sm:flex-row"
+          >
+            <input
+              aria-label="Search review queue"
+              type="search"
+              value={searchDraft}
+              onChange={(event) =>
+                setSearchDraft(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitSearch();
+                }
+              }}
+              placeholder="Search external key, name, model, manufacturer, brand, family..."
+              className="min-w-0 flex-1 rounded-xl border border-[#313a5a] bg-[#080e1c] px-4 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-amber-400"
+            />
+
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Search
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={clearSearch}
+                className="rounded-xl border border-[#313a5a] px-4 py-2.5 text-sm font-medium text-slate-300 hover:text-white disabled:opacity-40"
+              >
+                Clear search
+              </button>
+            </div>
+          </form>
+
+          {appliedSearch && !loading && !error ? (
+            <div
+              role="status"
+              className="mt-3 text-sm text-slate-400"
+            >
+              {total > 0 ? (
+                <>
+                  <strong className="text-slate-200">
+                    {total.toLocaleString()}
+                  </strong>{" "}
+                  matching{" "}
+                  {total === 1 ? "record" : "records"} for{" "}
+                  <span className="text-amber-200">
+                    &ldquo;{appliedSearch}&rdquo;
+                  </span>{" "}
+                  <span className="text-slate-600">
+                    (NEEDS_REVIEW only)
+                  </span>
+                </>
+              ) : (
+                <span className="text-slate-300">
+                  No staged records match &ldquo;{appliedSearch}&rdquo;
+                  in the NEEDS_REVIEW queue.
+                </span>
+              )}
+            </div>
+          ) : null}
+        </section>
 
         {error ? (
           <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-300">
             {error}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-500/10"
+              >
+                Retry
+              </button>
+
+              {appliedSearch ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="rounded-lg border border-[#313a5a] px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white"
+                >
+                  Clear search
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
         {loading ? (
           <div className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-8 text-sm text-slate-400">
-            Loading governed review queue...
+            {appliedSearch
+              ? `Searching NEEDS_REVIEW records for "${appliedSearch}"...`
+              : "Loading governed review queue..."}
           </div>
         ) : null}
 
         {!loading &&
+        !error &&
+        appliedSearch &&
+        items.length === 0 ? (
+          <div className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-8 text-center">
+            <div className="text-lg font-semibold text-white">
+              No staged records match this search.
+            </div>
+
+            <div className="mt-2 text-sm text-slate-500">
+              No NEEDS_REVIEW record matches &ldquo;{appliedSearch}&rdquo;.
+              Clear the search to return to the full governed review queue.
+            </div>
+
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="mt-4 inline-flex rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200"
+            >
+              Clear search
+            </button>
+          </div>
+        ) : null}
+
+        {!loading &&
+        !error &&
+        !appliedSearch &&
         items.length === 0 ? (
           <div className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-8 text-center">
             <div className="text-lg font-semibold text-white">

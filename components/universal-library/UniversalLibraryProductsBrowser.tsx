@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -101,7 +102,6 @@ type ApiResult = {
 };
 
 type FilterState = {
-  search: string;
   type: string;
   manufacturer: string;
   brand: string;
@@ -113,7 +113,6 @@ type FilterState = {
 };
 
 const emptyFilters: FilterState = {
-  search: "",
   type: "",
   manufacturer: "",
   brand: "",
@@ -251,7 +250,7 @@ function valueToText(attribute: AttributeValue): string {
     }
   }
 
-  return "—";
+  return "â€”";
 }
 
 function MetricCard({
@@ -343,7 +342,7 @@ function ProductRow({
           </div>
           <div className="mt-1 text-xs text-slate-500">
             {product.brand?.name
-              ? `Brand · ${product.brand.name}`
+              ? `Brand Â· ${product.brand.name}`
               : product.type}
           </div>
         </div>
@@ -354,13 +353,13 @@ function ProductRow({
           </div>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
             <span>
-              Model: {identity.model || "—"}
+              Model: {identity.model || "â€”"}
             </span>
             <span>
-              MPN: {identity.mpn || "—"}
+              MPN: {identity.mpn || "â€”"}
             </span>
             <span>
-              GTIN: {identity.gtin || "—"}
+              GTIN: {identity.gtin || "â€”"}
             </span>
           </div>
         </div>
@@ -413,14 +412,14 @@ function ProductRow({
             <div className="grid gap-3 sm:grid-cols-2">
               {[
                 ["Type", product.type],
-                ["Manufacturer", product.manufacturer?.name || "—"],
-                ["Brand", product.brand?.name || "—"],
-                ["Family", product.family?.name || "—"],
-                ["Category", product.category?.name || "—"],
-                ["Variant", product.variantName || "—"],
-                ["Model", identity.model || "—"],
-                ["MPN", identity.mpn || "—"],
-                ["GTIN / EAN / UPC", identity.gtin || "—"],
+                ["Manufacturer", product.manufacturer?.name || "â€”"],
+                ["Brand", product.brand?.name || "â€”"],
+                ["Family", product.family?.name || "â€”"],
+                ["Category", product.category?.name || "â€”"],
+                ["Variant", product.variantName || "â€”"],
+                ["Model", identity.model || "â€”"],
+                ["MPN", identity.mpn || "â€”"],
+                ["GTIN / EAN / UPC", identity.gtin || "â€”"],
                 ["Universal ID", product.id],
               ].map(([label, value]) => (
                 <div
@@ -538,23 +537,33 @@ function ProductRow({
 export default function UniversalLibraryProductsBrowser() {
   const [products, setProducts] = useState<UniversalProduct[]>([]);
   const [total, setTotal] = useState(0);
+  const [publishedTotal, setPublishedTotal] = useState(0);
+  const [searchDraft, setSearchDraft] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [filters, setFilters] =
     useState<FilterState>(emptyFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const requestSequence = useRef(0);
 
   const loadProducts = useCallback(async () => {
+    const sequence = ++requestSequence.current;
+    const query = appliedSearch.trim();
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(
-        "/api/universal-library/items?limit=50&isActive=true",
-        {
-          cache: "no-store",
-        },
-      );
+      const baseUrl =
+        "/api/universal-library/items?limit=50&isActive=true";
+      const url = query
+        ? `${baseUrl}&q=${encodeURIComponent(query)}`
+        : baseUrl;
+
+      const response = await fetch(url, {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
         throw new Error(
@@ -564,9 +573,21 @@ export default function UniversalLibraryProductsBrowser() {
 
       const payload = extractApiResult(await response.json());
 
+      if (sequence !== requestSequence.current) {
+        return;
+      }
+
       setProducts(payload.items);
       setTotal(payload.total);
+
+      if (!query) {
+        setPublishedTotal(payload.total);
+      }
     } catch (caught) {
+      if (sequence !== requestSequence.current) {
+        return;
+      }
+
       setProducts([]);
       setTotal(0);
       setError(
@@ -575,13 +596,36 @@ export default function UniversalLibraryProductsBrowser() {
           : "Failed to load Universal Library products.",
       );
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [appliedSearch]);
 
   useEffect(() => {
     void loadProducts();
   }, [loadProducts]);
+
+  const submitSearch = useCallback(() => {
+    const next = searchDraft.trim();
+
+    if (next === appliedSearch) {
+      void loadProducts();
+      return;
+    }
+
+    setAppliedSearch(next);
+  }, [appliedSearch, loadProducts, searchDraft]);
+
+  const clearSearch = useCallback(() => {
+    setSearchDraft("");
+
+    if (appliedSearch) {
+      setAppliedSearch("");
+    } else {
+      void loadProducts();
+    }
+  }, [appliedSearch, loadProducts]);
 
   const options = useMemo(() => {
     const unique = (values: Array<string | null | undefined>) =>
@@ -612,33 +656,8 @@ export default function UniversalLibraryProductsBrowser() {
   }, [products]);
 
   const filtered = useMemo(() => {
-    const query = filters.search.trim().toLowerCase();
-
     return products.filter((product) => {
       const identity = productIdentity(product);
-      const haystack = [
-        product.name,
-        product.nameEn,
-        product.nameAr,
-        product.searchName,
-        product.manufacturer?.name,
-        product.brand?.name,
-        product.family?.name,
-        product.category?.name,
-        identity.model,
-        identity.mpn,
-        identity.gtin,
-        ...(product.identifiers ?? []).map(
-          (identifier) => identifier.value,
-        ),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      if (query && !haystack.includes(query)) {
-        return false;
-      }
 
       if (
         filters.type &&
@@ -801,7 +820,7 @@ export default function UniversalLibraryProductsBrowser() {
 
             <div className="rounded-xl border border-[#313a5a] bg-[#080e1c] px-4 py-3 text-xs text-slate-400">
               <div className="font-semibold text-slate-200">
-                Huge Library · Small Working Set
+                Huge Library Â· Small Working Set
               </div>
               <div className="mt-1">
                 Browser loads a bounded server-side result set.
@@ -815,13 +834,13 @@ export default function UniversalLibraryProductsBrowser() {
         <section className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <MetricCard
             label="Published Items"
-            value={total.toLocaleString()}
-            detail="Server-reported total"
+            value={publishedTotal.toLocaleString()}
+            detail="Server-reported global total"
           />
           <MetricCard
             label="Loaded Working Set"
             value={products.length}
-            detail="Bounded to 50"
+            detail={appliedSearch ? "Search rows loaded" : "Bounded to 50"}
           />
           <MetricCard
             label="Manufacturers"
@@ -846,19 +865,81 @@ export default function UniversalLibraryProductsBrowser() {
         </section>
 
         <section className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-4">
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <form
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitSearch();
+            }}
+            className="flex flex-col gap-2 sm:flex-row"
+          >
             <input
-              aria-label="Search products"
-              value={filters.search}
+              aria-label="Search published library"
+              type="search"
+              value={searchDraft}
               onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  search: event.target.value,
-                }))
+                setSearchDraft(event.target.value)
               }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitSearch();
+                }
+              }}
               placeholder="Search product, model, MPN, GTIN, manufacturer..."
-              className="min-w-0 rounded-xl border border-[#313a5a] bg-[#080e1c] px-4 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-400 sm:col-span-2 lg:col-span-2"
+              className="min-w-0 flex-1 rounded-xl border border-[#313a5a] bg-[#080e1c] px-4 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-400"
             />
+
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Search
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={clearSearch}
+                className="rounded-xl border border-[#313a5a] px-4 py-2.5 text-sm font-medium text-slate-300 hover:text-white disabled:opacity-40"
+              >
+                Clear search
+              </button>
+            </div>
+          </form>
+
+          {appliedSearch && !loading && !error ? (
+            <div
+              role="status"
+              className="mt-3 text-sm text-slate-400"
+            >
+              {total > 0 ? (
+                <>
+                  <strong className="text-slate-200">
+                    {total.toLocaleString()}
+                  </strong>{" "}
+                  {total === 1 ? "result" : "results"} for{" "}
+                  <span className="text-indigo-300">
+                    &ldquo;{appliedSearch}&rdquo;
+                  </span>
+                  {products.length < total ? (
+                    <span className="text-slate-600">
+                      {" "}
+                      Ã¢â‚¬â€ showing first {products.length} loaded
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-slate-300">
+                  No published items match &ldquo;{appliedSearch}&rdquo;.
+                </span>
+              )}
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 
             <FilterSelect
               label="All types"
@@ -994,18 +1075,64 @@ export default function UniversalLibraryProductsBrowser() {
             <div className="mt-1 text-sm text-red-200/70">
               {error}
             </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void loadProducts()}
+                className="rounded-xl border border-red-400/30 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/10"
+              >
+                Retry
+              </button>
+
+              {appliedSearch ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="rounded-xl border border-[#313a5a] px-4 py-2 text-sm font-medium text-slate-300 hover:text-white"
+                >
+                  Clear search
+                </button>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
         {loading ? (
           <section className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-12 text-center">
             <div className="text-sm font-medium text-slate-300">
-              Loading published Universal Library...
+              {appliedSearch
+                ? `Searching published library for "${appliedSearch}"...`
+                : "Loading published Universal Library..."}
             </div>
           </section>
         ) : null}
 
-        {!loading && !error && products.length === 0 ? (
+        {!loading && !error && appliedSearch && products.length === 0 ? (
+          <section className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-12 text-center">
+            <div className="text-lg font-semibold text-white">
+              No published items match this search.
+            </div>
+
+            <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              No published item matches{" "}
+              <span className="text-indigo-300">
+                &ldquo;{appliedSearch}&rdquo;
+              </span>
+              . Try another product name, model, MPN, GTIN or clear
+              the search to return to the published working set.
+            </p>
+
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="mt-5 inline-flex rounded-xl border border-indigo-400/30 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-300"
+            >
+              Clear search
+            </button>
+          </section>
+        ) : null}
+
+        {!loading && !error && !appliedSearch && products.length === 0 ? (
           <section className="rounded-2xl border border-[#222a45] bg-[#0b1224] p-12 text-center">
             <div className="text-lg font-semibold text-white">
               No published products yet
@@ -1078,9 +1205,9 @@ export default function UniversalLibraryProductsBrowser() {
                     className="rounded-xl border border-[#313a5a] bg-[#10182d] px-3 py-2 text-xs"
                   >
                     <span className="font-medium text-slate-200">
-                      {product.manufacturer?.name || "—"}
+                      {product.manufacturer?.name || "â€”"}
                     </span>
-                    <span className="mx-2 text-slate-600">·</span>
+                    <span className="mx-2 text-slate-600">Â·</span>
                     <span className="text-slate-400">
                       {product.modelNumber || product.name}
                     </span>
@@ -1100,8 +1227,8 @@ export default function UniversalLibraryProductsBrowser() {
         ) : null}
 
         <footer className="pb-6 text-center text-[11px] text-slate-700">
-          VOKA Universal Commercial Library · published global
-          knowledge only · tenant-private commercial data excluded
+          VOKA Universal Commercial Library Â· published global
+          knowledge only Â· tenant-private commercial data excluded
         </footer>
       </div>
     </main>
