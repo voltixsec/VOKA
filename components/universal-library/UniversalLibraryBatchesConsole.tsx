@@ -1,6 +1,11 @@
 "use client";
 
+import UniversalLibraryBatchWizard from "./UniversalLibraryBatchWizard";
 import UniversalLibraryBulkImportExecutionControl from "./UniversalLibraryBulkImportExecutionControl";
+import {
+  readBatchWizardSelection,
+  writeBatchWizardSelection,
+} from "./batchWizardSelection";
 import {
   useCallback,
   useEffect,
@@ -172,6 +177,7 @@ function MetricCard({
 }
 
 export default function UniversalLibraryBatchesConsole() {
+  const [wizardRevision, setWizardRevision] = useState(0);
   const fileInputRef =
     useRef<HTMLInputElement>(
       null,
@@ -213,6 +219,13 @@ export default function UniversalLibraryBatchesConsole() {
     setSourceNamespace,
   ] = useState(
     "VOKA_UCL_DATA_FACTORY",
+  );
+
+  const [
+    sourceId,
+    setSourceId,
+  ] = useState(
+    "cmto59ep10000gkt18i4ug9z9",
   );
 
   const [
@@ -267,6 +280,25 @@ export default function UniversalLibraryBatchesConsole() {
   useEffect(() => {
     void loadBatches();
   }, [loadBatches]);
+
+  useEffect(() => {
+    const restored = readBatchWizardSelection();
+    if (!restored) {
+      return;
+    }
+
+    setSourceId(restored.sourceId);
+    setBatchExternalKey(restored.batchExternalKey);
+    setSourceNamespace(restored.sourceNamespace);
+  }, []);
+
+  useEffect(() => {
+    writeBatchWizardSelection({
+      sourceId,
+      batchExternalKey,
+      sourceNamespace,
+    });
+  }, [sourceId, batchExternalKey, sourceNamespace]);
 
   const metrics =
     useMemo(() => {
@@ -457,6 +489,16 @@ export default function UniversalLibraryBatchesConsole() {
           </div>
         </section>
 
+        <UniversalLibraryBatchWizard
+          key={`${sourceId}:${batchExternalKey}:${sourceNamespace}:${wizardRevision}`}
+          sourceId={sourceId}
+          batchExternalKey={batchExternalKey}
+          sourceNamespace={sourceNamespace}
+          onResumeRequested={() => {
+            setUploadPanelOpen(true);
+          }}
+        />
+
         {uploadPanelOpen ? (
           <section className="rounded-2xl border border-indigo-400/30 bg-[#0b1224] p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -568,7 +610,10 @@ export default function UniversalLibraryBatchesConsole() {
             selectedFile={selectedFile}
             batchExternalKey={batchExternalKey}
             sourceNamespace={sourceNamespace}
+            preferredSourceId={sourceId}
+            onSourceIdChange={setSourceId}
             onImportFinished={() => {
+              setWizardRevision((revision) => revision + 1);
               void loadBatches();
             }}
           />
@@ -776,13 +821,48 @@ export default function UniversalLibraryBatchesConsole() {
                         </div>
                       </div>
 
-                      <div className="lg:col-span-3 lg:text-right">
-                        <div className="flex min-h-[28px] items-start text-[9px] font-bold uppercase leading-3 tracking-wide text-slate-600">
-                          Last Activity
+                      <div className="flex flex-wrap items-end justify-between gap-3 lg:col-span-3">
+                        <div>
+                          <div className="flex min-h-[28px] items-start text-[9px] font-bold uppercase leading-3 tracking-wide text-slate-600">
+                            Last Activity
+                          </div>
+
+                          <div className="mt-1 text-[11px] leading-5 text-slate-400">
+                            {formatDate(batch.lastActivityAt)}
+                          </div>
                         </div>
 
-                        <div className="mt-1 text-[11px] leading-5 text-slate-400">
-                          {formatDate(batch.lastActivityAt)}
+                        <div className="flex flex-wrap gap-2">
+                          {batch.status === "NEEDS_ATTENTION" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSourceId(batch.sourceId);
+                                setBatchExternalKey(batch.batchExternalKey);
+                                setSourceNamespace(
+                                  batch.sourceNamespace || "",
+                                );
+                                setUploadPanelOpen(true);
+                              }}
+                              className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200"
+                            >
+                              Resume
+                            </button>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSourceId(batch.sourceId);
+                              setBatchExternalKey(batch.batchExternalKey);
+                              setSourceNamespace(
+                                batch.sourceNamespace || "",
+                              );
+                            }}
+                            className="rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-200"
+                          >
+                            Process remaining
+                          </button>
                         </div>
                       </div>
                     </div>

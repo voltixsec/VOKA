@@ -12,6 +12,7 @@ import {
   IngestionStatus,
 } from "../entities";
 import { NormalizedIngestionPayload } from "../normalization/NormalizationPipelineService";
+import type { BulkWizardRecordCounts } from "../bulk-import/BatchWizardContract";
 
 export const MAX_UNIVERSAL_SEARCH_LIMIT = 50;
 export const DEFAULT_UNIVERSAL_SEARCH_LIMIT = 20;
@@ -136,6 +137,14 @@ export interface IUniversalLibraryRepository {
   findActiveItemIdsByName(name: string, manufacturerName?: string | null): Promise<string[]>;
   saveIngestionRecord(input: SaveIngestionRecordInput): Promise<UniversalIngestionRecord>;
   claimPendingIngestionRecords(limit?: number): Promise<UniversalIngestionRecord[]>;
+  claimBulkWizardIngestionRecords(
+    acquisitionRunIds: string[],
+    limit?: number,
+    excludeRecordIds?: string[],
+  ): Promise<UniversalIngestionRecord[]>;
+  countBulkWizardIngestionRecords(
+    acquisitionRunIds: string[],
+  ): Promise<BulkWizardRecordCounts>;
   updateIngestionRecordStatus(
     id: string,
     status: IngestionStatus,

@@ -3,6 +3,13 @@
 
 Architecture decisions are recorded here.
 
+## 2026-09-08 — UCL-CLOSE-06 E2E Batch Wizard implemented
+
+- Added a 10-step operator wizard on Batches without rebuilding UCL-1–6 or auto-publishing.
+- Process is run-scoped: claim/count use `acquisitionRunId IN (...)` with `FOR UPDATE SKIP LOCKED`, exclude already-claimed ids in the same pass, and isolate hard failures so retry is a later operator action.
+- Journey API plus Batches history Resume / Process remaining expose error, partial/failure, retry, and resume. Chunk resume still requires the original file. Selected batch identity persists in localStorage across refresh/reopen.
+- CLOSE-06 is IMPLEMENTED / ENGINEERING VALIDATED / PENDING CEO LIVE UI ACCEPTANCE. Not closed. See [engineering checkpoint](checkpoints/2026-09-08-ucl-close06-engineering-ready.md). Data Factory stays PAUSED. No merge/tag.
+
 ## 2026-08-30 — Conversational Experience V2
 
 - The Sales Assistant now projects assistant prose, governed system understanding, committed fact chips and the secondary summary from the same post-reducer canonical draft. Activity indicators remain local presentation state.

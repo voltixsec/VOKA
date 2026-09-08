@@ -19,6 +19,8 @@ const controlPlaneRoutes = [
   "app/api/universal-library/bulk-import/ui/chunk/route.ts",
   "app/api/universal-library/bulk-import/ui/batches/route.ts",
   "app/api/universal-library/bulk-import/ui/batches/status/route.ts",
+  "app/api/universal-library/bulk-import/ui/process/route.ts",
+  "app/api/universal-library/bulk-import/ui/journey/route.ts",
 
   "app/api/universal-library/ingest/route.ts",
   "app/api/universal-library/ingest/process/route.ts",

@@ -1,4 +1,4 @@
-﻿# VOKA — Master Product Acceptance Ledger
+# VOKA — Master Product Acceptance Ledger
 
 <!-- VOKA-RELEASE-WAR-ROOM-2026-09-06 -->
 
@@ -25,6 +25,11 @@ Session closure checkpoint — **2026-09-07**:
 - **UCL-CLOSE-01 through UCL-CLOSE-04 = 🟢 CLOSED / ACCEPTED** by the CEO.
 - Exact next slice: **UCL-CLOSE-05 — Explicit Adoption / Commercial Truth**.
 - UCL-CLOSE-06 remains open; UCL as a whole is not yet declared closed.
+
+Later same-day CLOSE-05 was accepted. On **2026-09-08**, UCL-CLOSE-06 was
+integrated from `arena/01a08189-voka` into the official feature branch and is
+**IMPLEMENTED / ENGINEERING VALIDATED / PENDING CEO LIVE UI ACCEPTANCE**.
+Do not declare UCL-CLOSE-06 or UCL V1 closed.
 - [Closure evidence, migrations and validation](../checkpoints/2026-09-07-ucl-close04-session-close.md).
 - Data Factory remains PAUSED at System008 / `SEC-SYS008-B004`.
 - `LIVE-FAIL-001 / CEO-R1-030` remains RED/BLOCKER;
@@ -507,25 +512,21 @@ for migration names, build result and acceptance limitations.
 
 Status:
 
-🟡 **OPEN — EXACT NEXT SLICE / LIVE ACCEPTANCE REQUIRED**
+🟢 **CLOSED / ACCEPTED — 2026-09-07**
 
-Prove:
-
-Universal Library item
-→ explicit tenant adoption
-→ Company Catalog
-→ tenant-owned mutable commercial fields
-→ quotation uses tenant Catalog snapshot.
-
-Universal data must never overwrite tenant commercial truth.
+See the later CLOSE-05 evidence section in this ledger. Universal data must
+never overwrite tenant commercial truth.
 
 ## UCL-CLOSE-06 — End-to-End Batch Wizard
 
 Status:
 
-🟡 **CEO OPERATOR ACCEPTANCE REQUIRED**
+🟡 **IMPLEMENTED / ENGINEERING VALIDATED / PENDING CEO LIVE UI ACCEPTANCE — 2026-09-08**
 
-Prove a bounded real operator journey:
+Do **not** treat this slice as CLOSED or ACCEPTED. Local engineering validation
+passed. CEO live UI acceptance remains outstanding.
+
+Implemented bounded operator journey on `/dashboard/universal-library/batches`:
 
 File
 → Upload
@@ -538,12 +539,34 @@ File
 → Publish
 → Status / History.
 
-Also prove:
+Implemented behavior:
 
-- error state;
-- partial/failure state;
-- retry;
-- resume.
+- Upload remains bounded resumable JSONL staging and never publishes.
+- Process claims only the logical batch's acquisition runs (`FOR UPDATE SKIP LOCKED`).
+- Process normalizes and lands `NEEDS_REVIEW`; `publishedCount` must stay `0`.
+- Failed records stay failed inside the same process pass and can retry on a later pass.
+- Remaining RECEIVED records can resume without replaying review-ready rows.
+- Failed/missing chunks remain resumable through the existing chunk uploader.
+- History **Resume** still requires re-selecting the original file; it fills the
+  batch keys and opens upload. **Process remaining** loads keys into the wizard
+  without requiring a file.
+- Process and journey APIs are platform-admin gated (`OWNER`/`ADMIN`) and do not
+  expose the operational secret to the browser.
+
+Engineering evidence (2026-09-08):
+
+- Prisma generate / validate, TypeScript, production build and diff checks PASS.
+- UCL: 68 files / 484 tests PASS, including opt-in rollback-only PostgreSQL contracts.
+- Four-row synthetic batch proves durable staging, partial processing, retry,
+  resume without replay, and no direct publication; three review-ready rows and
+  one intentionally invalid row remain as evidence.
+- Two non-destructive migrations correct the proven processing-transition and
+  processing-payload constraints; both were applied only to the local development DB.
+- [Engineering checkpoint and exact live acceptance still required](../checkpoints/2026-09-08-ucl-close06-engineering-ready.md).
+
+CEO must still accept the complete live operator journey, including error,
+partial/failure, retry, resume, explicit review/publish, and durable status/history.
+No next product phase starts before that acceptance. Data Factory remains PAUSED.
 
 When `UCL-CLOSE-01` through `UCL-CLOSE-06` are all accepted:
 
@@ -612,8 +635,9 @@ with remaining live acceptance items.
 Status:
 
 🟢 **IMPLEMENTED FOUNDATION**
-with `UCL-CLOSE-05` and `UCL-CLOSE-06` remaining before implementation
-freeze.
+with `UCL-CLOSE-05` CLOSED / ACCEPTED and `UCL-CLOSE-06` remaining
+IMPLEMENTED / ENGINEERING VALIDATED / PENDING CEO LIVE UI ACCEPTANCE. UCL V1 is
+not closed.
 
 ## PHASE 4 — Final Product Closure
 
@@ -625,8 +649,8 @@ Execution order:
 
 ### 4A — UCL Final Closure
 
-UCL-CLOSE-01 through UCL-CLOSE-04 are accepted. Next close UCL-CLOSE-05,
-then UCL-CLOSE-06.
+UCL-CLOSE-01 through UCL-CLOSE-05 are accepted. Next: CEO live UI acceptance
+of UCL-CLOSE-06. Do not declare UCL V1 closed.
 
 ### 4B — Sales Assistant + Quotation Final Acceptance
 
@@ -2367,7 +2391,7 @@ Migration:
 - Applied successfully.
 - `CatalogItem.salePrice` verified nullable `numeric(18,3)`.
 
-**UCL-CLOSE-06 — E2E Batch Wizard remains OPEN and is the exact next UCL closure slice.**
+**UCL-CLOSE-06 — E2E Batch Wizard is IMPLEMENTED / ENGINEERING VALIDATED / PENDING CEO LIVE UI ACCEPTANCE. Not closed.**
 
 Existing release gates remain unchanged, including:
 - `LIVE-FAIL-001` Payment Registration — RED / BLOCKER.

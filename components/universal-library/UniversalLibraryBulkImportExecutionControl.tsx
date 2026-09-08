@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import {
+  useEffect,
   useState,
 } from "react";
 
@@ -55,6 +56,12 @@ type Props = {
 
   sourceNamespace:
     string;
+
+  preferredSourceId?:
+    string;
+
+  onSourceIdChange?:
+    (value: string) => void;
 
   onImportFinished:
     () => void;
@@ -229,14 +236,23 @@ export default function UniversalLibraryBulkImportExecutionControl({
   selectedFile,
   batchExternalKey,
   sourceNamespace,
+  preferredSourceId,
+  onSourceIdChange,
   onImportFinished,
 }: Props) {
   const [
     sourceId,
     setSourceId,
   ] = useState(
-    DEFAULT_DATA_FACTORY_SOURCE_ID,
+    preferredSourceId?.trim() ||
+      DEFAULT_DATA_FACTORY_SOURCE_ID,
   );
+
+  useEffect(() => {
+    if (preferredSourceId?.trim()) {
+      setSourceId(preferredSourceId.trim());
+    }
+  }, [preferredSourceId]);
 
   const [
     phase,
@@ -696,12 +712,16 @@ export default function UniversalLibraryBulkImportExecutionControl({
             }
             onChange={(
               event,
-            ) =>
+            ) => {
               setSourceId(
                 event.target
                   .value,
-              )
-            }
+              );
+              onSourceIdChange?.(
+                event.target
+                  .value,
+              );
+            }}
             className="h-10 w-full rounded-lg border border-[#313a5a] bg-[#0b1224] px-3 font-mono text-xs text-slate-200 outline-none focus:border-indigo-400 disabled:opacity-60"
           />
         </div>
