@@ -36,6 +36,8 @@ import {
   NormalizedIngestionPayload,
   VerificationStatus,
   normalizeUniversalIdentifier,
+  emptyBulkWizardRecordCounts,
+  type BulkWizardRecordCounts,
 } from "../../domain";
 
 export class PrismaUniversalLibraryRepository implements IUniversalLibraryRepository {
@@ -724,6 +726,134 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
     return records.map(r => this.mapIngestionRecordToDomain(r));
   }
 
+  public async claimBulkWizardIngestionRecords(
+    acquisitionRunIds: string[],
+    limit = 50,
+    excludeRecordIds: string[] = [],
+  ): Promise<UniversalIngestionRecord[]> {
+    const runIds = [
+      ...new Set(
+        acquisitionRunIds.filter(
+          (id) => typeof id === "string" && id.trim().length > 0,
+        ),
+      ),
+    ];
+
+    if (runIds.length === 0) {
+      return [];
+    }
+
+    const boundedLimit = Math.min(Math.max(1, limit), 100);
+    const excludeIds = [
+      ...new Set(
+        excludeRecordIds.filter(
+          (id) => typeof id === "string" && id.trim().length > 0,
+        ),
+      ),
+    ];
+    const runList = this.sqlTextList(runIds);
+    const excludeSql =
+      excludeIds.length > 0
+        ? Prisma.sql`AND "id" NOT IN (${this.sqlTextList(excludeIds)})`
+        : Prisma.sql``;
+
+    const records = await this.prisma.$transaction(async (tx) => tx.$queryRaw<any[]>`
+      WITH candidates AS (
+        SELECT "id"
+        FROM "UniversalIngestionRecord"
+        WHERE "acquisitionRunId" IN (${runList})
+          AND (
+            "status" IN ('RECEIVED', 'NORMALIZED', 'MATCHED', 'FAILED')
+            OR ("status" = 'PROCESSING' AND "processingStartedAt" < CURRENT_TIMESTAMP - INTERVAL '15 minutes')
+            OR ("status" = 'NEEDS_REVIEW' AND "normalizedData" IS NULL)
+          )
+          ${excludeSql}
+        ORDER BY "createdAt" ASC, "id" ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${boundedLimit}
+      )
+      UPDATE "UniversalIngestionRecord" AS record
+      SET "status" = 'PROCESSING'::"UniversalIngestionStatus",
+          "processingStartedAt" = CURRENT_TIMESTAMP,
+          "retryCount" = record."retryCount" + 1,
+          "updatedAt" = CURRENT_TIMESTAMP
+      FROM candidates
+      WHERE record."id" = candidates."id"
+      RETURNING record.*
+    `);
+
+    return records.map((record) => this.mapIngestionRecordToDomain(record));
+  }
+
+  public async countBulkWizardIngestionRecords(
+    acquisitionRunIds: string[],
+  ): Promise<BulkWizardRecordCounts> {
+    const runIds = [
+      ...new Set(
+        acquisitionRunIds.filter(
+          (id) => typeof id === "string" && id.trim().length > 0,
+        ),
+      ),
+    ];
+
+    if (runIds.length === 0) {
+      return emptyBulkWizardRecordCounts();
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ status: string; count: bigint; incomplete: bigint }>
+    >`
+      SELECT
+        "status"::text AS status,
+        COUNT(*)::bigint AS count,
+        COUNT(*) FILTER (
+          WHERE "status" = 'NEEDS_REVIEW' AND "normalizedData" IS NULL
+        )::bigint AS incomplete
+      FROM "UniversalIngestionRecord"
+      WHERE "acquisitionRunId" IN (${this.sqlTextList(runIds)})
+      GROUP BY "status"
+    `;
+
+    const counts = emptyBulkWizardRecordCounts();
+
+    for (const row of rows) {
+      const n = Number(row.count);
+      counts.total += n;
+
+      switch (row.status) {
+        case "RECEIVED":
+          counts.received += n;
+          break;
+        case "NORMALIZED":
+          counts.normalized += n;
+          break;
+        case "MATCHED":
+          counts.matched += n;
+          break;
+        case "PROCESSING":
+          counts.processing += n;
+          break;
+        case "NEEDS_REVIEW":
+          counts.needsReview += n;
+          counts.incompleteReview += Number(row.incomplete);
+          break;
+        case "PUBLISHED":
+          counts.published += n;
+          break;
+        case "REJECTED":
+          counts.rejected += n;
+          break;
+        case "FAILED":
+          counts.failed += n;
+          break;
+        default:
+          break;
+      }
+    }
+
+    return counts;
+  }
+
   public async updateIngestionRecordStatus(
     id: string,
     status: IngestionStatus,
@@ -1247,6 +1377,10 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
         isNewItem,
       };
     });
+  }
+
+  private sqlTextList(ids: string[]): Prisma.Sql {
+    return Prisma.join(ids.map((id) => Prisma.sql`${id}`));
   }
 
   private encodeCursor(createdAt: Date, id: string): string {

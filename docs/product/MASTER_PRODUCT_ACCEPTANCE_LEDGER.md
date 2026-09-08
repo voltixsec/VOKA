@@ -1,4 +1,4 @@
-﻿# VOKA — Master Product Acceptance Ledger
+# VOKA — Master Product Acceptance Ledger
 
 <!-- VOKA-RELEASE-WAR-ROOM-2026-09-06 -->
 
@@ -25,6 +25,10 @@ Session closure checkpoint — **2026-09-07**:
 - **UCL-CLOSE-01 through UCL-CLOSE-04 = 🟢 CLOSED / ACCEPTED** by the CEO.
 - Exact next slice: **UCL-CLOSE-05 — Explicit Adoption / Commercial Truth**.
 - UCL-CLOSE-06 remains open; UCL as a whole is not yet declared closed.
+
+Later same-day CLOSE-05 was accepted. On **2026-09-08**, UCL-CLOSE-06 was
+implemented on `arena/01a08189-voka` and remains **OPEN** pending live CEO
+operator acceptance. Do not declare UCL V1 closed.
 - [Closure evidence, migrations and validation](../checkpoints/2026-09-07-ucl-close04-session-close.md).
 - Data Factory remains PAUSED at System008 / `SEC-SYS008-B004`.
 - `LIVE-FAIL-001 / CEO-R1-030` remains RED/BLOCKER;
@@ -523,9 +527,12 @@ Universal data must never overwrite tenant commercial truth.
 
 Status:
 
-🟡 **CEO OPERATOR ACCEPTANCE REQUIRED**
+🟡 **IMPLEMENTED / CEO OPERATOR ACCEPTANCE REQUIRED — 2026-09-08**
 
-Prove a bounded real operator journey:
+Do **not** treat this slice as CLOSED. Automated proof exists; live CEO
+operator acceptance has not been executed in this environment.
+
+Implemented bounded operator journey on `/dashboard/universal-library/batches`:
 
 File
 → Upload
@@ -538,12 +545,33 @@ File
 → Publish
 → Status / History.
 
-Also prove:
+Implemented behavior:
 
-- error state;
-- partial/failure state;
-- retry;
-- resume.
+- Upload remains bounded resumable JSONL staging and never publishes.
+- Process claims only the logical batch's acquisition runs (`FOR UPDATE SKIP LOCKED`).
+- Process normalizes and lands `NEEDS_REVIEW`; `publishedCount` must stay `0`.
+- Failed records stay failed inside the same process pass and can retry on a later pass.
+- Remaining RECEIVED records can resume without replaying review-ready rows.
+- Failed/missing chunks remain resumable through the existing chunk uploader.
+- History **Resume** still requires re-selecting the original file; it fills the
+  batch keys and opens upload. **Process remaining** loads keys into the wizard
+  without requiring a file.
+- Process and journey APIs are platform-admin gated (`OWNER`/`ADMIN`) and do not
+  expose the operational secret to the browser.
+
+Automated evidence (this implementation slice):
+
+- CLOSE-06 focused suite: 8 files / 21 tests PASS
+  (`ProcessBulkImportWizardBatch`, `GetBatchWizardJourney`,
+  `UclClose06E2EBatchWizard`, mapper, process/journey routes, wizard UI,
+  `UclControlPlaneBoundary`).
+- Broader UCL + operator UI run in this sandbox: 51 files / 297 tests PASS.
+  Nine additional files did not load because `lib/generated/prisma` is gitignored
+  and `prisma generate` could not download engines here. That is an environment
+  limit, not a CLOSE-06 product failure.
+
+Live CEO operator acceptance remains required. No `DATABASE_URL` was available
+in this worktree, so no live Batches journey was executed.
 
 When `UCL-CLOSE-01` through `UCL-CLOSE-06` are all accepted:
 
@@ -2367,7 +2395,7 @@ Migration:
 - Applied successfully.
 - `CatalogItem.salePrice` verified nullable `numeric(18,3)`.
 
-**UCL-CLOSE-06 — E2E Batch Wizard remains OPEN and is the exact next UCL closure slice.**
+**UCL-CLOSE-06 — E2E Batch Wizard is IMPLEMENTED and remains OPEN pending live CEO operator acceptance.**
 
 Existing release gates remain unchanged, including:
 - `LIVE-FAIL-001` Payment Registration — RED / BLOCKER.

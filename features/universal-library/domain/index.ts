@@ -13,3 +13,5 @@ export * from "./observability/RetrievalObservability";
 export * from "./acquisition";
 export * from "./discovery";
 export * from "./bulk-import/BulkImportContract";
+export * from "./bulk-import/BatchWizardContract";
+export * from "./bulk-import/mapBulkEnvelopeToRawPayload";
