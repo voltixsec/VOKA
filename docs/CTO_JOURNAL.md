@@ -356,3 +356,18 @@ branch if approved. No new PDF, localization, or verification scope is implied.
 - Product frontier is Phase 6.4 Product Integrity & Stabilization.
 - Next slice: Phase 6.4B — Customer Master Data.
 - Phase 7 remains frozen until Phase 6.4B, 6.4C, 6.4D and full commercial regression are complete.
+
+<!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
+
+## 2026-09-08 — Phase 4A UCL final closure
+
+- CEO live acceptance completed for UCL-CLOSE-06.
+- Journey truthfulness correction closed at `d3b45e79423ef4a6cadb1584ed1668f4634ab242`.
+- UCL-UX-01 Global Library Search implemented, engineering validated, live accepted and pushed at `26713485d752a0ea96c6e89cd846c39bb46181d1`.
+- Final UCL-UX-01 evidence: 14/14 focused; 495 PASS / 1 skipped full UCL; Prisma generate/validate PASS; typecheck PASS; build PASS; diff-check PASS.
+- Phase 4A is now CLOSED / CEO ACCEPTED.
+- Data Factory remains PAUSED.
+- Payment Registration remains RED/BLOCKER.
+- AUTH-DIRECT-ROUTE-GATE remains OPEN for Phase 4C.
+- Exact next slice: Phase 4B — Sales Assistant + Quotation Final Acceptance.
+- No merge. No tag.

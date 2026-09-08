@@ -1,3 +1,32 @@
+<!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
+
+## Phase 4A UCL Final Closure — 2026-09-08
+
+**CLOSED / CEO ACCEPTED.**
+
+Official product baseline before this documentation checkpoint:
+
+`26713485d752a0ea96c6e89cd846c39bb46181d1`
+
+Current accepted state:
+
+- UCL-CLOSE-01 through UCL-CLOSE-06 = CLOSED / ACCEPTED.
+- UCL-UX-01 Global Library Search = CLOSED / LIVE ACCEPTED.
+- Phase 4A — UCL Final Closure = COMPLETE.
+- Exact next execution slice = **Phase 4B — Sales Assistant + Quotation Final Acceptance**.
+- Broad Data Factory harvesting remains PAUSED.
+- Future Data Factory resume marker remains System008 / `SEC-SYS008-B004`.
+- `LIVE-FAIL-001 / CEO-R1-030 — Payment Registration End-to-End` remains RED / RELEASE BLOCKER.
+- `AUTH-DIRECT-ROUTE-GATE` remains OPEN for Phase 4C.
+- Review-heading mojibake (`Review â†’ Approve...`) is a bounded UX/localization cleanup, not an open UCL governance gate.
+- No merge to main. No release tag.
+
+Canonical closure evidence:
+
+`docs/checkpoints/2026-09-08-ucl-final-closure-session-close.md`
+
+This section supersedes the earlier same-day CLOSE-06 `PENDING CEO LIVE UI ACCEPTANCE` status for current execution.
+
 <!-- VOKA-CANONICAL-RELEASE-STATUS-2026-09-06 -->
 
 ## UCL-CLOSE-06 implementation — 2026-09-08

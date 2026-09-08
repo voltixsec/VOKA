@@ -1,5 +1,54 @@
 # VOKA — Master Product Acceptance Ledger
 
+<!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
+
+## CURRENT PHASE 4A UCL FINAL CLOSURE — 2026-09-08
+
+Status:
+
+🟢 **PHASE 4A — UCL FINAL CLOSURE = CLOSED / CEO ACCEPTED**
+
+Official product baseline before this documentation checkpoint:
+
+`26713485d752a0ea96c6e89cd846c39bb46181d1`
+
+Accepted closure:
+
+- UCL-CLOSE-01 — Global Metrics Truth = CLOSED.
+- UCL-CLOSE-02 — Staged vs Published Clarity = CLOSED.
+- UCL-CLOSE-03 — Platform Admin / Control-Plane Boundary = CLOSED.
+- UCL-CLOSE-04 — Review → Approve/Reject → Publish = CLOSED.
+- UCL-CLOSE-05 — Explicit Adoption / Commercial Truth = CLOSED.
+- UCL-CLOSE-06 — E2E Batch Wizard = CLOSED / LIVE ACCEPTED.
+- UCL-UX-01 — Global Library Search = CLOSED / LIVE ACCEPTED.
+
+Fresh final UCL-UX-01 evidence:
+
+- focused regression: 3 files / 14 tests PASS;
+- full UCL: 68 files PASS / 1 skipped; 495 tests PASS / 1 skipped;
+- Prisma generate PASS;
+- Prisma validate PASS;
+- TypeScript PASS;
+- production build PASS;
+- diff check PASS;
+- live Published and Review server-side search accepted by CEO.
+
+Current remaining release gates are outside Phase 4A:
+
+- `LIVE-FAIL-001 / CEO-R1-030` remains RED / RELEASE BLOCKER.
+- `AUTH-DIRECT-ROUTE-GATE` remains OPEN for Phase 4C.
+
+Exact next execution slice:
+
+**Phase 4B — Sales Assistant + Quotation Final Acceptance**
+
+Canonical evidence:
+
+`docs/checkpoints/2026-09-08-ucl-final-closure-session-close.md`
+
+This current section supersedes earlier statements that UCL-CLOSE-06 is still pending CEO live acceptance.
+
+
 <!-- VOKA-RELEASE-WAR-ROOM-2026-09-06 -->
 
 # CURRENT RELEASE WAR ROOM RECONCILIATION — 2026-09-06
