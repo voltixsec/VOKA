@@ -27,6 +27,22 @@ type Journey = {
     rejected: number;
     failed: number;
     awaitingProcess: number;
+    pending: number;
+    succeeded: number;
+  };
+  progress: {
+    expectedChunks: number;
+    completedChunks: number;
+    failedChunks: number;
+    partialChunks: number;
+    missingChunks: number;
+    chunkPercent: number;
+    pendingCount: number;
+    succeededCount: number;
+    failedCount: number;
+    publishedCount: number;
+    rejectedCount: number;
+    recordPercent: number;
   };
   steps: Array<{
     id: string;
@@ -52,6 +68,42 @@ function stepClass(state: StepState): string {
   return "border-[#222a45] bg-[#10182d] text-slate-500";
 }
 
+function operatorGuidance(journey: Journey | null, hasKeys: boolean): string {
+  if (!hasKeys) {
+    return "Select a JSONL file or open a batch from history. Upload never publishes. Review remains mandatory.";
+  }
+
+  if (!journey) {
+    return "Loading durable batch state…";
+  }
+
+  if (journey.canResumeChunks) {
+    return `Partial/failure state: retry chunks ${journey.retryChunkIndexes.join(", ")}. Re-select the original file to resume only those chunks. Completed chunks will not be replayed.`;
+  }
+
+  if (journey.records.pending > 0 && journey.records.failed > 0) {
+    return `${journey.records.pending} pending and ${journey.records.failed} failed records remain. Process remaining / retry failed will not republish or duplicate review-ready rows.`;
+  }
+
+  if (journey.records.pending > 0) {
+    return `${journey.records.pending} records are pending process. Process lands review, never publication.`;
+  }
+
+  if (journey.records.failed > 0) {
+    return `${journey.records.failed} records failed. Retry failed work without reprocessing succeeded review rows.`;
+  }
+
+  if (journey.records.needsReview > 0) {
+    return `${journey.records.needsReview} records are waiting in Review. Publish only from explicit approval.`;
+  }
+
+  if (journey.records.published > 0) {
+    return "This batch has published canonical records. Further publication still requires explicit review.";
+  }
+
+  return "Durable batch state is loaded. Continue the next ready step.";
+}
+
 export default function UniversalLibraryBatchWizard({
   sourceId,
   batchExternalKey,
@@ -68,9 +120,12 @@ export default function UniversalLibraryBatchWizard({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  const hasKeys = Boolean(sourceId.trim() && batchExternalKey.trim());
+
   const loadJourney = useCallback(async () => {
     if (!sourceId.trim() || !batchExternalKey.trim()) {
       setJourney(null);
+      setError(null);
       return;
     }
 
@@ -92,6 +147,7 @@ export default function UniversalLibraryBatchWizard({
       );
     }
 
+    setError(null);
     setJourney((body.data ?? body) as Journey);
   }, [sourceId, batchExternalKey, sourceNamespace]);
 
@@ -147,7 +203,7 @@ export default function UniversalLibraryBatchWizard({
       }
 
       setMessage(
-        `Processed ${result.processedCount} records. ${result.needsReviewCount} sent to review. ${result.failedCount} failed. Remaining: ${result.remainingCount}.`,
+        `Processed ${result.processedCount} records. Succeeded ${result.needsReviewCount}. Failed ${result.failedCount}. Remaining ${result.remainingCount}. Nothing was published.`,
       );
 
       await loadJourney();
@@ -166,8 +222,17 @@ export default function UniversalLibraryBatchWizard({
     id: step.id,
     label: step.label,
     href: step.href,
-    state: "LOCKED" as StepState,
+    state: (step.id === "FILE" ? "READY" : "LOCKED") as StepState,
   }));
+
+  const pending = journey?.records.pending ?? 0;
+  const succeeded = journey?.records.succeeded ?? 0;
+  const failed = journey?.records.failed ?? 0;
+  const published = journey?.records.published ?? 0;
+  const rejected = journey?.records.rejected ?? 0;
+  const total = journey?.records.total ?? 0;
+  const chunkPercent = journey?.progress.chunkPercent ?? 0;
+  const recordPercent = journey?.progress.recordPercent ?? 0;
 
   return (
     <section
@@ -183,7 +248,7 @@ export default function UniversalLibraryBatchWizard({
             File → Upload → Batch → Process → Staging → Hierarchy → Products → Review → Publish → Status / History
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Bounded operator journey. Import never publishes. Failed or missing chunks can resume. Failed records can retry.
+            {operatorGuidance(journey, hasKeys)}
           </p>
         </div>
         {journey ? (
@@ -192,6 +257,19 @@ export default function UniversalLibraryBatchWizard({
           </div>
         ) : null}
       </div>
+
+      {hasKeys ? (
+        <div className="mt-3 font-mono text-[11px] text-slate-500">
+          Batch {batchExternalKey.trim()} · {sourceNamespace.trim() || "no namespace"}
+        </div>
+      ) : (
+        <div
+          data-testid="ucl-batch-wizard-idle"
+          className="mt-3 text-xs text-slate-500"
+        >
+          No batch selected. Upload a file or choose Process remaining from history. State survives refresh.
+        </div>
+      )}
 
       <ol className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {steps.map((step, index) => (
@@ -211,32 +289,77 @@ export default function UniversalLibraryBatchWizard({
       </ol>
 
       {journey ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Awaiting process</div>
-            <div className="mt-1 text-sm font-semibold text-white">{journey.records.awaitingProcess}</div>
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">Total</div>
+              <div className="mt-1 text-sm font-semibold text-white">{total}</div>
+            </div>
+            <div
+              data-testid="ucl-batch-wizard-pending"
+              className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2"
+            >
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">Pending</div>
+              <div className="mt-1 text-sm font-semibold text-white">{pending}</div>
+            </div>
+            <div
+              data-testid="ucl-batch-wizard-succeeded"
+              className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2"
+            >
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">Succeeded</div>
+              <div className="mt-1 text-sm font-semibold text-violet-300">{succeeded}</div>
+            </div>
+            <div
+              data-testid="ucl-batch-wizard-failed"
+              className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2"
+            >
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">Failed</div>
+              <div className="mt-1 text-sm font-semibold text-amber-300">{failed}</div>
+            </div>
+            <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">Published</div>
+              <div className="mt-1 text-sm font-semibold text-emerald-300">{published}</div>
+            </div>
+            <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">Rejected</div>
+              <div className="mt-1 text-sm font-semibold text-red-300">{rejected}</div>
+            </div>
           </div>
-          <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Needs review</div>
-            <div className="mt-1 text-sm font-semibold text-violet-300">{journey.records.needsReview}</div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>Chunk progress</span>
+                <span>
+                  {journey.progress.completedChunks}/{journey.progress.expectedChunks} · {chunkPercent}%
+                </span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1b2340]">
+                <div
+                  className="h-full rounded-full bg-indigo-500"
+                  style={{ width: `${Math.min(chunkPercent, 100)}%` }}
+                />
+              </div>
+              {journey.progress.failedChunks > 0 || journey.progress.partialChunks > 0 || journey.progress.missingChunks > 0 ? (
+                <div className="mt-1 text-[10px] text-amber-300">
+                  {journey.progress.failedChunks} failed · {journey.progress.partialChunks} partial · {journey.progress.missingChunks} missing
+                </div>
+              ) : null}
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>Record progress</span>
+                <span>{recordPercent}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#1b2340]">
+                <div
+                  className="h-full rounded-full bg-violet-500"
+                  style={{ width: `${Math.min(recordPercent, 100)}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Failed</div>
-            <div className="mt-1 text-sm font-semibold text-amber-300">{journey.records.failed}</div>
-          </div>
-          <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Published</div>
-            <div className="mt-1 text-sm font-semibold text-emerald-300">{journey.records.published}</div>
-          </div>
-          <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Retry chunks</div>
-            <div className="mt-1 text-sm font-semibold text-slate-200">{journey.retryChunkIndexes.length}</div>
-          </div>
-          <div className="rounded-lg border border-[#222a45] bg-[#10182d] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500">Rejected</div>
-            <div className="mt-1 text-sm font-semibold text-red-300">{journey.records.rejected}</div>
-          </div>
-        </div>
+        </>
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">

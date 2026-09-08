@@ -3,6 +3,8 @@ import {
   BATCH_WIZARD_STEPS,
   awaitingBulkWizardProcess,
   emptyBulkWizardRecordCounts,
+  pendingBulkWizardRecords,
+  succeededBulkWizardRecords,
   type BatchWizardOverallStatus,
   type BatchWizardStepId,
   type BatchWizardStepState,
@@ -33,6 +35,22 @@ export interface BatchWizardJourney {
   batch: BulkImportBatchStatusResult | null;
   records: BulkWizardRecordCounts & {
     awaitingProcess: number;
+    pending: number;
+    succeeded: number;
+  };
+  progress: {
+    expectedChunks: number;
+    completedChunks: number;
+    failedChunks: number;
+    partialChunks: number;
+    missingChunks: number;
+    chunkPercent: number;
+    pendingCount: number;
+    succeededCount: number;
+    failedCount: number;
+    publishedCount: number;
+    rejectedCount: number;
+    recordPercent: number;
   };
   canProcess: boolean;
   canRetryFailedRecords: boolean;
@@ -203,6 +221,20 @@ export class GetBatchWizardJourney {
       : emptyBulkWizardRecordCounts();
 
     const awaitingProcess = awaitingBulkWizardProcess(records);
+    const pending = pendingBulkWizardRecords(records);
+    const succeeded = succeededBulkWizardRecords(records);
+    const expectedChunks = batch?.expectedChunks ?? 0;
+    const completedChunks = batch?.completedChunks ?? 0;
+    const settledRecords =
+      succeeded + records.published + records.rejected;
+    const recordPercent =
+      records.total > 0
+        ? Math.round((settledRecords / records.total) * 100)
+        : 0;
+    const chunkPercent =
+      expectedChunks > 0
+        ? Math.round((completedChunks / expectedChunks) * 100)
+        : 0;
 
     const steps = BATCH_WIZARD_STEPS.map((step) => ({
       id: step.id,
@@ -218,6 +250,22 @@ export class GetBatchWizardJourney {
       records: {
         ...records,
         awaitingProcess,
+        pending,
+        succeeded,
+      },
+      progress: {
+        expectedChunks,
+        completedChunks,
+        failedChunks: batch?.failedChunks ?? 0,
+        partialChunks: batch?.partialChunks ?? 0,
+        missingChunks: batch?.missingChunks ?? 0,
+        chunkPercent,
+        pendingCount: pending,
+        succeededCount: succeeded,
+        failedCount: records.failed,
+        publishedCount: records.published,
+        rejectedCount: records.rejected,
+        recordPercent,
       },
       canProcess: awaitingProcess > 0,
       canRetryFailedRecords: records.failed > 0,

@@ -84,6 +84,10 @@ describe("UCL-CLOSE-06 E2E Batch Wizard", () => {
       BATCH_WIZARD_STEPS.map((step) => step.id),
     );
     expect(journey.overallStatus).toBe("IN_REVIEW");
+    expect(journey.records.pending).toBe(0);
+    expect(journey.records.succeeded).toBe(2);
+    expect(journey.records.failed).toBe(0);
+    expect(journey.records.published).toBe(0);
     expect(journey.steps.find((step) => step.id === "STAGING")?.href).toBe(
       "/dashboard/universal-library/products",
     );
@@ -206,6 +210,46 @@ describe("UCL-CLOSE-06 E2E Batch Wizard", () => {
     );
     expect(journey.records.published).toBe(0);
     expect(journey.canRetryFailedRecords).toBe(true);
+  });
+
+  it("does not duplicate records when the same envelopes are restaged", async () => {
+    const repo = new InMemoryBulkWizardRepository();
+    repo.sources.set(
+      "source-1",
+      new UniversalSource({
+        id: "source-1",
+        name: "Wizard Source",
+        type: "SYNTHETIC",
+        verificationStatus: "SOURCE_VERIFIED",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+
+    const staging = new BulkImportStagingService(repo as any);
+    const lines = [
+      envelope("cam-1", { name: "Camera One", manufacturerName: "Hikvision" }),
+      envelope("cam-2", { name: "Camera Two", manufacturerName: "Hikvision" }),
+    ];
+
+    const first = await staging.stage(await parsed(lines), {
+      sourceId: "source-1",
+      acquisitionRunId: "run-1",
+    });
+
+    expect(first.newRecords).toBe(2);
+    expect(repo.records.size).toBe(2);
+
+    const restage = await staging.stage(await parsed(lines), {
+      sourceId: "source-1",
+      acquisitionRunId: "run-1",
+    });
+
+    expect(restage.unchangedRecords).toBe(2);
+    expect(restage.newRecords).toBe(0);
+    expect(restage.changedRecords).toBe(0);
+    expect(repo.records.size).toBe(2);
   });
 
   it("scopes durable wizard claims to the logical batch runs", () => {

@@ -2,7 +2,7 @@
 
 ## UCL-CLOSE-06 implementation — 2026-09-08
 
-Implemented, not CEO-accepted:
+IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE. Not closed:
 
 - Operator E2E Batch Wizard on `/dashboard/universal-library/batches`.
 - Journey: File → Upload → Batch → Process → Staging → Hierarchy → Products → Review → Publish → Status / History.
@@ -10,14 +10,18 @@ Implemented, not CEO-accepted:
 - Journey API `GET /api/universal-library/bulk-import/ui/journey` drives the 10-step stepper plus retry/resume affordances.
 - Automated CLOSE-06 proof covers happy path, isolated failure, retry, remaining-record resume, invalid JSONL, and control-plane gating.
 - Chunk Resume from history still requires re-selecting the original file.
+- Selected batch identity persists in localStorage (`voka.ucl.batch-wizard.selection`).
+- Journey counts separate pending vs succeeded vs failed; process remaining/retry
+  does not republish or duplicate review-ready rows.
 - Data Factory remains **PAUSED** at System008 / `SEC-SYS008-B004`.
 - `LIVE-FAIL-001` and `AUTH-DIRECT-ROUTE-GATE` remain open and out of scope.
 - No merge/tag. Do not claim UCL V1 fully closed.
 
 Exact next UCL action:
 
-**Live CEO operator acceptance of UCL-CLOSE-06** on Batches, including error,
-partial/failure, retry, and resume. This sandbox had no `DATABASE_URL`.
+**Local CTO validation, then live CEO operator acceptance of UCL-CLOSE-06**
+on Batches, including error, partial/failure, retry, and resume. This sandbox
+could not run Prisma generate/validate, typecheck, or production build.
 
 ## Phase 4A UCL Session Closure — 2026-09-07
 
@@ -304,7 +308,7 @@ Canonical architecture:
 
 ## Resume Update — UCL-CLOSE-06 IMPLEMENTED — 2026-09-08
 
-- `UCL-CLOSE-06 — E2E Batch Wizard` = **IMPLEMENTED / LIVE CEO ACCEPTANCE REQUIRED**.
+- `UCL-CLOSE-06 — E2E Batch Wizard` = **IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE**.
 - UCL V1 is **not** fully closed.
 - Data Factory remains **PAUSED** at System008 / `SEC-SYS008-B004`.
 - `LIVE-FAIL-001` remains RED / BLOCKER.

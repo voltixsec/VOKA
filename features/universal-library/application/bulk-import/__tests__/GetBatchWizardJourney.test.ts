@@ -64,6 +64,11 @@ describe("GetBatchWizardJourney", () => {
     expect(journey.canResumeChunks).toBe(true);
     expect(journey.canProcess).toBe(true);
     expect(journey.retryChunkIndexes).toEqual([1, 2]);
+    expect(journey.records.pending).toBe(1);
+    expect(journey.records.succeeded).toBe(0);
+    expect(journey.records.failed).toBe(0);
+    expect(journey.progress.expectedChunks).toBe(2);
+    expect(journey.progress.completedChunks).toBe(0);
     expect(
       journey.steps.find((step) => step.id === "PROCESS")?.state,
     ).toBe("READY");
@@ -89,6 +94,9 @@ describe("GetBatchWizardJourney", () => {
     });
 
     expect(journey.overallStatus).toBe("IN_REVIEW");
+    expect(journey.records.pending).toBe(0);
+    expect(journey.records.succeeded).toBe(1);
+    expect(journey.progress.recordPercent).toBe(100);
     expect(journey.steps.find((step) => step.id === "REVIEW")?.state).toBe(
       "READY",
     );

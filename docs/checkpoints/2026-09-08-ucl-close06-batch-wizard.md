@@ -6,7 +6,7 @@ Branch:
 
 `arena/01a08189-voka`
 
-This is an implementation checkpoint, not CEO acceptance.
+This is an implementation checkpoint, not local validation and not CEO acceptance.
 
 ## Closure State
 
@@ -15,7 +15,8 @@ This is an implementation checkpoint, not CEO acceptance.
 - UCL-CLOSE-03 — CLOSED
 - UCL-CLOSE-04 — CLOSED / ACCEPTED
 - UCL-CLOSE-05 — CLOSED / ACCEPTED
-- **UCL-CLOSE-06 — IMPLEMENTED / LIVE CEO ACCEPTANCE REQUIRED**
+- **UCL-CLOSE-06 — IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE**
+- UCL V1 — NOT CLOSED
 
 UCL V1 must not be declared fully closed until UCL-CLOSE-06 is accepted.
 
@@ -56,17 +57,19 @@ to the browser.
 ## Known Limit
 
 History Resume does not bypass file re-selection. The original JSONL is still
-required to replay only failed/missing chunks.
+required to replay only failed/missing chunks. Selected batch identity persists
+in localStorage across refresh/reopen so Process remaining and journey counts
+restore without re-entering keys.
 
 ## Automated Evidence
 
 Focused CLOSE-06 suite:
 
-- 8 files / 21 tests PASS
+- 10 files / 26 tests PASS
 
 Broader UCL + operator UI in this sandbox:
 
-- 51 files / 297 tests PASS
+- 53 files / 303 tests PASS
 - 9 files did not load: `lib/generated/prisma` is gitignored and
   `prisma generate` could not download engines in this environment.
 
@@ -76,6 +79,7 @@ No live CEO Batches journey was executed (`DATABASE_URL` absent).
 
 Still OPEN / unchanged:
 
+- `UCL-CLOSE-06` local typecheck / Prisma validate / production build
 - `UCL-CLOSE-06` live CEO operator acceptance
 - `LIVE-FAIL-001 — Payment Registration End-to-End` — RED / BLOCKER
 - `AUTH-DIRECT-ROUTE-GATE` — OPEN for Phase 4C

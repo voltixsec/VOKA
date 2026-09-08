@@ -7,8 +7,8 @@ Architecture decisions are recorded here.
 
 - Added a 10-step operator wizard on Batches without rebuilding UCL-1–6 or auto-publishing.
 - Process is run-scoped: claim/count use `acquisitionRunId IN (...)` with `FOR UPDATE SKIP LOCKED`, exclude already-claimed ids in the same pass, and isolate hard failures so retry is a later operator action.
-- Journey API plus Batches history Resume / Process remaining expose error, partial/failure, retry, and resume. Chunk resume still requires the original file.
-- CLOSE-06 remains OPEN until live CEO operator acceptance. Data Factory stays PAUSED. No merge/tag.
+- Journey API plus Batches history Resume / Process remaining expose error, partial/failure, retry, and resume. Chunk resume still requires the original file. Selected batch identity persists in localStorage across refresh/reopen.
+- CLOSE-06 is IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE. Not closed. Data Factory stays PAUSED. No merge/tag.
 
 ## 2026-08-30 — Conversational Experience V2
 

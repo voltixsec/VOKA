@@ -3,6 +3,10 @@
 import UniversalLibraryBatchWizard from "./UniversalLibraryBatchWizard";
 import UniversalLibraryBulkImportExecutionControl from "./UniversalLibraryBulkImportExecutionControl";
 import {
+  readBatchWizardSelection,
+  writeBatchWizardSelection,
+} from "./batchWizardSelection";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -275,6 +279,25 @@ export default function UniversalLibraryBatchesConsole() {
   useEffect(() => {
     void loadBatches();
   }, [loadBatches]);
+
+  useEffect(() => {
+    const restored = readBatchWizardSelection();
+    if (!restored) {
+      return;
+    }
+
+    setSourceId(restored.sourceId);
+    setBatchExternalKey(restored.batchExternalKey);
+    setSourceNamespace(restored.sourceNamespace);
+  }, []);
+
+  useEffect(() => {
+    writeBatchWizardSelection({
+      sourceId,
+      batchExternalKey,
+      sourceNamespace,
+    });
+  }, [sourceId, batchExternalKey, sourceNamespace]);
 
   const metrics =
     useMemo(() => {

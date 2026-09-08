@@ -5,6 +5,7 @@ import {
 } from "../../domain/repositories/UniversalLibraryRepository";
 import { IdentityResolutionService } from "../../domain/identity-resolution/IdentityResolutionService";
 import { NormalizationPipelineService } from "../../domain/normalization/NormalizationPipelineService";
+import { awaitingBulkWizardProcess } from "../../domain/bulk-import/BatchWizardContract";
 import { mapBulkEnvelopeToRawPayload } from "../../domain/bulk-import/mapBulkEnvelopeToRawPayload";
 import type { UniversalIngestionRecord } from "../../domain/entities/UniversalIngestionRecord";
 import {
@@ -231,12 +232,7 @@ export class ProcessBulkImportWizardBatch {
         effectiveRunIds,
       );
 
-    summary.remainingCount =
-      counts.received +
-      counts.normalized +
-      counts.matched +
-      counts.failed +
-      counts.incompleteReview;
+    summary.remainingCount = awaitingBulkWizardProcess(counts);
 
     if (summary.remainingCount > 0 && summary.needsReviewCount === 0 && summary.failedCount > 0 && counts.needsReview === 0) {
       summary.overallStatus = "FAILED";

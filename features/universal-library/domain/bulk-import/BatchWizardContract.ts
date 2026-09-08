@@ -99,14 +99,26 @@ export function emptyBulkWizardRecordCounts(): BulkWizardRecordCounts {
   };
 }
 
-export function awaitingBulkWizardProcess(
+export function pendingBulkWizardRecords(
   counts: BulkWizardRecordCounts,
 ): number {
   return (
     counts.received +
     counts.normalized +
     counts.matched +
-    counts.failed +
+    counts.processing +
     counts.incompleteReview
   );
+}
+
+export function succeededBulkWizardRecords(
+  counts: BulkWizardRecordCounts,
+): number {
+  return Math.max(0, counts.needsReview - counts.incompleteReview);
+}
+
+export function awaitingBulkWizardProcess(
+  counts: BulkWizardRecordCounts,
+): number {
+  return pendingBulkWizardRecords(counts) + counts.failed;
 }

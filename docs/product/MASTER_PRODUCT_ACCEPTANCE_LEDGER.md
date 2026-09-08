@@ -27,8 +27,9 @@ Session closure checkpoint — **2026-09-07**:
 - UCL-CLOSE-06 remains open; UCL as a whole is not yet declared closed.
 
 Later same-day CLOSE-05 was accepted. On **2026-09-08**, UCL-CLOSE-06 was
-implemented on `arena/01a08189-voka` and remains **OPEN** pending live CEO
-operator acceptance. Do not declare UCL V1 closed.
+implemented on `arena/01a08189-voka` and remains
+**IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE**.
+Do not declare UCL-CLOSE-06 or UCL V1 closed.
 - [Closure evidence, migrations and validation](../checkpoints/2026-09-07-ucl-close04-session-close.md).
 - Data Factory remains PAUSED at System008 / `SEC-SYS008-B004`.
 - `LIVE-FAIL-001 / CEO-R1-030` remains RED/BLOCKER;
@@ -511,26 +512,20 @@ for migration names, build result and acceptance limitations.
 
 Status:
 
-🟡 **OPEN — EXACT NEXT SLICE / LIVE ACCEPTANCE REQUIRED**
+🟢 **CLOSED / ACCEPTED — 2026-09-07**
 
-Prove:
-
-Universal Library item
-→ explicit tenant adoption
-→ Company Catalog
-→ tenant-owned mutable commercial fields
-→ quotation uses tenant Catalog snapshot.
-
-Universal data must never overwrite tenant commercial truth.
+See the later CLOSE-05 evidence section in this ledger. Universal data must
+never overwrite tenant commercial truth.
 
 ## UCL-CLOSE-06 — End-to-End Batch Wizard
 
 Status:
 
-🟡 **IMPLEMENTED / CEO OPERATOR ACCEPTANCE REQUIRED — 2026-09-08**
+🟡 **IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE — 2026-09-08**
 
-Do **not** treat this slice as CLOSED. Automated proof exists; live CEO
-operator acceptance has not been executed in this environment.
+Do **not** treat this slice as CLOSED or ACCEPTED. Automated sandbox proof
+exists; local typecheck / Prisma / production build and live CEO operator
+acceptance have not been executed in this environment.
 
 Implemented bounded operator journey on `/dashboard/universal-library/batches`:
 
@@ -561,17 +556,18 @@ Implemented behavior:
 
 Automated evidence (this implementation slice):
 
-- CLOSE-06 focused suite: 8 files / 21 tests PASS
+- CLOSE-06 focused suite: 10 files / 26 tests PASS
   (`ProcessBulkImportWizardBatch`, `GetBatchWizardJourney`,
   `UclClose06E2EBatchWizard`, mapper, process/journey routes, wizard UI,
-  `UclControlPlaneBoundary`).
-- Broader UCL + operator UI run in this sandbox: 51 files / 297 tests PASS.
+  `UclControlPlaneBoundary`, `BatchWizardContract`, `batchWizardSelection`).
+- Broader UCL + operator UI run in this sandbox: 53 files / 303 tests PASS.
   Nine additional files did not load because `lib/generated/prisma` is gitignored
   and `prisma generate` could not download engines here. That is an environment
   limit, not a CLOSE-06 product failure.
 
-Live CEO operator acceptance remains required. No `DATABASE_URL` was available
-in this worktree, so no live Batches journey was executed.
+Local validation and live CEO operator acceptance remain required. No
+`DATABASE_URL` was available in this worktree, so no live Batches journey
+was executed.
 
 When `UCL-CLOSE-01` through `UCL-CLOSE-06` are all accepted:
 
@@ -640,8 +636,9 @@ with remaining live acceptance items.
 Status:
 
 🟢 **IMPLEMENTED FOUNDATION**
-with `UCL-CLOSE-05` and `UCL-CLOSE-06` remaining before implementation
-freeze.
+with `UCL-CLOSE-05` CLOSED / ACCEPTED and `UCL-CLOSE-06` remaining
+IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE. UCL V1 is
+not closed.
 
 ## PHASE 4 — Final Product Closure
 
@@ -653,8 +650,8 @@ Execution order:
 
 ### 4A — UCL Final Closure
 
-UCL-CLOSE-01 through UCL-CLOSE-04 are accepted. Next close UCL-CLOSE-05,
-then UCL-CLOSE-06.
+UCL-CLOSE-01 through UCL-CLOSE-05 are accepted. Next: local validation and
+CEO acceptance of UCL-CLOSE-06. Do not declare UCL V1 closed.
 
 ### 4B — Sales Assistant + Quotation Final Acceptance
 
@@ -2395,7 +2392,7 @@ Migration:
 - Applied successfully.
 - `CatalogItem.salePrice` verified nullable `numeric(18,3)`.
 
-**UCL-CLOSE-06 — E2E Batch Wizard is IMPLEMENTED and remains OPEN pending live CEO operator acceptance.**
+**UCL-CLOSE-06 — E2E Batch Wizard is IMPLEMENTED / PENDING LOCAL VALIDATION / PENDING CEO ACCEPTANCE. Not closed.**
 
 Existing release gates remain unchanged, including:
 - `LIVE-FAIL-001` Payment Registration — RED / BLOCKER.
