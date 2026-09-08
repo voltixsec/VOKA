@@ -1,7 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { ListBulkImportBatches } from "@/features/universal-library/application/bulk-import/ListBulkImportBatches";
 import { PrismaBulkImportBatchHistoryRepository } from "@/features/universal-library/infrastructure/bulk-import/PrismaBulkImportBatchHistoryRepository";
+import { PrismaUniversalLibraryRepository } from "@/features/universal-library/infrastructure/prisma/PrismaUniversalLibraryRepository";
 import {
   apiSuccess,
   withPlatformAdminAuth,
@@ -79,6 +80,9 @@ export const GET = withPlatformAdminAuth(
       const useCase =
         new ListBulkImportBatches(
           new PrismaBulkImportBatchHistoryRepository(
+            prisma,
+          ),
+          new PrismaUniversalLibraryRepository(
             prisma,
           ),
         );

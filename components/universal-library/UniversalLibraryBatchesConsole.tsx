@@ -17,7 +17,10 @@ import {
 type BatchStatus =
   | "COMPLETED"
   | "IN_PROGRESS"
-  | "NEEDS_ATTENTION";
+  | "NEEDS_ATTENTION"
+  | "READY_TO_PROCESS"
+  | "IN_REVIEW"
+  | "FAILED";
 
 type BatchItem = {
   sourceId: string;
@@ -26,6 +29,8 @@ type BatchItem = {
   fileName?: string | null;
 
   status: BatchStatus;
+  uploadStatus?: "COMPLETED" | "IN_PROGRESS" | "NEEDS_ATTENTION";
+  journeyStatus?: string;
 
   expectedChunks: number;
   completedChunks: number;
@@ -131,7 +136,7 @@ function formatDate(
 }
 
 function statusClass(
-  status: BatchStatus,
+  status: string,
 ): string {
   if (
     status === "COMPLETED"
@@ -140,12 +145,41 @@ function statusClass(
   }
 
   if (
+    status === "READY_TO_PROCESS" ||
     status === "IN_PROGRESS"
   ) {
     return "border-indigo-400/30 bg-indigo-500/10 text-indigo-300";
   }
 
+  if (
+    status === "IN_REVIEW"
+  ) {
+    return "border-violet-400/30 bg-violet-500/10 text-violet-300";
+  }
+
+  if (
+    status === "FAILED"
+  ) {
+    return "border-red-400/30 bg-red-500/10 text-red-300";
+  }
+
   return "border-amber-400/30 bg-amber-500/10 text-amber-300";
+}
+
+function batchDisplayStatus(batch: BatchItem): string {
+  if (batch.journeyStatus) {
+    return batch.journeyStatus;
+  }
+  if (batch.status === "COMPLETED") {
+    const staged = batch.stagedContributionCount ?? batch.stagedCount;
+    if (staged > 0 && batch.reviewRequiredCount === 0 && batch.publishedCount === 0) {
+      return "READY_TO_PROCESS";
+    }
+    if (batch.reviewRequiredCount > 0) {
+      return "IN_REVIEW";
+    }
+  }
+  return batch.status;
 }
 
 function MetricCard({
@@ -305,22 +339,31 @@ export default function UniversalLibraryBatchesConsole() {
       const completed =
         batches.filter(
           (batch) =>
-            batch.status ===
+            batchDisplayStatus(batch) ===
             "COMPLETED",
         ).length;
 
       const active =
         batches.filter(
-          (batch) =>
-            batch.status ===
-            "IN_PROGRESS",
+          (batch) => {
+            const st = batchDisplayStatus(batch);
+            return (
+              st === "IN_PROGRESS" ||
+              st === "READY_TO_PROCESS" ||
+              st === "IN_REVIEW"
+            );
+          },
         ).length;
 
       const attention =
         batches.filter(
-          (batch) =>
-            batch.status ===
-            "NEEDS_ATTENTION",
+          (batch) => {
+            const st = batchDisplayStatus(batch);
+            return (
+              st === "NEEDS_ATTENTION" ||
+              st === "FAILED"
+            );
+          },
         ).length;
 
       const staged =
@@ -716,6 +759,7 @@ export default function UniversalLibraryBatchesConsole() {
               </div>
             ) : (
               batches.map((batch) => {
+                const displayStatus = batchDisplayStatus(batch);
                 const progress =
                   batch.expectedChunks > 0
                     ? Math.round(
@@ -746,17 +790,17 @@ export default function UniversalLibraryBatchesConsole() {
                       <div>
                         <span
                           className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusClass(
-                            batch.status,
+                            displayStatus,
                           )}`}
                         >
-                          {batch.status}
+                          {displayStatus.replace(/_/g, " ")}
                         </span>
                       </div>
 
                       <div className="min-w-0">
                         <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400">
                           <span>
-                            {batch.completedChunks}/{batch.expectedChunks} chunks
+                            Upload: {batch.completedChunks}/{batch.expectedChunks} chunks
                           </span>
 
                           <span className="font-semibold text-slate-300">
@@ -833,7 +877,8 @@ export default function UniversalLibraryBatchesConsole() {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                          {batch.status === "NEEDS_ATTENTION" ? (
+                          {batch.status === "NEEDS_ATTENTION" ||
+                          displayStatus === "NEEDS_ATTENTION" ? (
                             <button
                               type="button"
                               onClick={() => {

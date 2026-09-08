@@ -112,7 +112,17 @@ function stepState(
     case "STAGING":
     case "HIERARCHY":
     case "PRODUCTS":
-      return records.total > 0 ? "COMPLETE" : "LOCKED";
+      if (
+        succeededBulkWizardRecords(records) > 0 ||
+        records.published > 0 ||
+        records.rejected > 0
+      ) {
+        if (awaitingProcess > 0) {
+          return "PARTIAL";
+        }
+        return "COMPLETE";
+      }
+      return "LOCKED";
     case "REVIEW":
       if (succeededBulkWizardRecords(records) > 0) {
         return "READY";
@@ -122,15 +132,31 @@ function stepState(
       }
       return "LOCKED";
     case "PUBLISH":
-      if (records.published > 0 && (records.needsReview > 0 || awaitingProcess > 0)) {
+      if (
+        records.published > 0 &&
+        (records.needsReview > 0 || awaitingProcess > 0)
+      ) {
         return "PARTIAL";
       }
+
+      if (records.needsReview > 0 || awaitingProcess > 0) {
+        return "LOCKED";
+      }
+
       if (records.published > 0) {
         return "COMPLETE";
       }
-      return succeededBulkWizardRecords(records) > 0 ? "READY" : "LOCKED";
+
+      return "LOCKED";
     case "STATUS_HISTORY":
-      return "COMPLETE";
+      if (
+        (records.published > 0 || records.rejected > 0) &&
+        records.needsReview === 0 &&
+        awaitingProcess === 0
+      ) {
+        return "COMPLETE";
+      }
+      return "READY";
     default:
       return "LOCKED";
   }

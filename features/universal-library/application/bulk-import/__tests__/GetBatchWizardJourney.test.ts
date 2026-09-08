@@ -122,4 +122,54 @@ describe("GetBatchWizardJourney", () => {
       "/dashboard/universal-library/published",
     );
   });
+
+  it("proves UI truthfulness before process: 1 completed chunk, 2 pending ingestion records", async () => {
+    const repo = new InMemoryBulkWizardRepository();
+    repo.records.set(
+      "rec-1",
+      ingestion({
+        status: "RECEIVED",
+      }),
+    );
+    repo.records.set(
+      "rec-2",
+      ingestion({
+        id: "rec-2",
+        sourceExternalId: "ext-rec-2",
+        status: "RECEIVED",
+      }),
+    );
+
+    const journey = await new GetBatchWizardJourney(
+      batchStatusRepository([
+        bulkRun({
+          policySnapshot: {
+            mode: "BULK_JSONL",
+            batchExternalKey: "WIZARD_BATCH_001",
+            sourceNamespace: "VOKA_UCL_TEST",
+            chunk: { index: 1, count: 1, recordCount: 2 },
+          },
+        }),
+      ]),
+      repo as any,
+    ).execute({
+      sourceId: "source-1",
+      batchExternalKey: "WIZARD_BATCH_001",
+      sourceNamespace: "VOKA_UCL_TEST",
+    });
+
+    expect(journey.overallStatus).toBe("READY_TO_PROCESS");
+    expect(journey.steps.find((step) => step.id === "FILE")?.state).toBe("COMPLETE");
+    expect(journey.steps.find((step) => step.id === "UPLOAD")?.state).toBe("COMPLETE");
+    expect(journey.steps.find((step) => step.id === "BATCH")?.state).toBe("COMPLETE");
+    expect(journey.steps.find((step) => step.id === "PROCESS")?.state).toBe("READY");
+    expect(journey.steps.find((step) => step.id === "STAGING")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "HIERARCHY")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "PRODUCTS")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "REVIEW")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "PUBLISH")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "STATUS_HISTORY")?.state).toBe("READY");
+    expect(journey.records.pending).toBe(2);
+    expect(journey.records.succeeded).toBe(0);
+  });
 });

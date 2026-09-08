@@ -276,5 +276,46 @@ it(
         );
       },
     );
+
+    it(
+      "does not claim globally COMPLETED when pending records remain before process",
+      async () => {
+        const fakeLibraryRepo = {
+          async countBulkWizardIngestionRecords() {
+            return {
+              total: 2,
+              received: 2,
+              normalized: 0,
+              matched: 0,
+              processing: 0,
+              needsReview: 0,
+              published: 0,
+              rejected: 0,
+              failed: 0,
+              incompleteReview: 0,
+            };
+          },
+        };
+
+        const useCase = new ListBulkImportBatches(
+          repository([
+            makeRun("BATCH-PENDING", 1, 1, "COMPLETED", {
+              stagedCount: 2,
+            }),
+          ]),
+          fakeLibraryRepo as any,
+        );
+
+        const result = await useCase.execute();
+        expect(result.items).toHaveLength(1);
+        const item = result.items[0];
+        expect(item.status).not.toBe("COMPLETED");
+        expect(item.status).toBe("READY_TO_PROCESS");
+        expect(item.uploadStatus).toBe("COMPLETED");
+        expect(item.journeyStatus).toBe("READY_TO_PROCESS");
+        expect(item.completedChunks).toBe(1);
+        expect(item.expectedChunks).toBe(1);
+      },
+    );
   },
 );

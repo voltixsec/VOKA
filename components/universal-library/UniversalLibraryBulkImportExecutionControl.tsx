@@ -792,7 +792,7 @@ export default function UniversalLibraryBulkImportExecutionControl({
 
           <div className="rounded-lg border border-[#222a45] bg-[#0b1224] px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-slate-500">
-              Processed
+              Processed Chunks
             </div>
             <div className="mt-1 text-sm font-semibold text-indigo-300">
               {processedChunks.toLocaleString()}
@@ -801,7 +801,7 @@ export default function UniversalLibraryBulkImportExecutionControl({
 
           <div className="rounded-lg border border-[#222a45] bg-[#0b1224] px-3 py-2">
             <div className="text-[10px] uppercase tracking-wider text-slate-500">
-              Successful
+              Successful Chunks
             </div>
             <div className="mt-1 text-sm font-semibold text-emerald-300">
               {successfulChunks.toLocaleString()}

@@ -1,4 +1,6 @@
 import type { BulkImportRunRecord } from "./RunBulkImportFile";
+import type { IUniversalLibraryRepository } from "../../domain/repositories/UniversalLibraryRepository";
+import { awaitingBulkWizardProcess } from "../../domain/bulk-import/BatchWizardContract";
 
 export interface BulkImportBatchHistoryQuery {
   limit?: number;
@@ -24,7 +26,23 @@ export interface BulkImportBatchHistoryItem {
   status:
     | "COMPLETED"
     | "IN_PROGRESS"
+    | "NEEDS_ATTENTION"
+    | "READY_TO_PROCESS"
+    | "IN_REVIEW"
+    | "FAILED";
+
+  uploadStatus?:
+    | "COMPLETED"
+    | "IN_PROGRESS"
     | "NEEDS_ATTENTION";
+
+  journeyStatus?:
+    | "READY_TO_PROCESS"
+    | "IN_REVIEW"
+    | "COMPLETE"
+    | "FAILED"
+    | "NEEDS_ATTENTION"
+    | "IN_PROGRESS";
 
   expectedChunks: number;
   completedChunks: number;
@@ -140,6 +158,8 @@ export class ListBulkImportBatches {
   public constructor(
     private readonly repository:
       IBulkImportBatchHistoryRepository,
+    private readonly libraryRepository?:
+      IUniversalLibraryRepository,
   ) {}
 
   public async execute(
@@ -357,27 +377,53 @@ export class ListBulkImportBatches {
         expectedChunks -
         latestRuns.length;
 
-      let status:
-        BulkImportBatchHistoryItem["status"];
-
-      if (
+      const uploadStatus: NonNullable<BulkImportBatchHistoryItem["uploadStatus"]> =
         completedChunks ===
           expectedChunks &&
         partialChunks === 0 &&
         failedChunks === 0 &&
         activeChunks === 0 &&
         missingChunks === 0
-      ) {
-        status =
-          "COMPLETED";
-      } else if (
-        activeChunks > 0
-      ) {
-        status =
-          "IN_PROGRESS";
-      } else {
-        status =
-          "NEEDS_ATTENTION";
+          ? "COMPLETED"
+          : activeChunks > 0
+            ? "IN_PROGRESS"
+            : "NEEDS_ATTENTION";
+
+      const runIds = group.map((run) => run.id);
+      const recordCounts = this.libraryRepository
+        ? await this.libraryRepository.countBulkWizardIngestionRecords(runIds)
+        : null;
+
+      let status: BulkImportBatchHistoryItem["status"] = uploadStatus;
+      let journeyStatus: BulkImportBatchHistoryItem["journeyStatus"] = undefined;
+
+      if (recordCounts && recordCounts.total > 0) {
+        const awaiting = awaitingBulkWizardProcess(recordCounts);
+        if (uploadStatus === "NEEDS_ATTENTION") {
+          status = "NEEDS_ATTENTION";
+          journeyStatus = "NEEDS_ATTENTION";
+        } else if (uploadStatus === "IN_PROGRESS") {
+          status = "IN_PROGRESS";
+          journeyStatus = "IN_PROGRESS";
+        } else if (awaiting > 0 && recordCounts.failed === recordCounts.total) {
+          status = "FAILED";
+          journeyStatus = "FAILED";
+        } else if (awaiting > 0) {
+          status = "READY_TO_PROCESS";
+          journeyStatus = "READY_TO_PROCESS";
+        } else if (recordCounts.needsReview > 0) {
+          status = "IN_REVIEW";
+          journeyStatus = "IN_REVIEW";
+        } else if (recordCounts.published > 0) {
+          status = "COMPLETED";
+          journeyStatus = "COMPLETE";
+        } else if (recordCounts.failed > 0) {
+          status = "FAILED";
+          journeyStatus = "FAILED";
+        } else {
+          status = "COMPLETED";
+          journeyStatus = "COMPLETE";
+        }
       }
 
       const publishedCount =
@@ -428,6 +474,8 @@ export class ListBulkImportBatches {
         sourceNamespace,
         fileName,
         status,
+        uploadStatus,
+        journeyStatus,
 
         expectedChunks,
         completedChunks,
@@ -480,22 +528,29 @@ export class ListBulkImportBatches {
           ),
 
         reviewRequiredCount:
-          latestRuns.reduce(
-            (sum, run) =>
-              sum +
-              run.reviewRequiredCount,
-            0,
-          ),
+          recordCounts
+            ? recordCounts.needsReview
+            : latestRuns.reduce(
+                (sum, run) =>
+                  sum +
+                  run.reviewRequiredCount,
+                0,
+              ),
 
         rejectedCount:
-          latestRuns.reduce(
-            (sum, run) =>
-              sum +
-              run.rejectedCount,
-            0,
-          ),
+          recordCounts
+            ? recordCounts.rejected
+            : latestRuns.reduce(
+                (sum, run) =>
+                  sum +
+                  run.rejectedCount,
+                0,
+              ),
 
-        publishedCount,
+        publishedCount:
+          recordCounts
+            ? recordCounts.published
+            : publishedCount,
 
         firstStartedAt,
         lastActivityAt,

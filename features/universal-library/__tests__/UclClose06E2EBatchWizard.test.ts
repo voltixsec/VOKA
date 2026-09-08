@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { BulkImportStagingService } from "../application/bulk-import/BulkImportStagingService";
+import { ListBulkImportBatches } from "../application/bulk-import/ListBulkImportBatches";
 import { ProcessBulkImportWizardBatch } from "../application/bulk-import/ProcessBulkImportWizardBatch";
 import { GetBatchWizardJourney } from "../application/bulk-import/GetBatchWizardJourney";
 import { ReviewIngestionRecord } from "../application/use-cases/ReviewIngestionRecord";
@@ -250,6 +251,81 @@ describe("UCL-CLOSE-06 E2E Batch Wizard", () => {
     expect(restage.newRecords).toBe(0);
     expect(restage.changedRecords).toBe(0);
     expect(repo.records.size).toBe(2);
+  });
+
+  it("proves UI truthfulness before process: 1 completed upload chunk, 2 pending ingestion records", async () => {
+    const repo = new InMemoryBulkWizardRepository();
+    repo.sources.set(
+      "source-1",
+      new UniversalSource({
+        id: "source-1",
+        name: "Wizard Source",
+        type: "SYNTHETIC",
+        verificationStatus: "SOURCE_VERIFIED",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+
+    const staging = new BulkImportStagingService(repo as any);
+    const upload = await staging.stage(
+      await parsed([
+        envelope("cam-1", { name: "Camera One", manufacturerName: "Hikvision" }),
+        envelope("cam-2", { name: "Camera Two", manufacturerName: "Hikvision" }),
+      ]),
+      {
+        sourceId: "source-1",
+        acquisitionRunId: "run-1",
+      },
+    );
+
+    expect(upload.newRecords).toBe(2);
+    expect(upload.results.every((result) => result.ingestionRecord?.status === "RECEIVED")).toBe(true);
+
+    const runs = batchStatusRepository([
+      bulkRun({
+        id: "run-1",
+        status: "COMPLETED",
+        stagedCount: 2,
+        policySnapshot: {
+          mode: "BULK_JSONL",
+          batchExternalKey: "WIZARD_BATCH_001",
+          sourceNamespace: "VOKA_UCL_TEST",
+          chunk: { index: 1, count: 1, recordCount: 2 },
+        },
+      }),
+    ]);
+
+    const journey = await new GetBatchWizardJourney(runs, repo as any).execute({
+      sourceId: "source-1",
+      batchExternalKey: "WIZARD_BATCH_001",
+      sourceNamespace: "VOKA_UCL_TEST",
+    });
+
+    expect(journey.overallStatus).toBe("READY_TO_PROCESS");
+    expect(journey.steps.find((step) => step.id === "FILE")?.state).toBe("COMPLETE");
+    expect(journey.steps.find((step) => step.id === "UPLOAD")?.state).toBe("COMPLETE");
+    expect(journey.steps.find((step) => step.id === "BATCH")?.state).toBe("COMPLETE");
+    expect(journey.steps.find((step) => step.id === "PROCESS")?.state).toBe("READY");
+    expect(journey.steps.find((step) => step.id === "STAGING")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "HIERARCHY")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "PRODUCTS")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "REVIEW")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "PUBLISH")?.state).toBe("LOCKED");
+    expect(journey.steps.find((step) => step.id === "STATUS_HISTORY")?.state).toBe("READY");
+
+    const history = await new ListBulkImportBatches(runs, repo as any).execute({
+      sourceId: "source-1",
+    });
+
+    expect(history.items).toHaveLength(1);
+    const historyItem = history.items[0];
+    expect(historyItem.status).not.toBe("COMPLETED");
+    expect(historyItem.status).toBe("READY_TO_PROCESS");
+    expect(historyItem.uploadStatus).toBe("COMPLETED");
+    expect(historyItem.completedChunks).toBe(1);
+    expect(historyItem.expectedChunks).toBe(1);
   });
 
   it("scopes durable wizard claims to the logical batch runs", () => {

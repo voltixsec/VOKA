@@ -1,4 +1,4 @@
-﻿import {
+import {
   timingSafeEqual,
 } from "node:crypto";
 
@@ -8,6 +8,7 @@ import {
 
 import { ListBulkImportBatches } from "@/features/universal-library/application/bulk-import/ListBulkImportBatches";
 import { PrismaBulkImportBatchHistoryRepository } from "@/features/universal-library/infrastructure/bulk-import/PrismaBulkImportBatchHistoryRepository";
+import { PrismaUniversalLibraryRepository } from "@/features/universal-library/infrastructure/prisma/PrismaUniversalLibraryRepository";
 import {
   apiSuccess,
   withPlatformAdminAuth,
@@ -124,6 +125,9 @@ export const GET =
         const useCase =
           new ListBulkImportBatches(
             new PrismaBulkImportBatchHistoryRepository(
+              prisma,
+            ),
+            new PrismaUniversalLibraryRepository(
               prisma,
             ),
           );

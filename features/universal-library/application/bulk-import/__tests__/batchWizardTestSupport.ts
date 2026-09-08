@@ -8,6 +8,7 @@ import {
 } from "../../../domain";
 import type { BulkImportRunRecord } from "../RunBulkImportFile";
 import type { IBulkImportBatchStatusRepository } from "../GetBulkImportBatchStatus";
+import type { IBulkImportBatchHistoryRepository } from "../ListBulkImportBatches";
 
 export function bulkRun(
   overrides: Partial<BulkImportRunRecord> = {},
@@ -366,9 +367,12 @@ export class InMemoryBulkWizardRepository
 
 export function batchStatusRepository(
   runs: BulkImportRunRecord[],
-): IBulkImportBatchStatusRepository {
+): IBulkImportBatchStatusRepository & IBulkImportBatchHistoryRepository {
   return {
     async findBatchRuns() {
+      return runs;
+    },
+    async findRecentBulkRuns() {
       return runs;
     },
   };
