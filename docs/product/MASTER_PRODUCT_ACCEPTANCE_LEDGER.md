@@ -1,3 +1,23 @@
+<!-- VOKA-PHASE4C-SECURITY-CORRECTION-01-STATUS-2026-09-09 -->
+
+## Phase 4C Security Correction 01 - 2026-09-09
+
+**IMPLEMENTED / OFFLINE FOCUSED VALIDATED / STANDARD VALIDATION PENDING.**
+
+- Official durable HEAD: `e708632a479d0157d58423eec92d61c4f9dd16a7`.
+- D1: UCL acquisition-run detail is now platform-admin gated.
+- D2: root `GET/POST /api/companies` is now platform-admin gated.
+- D3: protected nested dashboard paths now preserve safe `returnTo` through middleware.
+- UCL Review heading mojibake is corrected.
+- 56 focused offline tests passed; `git diff --check` passed.
+- Prisma generate, repository-wide typecheck, production build and DB-backed/full regression remain pending because the Arena environment could not download the Prisma engine.
+- Pending database validation must use a dedicated disposable test database only. The office/shared database must never be used for these tests.
+- `AUTH-DIRECT-ROUTE-GATE` remains OPEN until CEO live browser acceptance.
+- Sales Assistant and Quotation are CEO-FROZEN and must not be audited, modified, tested or reopened until explicit CEO instruction.
+- `LIVE-FAIL-001 / CEO-R1-030` Payment Registration remains RED / RELEASE BLOCKER.
+- Data Factory remains PAUSED.
+- Exact next action: standard validation on a disposable test database, then CEO live Phase 4C Auth/Security acceptance, then Phase 4D Remaining Visible V1 Modules.
+- No merge to main. No release tag.
 # VOKA — Master Product Acceptance Ledger
 
 <!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
