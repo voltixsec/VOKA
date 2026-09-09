@@ -20,6 +20,7 @@ import {
 } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
 import { CatalogItemModal } from "../../../components/catalog/CatalogItemModal";
+import { CatalogXlsxPanel } from "../../../components/catalog/CatalogXlsxPanel";
 import { catalogFallbackDisclosure } from "@/lib/i18n/display-labels";
 
 type CatalogItemType = "PRODUCT" | "SERVICE";
@@ -311,7 +312,13 @@ export default function ProductsPage() {
           />
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <CatalogXlsxPanel
+            isArabic={isArabic}
+            search={search}
+            filterType={filterType}
+            onImported={loadData}
+          />
           <Button type="button" variant="secondary" onClick={() => openCreateModal("SERVICE")}>
             {t("+ خدمة جديدة", "+ Add Service")}
           </Button>
