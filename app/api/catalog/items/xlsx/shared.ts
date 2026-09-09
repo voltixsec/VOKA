@@ -37,7 +37,7 @@ export async function loadCatalogXlsxLookups(companyId: string): Promise<Catalog
   };
 }
 
-export async function parseCatalogUpload(form: FormData) {
+export async function parseCatalogWorkbookFile(form: FormData) {
   const file = form.get("file");
   if (!(file instanceof File)) throw ApiError.badRequest("CATALOG_XLSX_FILE_REQUIRED", "An .xlsx file is required.");
   if (!file.name.toLowerCase().endsWith(".xlsx")) {
@@ -54,6 +54,11 @@ export async function parseCatalogUpload(form: FormData) {
     throw ApiError.badRequest("CATALOG_XLSX_UNREADABLE", "Workbook could not be read.");
   }
   if (!parsed.headers.length) throw ApiError.badRequest("CATALOG_XLSX_NO_HEADERS", "Workbook has no header row.");
+  return { parsed, buffer };
+}
+
+export async function parseCatalogUpload(form: FormData) {
+  const { parsed } = await parseCatalogWorkbookFile(form);
   if (!parsed.rows.length) throw ApiError.badRequest("CATALOG_XLSX_NO_ROWS", "Workbook has no usable rows.");
   if (parsed.rows.length > CATALOG_XLSX_MAX_ROWS) {
     throw ApiError.badRequest("CATALOG_XLSX_TOO_MANY_ROWS", `At most ${CATALOG_XLSX_MAX_ROWS} rows can be imported.`);

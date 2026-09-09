@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
+import { displayLabel } from "@/lib/i18n/display-labels";
 import {
   CATALOG_XLSX_FIELDS,
-  CATALOG_XLSX_HEADERS,
+  CATALOG_XLSX_FIELD_LABELS,
   REQUIRED_CATALOG_XLSX_FIELDS,
   autoMapCatalogHeaders,
   type CatalogXlsxField,
@@ -61,18 +62,23 @@ export function CatalogXlsxPanel({
   }
 
   async function readHeaders(next: File) {
-    const ExcelJS = await import("exceljs");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await next.arrayBuffer());
-    const sheet = workbook.getWorksheet("Catalog") ?? workbook.worksheets[0];
-    const names: string[] = [];
-    sheet?.getRow(1).eachCell((cell) => {
-      const value = String(cell.value ?? "").trim();
-      if (value) names.push(value);
-    });
-    setHeaders(names);
-    setMapping(autoMapCatalogHeaders(names));
-    setStep("map");
+    try {
+      setBusy(true);
+      setError("");
+      const body = new FormData();
+      body.set("file", next);
+      const response = await fetch("/api/catalog/items/xlsx/parse-headers", { method: "POST", body });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error?.message ?? t("تعذر قراءة العناوين", "Could not read headers"));
+      const names: string[] = Array.isArray(json.data?.headers) ? json.data.headers : [];
+      setHeaders(names);
+      setMapping(autoMapCatalogHeaders(names));
+      setStep("map");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("تعذر قراءة العناوين", "Could not read headers"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runPreview() {
@@ -181,7 +187,7 @@ export function CatalogXlsxPanel({
             {CATALOG_XLSX_FIELDS.map((field) => (
               <label key={field} className="grid gap-1 text-sm text-slate-300">
                 <span>
-                  {CATALOG_XLSX_HEADERS[field]}
+                  {isArabic ? CATALOG_XLSX_FIELD_LABELS[field].ar : CATALOG_XLSX_FIELD_LABELS[field].en}
                   {REQUIRED_CATALOG_XLSX_FIELDS.includes(field) ? " *" : ""}
                 </span>
                 <select

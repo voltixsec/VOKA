@@ -89,6 +89,7 @@ model Company {
   authorizedSignatories    AuthorizedSignatory[]
   drawingTakeoffSessions   DrawingTakeoffSession[]
   universalAdoptions       UniversalItemAdoption[]
+  universalLibrarySectors  CompanyUniversalLibrarySector[]
   localizedContents        LocalizedContent[]
   notifications            Notification[]
   createdAt                DateTime                        @default(now())
@@ -1756,6 +1757,17 @@ model UniversalItemProvenance {
   @@index([universalItemId])
   @@index([sourceId])
   @@index([acquisitionRunId])
+}
+
+model CompanyUniversalLibrarySector {
+  id         String   @id @default(cuid())
+  companyId  String
+  sectorCode String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([companyId, sectorCode])
+  @@index([companyId])
 }
 
 model UniversalItemAdoption {

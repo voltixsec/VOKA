@@ -17,6 +17,8 @@ describe('user-visible domain labels', () => {
     expect(displayLabel('ISSUED', 'ar')).toBe('صادرة');
     expect(displayLabel('UNPAID', 'ar')).toBe('غير مدفوعة');
     expect(displayLabel('DIRECT', 'ar')).toBe('مباشرة');
+    expect(displayLabel('PERCENTAGE', 'ar')).toBe('نسبة مئوية');
+    expect(displayLabel('CODE_REQUIRED', 'ar')).toBe('الكود مطلوب');
     expect(displayLabel('ISSUED', 'en')).toBe('Issued');
     expect(displayActorName('System Administrator', 'ar')).toBe('مسؤول النظام');
   });

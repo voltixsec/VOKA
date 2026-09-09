@@ -52,6 +52,27 @@ export const CATALOG_XLSX_HEADERS: Record<CatalogXlsxField, string> = {
   notes: "Notes",
 };
 
+export const CATALOG_XLSX_FIELD_LABELS: Record<CatalogXlsxField, { ar: string; en: string }> = {
+  type: { ar: "النوع", en: "Type" },
+  code: { ar: "الكود", en: "Code" },
+  name: { ar: "الاسم", en: "Name" },
+  nameAr: { ar: "الاسم بالعربية", en: "Name AR" },
+  nameEn: { ar: "الاسم بالإنجليزية", en: "Name EN" },
+  salePrice: { ar: "سعر البيع", en: "Sale Price" },
+  purchasePrice: { ar: "سعر الشراء", en: "Purchase Price" },
+  sku: { ar: "رمز المخزون", en: "SKU" },
+  barcode: { ar: "الباركود", en: "Barcode" },
+  unit: { ar: "الوحدة", en: "Unit" },
+  taxRate: { ar: "الضريبة", en: "Tax Rate" },
+  description: { ar: "الوصف", en: "Description" },
+  descriptionAr: { ar: "الوصف بالعربية", en: "Description AR" },
+  descriptionEn: { ar: "الوصف بالإنجليزية", en: "Description EN" },
+  trackInventory: { ar: "تتبع المخزون", en: "Track Inventory" },
+  allowDiscount: { ar: "السماح بالخصم", en: "Allow Discount" },
+  active: { ar: "نشط", en: "Active" },
+  notes: { ar: "ملاحظات", en: "Notes" },
+};
+
 export const REQUIRED_CATALOG_XLSX_FIELDS: CatalogXlsxField[] = ["type", "code", "name"];
 
 const ALLOWED_TYPES: CatalogItemType[] = [

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Button, Input, Modal } from "@/components/ui";
+import { UNIVERSAL_LIBRARY_SECTORS } from "@/features/universal-library/application/companySectors";
 import type { UniversalProduct } from "./UniversalLibraryProductsBrowser";
 
 type Option = { id: string; name: string; nameAr?: string | null; nameEn?: string | null };
@@ -15,7 +16,7 @@ export default function UniversalLibraryAdoptionBrowser() {
   const t = (ar: string, en: string) => isArabic ? ar : en;
   const [items, setItems] = useState<UniversalProduct[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<UniversalProduct | null>(null);
   const [adopted, setAdopted] = useState<Record<string, CatalogResult>>({});
@@ -25,6 +26,11 @@ export default function UniversalLibraryAdoptionBrowser() {
   const [taxRateId, setTaxRateId] = useState("");
   const [units, setUnits] = useState<Option[]>([]);
   const [taxes, setTaxes] = useState<Option[]>([]);
+  const [sectors, setSectors] = useState<string[]>([]);
+  const [sectorDraft, setSectorDraft] = useState<string[]>([]);
+  const [sectorsReady, setSectorsReady] = useState(false);
+  const [sectorError, setSectorError] = useState("");
+  const [savingSectors, setSavingSectors] = useState(false);
   const [saving, setSaving] = useState(false);
   const submitting = useRef(false);
   const [modalError, setModalError] = useState("");
@@ -49,11 +55,35 @@ export default function UniversalLibraryAdoptionBrowser() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(undefined, controller.signal);
+    void (async () => {
+      try {
+        const response = await fetch("/api/universal-library/company-sectors", { cache: "no-store", signal: controller.signal });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || t("تعذر تحميل القطاعات", "Could not load sectors."));
+        const selected = Array.isArray(body.data?.selected) ? body.data.selected as string[] : [];
+        if (!controller.signal.aborted) {
+          setSectors(selected);
+          setSectorDraft(selected);
+          setSectorsReady(true);
+        }
+      } catch (caught) {
+        if (!controller.signal.aborted) {
+          setSectorError(caught instanceof Error ? caught.message : "Request failed");
+          setSectorsReady(true);
+        }
+      }
+    })();
     return () => controller.abort();
-    // The published list is language-independent; names are localized at render time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (sectors.length === 0) return;
+    const controller = new AbortController();
+    void load(undefined, controller.signal);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectors.join(",")]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -104,13 +134,61 @@ export default function UniversalLibraryAdoptionBrowser() {
     finally { submitting.current = false; setSaving(false); }
   }
 
+  async function saveSectors() {
+    try {
+      setSavingSectors(true);
+      setSectorError("");
+      const response = await fetch("/api/universal-library/company-sectors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectorCodes: sectorDraft }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || t("تعذر حفظ القطاعات", "Could not save sectors."));
+      setSectors(Array.isArray(body.data?.selected) ? body.data.selected : sectorDraft);
+    } catch (caught) {
+      setSectorError(caught instanceof Error ? caught.message : "Request failed");
+    } finally {
+      setSavingSectors(false);
+    }
+  }
+
+  function toggleSector(code: string) {
+    setSectorDraft((current) => {
+      if (current.includes(code)) return current.filter((item) => item !== code);
+      if (current.length >= 3) return current;
+      return [...current, code];
+    });
+  }
+
   return <section dir={isArabic ? "rtl" : "ltr"} className="space-y-6">
     <Link href="/dashboard/products" className="text-sky-300">{t("كتالوج الشركة", "Company Catalog")}</Link>
     <h1 className="text-3xl font-bold">{t("المكتبة العالمية", "Universal Library")}</h1>
-    <p className="text-slate-400">{t("استعرض الأصناف المنشورة وأضفها صراحةً إلى كتالوج شركتك. إعادة الإضافة تحفظ بيانات شركتك الحالية.", "Browse published items and explicitly add them to Company Catalog. Adding an existing item preserves your current company data.")}</p>
-    {error && <div role="alert">{error} <Button onClick={() => void load()}>{t("إعادة المحاولة", "Retry")}</Button></div>}
-    {loading && <p role="status">{t("جارٍ التحميل…", "Loading…")}</p>}
-    {!loading && !error && items.length === 0 && <p>{t("لا توجد أصناف منشورة", "No published items yet.")}</p>}
+    <p className="text-slate-400">{t("ثبّت قطاعاً واحداً على الأقل وثلاثة كحد أقصى. لا يتم نسخ أصناف المكتبة بالجملة إلى كتالوج الشركة.", "Install at least one sector and at most three. Library items are not mass-copied into Company Catalog.")}</p>
+    <div className="grid gap-3 md:grid-cols-3">
+      {UNIVERSAL_LIBRARY_SECTORS.map((sector) => {
+        const on = sectorDraft.includes(sector.code);
+        return (
+          <button
+            key={sector.code}
+            type="button"
+            onClick={() => toggleSector(sector.code)}
+            className={`rounded-xl border p-4 text-start ${on ? "border-sky-400 bg-sky-950" : "border-white/10 bg-slate-900"}`}
+          >
+            {isArabic ? sector.ar : sector.en}
+          </button>
+        );
+      })}
+    </div>
+    {sectorError ? <p role="alert" className="text-red-300">{sectorError}</p> : null}
+    <Button type="button" disabled={savingSectors || sectorDraft.length < 1} onClick={() => void saveSectors()}>
+      {t("تثبيت القطاعات", "Install sectors")}
+    </Button>
+    {!sectorsReady ? <p role="status">{t("جارٍ التحميل…", "Loading…")}</p> : null}
+    {sectors.length === 0 ? <p className="text-slate-400">{t("اختر قطاعات شركتك أولاً لتصفح الأصناف.", "Choose your company sectors first to browse items.")}</p> : null}
+    {sectors.length > 0 && error && <div role="alert">{error} <Button onClick={() => void load()}>{t("إعادة المحاولة", "Retry")}</Button></div>}
+    {sectors.length > 0 && loading && <p role="status">{t("جارٍ التحميل…", "Loading…")}</p>}
+    {sectors.length > 0 && !loading && !error && items.length === 0 && <p>{t("لا توجد أصناف منشورة", "No published items yet.")}</p>}
     <div className="grid gap-4 md:grid-cols-2">{items.map(item => {
       const result = adopted[item.id];
       return <article key={item.id} className="space-y-3 rounded-xl border border-white/10 bg-slate-900 p-5">
