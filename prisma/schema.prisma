@@ -1404,6 +1404,7 @@ model UniversalCategory {
   source               UniversalSource?               @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   items                UniversalCatalogItem[]
   attributeDefinitions UniversalAttributeDefinition[]
+  companyLibrarySectors CompanyUniversalLibrarySector[]
 
   @@unique([code])
   @@unique([sourceId, sourceExternalId])
@@ -1762,12 +1763,16 @@ model UniversalItemProvenance {
 model CompanyUniversalLibrarySector {
   id         String   @id @default(cuid())
   companyId  String
-  sectorCode String
+  categoryId String
+  isActive   Boolean  @default(true)
   company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category   UniversalCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  @@unique([companyId, sectorCode])
-  @@index([companyId])
+  @@unique([companyId, categoryId])
+  @@index([companyId, isActive])
+  @@index([categoryId])
 }
 
 model UniversalItemAdoption {

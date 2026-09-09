@@ -10,6 +10,7 @@ export type CompanyBrandRecord = {
   whatsapp?: string | null;
   logoUrl?: string | null;
   letterheadUrl?: string | null;
+  brandTheme?: string | null;
 };
 
 export type CompanyDocumentIdentity = {
@@ -21,6 +22,7 @@ export type CompanyDocumentIdentity = {
   whatsapp: string | null;
   logoUrl: string | null;
   letterheadUrl: string | null;
+  brandTheme: string | null;
 };
 
 export const COMPANY_IDENTITY_SELECT = {
@@ -35,6 +37,7 @@ export const COMPANY_IDENTITY_SELECT = {
   whatsapp: true,
   logoUrl: true,
   letterheadUrl: true,
+  brandTheme: true,
 } as const;
 
 export function localizeCompanyDocumentIdentity(
@@ -58,6 +61,7 @@ export function localizeCompanyDocumentIdentity(
     whatsapp: company?.whatsapp?.trim() || null,
     logoUrl: company?.logoUrl?.trim() || null,
     letterheadUrl: company?.letterheadUrl?.trim() || null,
+    brandTheme: company?.brandTheme ?? null,
   };
 }
 

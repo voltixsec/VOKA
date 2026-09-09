@@ -1,244 +1,498 @@
 import path from "node:path";
 import PDFDocument from "pdfkit";
+import { commercialUnitLabel } from "@/lib/i18n/unit-labels";
 import { displayLabel } from "@/lib/i18n/display-labels";
+import type { QuotationDocumentSnapshot } from "@/src/application/document";
+import { quotationTermsPresentation } from "@/src/application/document/quotation-terms-presentation";
 import {
-  decodeCompanyDocumentImage,
-  type CompanyDocumentIdentity,
-} from "@/lib/documents/company-document-identity";
+  columnPositions,
+  drawTotals,
+  proposalBoqItemText,
+} from "@/src/infrastructure/document/pdfkit/ProposalPdfBoq";
+import {
+  LETTERHEAD_SAFE_AREA,
+  PROPOSAL_COLOR,
+  PROPOSAL_TEXT,
+  configureProposalTextDirection,
+  decodeProposalImageDataUrl,
+  drawProposalCard,
+  drawProposalCompanyApproval,
+  drawProposalLetterhead,
+  drawProposalSubject,
+  formatProposalDate,
+  formatProposalMoney,
+  proposalAlignment,
+  proposalBrand,
+  proposalScopeLabel,
+  proposalTextOptions,
+  type ProposalPdfDocument,
+  type ProposalSnapshot,
+} from "@/src/infrastructure/document/pdfkit/ProposalPdfShared";
 
-const COLOR = {
-  navy: "#0f172a",
-  gold: "#c9a227",
-  blue: "#0369a1",
-  muted: "#64748b",
-  line: "#cbd5e1",
-  pale: "#f8fafc",
-  lightBlue: "#f0f9ff",
-  white: "#ffffff",
-  slate: "#475569",
-} as const;
+export const COMMERCIAL_PDF_MARGINS = { top: 32, right: 38, bottom: 48, left: 38 } as const;
 
 export type CommercialPdfKind = "INVOICE" | "CONTRACT";
 
-export type CommercialPdfLine = {
-  position: number;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-};
-
-export type CommercialPdfInput = {
-  kind: CommercialPdfKind;
-  locale: "ar" | "en";
-  identity: CompanyDocumentIdentity;
-  number: string;
-  status: string;
-  settlementStatus?: string | null;
-  customerName: string;
-  dateLabel: string;
-  dateValue: string;
-  dueLabel?: string;
-  dueValue?: string;
-  currencyCode: string;
-  provenance?: string | null;
-  lines: CommercialPdfLine[];
-  subtotal: number;
-  discountAmount: number;
-  taxAmount: number;
-  totalAmount: number;
-  paidAmount?: number;
-  outstandingAmount?: number;
-  notes?: string | null;
-  terms?: string | null;
-  milestones?: Array<{ position: number; title: string; amount: string }>;
-};
-
-function t(locale: "ar" | "en", ar: string, en: string) {
-  return locale === "ar" ? ar : en;
+export function commercialDocumentTitle(kind: CommercialPdfKind, locale: "ar" | "en") {
+  if (kind === "INVOICE") return locale === "ar" ? "فاتورة" : "INVOICE";
+  return locale === "ar" ? "عقد" : "CONTRACT";
 }
 
-function money(value: number, currency: string) {
-  return `${currency} ${value.toFixed(3)}`;
+/** Same geometry as drawProposalHeader; only the document title differs. */
+export function drawCommercialHeader(
+  doc: ProposalPdfDocument,
+  snapshot: ProposalSnapshot,
+  title: string,
+  hasLetterhead = false,
+): number {
+  const locale = snapshot.locale;
+  const brand = proposalBrand(snapshot);
+  const company = snapshot.company;
+  const pageWidth = doc.page.width;
+  const left = 38;
+  const right = 38;
+  const usableWidth = pageWidth - left - right;
+  const headerHeight = 132;
+
+  if (hasLetterhead) {
+    doc.fillColor(brand.primary).fontSize(20).text(title, left, LETTERHEAD_SAFE_AREA.top + 4, proposalTextOptions("center", usableWidth, 24));
+    return LETTERHEAD_SAFE_AREA.top + 38;
+  }
+
+  const labels =
+    locale === "ar"
+      ? { poBox: "ص.ب", phone: "هاتف", mobile: "موبايل", whatsapp: "واتساب" }
+      : { poBox: "P.O. Box", phone: "Tel", mobile: "Mobile", whatsapp: "WhatsApp" };
+
+  const firstContactLine = [
+    company.poBox ? labels.poBox + ": " + company.poBox : null,
+    company.phone ? labels.phone + ": " + company.phone : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("   |   ");
+
+  const secondContactLine = [
+    company.mobile ? labels.mobile + ": " + company.mobile : null,
+    company.whatsapp ? labels.whatsapp + ": " + company.whatsapp : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("   |   ");
+
+  doc.rect(0, 0, pageWidth, headerHeight).fill(brand.primary);
+  doc.rect(0, headerHeight - 4, pageWidth, 4).fill(brand.accent);
+
+  const logo = decodeProposalImageDataUrl(company.logoUrl);
+  const logoWidth = 96;
+  const logoHeight = 52;
+  const gap = 24;
+  const companyWidth = usableWidth - logoWidth - gap;
+  const companyX = locale === "ar" ? pageWidth - right - companyWidth : left;
+  const logoX = locale === "ar" ? left : pageWidth - right - logoWidth;
+
+  if (logo) {
+    try {
+      doc.image(logo, logoX, 16, { fit: [logoWidth, logoHeight], align: "center", valign: "center" });
+    } catch {
+      /* Invalid logo data must not stop PDF generation. */
+    }
+  }
+
+  const align = locale === "ar" ? "right" : "left";
+  const headerTextColor = brand.textOnPrimary;
+
+  doc.fillColor(headerTextColor).fontSize(15).text(company.name, companyX, 12, proposalTextOptions(align, companyWidth, 18));
+  if (company.address) {
+    doc.fillColor(headerTextColor).fontSize(8.5).text(company.address, companyX, 34, proposalTextOptions(align, companyWidth, 16));
+  }
+  if (firstContactLine) {
+    doc.fillColor(headerTextColor).fontSize(8).text(firstContactLine, companyX, 54, proposalTextOptions(align, companyWidth, 10));
+  }
+  if (secondContactLine) {
+    doc.fillColor(headerTextColor).fontSize(8).text(secondContactLine, companyX, 68, proposalTextOptions(align, companyWidth, 10));
+  }
+  doc.fillColor(headerTextColor).fontSize(24).text(title, left, 76, proposalTextOptions("center", usableWidth, 20));
+  return 146;
 }
 
-function textOpts(align: "left" | "right" | "center", width: number, height?: number): PDFKit.Mixins.TextOptions {
-  return { width, align, lineBreak: true, features: ["rlig", "calt", "liga"], ...(height ? { height, ellipsis: true } : {}) };
+function drawField(
+  doc: ProposalPdfDocument,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  width: number,
+  align: "left" | "right",
+): void {
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(7).text(label, x, y, proposalTextOptions(align, width));
+  doc.fillColor(PROPOSAL_COLOR.navy).fontSize(9).text(value || "-", x, y + 15, proposalTextOptions(align, width, 27));
 }
 
-export async function renderCommercialPdf(input: CommercialPdfInput): Promise<Buffer> {
-  const locale = input.locale;
-  const ar = locale === "ar";
-  const align = ar ? "right" : "left";
-  const title = input.kind === "INVOICE" ? t(locale, "فاتورة", "INVOICE") : t(locale, "عقد", "CONTRACT");
-  const doc = new PDFDocument({ size: "A4", margin: 38, info: { Title: `${title} ${input.number}`, Author: input.identity.name } });
+function drawCompactField(
+  doc: ProposalPdfDocument,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  width: number,
+  align: "left" | "right",
+): void {
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(6.5).text(label, x, y, proposalTextOptions(align, width));
+  doc.fillColor(PROPOSAL_COLOR.navy).fontSize(8).text(value || "-", x, y + 14, proposalTextOptions(align, width, 20));
+}
+
+function drawCoverCommercialSummary(doc: ProposalPdfDocument, snapshot: ProposalSnapshot, y: number, compactForLetterhead = false): number {
+  const locale = snapshot.locale;
+  const quote = snapshot.quotation;
+  const brand = proposalBrand(snapshot);
+  const left = 38;
+  const width = doc.page.width - 76;
+  const align = locale === "ar" ? "right" : "left";
+  const notes = locale === "ar" ? quote.notesAr || quote.notes || null : quote.notesEn || quote.notes || null;
+  const terms = locale === "ar" ? quote.termsAndConditionsAr || quote.termsAndConditions || null : quote.termsAndConditionsEn || quote.termsAndConditions || null;
+  const notesLabel = locale === "ar" ? "ملاحظات" : "Notes";
+  const termsLabel = locale === "ar" ? "الشروط والأحكام" : "Terms and conditions";
+  const netLabel = locale === "ar" ? "صافي قيمة عرض السعر" : "Net proposal value";
+  let currentY = y;
+
+  if (notes) {
+    const notesHeight = compactForLetterhead ? 60 : 68;
+    drawProposalCard(doc, left, currentY, width, notesHeight, brand.soft);
+    doc.fillColor(brand.primary).fontSize(8).text(notesLabel, left + 14, currentY + 10, proposalTextOptions(align, width - 28, 14));
+    doc.fillColor(PROPOSAL_COLOR.slate).fontSize(8).text(notes, left + 14, currentY + 29, proposalTextOptions(align, width - 28, 30));
+    currentY += notesHeight + (compactForLetterhead ? 6 : 10);
+  }
+
+  if (terms) {
+    const displayTerms = quotationTermsPresentation(terms).text;
+    doc.fontSize(8);
+    const textHeight = doc.heightOfString(displayTerms, { width: width - 28, align });
+    const availableHeight = doc.page.height - 82 - (compactForLetterhead ? 56 : 70) - currentY;
+    const termsHeight = Math.max(compactForLetterhead ? 74 : 86, Math.min(textHeight + 42, availableHeight));
+    drawProposalCard(doc, left, currentY, width, termsHeight, PROPOSAL_COLOR.pale);
+    doc.fillColor(brand.primary).fontSize(8).text(termsLabel, left + 14, currentY + 10, proposalTextOptions(align, width - 28, 14));
+    doc.fillColor(PROPOSAL_COLOR.slate).fontSize(8).text(displayTerms, left + 14, currentY + 29, proposalTextOptions(align, width - 28, termsHeight - 38));
+    currentY += termsHeight + (compactForLetterhead ? 6 : 12);
+  }
+
+  const valueHeight = compactForLetterhead ? 50 : 58;
+  doc.roundedRect(left, currentY, width, valueHeight, 8).fill(brand.primary);
+  doc.fillColor(brand.textOnPrimary).fontSize(8).text(netLabel, left + 16, currentY + 10, proposalTextOptions(locale === "ar" ? "right" : "left", width - 32, 14));
+  doc.fillColor(brand.textOnPrimary).fontSize(15).text(
+    formatProposalMoney(quote.totals.totalAmount, quote.currencyCode),
+    left + 16,
+    currentY + (compactForLetterhead ? 24 : 28),
+    proposalTextOptions(locale === "ar" ? "left" : "right", width - 32, 22),
+  );
+  return currentY + valueHeight;
+}
+
+function drawCommercialCover(doc: ProposalPdfDocument, snapshot: ProposalSnapshot, title: string): boolean {
+  const locale = snapshot.locale;
+  const quote = snapshot.quotation;
+  const text = PROPOSAL_TEXT[locale];
+  const align = proposalAlignment(locale);
+  const left = 38;
+  const width = doc.page.width - 76;
+  const hasLetterhead = drawProposalLetterhead(doc, snapshot);
+  let y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
+  y = drawProposalSubject(doc, snapshot, y);
+
+  drawProposalCard(doc, left, y, width, 116);
+  const gap = 14;
+  const columnWidth = (width - gap * 2) / 3;
+  drawField(doc, text.reference, quote.number, left + 12, y + 13, columnWidth - 18, align);
+  drawField(doc, text.issueDate, formatProposalDate(quote.issueDate), left + columnWidth + gap + 6, y + 13, columnWidth - 18, align);
+  if (quote.expiryDate || locale !== "en") {
+    drawField(doc, text.expiryDate, formatProposalDate(quote.expiryDate), left + (columnWidth + gap) * 2, y + 13, columnWidth - 18, align);
+  }
+  drawField(doc, text.customer, quote.customer.name, left + 12, y + 65, columnWidth - 18, align);
+  drawField(
+    doc,
+    text.project,
+    (locale === "ar" ? quote.projectNameAr || quote.projectName : quote.projectNameEn || quote.projectName) || "-",
+    left + columnWidth + gap + 6,
+    y + 65,
+    columnWidth - 18,
+    align,
+  );
+  drawField(
+    doc,
+    text.attention,
+    (locale === "ar" ? quote.attentionNameAr || quote.attentionName : quote.attentionNameEn || quote.attentionName) || "-",
+    left + (columnWidth + gap) * 2,
+    y + 65,
+    columnWidth - 18,
+    align,
+  );
+  y += 128;
+
+  drawProposalCard(doc, left, y, width, 132);
+  drawField(doc, text.scope, proposalScopeLabel(quote.scopeType, locale), left + 14, y + 13, width - 28, align);
+  doc.moveTo(left + 14, y + 56).lineTo(left + width - 14, y + 56).lineWidth(0.4).strokeColor(PROPOSAL_COLOR.line).stroke();
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(10.5).text(text.brief, left + 14, y + 67, proposalTextOptions(align, width - 28));
+  const brief = locale === "ar" ? quote.briefAr : quote.briefEn;
+  doc.fillColor(PROPOSAL_COLOR.navy).fontSize(10.5).text(brief || "-", left + 14, y + 87, proposalTextOptions(align, width - 28, 34));
+  y += 144 + 14;
+  drawCoverCommercialSummary(doc, snapshot, y, hasLetterhead);
+  return hasLetterhead;
+}
+
+function drawCommercialBoq(doc: ProposalPdfDocument, snapshot: ProposalSnapshot, title: string): boolean[] {
+  const letterheadFlags: boolean[] = [];
+  const startPage = () => {
+    const hasLetterhead = drawProposalLetterhead(doc, snapshot);
+    letterheadFlags.push(hasLetterhead);
+    return hasLetterhead;
+  };
+
+  doc.addPage();
+  let hasLetterhead = startPage();
+  const quote = snapshot.quotation;
+  const locale = snapshot.locale;
+  const brand = proposalBrand(snapshot);
+  const text = PROPOSAL_TEXT[locale];
+  const align = proposalAlignment(locale);
+  const left = 38;
+  const totalWidth = doc.page.width - 76;
+  let y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
+  y = drawProposalSubject(doc, snapshot, y);
+
+  drawProposalCard(doc, left, y, totalWidth, 58);
+  const metaWidth = totalWidth / 4;
+  drawCompactField(doc, text.reference, quote.number, left + 9, y + 9, metaWidth - 18, align);
+  drawCompactField(doc, text.customer, quote.customer.name, left + metaWidth + 9, y + 9, metaWidth - 18, align);
+  drawCompactField(
+    doc,
+    text.project,
+    (locale === "ar" ? quote.projectNameAr || quote.projectName : quote.projectNameEn || quote.projectName) || "-",
+    left + metaWidth * 2 + 9,
+    y + 9,
+    metaWidth - 18,
+    align,
+  );
+  drawCompactField(doc, text.scope, proposalScopeLabel(quote.scopeType, locale), left + metaWidth * 3 + 9, y + 9, metaWidth - 18, align);
+  y += 68;
+
+  const columns = [
+    { width: totalWidth * 0.4, align },
+    { width: totalWidth * 0.11, align: "center" as const },
+    { width: totalWidth * 0.1, align: "right" as const },
+    { width: totalWidth * 0.17, align: "right" as const },
+    { width: totalWidth * 0.1, align: "right" as const },
+    { width: totalWidth * 0.12, align: "right" as const },
+  ];
+  const positions = columnPositions(locale, left, totalWidth, columns);
+  const headers = [text.item, text.unit, text.quantity, text.unitPrice, text.tax, text.total];
+
+  const drawTableHead = () => {
+    doc.rect(left, y, totalWidth, 24).fill(brand.softStrong);
+    headers.forEach((header, index) => {
+      doc.fillColor(PROPOSAL_COLOR.navy).fontSize(6.8).text(header, positions[index] + 4, y + 7, proposalTextOptions(columns[index].align, columns[index].width - 8, 12));
+    });
+    y += 24;
+  };
+  drawTableHead();
+
+  const lineCount = Math.max(quote.lines.length, 1);
+  const rowHeight = Math.max(12, Math.min(30, 150 / lineCount));
+  const itemFontSize = rowHeight >= 25 ? 7.2 : rowHeight >= 18 ? 6.2 : 5.2;
+  const pageBottom = doc.page.height - 80;
+
+  quote.lines.forEach((line, rowIndex) => {
+    if (y + rowHeight > pageBottom) {
+      doc.addPage();
+      hasLetterhead = startPage();
+      y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
+      drawTableHead();
+    }
+    if (rowIndex % 2 === 1) doc.rect(left, y, totalWidth, rowHeight).fill("#fbfdff");
+    doc.fillColor(PROPOSAL_COLOR.navy).fontSize(itemFontSize).text(
+      proposalBoqItemText(line, locale),
+      positions[0] + 4,
+      y + 4,
+      proposalTextOptions(align, columns[0].width - 8, Math.max(8, rowHeight - 7)),
+    );
+    const values = [
+      commercialUnitLabel(line, locale === "ar") || "-",
+      String(line.quantity),
+      formatProposalMoney(line.unitPrice, quote.currencyCode),
+      formatProposalMoney(line.taxAmount, quote.currencyCode),
+      formatProposalMoney(line.totalAmount, quote.currencyCode),
+    ];
+    values.forEach((value, valueIndex) => {
+      const columnIndex = valueIndex + 1;
+      doc.fillColor(PROPOSAL_COLOR.navy).fontSize(itemFontSize).text(
+        value,
+        positions[columnIndex] + (locale === "en" ? 6 : 3),
+        y + 4,
+        proposalTextOptions(columns[columnIndex].align, columns[columnIndex].width - (locale === "en" ? 12 : 6), Math.max(8, rowHeight - 7)),
+      );
+    });
+    doc.moveTo(left, y + rowHeight).lineTo(left + totalWidth, y + rowHeight).lineWidth(0.35).strokeColor(PROPOSAL_COLOR.line).stroke();
+    y += rowHeight;
+  });
+
+  y += 8;
+  if (y > pageBottom - 80) {
+    doc.addPage();
+    hasLetterhead = startPage();
+    y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
+  }
+  y = drawTotals(doc, snapshot, y) + 8;
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(6.2).text(text.continuation, left + 14, y + 5, proposalTextOptions("center", totalWidth - 28, 12));
+  y += 28;
+  if (snapshot.quotation.status === "APPROVED" && snapshot.quotation.approvedAt) {
+    drawProposalCompanyApproval(doc, snapshot, y, 112, null);
+  }
+  return letterheadFlags;
+}
+
+function decoratePages(doc: ProposalPdfDocument, snapshot: ProposalSnapshot, letterheadPages: readonly boolean[]): void {
+  const range = doc.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    doc.switchToPage(range.start + index);
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    if (letterheadPages[index]) {
+      doc.fillColor(PROPOSAL_COLOR.muted).fontSize(5.8).text(
+        `${snapshot.quotation.number} · ${String(index + 1)} / ${String(range.count)}`,
+        38,
+        pageHeight - LETTERHEAD_SAFE_AREA.bottom - LETTERHEAD_SAFE_AREA.traceOffset,
+        { width: pageWidth - 76, align: "center", lineBreak: false },
+      );
+      continue;
+    }
+    const left = 38;
+    const width = pageWidth - 76;
+    const lineY = pageHeight - 72;
+    const textY = pageHeight - 63;
+    doc.save();
+    doc.moveTo(left, lineY).lineTo(left + width, lineY).lineWidth(0.35).strokeColor(PROPOSAL_COLOR.line).stroke();
+    doc.fillColor(PROPOSAL_COLOR.muted).fontSize(5.8).text(
+      snapshot.company.name + " — " + snapshot.quotation.number,
+      left,
+      textY,
+      { width: 210, align: "left", lineBreak: false },
+    );
+    doc.fillColor(PROPOSAL_COLOR.muted).fontSize(5.8).text(
+      String(index + 1) + " / " + String(range.count),
+      pageWidth / 2 - 30,
+      textY,
+      { width: 60, align: "center", lineBreak: false },
+    );
+    doc.restore();
+  }
+}
+
+export async function renderCommercialProposalPdf(snapshot: ProposalSnapshot, kind: CommercialPdfKind): Promise<Buffer> {
+  const title = commercialDocumentTitle(kind, snapshot.locale);
+  const doc = new PDFDocument({
+    size: "A4",
+    margins: { ...COMMERCIAL_PDF_MARGINS },
+    bufferPages: true,
+    autoFirstPage: true,
+    info: {
+      Title: `${title} ${snapshot.quotation.number}`,
+      Author: snapshot.company.name,
+      Subject: snapshot.locale === "ar" ? snapshot.quotation.subjectAr || title : snapshot.quotation.subjectEn || title,
+    },
+  });
   const chunks: Buffer[] = [];
-  doc.on("data", (x) => chunks.push(Buffer.from(x)));
-  const done = new Promise<Buffer>((resolve, reject) => {
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const completed = new Promise<Buffer>((resolve, reject) => {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
   });
   doc.registerFont("VOKA", path.join(process.cwd(), "assets", "fonts", "Cairo-Variable.ttf")).font("VOKA");
-
-  const pageWidth = doc.page.width;
-  const left = 38;
-  const usable = pageWidth - 76;
-  const letterhead = decodeCompanyDocumentImage(input.identity.letterheadUrl);
-  let y = 16;
-  if (letterhead) {
-    try {
-      doc.image(letterhead, 0, 0, { fit: [pageWidth, doc.page.height], align: "center", valign: "center" });
-      y = 124;
-    } catch {
-      y = 16;
-    }
-  } else {
-    doc.rect(0, 0, pageWidth, 132).fill(COLOR.navy);
-    doc.rect(0, 128, pageWidth, 4).fill(COLOR.gold);
-    const logo = decodeCompanyDocumentImage(input.identity.logoUrl);
-    const logoW = 96;
-    const companyW = usable - logoW - 24;
-    const companyX = ar ? pageWidth - 38 - companyW : left;
-    const logoX = ar ? left : pageWidth - 38 - logoW;
-    if (logo) {
-      try {
-        doc.image(logo, logoX, 16, { fit: [logoW, 52], align: "center", valign: "center" });
-      } catch {
-        /* ignore invalid logo */
-      }
-    }
-    doc.fillColor(COLOR.white).fontSize(15).text(input.identity.name, companyX, 12, textOpts(align, companyW, 18));
-    if (input.identity.address) {
-      doc.fontSize(8.5).text(input.identity.address, companyX, 34, textOpts(align, companyW, 16));
-    }
-    const contact = [
-      input.identity.poBox ? `${t(locale, "ص.ب", "P.O. Box")}: ${input.identity.poBox}` : null,
-      input.identity.phone ? `${t(locale, "هاتف", "Tel")}: ${input.identity.phone}` : null,
-      input.identity.mobile ? `${t(locale, "موبايل", "Mobile")}: ${input.identity.mobile}` : null,
-    ]
-      .filter(Boolean)
-      .join("   |   ");
-    if (contact) doc.fontSize(8).text(contact, companyX, 54, textOpts(align, companyW, 12));
-    y = 146;
-  }
-
-  doc.fillColor(COLOR.navy).fontSize(20).text(title, left, y, textOpts("center", usable, 24));
-  y += 32;
-  doc.fontSize(11).fillColor(COLOR.blue).text(input.number, left, y, textOpts("center", usable, 16));
-  y += 28;
-
-  const cardH = input.dueValue ? 88 : 72;
-  doc.roundedRect(left, y, usable, cardH, 7).fill(COLOR.pale);
-  doc.roundedRect(left, y, usable, cardH, 7).lineWidth(0.6).strokeColor(COLOR.line).stroke();
-  const statusText = [displayLabel(input.status, locale), input.settlementStatus ? displayLabel(input.settlementStatus, locale) : null]
-    .filter(Boolean)
-    .join(" · ");
-  const meta = [
-    `${t(locale, "الحالة", "Status")}: ${statusText}`,
-    `${t(locale, "العميل", "Customer")}: ${input.customerName}`,
-    `${input.dateLabel}: ${input.dateValue}`,
-    input.dueLabel && input.dueValue ? `${input.dueLabel}: ${input.dueValue}` : null,
-    `${t(locale, "العملة", "Currency")}: ${input.currencyCode}`,
-    input.provenance ? `${t(locale, "المصدر", "Source")}: ${input.provenance}` : null,
-  ].filter((row): row is string => Boolean(row));
-  meta.forEach((row, i) => {
-    doc.fillColor(COLOR.slate).fontSize(9).text(row, left + 12, y + 8 + i * 12, textOpts(align, usable - 24, 12));
-  });
-  y += cardH + 14;
-
-  const cols = ar
-    ? [
-        { key: "total", w: 90 },
-        { key: "unit", w: 90 },
-        { key: "qty", w: 70 },
-        { key: "name", w: usable - 280 },
-        { key: "pos", w: 30 },
-      ]
-    : [
-        { key: "pos", w: 30 },
-        { key: "name", w: usable - 280 },
-        { key: "qty", w: 70 },
-        { key: "unit", w: 90 },
-        { key: "total", w: 90 },
-      ];
-  const headers: Record<string, string> = {
-    pos: "#",
-    name: t(locale, "البند", "Item"),
-    qty: t(locale, "الكمية", "Qty"),
-    unit: t(locale, "سعر الوحدة", "Unit price"),
-    total: t(locale, "الإجمالي", "Total"),
-  };
-  const drawHead = () => {
-    doc.rect(left, y, usable, 22).fill(COLOR.navy);
-    let x = left;
-    cols.forEach((col) => {
-      doc.fillColor(COLOR.white).fontSize(8).text(headers[col.key], x + 4, y + 6, textOpts(align, col.w - 8, 12));
-      x += col.w;
-    });
-    y += 22;
-  };
-  drawHead();
-  input.lines.forEach((line, index) => {
-    if (y > 720) {
-      doc.addPage();
-      y = 48;
-      drawHead();
-    }
-    if (index % 2 === 1) doc.rect(left, y, usable, 20).fill(COLOR.lightBlue);
-    const cells: Record<string, string> = {
-      pos: String(line.position),
-      name: line.name,
-      qty: line.quantity.toFixed(3),
-      unit: money(line.unitPrice, input.currencyCode),
-      total: money(line.total, input.currencyCode),
-    };
-    let x = left;
-    cols.forEach((col) => {
-      doc.fillColor(COLOR.navy).fontSize(8).text(cells[col.key], x + 4, y + 5, textOpts(align, col.w - 8, 12));
-      x += col.w;
-    });
-    y += 20;
-  });
-
-  y += 12;
-  const totals = [
-    { label: t(locale, "المجموع الفرعي", "Subtotal"), value: money(input.subtotal, input.currencyCode), strong: false },
-    { label: t(locale, "الخصم", "Discount"), value: money(input.discountAmount, input.currencyCode), strong: false },
-    { label: t(locale, "الضريبة", "Tax"), value: money(input.taxAmount, input.currencyCode), strong: false },
-    { label: t(locale, "الإجمالي", "Total"), value: money(input.totalAmount, input.currencyCode), strong: true },
-  ];
-  if (input.paidAmount != null) totals.push({ label: t(locale, "المدفوع", "Paid"), value: money(input.paidAmount, input.currencyCode), strong: false });
-  if (input.outstandingAmount != null) {
-    totals.push({ label: t(locale, "المتبقي", "Outstanding"), value: money(input.outstandingAmount, input.currencyCode), strong: false });
-  }
-  const boxW = Math.min(280, usable);
-  const boxX = ar ? left : left + usable - boxW;
-  totals.forEach((row) => {
-    if (row.strong) doc.rect(boxX, y, boxW, 22).fill(COLOR.lightBlue);
-    doc.fillColor(row.strong ? COLOR.blue : COLOR.slate).fontSize(row.strong ? 10 : 8)
-      .text(row.label, boxX + 8, y + 5, textOpts(align, boxW * 0.45, 14));
-    doc.fillColor(row.strong ? COLOR.blue : COLOR.navy).fontSize(row.strong ? 10 : 8)
-      .text(row.value, boxX + boxW * 0.48, y + 5, textOpts(ar ? "left" : "right", boxW * 0.48, 14));
-    y += row.strong ? 22 : 18;
-  });
-
-  if (input.milestones?.length) {
-    y += 10;
-    doc.fillColor(COLOR.navy).fontSize(11).text(t(locale, "جدول الدفعات", "Milestones"), left, y, textOpts(align, usable, 16));
-    y += 18;
-    input.milestones.forEach((m) => {
-      doc.fillColor(COLOR.slate).fontSize(9).text(`${m.position}. ${m.title} — ${m.amount}`, left, y, textOpts(align, usable, 14));
-      y += 14;
-    });
-  }
-  if (input.notes) {
-    y += 8;
-    doc.fillColor(COLOR.navy).fontSize(10).text(`${t(locale, "ملاحظات", "Notes")}: ${input.notes}`, left, y, textOpts(align, usable));
-  }
-  if (input.terms) {
-    y += 16;
-    doc.fillColor(COLOR.navy).fontSize(10).text(`${t(locale, "الشروط والأحكام", "Terms and conditions")}: ${input.terms}`, left, y, textOpts(align, usable));
-  }
+  configureProposalTextDirection(doc, snapshot.locale);
+  const coverLetterhead = drawCommercialCover(doc, snapshot, title);
+  const boqLetterheads = drawCommercialBoq(doc, snapshot, title);
+  decoratePages(doc, snapshot, [coverLetterhead, ...boqLetterheads]);
   doc.end();
-  return done;
+  return completed;
 }
+
+export function commercialSnapshotFromParts(input: {
+  kind: CommercialPdfKind;
+  locale: "ar" | "en";
+  company: QuotationDocumentSnapshot["company"];
+  number: string;
+  status: string;
+  issueDate: Date;
+  dueDate?: Date | null;
+  currencyCode: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerTaxNo?: string | null;
+  billingAddress?: string | null;
+  subjectAr?: string | null;
+  subjectEn?: string | null;
+  briefAr?: string | null;
+  briefEn?: string | null;
+  projectName?: string | null;
+  projectNameAr?: string | null;
+  projectNameEn?: string | null;
+  attentionName?: string | null;
+  attentionNameAr?: string | null;
+  attentionNameEn?: string | null;
+  scopeType?: string | null;
+  lines: QuotationDocumentSnapshot["quotation"]["lines"];
+  discountType?: "FIXED" | "PERCENTAGE" | null;
+  discountValue?: number;
+  totals: { subtotal: number; discountAmount: number; taxAmount: number; totalAmount: number };
+  notes?: string | null;
+  notesAr?: string | null;
+  notesEn?: string | null;
+  terms?: string | null;
+  termsAr?: string | null;
+  termsEn?: string | null;
+}): ProposalSnapshot {
+  const titleAr = commercialDocumentTitle(input.kind, "ar");
+  const titleEn = commercialDocumentTitle(input.kind, "en");
+  return {
+    locale: input.locale,
+    company: input.company,
+    quotation: {
+      number: input.number,
+      revisionNumber: 0,
+      status: input.status,
+      issueDate: input.issueDate,
+      expiryDate: input.dueDate ?? null,
+      currencyCode: input.currencyCode,
+      subjectAr: input.subjectAr || titleAr,
+      subjectEn: input.subjectEn || titleEn,
+      briefAr: input.briefAr ?? null,
+      briefEn: input.briefEn ?? null,
+      projectName: input.projectName ?? null,
+      projectNameAr: input.projectNameAr ?? null,
+      projectNameEn: input.projectNameEn ?? null,
+      attentionName: input.attentionName ?? null,
+      attentionNameAr: input.attentionNameAr ?? null,
+      attentionNameEn: input.attentionNameEn ?? null,
+      scopeType: input.scopeType ?? null,
+      customer: {
+        name: input.customerName,
+        email: input.customerEmail ?? null,
+        phone: input.customerPhone ?? null,
+        taxNumber: input.customerTaxNo ?? null,
+        billingAddress: input.billingAddress ?? null,
+      },
+      lines: input.lines,
+      discount: input.discountType ? { type: input.discountType, value: input.discountValue ?? 0 } : null,
+      totals: input.totals,
+      notes: input.notes ?? null,
+      notesAr: input.notesAr ?? null,
+      notesEn: input.notesEn ?? null,
+      termsAndConditions: input.terms ?? null,
+      termsAndConditionsAr: input.termsAr ?? null,
+      termsAndConditionsEn: input.termsEn ?? null,
+      approvedAt: null,
+      approvedByName: null,
+      approvedByRole: null,
+    },
+    qrValue: "",
+  };
+}
+
+export { displayLabel };
