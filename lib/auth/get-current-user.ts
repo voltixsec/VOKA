@@ -20,6 +20,7 @@ export async function getCurrentUser(): Promise<AuthContext> {
 
   if (!accessToken) {
     throw ApiError.unauthorized(
+      'UNAUTHORIZED',
       'Authentication is required.',
     );
   }
@@ -35,6 +36,7 @@ export async function getCurrentUser(): Promise<AuthContext> {
       );
   } catch {
     throw ApiError.unauthorized(
+      'SESSION_INVALID_OR_EXPIRED',
       'The authentication session is invalid or expired.',
     );
   }
@@ -54,6 +56,7 @@ export async function getCurrentUser(): Promise<AuthContext> {
 
   if (!user || !user.isActive) {
     throw ApiError.unauthorized(
+      'USER_UNAVAILABLE',
       'The user account is unavailable or inactive.',
     );
   }

@@ -3,5 +3,5 @@
 export function unauthorized(
   message = 'Authentication is required.',
 ): never {
-  throw ApiError.unauthorized(message);
+  throw ApiError.unauthorized('UNAUTHORIZED', message);
 }

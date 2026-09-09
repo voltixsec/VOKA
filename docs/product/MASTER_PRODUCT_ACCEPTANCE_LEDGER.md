@@ -1,23 +1,23 @@
-<!-- VOKA-PHASE4C-SECURITY-CORRECTION-01-STATUS-2026-09-09 -->
+<!-- VOKA-PHASE4C-FINAL-VERIFICATION-2026-09-09 -->
 
-## Phase 4C Security Correction 01 - 2026-09-09
+## Current Phase 4C verification - 2026-09-09
 
-**IMPLEMENTED / OFFLINE FOCUSED VALIDATED / STANDARD VALIDATION PENDING.**
+**ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING.**
 
-- Official durable HEAD: `e708632a479d0157d58423eec92d61c4f9dd16a7`.
-- D1: UCL acquisition-run detail is now platform-admin gated.
-- D2: root `GET/POST /api/companies` is now platform-admin gated.
-- D3: protected nested dashboard paths now preserve safe `returnTo` through middleware.
-- UCL Review heading mojibake is corrected.
-- 56 focused offline tests passed; `git diff --check` passed.
-- Prisma generate, repository-wide typecheck, production build and DB-backed/full regression remain pending because the Arena environment could not download the Prisma engine.
-- Pending database validation must use a dedicated disposable test database only. The office/shared database must never be used for these tests.
-- `AUTH-DIRECT-ROUTE-GATE` remains OPEN until CEO live browser acceptance.
-- Sales Assistant and Quotation are CEO-FROZEN and must not be audited, modified, tested or reopened until explicit CEO instruction.
-- `LIVE-FAIL-001 / CEO-R1-030` Payment Registration remains RED / RELEASE BLOCKER.
-- Data Factory remains PAUSED.
-- Exact next action: standard validation on a disposable test database, then CEO live Phase 4C Auth/Security acceptance, then Phase 4D Remaining Visible V1 Modules.
-- No merge to main. No release tag.
+- Review baseline: `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`, official feature branch.
+- Unauthorized API code defect: FIXED. Four incorrect call signatures now separate stable machine codes from human messages; response envelope unchanged.
+- Validation: 96/96 tests in an explicit 16-file non-frozen allowlist PASS; typecheck, schema validation, production build and diff check PASS. No DB-backed tests ran.
+- CEO reported successful nested direct-route/returnTo, refresh recovery/failure, safe redirect, logout, logged-out API and platform-admin/ordinary OWNER checks. Those supplied live results are accepted evidence; they were not re-executed by this review.
+- `AUTH-DIRECT-ROUTE-GATE`: reported non-frozen nested route checks PASS. Full Phase 4C acceptance remains PARTIAL; cross-tenant live proof is PENDING.
+- D4: multi-membership selector DEFERRED / FAIL-CLOSED. D5: refresh revocation DEFERRED to Phase 5. D6: bounded 401 UX DEFERRED.
+- Payment `LIVE-FAIL-001 / CEO-R1-030`: current code path appears complete; no implementation needed from reviewed evidence. **CEO LIVE RE-ACCEPTANCE REQUIRED; release gate OPEN, not ACCEPTED/CLOSED.** Historical live failure remains evidence, not a new reproduction.
+- Sales Assistant and Quotation remain CEO-FROZEN. Data Factory remains PAUSED.
+- No office/shared DB touched; no merge, tag, push or Arena cherry-pick.
+
+Evidence, exact test allowlist, safety limits, accepted live checks and remaining payment scenario: [Phase 4C final verification checkpoint](../checkpoints/2026-09-09-phase4c-final-verification.md).
+
+This section supersedes earlier current-status claims about Phase 4C validation/auth acceptance and the payment implementation diagnosis. Historical entries below remain evidence and do not close the outstanding live gates.
+
 # VOKA — Master Product Acceptance Ledger
 
 <!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
