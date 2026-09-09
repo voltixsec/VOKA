@@ -1,13 +1,31 @@
+<!-- VOKA-SLICE1-CANONICAL-CLOSURE-2026-09-09 -->
+
+## Current resume point - 2026-09-09 (Slice 1 canonical closure)
+
+**PHASE 4C = CLOSED.**
+
+**LIVE-FAIL-001 / CEO-R1-030 = CLOSED.**
+
+Official base: `7b00c857a39d4d0d8bd6d8fbe4434b2595ba5287`
+
+- Engineering validation = PASS
+- Live auth/session/platform acceptance = PASS
+- Cross-Tenant Isolation = PASS 8/8 (`AUTH-DIRECT-ROUTE-GATE` CLOSED)
+- Payment live re-acceptance = PASS (10.000 ISSUED; 4.000 → 201 PARTIALLY_PAID 4/6; register/statement/dashboard PASS; 6.000 → 201 PAID 10/0 form hidden; overpay 1.000 → 409 PAYMENT_CONFLICT, no extra payment)
+
+Deferred, not blockers: D4 multi-membership selector (fail-closed); D5 refresh revocation (Phase 5); D6 broader expired-session UX.
+
+Sales Assistant and Quotation remain CEO-FROZEN. Data Factory remains PAUSED. Do not reopen UCL foundation. **Do not start Phase 4D in this slice.**
+
+Read the [current canonical acceptance ledger](../product/MASTER_PRODUCT_ACCEPTANCE_LEDGER.md) and [final verification checkpoint](../checkpoints/2026-09-09-phase4c-final-verification.md).
+
+This resume point supersedes the older current-state instructions below, including the same-day Phase 4C PARTIAL / payment-not-closed snapshot.
+
 <!-- VOKA-PHASE4C-FINAL-VERIFICATION-2026-09-09 -->
 
-## Current resume point - 2026-09-09
+## Historical resume snapshot - 2026-09-09 (superseded)
 
-Phase 4C: **ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING**.
-The bounded unauthorized API code correction is validated on the official feature branch, starting from `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`.
-
-Read the [current canonical acceptance ledger](../product/MASTER_PRODUCT_ACCEPTANCE_LEDGER.md) and [final verification checkpoint](../checkpoints/2026-09-09-phase4c-final-verification.md) for exact evidence, test exclusions and deferred items.
-
-Next: CEO cross-tenant live proof on an explicitly safe home/test DB and Payment live re-acceptance, then governed Phase 4D review. Payment is not closed. Sales Assistant/Quotation remain frozen and Data Factory paused. No merge/tag/push was performed. This resume point supersedes the older current-state instructions below.
+Phase 4C was then ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING at `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`. That snapshot is superseded by Slice 1 canonical closure above.
 
 <!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
 
