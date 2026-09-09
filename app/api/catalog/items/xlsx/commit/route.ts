@@ -16,7 +16,7 @@ export const POST = withCompanyAuth(
     }
     const inputs = preview.rows.map((row) => row.input).filter((row): row is NonNullable<typeof row> => Boolean(row));
     try {
-      const imported = await prisma.$transaction(async (tx: typeof prisma) => {
+      const imported = await prisma.$transaction(async (tx) => {
         const repository = new PrismaCatalogItemRepository(tx as never);
         return commitCatalogRows(repository, company.companyId, inputs);
       });
