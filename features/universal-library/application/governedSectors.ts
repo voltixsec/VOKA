@@ -40,6 +40,23 @@ export const CORE_COMMERCIAL_SECTOR_BOOTSTRAP = [
   },
 ] as const;
 
+export function isGovernedCommercialRoot(row: {
+  parentId?: string | null;
+  code?: string | null;
+  nameEn?: string | null;
+  nameAr?: string | null;
+}) {
+  if (row.parentId) return false;
+  const codes = new Set<string>(CORE_COMMERCIAL_SECTOR_BOOTSTRAP.map((s) => s.code));
+  const namesEn = new Set<string>(CORE_COMMERCIAL_SECTOR_BOOTSTRAP.map((s) => s.nameEn));
+  const namesAr = new Set<string>(CORE_COMMERCIAL_SECTOR_BOOTSTRAP.map((s) => s.nameAr));
+  return Boolean(
+    (row.code && codes.has(row.code)) ||
+      (row.nameEn && namesEn.has(row.nameEn)) ||
+      (row.nameAr && namesAr.has(row.nameAr)),
+  );
+}
+
 export function validateInstalledCategoryIds(ids: string[]) {
   const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
   if (unique.length < 1) return { ok: false as const, error: "UNIVERSAL_LIBRARY_SECTOR_REQUIRED" as const };

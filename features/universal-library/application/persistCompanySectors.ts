@@ -1,13 +1,12 @@
 import {
-  CORE_COMMERCIAL_SECTOR_BOOTSTRAP,
   MAX_COMPANY_UNIVERSAL_LIBRARY_SECTORS,
+  isGovernedCommercialRoot,
   validateInstalledCategoryIds,
 } from "./governedSectors";
 
 type PrismaLike = {
   universalCategory: {
     findMany: (args: unknown) => Promise<Array<{ id: string; parentId?: string | null; code?: string | null; name?: string; nameAr?: string | null; nameEn?: string | null }>>;
-    create: (args: unknown) => Promise<{ id: string; parentId: string | null; code: string | null; name: string; nameAr: string | null; nameEn: string | null }>;
   };
   $transaction: (fn: (tx: PrismaLike) => Promise<unknown>) => Promise<unknown>;
 };
@@ -35,46 +34,17 @@ function sectors(client: PrismaLike): SectorDelegate {
   return (client as PrismaLike & { companyUniversalLibrarySector: SectorDelegate }).companyUniversalLibrarySector;
 }
 
-export async function ensureGovernedCoreSectors(client?: PrismaLike) {
+export async function listGovernedRootSectors(client?: PrismaLike) {
   const db = client ?? (await defaultClient());
   const existing = await db.universalCategory.findMany({
     where: { parentId: null, isActive: true },
   });
-  for (const spec of CORE_COMMERCIAL_SECTOR_BOOTSTRAP) {
-    const match =
-      existing.find((row) => row.code === spec.code) ||
-      existing.find((row) => row.nameEn === spec.nameEn) ||
-      existing.find((row) => row.nameAr === spec.nameAr);
-    if (match) continue;
-    const created = await db.universalCategory.create({
-      data: {
-        parentId: null,
-        code: spec.code,
-        name: spec.name,
-        nameEn: spec.nameEn,
-        nameAr: spec.nameAr,
-        isActive: true,
-      },
-    });
-    existing.push(created);
-  }
-  const codes = new Set<string>(CORE_COMMERCIAL_SECTOR_BOOTSTRAP.map((s) => s.code));
-  const names = new Set<string>(CORE_COMMERCIAL_SECTOR_BOOTSTRAP.map((s) => s.nameEn));
-  return existing.filter(
-    (row) => row.parentId === null && ((row.code && codes.has(row.code)) || (row.nameEn != null && names.has(row.nameEn))),
-  );
-}
-
-export async function listGovernedRootSectors(client?: PrismaLike) {
-  const rows = await ensureGovernedCoreSectors(client);
-  const codes = new Set(CORE_COMMERCIAL_SECTOR_BOOTSTRAP.map((s) => s.code));
-  const preferred = rows.filter((row) => row.parentId === null && row.code && codes.has(row.code));
-  return (preferred.length ? preferred : rows.filter((row) => row.parentId === null)).map((row) => ({
+  return existing.filter(isGovernedCommercialRoot).map((row) => ({
     id: row.id,
-    code: row.code,
-    name: row.name,
-    nameAr: row.nameAr,
-    nameEn: row.nameEn,
+    code: row.code ?? null,
+    name: row.name ?? "",
+    nameAr: row.nameAr ?? null,
+    nameEn: row.nameEn ?? null,
   }));
 }
 
