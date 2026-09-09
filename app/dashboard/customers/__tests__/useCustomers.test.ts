@@ -6,13 +6,13 @@ import {
   customerListQueryString,
   fetchAllMatchingCustomers,
   useCustomers,
-} from "../useCustomers";
+} from "../../../../hooks/useCustomers";
 
 function page(customers: Array<{ id: string }>, pagination: object, summaries = { total: 40, LEAD: 5, ACTIVE: 30, INACTIVE: 3, BLOCKED: 2 }) {
-  return Promise.resolve({
+  return {
     ok: true,
     json: async () => ({ data: { customers, pagination, summaries } }),
-  } as Response);
+  } as Response;
 }
 
 describe("customer list query", () => {
