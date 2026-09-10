@@ -17,7 +17,9 @@ Do not keep 4D code open because a test DB lacks published items. Do not claim U
 
 Home resume: [office session close](../checkpoints/2026-09-10-office-session-close-home-resume.md). Night proof details remain in [night checkpoint](../checkpoints/2026-09-10-phase4d-night-close.md).
 
-Quotation/Sales Assistant remain frozen. Data Factory remains PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E, PR, merge, tag or official-branch update from this closeout.
+Next execution package (audit only, no 4E code yet): [Phase 4E readiness audit](../checkpoints/2026-09-10-phase4e-readiness-audit.md). First home implementation slice: **P1 Sales Order list localization**.
+
+Quotation/Sales Assistant remain frozen. Data Factory remains PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E implementation, PR, merge, tag or official-branch update from this audit.
 
 ---
 
