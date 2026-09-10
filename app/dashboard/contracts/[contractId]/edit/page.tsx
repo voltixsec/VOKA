@@ -289,7 +289,7 @@ export default function EditContractPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Load failed");
+          setError(e instanceof Error ? e.message : t("تعذر تحميل البيانات", "Load failed"));
         }
       } finally {
         if (!cancelled) {
@@ -487,7 +487,7 @@ export default function EditContractPage() {
       setDirty(false);
       router.push(`/dashboard/contracts/${contractId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(e instanceof Error ? e.message : t("فشل الحفظ", "Save failed"));
     } finally {
       setSaving(false);
     }

@@ -148,7 +148,7 @@ export default function ProductsPage() {
         setTaxRates(taxRatesJson.data || []);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Load failed");
+      setError(err instanceof Error ? err.message : t("تعذر تحميل البيانات", "Load failed"));
     } finally {
       setLoading(false);
     }
@@ -245,7 +245,7 @@ export default function ProductsPage() {
       setModalOpen(false);
       await loadData();
     } catch (err) {
-      setModalError(err instanceof Error ? err.message : "Save failed");
+      setModalError(err instanceof Error ? err.message : t("فشل الحفظ", "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -269,7 +269,7 @@ export default function ProductsPage() {
   return (
     <section className="space-y-6" dir={isArabic ? "rtl" : "ltr"}>
       <SectionHeader
-        eyebrow={t("الكتالوج التجارية", "Commercial Catalog")}
+        eyebrow={t("الكتالوج التجاري", "Commercial Catalog")}
         title={t("المنتجات والخدمات", "Products & Services")}
         description={t(
           "إدارة كود الأصناف والخدمات والأسعار المرجعية والبيانات ثنائية اللغة للربط المباشر مع عروض الأسعار.",

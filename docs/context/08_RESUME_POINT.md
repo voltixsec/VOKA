@@ -1,3 +1,20 @@
+<!-- VOKA-PHASE4E-BIG-CLOSURE-SPRINT-2026-09-10 -->
+
+## Phase 4E big closure sprint (execution-branch, non-authoritative) — 2026-09-10
+
+A bounded shared-chrome + localization polish sprint ran on Arena execution
+branch `arena/01a08bf6-voka`, based on authoritative HEAD
+`f75b0c75fa376d5ab354f2ad1471747e4ec7bb1a`. It closed Group A (dashboard chrome
+localization/nav consistency), Group B (catalog polish), Group C (Drawing Takeoff
+XLSX localization), and a bounded Group D AR/EN error-leak sweep. Frozen areas,
+DB data, and DB schema were untouched; typecheck/build are environment-deferred
+(no Prisma client / network). Details:
+[Phase 4E big closure sprint](../checkpoints/2026-09-10-phase4e-big-closure-sprint.md).
+No authoritative-branch update, PR, merge, or tag from this sprint. No acceptance
+status below is changed.
+
+---
+
 ## Current Phase 4D handoff — 2026-09-10 office close
 
 This section supersedes the night-close PENDING-visual language and older current-state/slice instructions below. Phase 4C and payment re-acceptance remain CLOSED. A/B/E remain PASS and must not be reopened.

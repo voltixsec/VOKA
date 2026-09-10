@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -55,8 +55,8 @@ const navigationItems: NavigationItem[] = [
   {
     labelEn: "Customers",
     labelAr: "العملاء",
-    descriptionEn: "CRM",
-    descriptionAr: "إدارة العملاء",
+    descriptionEn: "Customer records",
+    descriptionAr: "سجلات العملاء",
     href: "/dashboard/customers",
     icon: (
       <Icon>
@@ -153,10 +153,23 @@ const navigationItems: NavigationItem[] = [
     icon: (<Icon><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /><path d="M12 8v8" /></Icon>),
   },
   {
+    labelEn: "Reports",
+    labelAr: "التقارير",
+    descriptionEn: "Receivables aging",
+    descriptionAr: "أعمار الذمم المدينة",
+    href: "/dashboard/reports",
+    icon: (
+      <Icon>
+        <path d="M3 3v18h18" />
+        <path d="M7 15l3-4 3 2 4-6" />
+      </Icon>
+    ),
+  },
+  {
     labelEn: "Drawing Takeoff",
     labelAr: "حصر الرسومات",
-    descriptionEn: "CCTV / Low Voltage",
-    descriptionAr: "كاميرات وتيار خفيف",
+    descriptionEn: "Quantity takeoff",
+    descriptionAr: "حصر الكميات من المخططات",
     href: "/dashboard/takeoff",
     icon: (
       <Icon><path d="M4 3h16v18H4z" /><path d="m7 16 3-4 3 2 4-6" /><circle cx="8" cy="8" r="1" /></Icon>
@@ -204,7 +217,9 @@ export function Sidebar({ isPlatformAdmin = false }: { isPlatformAdmin?: boolean
           </span>
 
           <span className="mt-1 text-sm font-medium text-sky-300">
-            AI Sales OS
+            {isArabic
+              ? "نظام تشغيل المبيعات بالذكاء الاصطناعي"
+              : "AI Sales OS"}
           </span>
         </Link>
       </div>
@@ -273,8 +288,11 @@ export function Sidebar({ isPlatformAdmin = false }: { isPlatformAdmin?: boolean
 
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-sm font-bold text-sky-300">
-            VO
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-sm font-bold text-sky-300"
+            aria-hidden="true"
+          >
+            V
           </div>
 
           <div className="min-w-0">

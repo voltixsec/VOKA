@@ -78,7 +78,7 @@ export default function InvoiceDetails() {
         setPayments(bj.data?.payments ?? []);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : (isArabic ? "حدث خطأ" : "Error"));
     }
   }, [invoiceId, isArabic]);
   useEffect(() => {
@@ -113,7 +113,7 @@ export default function InvoiceDetails() {
       if (!r.ok) throw new Error(j?.error?.message ?? "Action failed");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : (isArabic ? "حدث خطأ" : "Error"));
     } finally {
       setBusy("");
     }
@@ -137,7 +137,7 @@ export default function InvoiceDetails() {
       setReference("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : (isArabic ? "حدث خطأ" : "Error"));
     } finally {
       setBusy("");
     }

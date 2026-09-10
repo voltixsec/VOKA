@@ -73,7 +73,7 @@ export default function InvoicesPage() {
         setPagination(b.data.pagination ?? EMPTY_PAGINATION);
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Error");
+        setError(e instanceof Error ? e.message : (isArabic ? "حدث خطأ" : "Error"));
       } finally {
         if (!cancelled) setLoading(false);
       }

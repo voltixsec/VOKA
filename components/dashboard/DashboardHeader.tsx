@@ -87,7 +87,7 @@ export function DashboardHeader() {
         .join("")
         .toUpperCase()
         .slice(0, 2)
-    : "VO";
+    : "V";
 
   return (
     <>
@@ -95,7 +95,7 @@ export function DashboardHeader() {
         <details className="relative lg:hidden">
           <summary className="cursor-pointer list-none rounded-xl border border-white/10 bg-white/5 px-3 py-2" aria-label={isArabic ? "فتح التنقل" : "Open navigation"}>☰</summary>
           <nav className="absolute start-0 top-12 flex w-60 flex-col rounded-2xl border border-white/10 bg-slate-900 p-2 text-sm shadow-2xl">
-            {[["Dashboard","لوحة التحكم","/dashboard"],["Customers","العملاء","/dashboard/customers"],["Quotations","عروض الأسعار","/dashboard/quotations"],["Sales Orders","أوامر البيع","/dashboard/sales-orders"],["Contracts","العقود","/dashboard/contracts"],["Invoices","الفواتير","/dashboard/invoices"],["Payments","المدفوعات","/dashboard/payments"],["Reports","التقارير","/dashboard/reports"],["Drawing Takeoff","حصر الرسومات","/dashboard/takeoff"],["Settings","الإعدادات","/dashboard/settings"]].map(([en, ar, href]) => <a key={href} href={href} className="rounded-xl px-3 py-2 hover:bg-white/5">{isArabic ? ar : en}</a>)}
+            {[["Dashboard","لوحة التحكم","/dashboard"],["Customers","العملاء","/dashboard/customers"],["Products & Services","المنتجات والخدمات","/dashboard/products"],["Quotations","عروض الأسعار","/dashboard/quotations"],["Sales Orders","أوامر البيع","/dashboard/sales-orders"],["Contracts","العقود","/dashboard/contracts"],["Invoices","الفواتير","/dashboard/invoices"],["Payments","المدفوعات","/dashboard/payments"],["Reports","التقارير","/dashboard/reports"],["Drawing Takeoff","حصر الرسومات","/dashboard/takeoff"],["Settings","الإعدادات","/dashboard/settings"]].map(([en, ar, href]) => <a key={href} href={href} className="rounded-xl px-3 py-2 hover:bg-white/5">{isArabic ? ar : en}</a>)}
           </nav>
         </details>
         <div className="hidden sm:block">
