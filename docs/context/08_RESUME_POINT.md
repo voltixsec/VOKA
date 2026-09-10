@@ -1,3 +1,20 @@
+<!-- VOKA-V1-FINAL-CLOSURE-VOLTX-2026-09-10 -->
+
+## VOKA V1 final product closure — 2026-09-10
+
+Execution is on Arena-fixed branch `arena/01a08c94-voka`, with authoritative base
+`f31b12fbb11339aa65698044c03e76189434f7fe`. This sprint is the current product
+state for the Sales Assistant, Quotation, and Drawing Takeoff surfaces. Customer
+identity is optional while a quotation remains a DRAFT; final approval/send still
+requires a customer, resolved pricing, quantities, and product readiness.
+
+Implemented in this slice: customer-optional quotation handoff/API/composer, explicit
+candidate rejection and researched-fact approval, confirmed takeoff → quotation
+draft conversion with provenance and unresolved pricing, preservation of multi-line
+takeoff review state, terms/notes handoff, and quotation combobox ARIA ownership.
+DB data and schema remain untouched. Data Factory remains paused. See the durable
+checkpoint `../checkpoints/2026-09-10-v1-final-product-closure-voltx-arena.md`.
+
 <!-- VOKA-PHASE4E-BIG-CLOSURE-SPRINT-2026-09-10 -->
 
 ## Phase 4E big closure sprint (execution-branch, non-authoritative) — 2026-09-10
