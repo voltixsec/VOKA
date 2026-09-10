@@ -7,10 +7,10 @@ function textPdf(text: string) {
 }
 
 describe("bounded PDF source inspection", () => {
-  it("extracts machine-readable text and retains a page boundary", () => {
+  it("extracts machine-readable text without fabricating page attribution", () => {
     const result = extractPdfText(textPdf("BOQ 1 Vehicle elevator each"));
     expect(result.text).toContain("BOQ 1 Vehicle elevator each");
-    expect(result.pages[0]).toMatchObject({ pageNumber: 1 });
+    expect(result.pages[0]).toMatchObject({ pageNumber: null });
     expect(result.pages[0].text).toContain("Vehicle elevator");
   });
 

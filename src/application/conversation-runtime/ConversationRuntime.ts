@@ -262,7 +262,36 @@ export class ConversationRuntime {
     const graph = buildSystemConfigurationGraph(proposed, { engineeringRules: observations.flatMap((observation) => observation.engineeringRules ?? []) });
     let workspace = this.strict.synchronize(base.workspace, proposed, graph, this.now());
     workspace = this.strict.applyProposal(workspace, { ...proposals.at(-1)!, patches }, message, this.now());
-    return this.strict.project(workspace, graph);
+    const projected = this.strict.project(workspace, graph);
+
+    // Preserve an existing governed BOM only when it belongs to the same
+    // system and the deterministic rebuild has no replacement.
+    const priorSystemKey = base.workspace?.engineering.system?.key;
+    const sameSystem = Boolean(
+      priorSystemKey &&
+      projected.system?.key &&
+      priorSystemKey === projected.system.key
+    );
+
+    const priorSalesBom = base.workspace?.commercialSolution.bom ?? [];
+    const priorEngineeringBom = base.workspace?.engineering.bom ?? [];
+
+    if (
+      sameSystem &&
+      projected.salesBom.length === 0 &&
+      priorSalesBom.length > 0
+    ) {
+      return {
+        ...projected,
+        engineeringBom:
+          priorEngineeringBom.length > 0
+            ? priorEngineeringBom
+            : priorSalesBom,
+        salesBom: priorSalesBom,
+      };
+    }
+
+    return projected;
   }
 
   private normalizeState(state: ConversationRuntimeState | null, locale: "ar" | "en"): ConversationRuntimeState {

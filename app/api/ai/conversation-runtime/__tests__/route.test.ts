@@ -6,7 +6,7 @@ vi.mock("@/src/infrastructure/ai/ConversationStateToken", () => ({ signConversat
 vi.mock("@/lib/api", async () => {
   const errors = await vi.importActual<typeof import("@/lib/api/ApiError")>("@/lib/api/ApiError");
   const responses = await vi.importActual<typeof import("@/lib/api/ApiResponse")>("@/lib/api/ApiResponse");
-  return { ApiError: errors.ApiError, apiSuccess: responses.apiSuccess, withCompanyAuth: (_roles: readonly string[], handler: Function) => async (request: Request) => { try { return await handler(request, {}, { companyId: "tenant-1" }); } catch (error) { return responses.handleApiError(error); } } };
+  return { ApiError: errors.ApiError, apiSuccess: responses.apiSuccess, withCompanyAuth: (_roles: readonly string[], handler: Function) => async (request: Request) => { try { return await handler(request, { user: { id: "user-1" } }, { companyId: "tenant-1" }); } catch (error) { return responses.handleApiError(error); } } };
 });
 import { POST } from "../route";
 
