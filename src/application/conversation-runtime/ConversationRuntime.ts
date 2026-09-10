@@ -1,8 +1,9 @@
-import { detectExplicitScopeType, detectExplicitSystemIdentity } from "./explicit-system-normalizer";
+import { detectExplicitScopeType, detectExplicitSystemIdentity, detectExplicitVehicleElevatorFacts } from "./explicit-system-normalizer";
 import { asksForFreshProductResearch, asksForProductOptions, renderProductOptionsReply } from "./product-options";
 import { resolveProductSelection } from "./product-selection";
 import type { ConversationBrainPort, ConversationToolPort, WorkspaceDefaultsPort } from "./ports";
-import { promotePendingCandidateFacts, reduceFactProposals } from "./fact-reducer";
+import type { NormalizedRequirementPort } from "@/src/application/source-artifacts";
+import { promotePendingCandidateFacts, reduceFactProposals, rejectPendingCandidateFacts } from "./fact-reducer";
 import type { CommercialSolutionHandoff, ConversationRuntimeState, ConversationToolKind, ConversationTurnInput, FlexibleTurnProposal, RuntimeMessage, ToolRequest } from "./types";
 import { buildSystemConfigurationGraph, emptySystemConfigurationGraph } from "./solution-graph";
 import { StrictBrain } from "./StrictBrain";
@@ -12,7 +13,7 @@ const MAX_MESSAGES = 100;
 const MAX_TOOL_ITERATIONS = 3;
 
 export class ConversationRuntime {
-  constructor(private readonly brain: ConversationBrainPort, private readonly tools: ConversationToolPort, private readonly now = () => new Date().toISOString(), private readonly id = () => crypto.randomUUID(), private readonly defaults?: WorkspaceDefaultsPort, private readonly strict = new StrictBrain()) {}
+  constructor(private readonly brain: ConversationBrainPort, private readonly tools: ConversationToolPort, private readonly now = () => new Date().toISOString(), private readonly id = () => crypto.randomUUID(), private readonly defaults?: WorkspaceDefaultsPort, private readonly strict = new StrictBrain(), private readonly requirements?: NormalizedRequirementPort) {}
 
   async execute(input: ConversationTurnInput): Promise<ConversationRuntimeState> {
     const reconcile = input.action === "RECONCILE";
@@ -20,9 +21,14 @@ export class ConversationRuntime {
     if (!message || message.length > 4_000) throw new Error("CONVERSATION_RUNTIME_MESSAGE_INVALID");
     const base = this.normalizeState(input.state, input.locale);
     const userMessage: RuntimeMessage = { id: this.id(), role: "USER", text: message, source: input.source, createdAt: this.now() };
+    const candidateResolution = rejectPendingCandidateFacts(
+      base.candidateFacts,
+      message,
+      this.now(),
+    );
     const approval = promotePendingCandidateFacts(
       base.confirmedFacts,
-      base.candidateFacts,
+      candidateResolution.candidates,
       message,
       this.now(),
     );
@@ -51,6 +57,8 @@ export class ConversationRuntime {
             "system.identity": explicitSystem,
           }
         : retainedFacts;
+    const vehicleIdentity = String(turnFacts["system.identity"]?.value ?? "").match(/vehicle\s*elevator|car\s*elevator|مصعد\s*(?:سيارات|سيارة)|رافعة\s*سيارات/iu);
+    if (vehicleIdentity || base.workspace?.engineering.system?.key === "VEHICLE_ELEVATOR") turnFacts = { ...turnFacts, ...detectExplicitVehicleElevatorFacts(message, this.now()) };
     const explicitScope = detectExplicitScopeType(message, this.now()) ?? (!turnFacts["scope.type"]
       ? [...base.messages].reverse().filter((item) => item.role === "USER").map((item) => detectExplicitScopeType(item.text, this.now())).find(Boolean) ?? null : null);
     if (explicitScope && turnFacts["scope.type"]?.value !== explicitScope.value) {
@@ -67,7 +75,7 @@ export class ConversationRuntime {
     const priorEngineeringRules = base.toolResults.flatMap((observation) => observation.engineeringRules ?? []);
     const initialGraph = buildSystemConfigurationGraph(turnFacts, { engineeringRules: priorEngineeringRules });
     let workingGraph = this.strict.project(this.strict.synchronize(base.workspace, turnFacts, initialGraph, this.now()), initialGraph);
-    const brainInput = (toolResults: typeof base.toolResults) => ({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, workspace: this.strict.synchronize(base.workspace, turnFacts, workingGraph, this.now()), compactMemory: base.compactMemory, toolResults, attachmentAvailable: Boolean(input.attachment), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] as ConversationToolKind[] });
+    const brainInput = (toolResults: typeof base.toolResults) => ({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, workspace: this.strict.synchronize(base.workspace, turnFacts, workingGraph, this.now()), compactMemory: base.compactMemory, toolResults, attachmentAvailable: Boolean(input.attachment?.id), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] as ConversationToolKind[] });
     let decision = this.strict.normalizeProposal(await this.brain.decide(brainInput([])));
     const requiresProductRetrieval = heuristicProductRetrieval || decision.researchRequests.some((request) => request.kind === "CATALOG_LOOKUP");
     const proposals: FlexibleTurnProposal[] = [decision];
@@ -102,6 +110,9 @@ export class ConversationRuntime {
       } else if (requiresProductRetrieval && catalogObservation && request?.kind === "CATALOG_LOOKUP") {
         request = null;
       }
+      if (request && ["ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"].includes(request.kind) && !request.attachmentId) {
+        request = { ...request, attachmentId: input.attachment?.id ?? null };
+      }
       if (!request) break;
       const jurisdictionKnown = workingGraph.requirements.some((item) => item.key === "system.jurisdiction" && String(item.value).trim());
       if (requiresProductRetrieval && request.kind === "RESEARCH" && !jurisdictionKnown) {
@@ -124,6 +135,8 @@ export class ConversationRuntime {
       legacyFactProposals.push(...decision.legacyFactProposals);
     }
     const allPatches = proposals.flatMap((proposal) => proposal.patches ?? []);
+    const vehicleElevator = /vehicle\s*elevator|car\s*elevator|مصعد\s*(?:سيارات|سيارة)|رافعة\s*سيارات/iu.test(String(turnFacts["system.identity"]?.value ?? ""));
+    const governedPatches = vehicleElevator ? allPatches.filter((patch) => !patch.path.startsWith("engineering.") && !patch.path.startsWith("products.")) : allPatches;
     const patchFacts = allPatches.flatMap((patch) => {
       if (!patch.path.startsWith("facts.") || !["SET", "REPLACE", "PROPOSE"].includes(patch.operation)) return [];
       if (!["string", "number", "boolean"].includes(typeof patch.value)) return [];
@@ -171,7 +184,7 @@ export class ConversationRuntime {
       decision = { ...decision, responseMode: "RESEARCH_RESULT", responseContent: input.locale === "ar" ? "راجعت المصادر المتاحة وحدثت الحل بالمعلومات التي أمكن توثيقها." : "I reviewed the available sources and updated the solution with the evidence that could be verified.", blockingQuestion: null };
     }
     let workspace = this.strict.synchronize(base.workspace, reduced.confirmed, solutionGraph, this.now());
-    workspace = this.strict.applyProposal(workspace, { ...decision, patches: allPatches }, patchEvidence, this.now());
+    workspace = this.strict.applyProposal(workspace, { ...decision, patches: governedPatches }, patchEvidence, this.now());
     workspace = this.strict.synchronize(workspace, reduced.confirmed, solutionGraph, this.now());
     if (this.defaults) {
       const scope = workspace.commercialContext.scope;
@@ -200,6 +213,15 @@ export class ConversationRuntime {
       }
     }
     solutionGraph = this.strict.project(workspace, solutionGraph);
+    if (this.requirements) {
+      await this.requirements.synchronize({
+        companyId: input.companyId,
+        userId: input.userId ?? null,
+        facts: reduced.confirmed,
+        graph: solutionGraph,
+        citations: turnObservations.flatMap((observation) => observation.citations ?? []),
+      });
+    }
     const missingCustomer = !workspace.commercialContext.customer;
     const missingAttention = !workspace.commercialContext.attention;
     const alreadyAsksUsefulQuestion = /[?؟]/u.test(decision.responseContent);
@@ -210,7 +232,9 @@ export class ConversationRuntime {
       decision = { ...decision, responseMode: "QUESTION", blockingQuestion: question };
     }
     const handoff: CommercialSolutionHandoff | null = null;
-    const reply = this.strict.render(decision, input.locale, workspace);
+    const truthfulDecision = { ...decision, responseContent: enforceTruthfulAssistantResponse(decision.responseContent, input.locale, observations, workspace, reduced.confirmed) };
+    const renderedReply = this.strict.render(truthfulDecision, input.locale, workspace);
+    const reply = enforceTruthfulAssistantResponse(renderedReply, input.locale, observations, workspace, reduced.confirmed);
     if (!reply) throw new Error("CONVERSATION_RUNTIME_EMPTY_REPLY");
     const assistantMessage: RuntimeMessage = { id: this.id(), role: "ASSISTANT", text: reply, source: "AI", createdAt: this.now() };
     const suggestedReplies = decision.suggestedReplies.filter((reply) => solutionGraph.system?.key !== "CCTV" || !/(?:retention|storage\s*days|مدة\s*(?:التسجيل|الاحتفاظ))/iu.test(reply));
@@ -239,6 +263,19 @@ export class ConversationRuntime {
     const graph = emptySystemConfigurationGraph();
     return { runtimeId: this.id(), version: 1, locale, messages: [], confirmedFacts: {}, candidateFacts: [], unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "EXPLORING", transitionState: "EXPLORING", compactMemory: "", suggestedReplies: [], handoff: null, handoffToken: null, solutionGraph: graph, workspace: this.strict.synchronize(undefined, {}, graph, this.now()) };
   }
+}
+
+function enforceTruthfulAssistantResponse(value: string, locale: "ar" | "en", observations: ConversationRuntimeState["toolResults"], workspace: ConversationRuntimeState["workspace"], facts: ConversationRuntimeState["confirmedFacts"]) {
+  const inspected = observations.some((observation) => ["ATTACHMENT_INSPECTION", "BOQ_INSPECTION", "DRAWING_INSPECTION"].includes(observation.kind) && observation.status === "COMPLETED");
+  if (!inspected && /(?:(?:file|attachment|document|pdf).*?(?:analy[sz]|read|review|inspect)|(?:analy[sz]|read|review|inspect).*?(?:file|attachment|document|pdf)|(?:الملف|المرفق|المستند).*?(?:حللت|قرأت|راجعت|فحصت)|(?:حللت|قرأت|راجعت|فحصت).*?(?:الملف|المرفق|المستند))/iu.test(value)) {
+    return locale === "ar" ? "استلمت المرفق، لكن لم يكتمل فحص محتواه بعد؛ لن أصفه بأنه مُحلل." : "The attachment was received, but its content was not inspected successfully, so I will not describe it as analyzed.";
+  }
+  const quantityApproved = /(?:quantity|quantities|الكمي(?:ة|ات)).{0,20}(?:approved|confirmed|اعتماد|معتمد|مؤكد)/iu.test(value);
+  const quantityApprovedInFacts = Object.entries(facts).some(([key, current]) => /quantity|numberOfStops|cameraCount/iu.test(key) && current.provenance === "USER_APPROVED");
+  if (quantityApproved && !quantityApprovedInFacts) return locale === "ar" ? "الكمية ما زالت تحتاج اعتماداً صريحاً في مساحة الحل." : "The quantity still requires explicit approval in the governed workspace.";
+  const systemComplete = /(?:system|configuration|solution|النظام|الحل|التكوين).{0,20}(?:complete|completed|جاهز بالكامل|مكتمل)/iu.test(value);
+  if (systemComplete && workspace?.readiness.pendingBeforeFinalIssue.some((item) => /engineering components|quantity|مكونات هندسية|كمية/iu.test(item))) return locale === "ar" ? "النظام معروف، لكن المتطلبات والمكونات الهندسية ما زالت جزئية وتحتاج مراجعة." : "The system is known, but engineering requirements and components remain partial and need review.";
+  return value;
 }
 
 function impliesFutureSearch(value: string) {

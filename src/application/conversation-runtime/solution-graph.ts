@@ -13,6 +13,8 @@ type GraphResolutionContext = { engineeringRules?: import("@/src/application/age
 
 const labels: Record<string, [string, string]> = {
   "system.jurisdiction": ["الدولة", "Jurisdiction"], "scope.type": ["النطاق", "Scope"],
+  "system.quantity": ["العدد", "Quantity"], "system.numberOfStops": ["عدد الطوابق أو الوقفات", "Stops / floors"],
+  "system.vehicleClass": ["فئة المركبة", "Vehicle class"], "system.capacity": ["السعة", "Capacity"],
   "system.areaM2": ["المساحة", "Area"], "system.tileSize": ["مقاس البلاط", "Tile size"],
   "system.qualityTier": ["المستوى", "Quality tier"], "system.cameraCount": ["عدد الكاميرات", "Camera count"],
   "system.resolutionMp": ["الدقة", "Resolution"], "system.environment": ["بيئة التشغيل", "Environment"],
@@ -48,6 +50,7 @@ function systemIdentity(value: string | null) {
   if (/gypsum|drywall|جبس/i.test(value)) return { key: "GYPSUM_BOARD", nameAr: "نظام جبس بورد", nameEn: "Gypsum board system" };
   if (/cctv|camera|surveillance|كامير/i.test(value)) return { key: "CCTV", nameAr: "نظام كاميرات مراقبة", nameEn: "CCTV system" };
   if (/fm\s*-?\s*200|إف\s*إم/i.test(value)) return { key: "FM200", nameAr: "نظام إطفاء FM-200", nameEn: "FM-200 suppression system" };
+  if (/vehicle\s*elevator|car\s*elevator|مصعد\s*(?:سيارات|سيارة)|رافعة\s*سيارات/iu.test(value)) return { key: "VEHICLE_ELEVATOR", nameAr: "مصعد سيارات", nameEn: "Vehicle elevator" };
   return { key: value.toUpperCase().replace(/\s+/g, "_"), nameAr: value, nameEn: value };
 }
 
@@ -63,7 +66,13 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
   const graph: SystemConfigurationGraph = { ...EMPTY_GRAPH, system, requirements, readiness: { draftReady: false, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: [] } };
   const area = numeric(facts, "system.areaM2");
 
-  if (system.key === "CERAMIC_FLOORING") {
+  if (system.key === "VEHICLE_ELEVATOR") {
+    graph.unresolvedDecisions = [
+      { key: "vehicleElevator.engineeringComponents", labelAr: "مكونات هندسية ومخطط المصعد", labelEn: "Engineering components and elevator drawing", safetyCritical: true },
+    ];
+    graph.assumptions = [{ key: "vehicleElevator.partial", textAr: "تم تثبيت النظام والعدد والوقفات فقط؛ لم يتم اختراع مكونات هندسية أو كميات غير مؤكدة.", textEn: "System, quantity, and stops are known; engineering components and unverified quantities remain for review." }];
+    graph.readiness = { draftReady: true, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: ["Engineering components", "Product selection", "Pricing"] };
+  } else if (system.key === "CERAMIC_FLOORING") {
     const size = text(facts, "system.tileSize") ?? "60x60";
     const normalized = size.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
     const tileArea = normalized ? (Number(normalized[1]) / 100) * (Number(normalized[2]) / 100) : null;
@@ -264,9 +273,12 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
 /** Draft policy is independent of product selection, engineering estimates and pricing. */
 export function constrainDocumentDraftReadiness(graph: SystemConfigurationGraph, facts: Record<string, ConfirmedFact>): SystemConfigurationGraph {
   const target = text(facts, "document.target");
-  const required = [!graph.system && "System", !text(facts, "customer.name") && "Customer", target && target !== "QUOTATION" && "Document type"].filter((value): value is string => Boolean(value));
+  // A quotation draft is a review workspace, not a final commercial commitment.
+  // Customer identity can be bound later from the composer without blocking the
+  // assistant handoff; finalization still requires it via QuotationFinalizationValidator.
+  const required = [!graph.system && "System", target && target !== "QUOTATION" && "Document type"].filter((value): value is string => Boolean(value));
   return { ...graph, readiness: { ...graph.readiness, draftReady: required.length === 0, pendingBeforeDraftOpen: required,
-    pendingBeforeFinalIssue: graph.readiness.pendingBeforeFinalIssue.filter((field) => field !== "Customer"),
+    pendingBeforeFinalIssue: graph.readiness.pendingBeforeFinalIssue,
   } };
 }
 
