@@ -62,6 +62,22 @@ describe('customer APIs', () => {
     expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({ companyId: 'company-1' }));
   });
 
+  it('forwards search, status, type and pagination and returns tenant summaries', async () => {
+    mocks.findAll.mockResolvedValue([customer()]);
+    mocks.count.mockResolvedValueOnce(21).mockResolvedValueOnce(4).mockResolvedValueOnce(10).mockResolvedValueOnce(5).mockResolvedValueOnce(2);
+    const response = await list(request('/api/customers?search=Noor&status=ACTIVE&type=COMPANY&page=2&pageSize=20'));
+    expect(response.status).toBe(200);
+    expect(mocks.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: 'company-1', search: 'Noor', status: 'ACTIVE', type: 'COMPANY', skip: 20, take: 20,
+    }));
+    expect(await response.json()).toMatchObject({
+      data: {
+        pagination: { total: 21, page: 2, pageSize: 20, totalPages: 2 },
+        summaries: { total: 21, LEAD: 4, ACTIVE: 10, INACTIVE: 5, BLOCKED: 2 },
+      },
+    });
+  });
+
   it('creates a customer with canonical WhatsApp and resists mass assignment', async () => {
     const response = await POST(request('/api/customers', 'POST', { companyId: 'other', code: 'C-2', nameEn: 'New', whatsapp: '+96590000000', isDeleted: true }));
     const body = await response.json();

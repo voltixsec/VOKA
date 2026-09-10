@@ -33,6 +33,7 @@ export const GET = withCompanyAuth(
     return apiSuccess({
       customers: output.customers.map(customerToResponse),
       pagination: { total: output.total, page: output.page, pageSize: output.pageSize, totalPages: output.totalPages },
+      summaries: output.summaries,
     }, { headers: { 'Cache-Control': 'no-store' } });
   },
 );

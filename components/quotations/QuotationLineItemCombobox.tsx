@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -49,6 +50,7 @@ export const QuotationLineItemCombobox = forwardRef<
 ) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const listboxId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dropdownStyle, setDropdownStyle] = useState<{
     top: number;
@@ -184,6 +186,9 @@ export const QuotationLineItemCombobox = forwardRef<
         role="combobox"
         aria-label={ariaLabel}
         aria-expanded={open}
+        aria-controls={listboxId}
+        aria-haspopup="listbox"
+        aria-activedescendant={open && optionCount > 0 ? `${listboxId}-${activeIndex < filteredItems.length ? `option-${activeIndex}` : activeIndex === filteredItems.length ? "create" : "create-edit"}` : undefined}
         autoComplete="off"
         disabled={disabled}
         value={value}
@@ -209,6 +214,9 @@ export const QuotationLineItemCombobox = forwardRef<
         dropdownStyle &&
         createPortal(
           <div
+            id={listboxId}
+            role="listbox"
+            aria-label={ariaLabel}
             className="fixed z-[100] max-h-64 overflow-auto rounded-lg border border-white/10 bg-slate-950 p-1 shadow-2xl"
             style={{
               top: dropdownStyle.top,
@@ -220,6 +228,9 @@ export const QuotationLineItemCombobox = forwardRef<
             <button
               key={item.id}
               type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              id={`${listboxId}-option-${index}`}
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
@@ -246,6 +257,9 @@ export const QuotationLineItemCombobox = forwardRef<
         <>
             <button
               type="button"
+              role="option"
+              aria-selected={activeIndex === filteredItems.length}
+              id={`${listboxId}-create`}
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
@@ -264,6 +278,9 @@ export const QuotationLineItemCombobox = forwardRef<
 
           <button
             type="button"
+            role="option"
+            aria-selected={activeIndex === filteredItems.length + 1}
+            id={`${listboxId}-create-edit`}
             tabIndex={-1}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {

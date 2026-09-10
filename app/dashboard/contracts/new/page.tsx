@@ -250,7 +250,7 @@ export default function NewContractPage() {
           }
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Load failed");
+        setError(e instanceof Error ? e.message : t("تعذر تحميل البيانات", "Load failed"));
       } finally {
         setLoading(false);
       }
@@ -446,7 +446,7 @@ export default function NewContractPage() {
       setDirty(false);
       router.push(`/dashboard/contracts/${json.data.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Create failed");
+      setError(e instanceof Error ? e.message : t("تعذر الإنشاء", "Create failed"));
     } finally {
       setSaving(false);
     }

@@ -112,7 +112,7 @@ export default function ContractDetailPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Load failed");
+          setError(e instanceof Error ? e.message : t("تعذر تحميل البيانات", "Load failed"));
         }
       } finally {
         if (!cancelled) {

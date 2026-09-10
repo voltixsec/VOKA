@@ -9,6 +9,10 @@ import {
 import { ApiError, apiSuccess, withCompanyAuth } from "../../../../lib/api";
 import { prisma } from "../../../../lib/prisma";
 import { serializeUniversalItem } from "../serialize-universal";
+import {
+  collectCategoryTreeIds,
+  listCompanyInstalledSectors,
+} from "@/features/universal-library/application/persistCompanySectors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,7 +62,7 @@ function parseBoolean(value: string | null): boolean | undefined {
 
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
-  async (request: Request) => {
+  async (request: Request, _auth, company) => {
     const searchParams = new URL(request.url).searchParams;
     const rawType = searchParams.get("type");
 
@@ -83,7 +87,7 @@ export const GET = withCompanyAuth(
     }
 
     const query = searchParams.get("q") ?? searchParams.get("query") ?? undefined;
-    const categoryId = searchParams.get("categoryId") ?? undefined;
+    const requestedCategoryId = searchParams.get("categoryId") ?? undefined;
     const manufacturerId = searchParams.get("manufacturerId") ?? undefined;
     const brandId = searchParams.get("brandId") ?? undefined;
     const familyId = searchParams.get("familyId") ?? undefined;
@@ -102,12 +106,31 @@ export const GET = withCompanyAuth(
     const limit = parsePositiveInteger(searchParams.get("limit"));
     const cursor = searchParams.get("cursor") ?? undefined;
 
+    const installed = await listCompanyInstalledSectors(company.companyId);
+    if (installed.length === 0) {
+      return apiSuccess([], {
+        meta: { total: 0, nextCursor: null },
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    const installedRoots = installed.map((row) => row.categoryId);
+    if (!requestedCategoryId) {
+      return apiSuccess([], {
+        meta: { total: 0, nextCursor: null, requiresSector: true },
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (!installedRoots.includes(requestedCategoryId)) {
+      throw ApiError.forbidden("UNIVERSAL_LIBRARY_SECTOR_NOT_INSTALLED", "Category is outside installed libraries.");
+    }
+    const categoryIds = await collectCategoryTreeIds([requestedCategoryId]);
+
     let result;
     try {
       result = await searchUniversalLibrary.execute({
         query,
         type: rawType as UniversalItemType | undefined,
-        categoryId,
+        categoryIds,
         manufacturerId,
         brandId,
         familyId,

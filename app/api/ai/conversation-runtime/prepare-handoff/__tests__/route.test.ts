@@ -88,13 +88,13 @@ describe("POST /api/ai/conversation-runtime/prepare-handoff", () => {
     });
   });
 
-  it("requires customer before signing a new handoff", async () => {
+  it("signs a customer-free quotation draft handoff and leaves customer binding to the composer", async () => {
     const request = new Request("http://localhost/api/ai/conversation-runtime/prepare-handoff", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state: { stateToken: "signed-state" } }) });
     const response = await POST(request);
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     expect(mocks.roles).toEqual(["OWNER", "ADMIN", "SALES"]);
-    expect(mocks.sign).not.toHaveBeenCalled();
-    expect(await response.json()).toMatchObject({ error: { code: "CUSTOMER_NAME_REQUIRED" } });
+    expect(mocks.sign).toHaveBeenCalledOnce();
+    expect((mocks.sign.mock.calls[0][0] as CommercialSolutionHandoff).confirmedFacts["customer.name"]).toBeUndefined();
   });
 
   it("projects the exact final governed workspace BOM without aggregating component lines", async () => {

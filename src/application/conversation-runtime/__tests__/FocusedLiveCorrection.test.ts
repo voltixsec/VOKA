@@ -54,14 +54,14 @@ describe("focused live commercial correction", () => {
     expect(applyApprovedProductSelection(line, invalid)).toEqual(line);
   });
 
-  it("requires customer but never product, market price or selling price for Draft", () => {
+  it("allows a customer-free draft but never product, market price or selling price", () => {
     const missing = { "system.identity": facts["system.identity"] };
-    expect(buildSystemConfigurationGraph(missing).readiness).toMatchObject({ draftReady: false, pendingBeforeDraftOpen: ["Customer"] });
+    expect(buildSystemConfigurationGraph(missing).readiness).toMatchObject({ draftReady: true, pendingBeforeDraftOpen: [] });
     const graph = buildSystemConfigurationGraph(facts);
     expect(graph.readiness).toMatchObject({ draftReady: true, pendingBeforeDraftOpen: [] });
     expect(graph.salesBom.every((line) => line.unitPrice === null && line.productSelectionStatus === "GENERIC")).toBe(true);
     const stale = { ...graph, readiness: { draftReady: false, pendingBeforeDraftOpen: ["Pricing", "Product selection"], pendingBeforeFinalIssue: ["Customer", "Pricing"] } };
-    expect(constrainDocumentDraftReadiness(stale, facts).readiness).toEqual({ draftReady: true, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: ["Pricing"] });
+    expect(constrainDocumentDraftReadiness(stale, facts).readiness).toEqual({ draftReady: true, pendingBeforeDraftOpen: [], pendingBeforeFinalIssue: ["Customer", "Pricing"] });
   });
 
   it.each([["توريد وتركيب", "SUPPLY_AND_INSTALLATION"], ["Supply and installation", "SUPPLY_AND_INSTALLATION"], ["توريد فقط", "SUPPLY_ONLY"], ["Supply only", "SUPPLY_ONLY"]])("resolves %s without relying on a provider scope patch or reasking", async (message, scope) => {

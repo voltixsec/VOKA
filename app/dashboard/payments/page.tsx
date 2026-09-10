@@ -72,7 +72,7 @@ export default function PaymentsPage() {
         ),
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Load failed");
+      setError(caught instanceof Error ? caught.message : t("تعذر تحميل البيانات", "Load failed"));
     } finally {
       setLoading(false);
     }
@@ -122,7 +122,7 @@ export default function PaymentsPage() {
       setNotes("");
       await load();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Payment failed");
+      setError(caught instanceof Error ? caught.message : t("تعذر تسجيل الدفعة", "Payment failed"));
     } finally {
       setSaving(false);
     }

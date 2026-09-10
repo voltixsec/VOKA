@@ -53,7 +53,11 @@ export class PrismaUniversalLibraryRepository implements IUniversalLibraryReposi
     const whereClause: any = {
       ...(params.isActive === undefined ? { isActive: true } : { isActive: params.isActive }),
       ...(params.type ? { type: params.type } : {}),
-      ...(params.categoryId ? { categoryId: params.categoryId } : {}),
+      ...(params.categoryIds?.length
+        ? { categoryId: { in: params.categoryIds } }
+        : params.categoryId
+          ? { categoryId: params.categoryId }
+          : {}),
       ...(params.manufacturerId ? { manufacturerId: params.manufacturerId } : {}),
       ...(params.brandId ? { brandId: params.brandId } : {}),
       ...(params.familyId ? { familyId: params.familyId } : {}),

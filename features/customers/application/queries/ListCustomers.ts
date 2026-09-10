@@ -1,4 +1,4 @@
-﻿import type { Service } from '../../../../lib/core';
+import type { Service } from '../../../../lib/core';
 
 import type {
   Customer,
@@ -18,12 +18,21 @@ export type ListCustomersInput = {
   pageSize?: number;
 };
 
+export type CustomerStatusSummaries = {
+  total: number;
+  LEAD: number;
+  ACTIVE: number;
+  INACTIVE: number;
+  BLOCKED: number;
+};
+
 export type ListCustomersOutput = {
   customers: Customer[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
+  summaries: CustomerStatusSummaries;
 };
 
 export class ListCustomers
@@ -55,9 +64,18 @@ export class ListCustomers
       take: pageSize,
     };
 
-    const [customers, total] = await Promise.all([
+    const tenant = {
+      companyId: input.companyId,
+      includeDeleted: input.includeDeleted ?? false,
+    };
+
+    const [customers, total, lead, active, inactive, blocked] = await Promise.all([
       this.customerRepository.findAll(filters),
       this.customerRepository.count(filters),
+      this.customerRepository.count({ ...tenant, status: "LEAD" }),
+      this.customerRepository.count({ ...tenant, status: "ACTIVE" }),
+      this.customerRepository.count({ ...tenant, status: "INACTIVE" }),
+      this.customerRepository.count({ ...tenant, status: "BLOCKED" }),
     ]);
 
     return {
@@ -69,6 +87,13 @@ export class ListCustomers
         total === 0
           ? 0
           : Math.ceil(total / pageSize),
+      summaries: {
+        total: lead + active + inactive + blocked,
+        LEAD: lead,
+        ACTIVE: active,
+        INACTIVE: inactive,
+        BLOCKED: blocked,
+      },
     };
   }
 

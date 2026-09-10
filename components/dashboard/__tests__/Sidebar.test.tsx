@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '../Sidebar';
 
@@ -20,5 +20,43 @@ describe('platform-only Sidebar entry', () => {
     isArabic = true;
     render(<Sidebar isPlatformAdmin />);
     expect(screen.getByRole('link', { name: 'المكتبة العالمية إدارة المنصة' })).toHaveAttribute('href', '/dashboard/universal-library');
+  });
+});
+
+describe('Sidebar localized chrome', () => {
+  it('localizes the tagline in Arabic', () => {
+    isArabic = true;
+    const { container } = render(<Sidebar />);
+    expect(screen.getByText('نظام تشغيل المبيعات بالذكاء الاصطناعي')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('AI Sales OS');
+  });
+
+  it('keeps the English tagline in English', () => {
+    isArabic = false;
+    render(<Sidebar />);
+    expect(screen.getByText('AI Sales OS')).toBeInTheDocument();
+  });
+
+  it('renders the established VO brand monogram', () => {
+    isArabic = false;
+    render(<Sidebar />);
+    expect(screen.getByText('VO', { exact: true })).toBeInTheDocument();
+  });
+
+  it('does not expose leftover technical jargon descriptions', () => {
+    isArabic = false;
+    const { container } = render(<Sidebar />);
+    expect(container.textContent).not.toContain('CRM');
+    expect(container.textContent).not.toContain('CCTV / Low Voltage');
+  });
+
+  it('exposes Reports as a navigation destination', () => {
+    isArabic = false;
+    render(<Sidebar />);
+    expect(screen.getByRole('link', { name: 'Reports Receivables aging' })).toHaveAttribute('href', '/dashboard/reports');
+    isArabic = true;
+    cleanup();
+    render(<Sidebar />);
+    expect(screen.getByRole('link', { name: 'التقارير أعمار الذمم المدينة' })).toHaveAttribute('href', '/dashboard/reports');
   });
 });
