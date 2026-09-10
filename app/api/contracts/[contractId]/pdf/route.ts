@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withCompanyAuth } from "@/lib/api";
+import { ApiError, withCompanyAuth } from "@/lib/api";
 import { localizeCompanyDocumentIdentity } from "@/lib/documents/company-document-identity";
 import { commercialSnapshotFromParts, renderCommercialProposalPdf } from "@/lib/documents/commercial-pdf";
 import { displayLabel } from "@/lib/i18n/display-labels";
@@ -18,8 +18,12 @@ export const GET = withCompanyAuth(
       company.companyId,
       contractIdFromDocumentRequest(request, "pdf"),
     );
-    const ar = auth.user.locale.startsWith("ar");
-    const locale = ar ? "ar" : "en";
+    const requestedLocale = new URL(request.url).searchParams.get("locale");
+    if (requestedLocale && requestedLocale !== "ar" && requestedLocale !== "en") {
+      throw ApiError.badRequest("DOCUMENT_LOCALE_INVALID", "locale must be ar or en.");
+    }
+    const locale: "ar" | "en" = (requestedLocale === "ar" || requestedLocale === "en" ? requestedLocale : null) || (auth.user.locale.toLowerCase().startsWith("ar") ? "ar" : "en");
+    const ar = locale === "ar";
     const identity = localizeCompanyDocumentIdentity(s.companyIdentity, locale, s.companyIdentity.name || "VOKA");
     const text = (a: string | null | undefined, e: string | null | undefined, f = "") =>
       ar ? (a ?? e ?? f) : (e ?? a ?? f);

@@ -1,3 +1,15 @@
+## Current Phase 4D handoff — 2026-09-10
+
+This section supersedes older current-state/slice instructions below. Phase 4C and payment re-acceptance remain CLOSED. A/B/E remain PASS and must not be reopened.
+
+C document engineering, D XLSX import and D2 Arabic UX: PASS. F installer/scoping/persistence and Security taxonomy linkage: PASS; F real-content acceptance is blocked on localhost/voka (45 Security descendants, zero active items). CEO visual/product acceptance remains PENDING; do not claim full Phase 4D closure.
+
+Full tests: 2312 passed / 0 failed / 50 skipped (2362 total; 343 files). Typecheck, build and Prisma status PASS (52 migrations applied). Quotation/Sales Assistant remain frozen; Data Factory remains PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E, PR, merge, tag or official-branch update.
+
+Final Arena SHA is the commit containing the [night checkpoint](../checkpoints/2026-09-10-phase4d-night-close.md); that checkpoint records migration IDs, data effects, all six root counts, local proof and morning-only acceptance steps.
+
+---
+
 <!-- VOKA-SLICE1-CANONICAL-CLOSURE-2026-09-09 -->
 
 ## Current resume point - 2026-09-09 (Slice 1 canonical closure)

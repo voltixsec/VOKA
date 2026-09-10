@@ -91,3 +91,8 @@ Approved.
 - The Sales Assistant consumes governed published knowledge; it does not build the library.
 - AI discovery is not canonical authority; provenance, validation, review and publication govern UCL truth.
 - Permanent scaling invariant: **Huge Library, Small Working Set.**
+
+
+## 2026-09-10 — Phase 4D bounded night closeout
+
+Owner-authorized local verification and bounded fixes are recorded in the [night checkpoint](../checkpoints/2026-09-10-phase4d-night-close.md). Commercial Invoice/Contract labels and locale handling preserve frozen Quotation geometry without changing Quotation source/tests. Sector installation stores tenant selection, scopes discovery and does not bulk-adopt products. A narrowly identified existing ETIM alarm hierarchy is linked under Security; missing real published items remain a product-data blocker, not permission to synthesize or populate the library. C/D/D2 engineering gates pass; F installer/linkage gates pass while local real-content acceptance is BLOCKED (45 descendants, zero active items). CEO visual acceptance remains pending. Data Factory stays paused; Arena-only commit/push is authorized, with no official update, PR, merge or tag.

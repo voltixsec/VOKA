@@ -6,7 +6,7 @@ import type { QuotationDocumentSnapshot } from "@/src/application/document";
 import { quotationTermsPresentation } from "@/src/application/document/quotation-terms-presentation";
 import {
   columnPositions,
-  drawTotals,
+
   proposalBoqItemText,
 } from "@/src/infrastructure/document/pdfkit/ProposalPdfBoq";
 import {
@@ -18,7 +18,7 @@ import {
   drawProposalCard,
   drawProposalCompanyApproval,
   drawProposalLetterhead,
-  drawProposalSubject,
+
   formatProposalDate,
   formatProposalMoney,
   proposalAlignment,
@@ -114,6 +114,17 @@ export function drawCommercialHeader(
   return 146;
 }
 
+function drawCommercialSubject(doc: ProposalPdfDocument, snapshot: ProposalSnapshot, y: number, title: string): number {
+  const width = doc.page.width - 76;
+  const brand = proposalBrand(snapshot);
+  const subject = (snapshot.locale === "ar" ? snapshot.quotation.subjectAr : snapshot.quotation.subjectEn) || title;
+  // Preserve ProposalPdfShared subject card geometry; change only commercial labels.
+  drawProposalCard(doc, 38, y, width, 72, brand.soft);
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(9).text(snapshot.locale === "ar" ? "الموضوع" : "Subject", 50, y + 10, proposalTextOptions("center", width - 24));
+  doc.fillColor(brand.primary).fontSize(16).text(subject, 50, y + 31, proposalTextOptions("center", width - 24, 31));
+  return y + 84;
+}
+
 function drawField(
   doc: ProposalPdfDocument,
   label: string,
@@ -151,7 +162,7 @@ function drawCoverCommercialSummary(doc: ProposalPdfDocument, snapshot: Proposal
   const terms = locale === "ar" ? quote.termsAndConditionsAr || quote.termsAndConditions || null : quote.termsAndConditionsEn || quote.termsAndConditions || null;
   const notesLabel = locale === "ar" ? "ملاحظات" : "Notes";
   const termsLabel = locale === "ar" ? "الشروط والأحكام" : "Terms and conditions";
-  const netLabel = locale === "ar" ? "صافي قيمة عرض السعر" : "Net proposal value";
+  const netLabel = locale === "ar" ? "صافي القيمة" : "Net value";
   let currentY = y;
 
   if (notes) {
@@ -195,7 +206,7 @@ function drawCommercialCover(doc: ProposalPdfDocument, snapshot: ProposalSnapsho
   const width = doc.page.width - 76;
   const hasLetterhead = drawProposalLetterhead(doc, snapshot);
   let y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
-  y = drawProposalSubject(doc, snapshot, y);
+  y = drawCommercialSubject(doc, snapshot, y, title);
 
   drawProposalCard(doc, left, y, width, 116);
   const gap = 14;
@@ -203,7 +214,7 @@ function drawCommercialCover(doc: ProposalPdfDocument, snapshot: ProposalSnapsho
   drawField(doc, text.reference, quote.number, left + 12, y + 13, columnWidth - 18, align);
   drawField(doc, text.issueDate, formatProposalDate(quote.issueDate), left + columnWidth + gap + 6, y + 13, columnWidth - 18, align);
   if (quote.expiryDate || locale !== "en") {
-    drawField(doc, text.expiryDate, formatProposalDate(quote.expiryDate), left + (columnWidth + gap) * 2, y + 13, columnWidth - 18, align);
+    drawField(doc, locale === "ar" ? "تاريخ الاستحقاق / الانتهاء" : "Due / end date", formatProposalDate(quote.expiryDate), left + (columnWidth + gap) * 2, y + 13, columnWidth - 18, align);
   }
   drawField(doc, text.customer, quote.customer.name, left + 12, y + 65, columnWidth - 18, align);
   drawField(
@@ -229,13 +240,264 @@ function drawCommercialCover(doc: ProposalPdfDocument, snapshot: ProposalSnapsho
   drawProposalCard(doc, left, y, width, 132);
   drawField(doc, text.scope, proposalScopeLabel(quote.scopeType, locale), left + 14, y + 13, width - 28, align);
   doc.moveTo(left + 14, y + 56).lineTo(left + width - 14, y + 56).lineWidth(0.4).strokeColor(PROPOSAL_COLOR.line).stroke();
-  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(10.5).text(text.brief, left + 14, y + 67, proposalTextOptions(align, width - 28));
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(10.5).text(locale === "ar" ? "الملخص" : "Summary", left + 14, y + 67, proposalTextOptions(align, width - 28));
   const brief = locale === "ar" ? quote.briefAr : quote.briefEn;
   doc.fillColor(PROPOSAL_COLOR.navy).fontSize(10.5).text(brief || "-", left + 14, y + 87, proposalTextOptions(align, width - 28, 34));
   y += 144 + 14;
   drawCoverCommercialSummary(doc, snapshot, y, hasLetterhead);
   return hasLetterhead;
 }
+
+export function drawCommercialTotals(
+  doc: ProposalPdfDocument,
+  snapshot: ProposalSnapshot,
+  y: number,
+): number {
+  const quote =
+    snapshot.quotation;
+
+  const locale =
+    snapshot.locale;
+
+  const brand =
+    proposalBrand(
+      snapshot,
+    );
+
+  const text =
+    { ...PROPOSAL_TEXT[locale], netProposalValue: locale === "ar" ? "صافي القيمة" : "Net value", totalProposalValue: locale === "ar" ? "إجمالي القيمة" : "Total value" };
+
+  const align =
+    proposalAlignment(locale);
+const left = 38;
+
+  const width =
+    doc.page.width - 76;
+
+  const hasDiscount =
+    quote.totals.discountAmount >
+    0;
+
+  const hasTax =
+    quote.totals.taxAmount >
+    0;
+
+  const rows = hasDiscount
+    ? [
+        {
+          label:
+            text.valueBeforeDiscount,
+
+          value:
+            formatProposalMoney(
+              quote.totals.subtotal,
+              quote.currencyCode,
+            ),
+
+          strong:
+            false,
+        },
+
+        {
+          label:
+            text.commercialDiscount +
+            (
+              quote.discount?.type ===
+              "PERCENTAGE"
+                ? " (" +
+                  quote.discount.value
+                    .toFixed(2)
+                    .replace(
+                      /\.00$/,
+                      "",
+                    ) +
+                  "%)"
+                : ""
+            ),
+
+          value:
+            "- " +
+            formatProposalMoney(
+              quote.totals
+                .discountAmount,
+              quote.currencyCode,
+            ),
+
+          strong:
+            false,
+        },
+
+        ...(hasTax
+          ? [{
+              label: text.tax,
+              value: formatProposalMoney(
+                quote.totals.taxAmount,
+                quote.currencyCode,
+              ),
+              strong: false,
+            }]
+          : []),
+
+        {
+          label:
+            text.netProposalValue,
+
+          value:
+            formatProposalMoney(
+              quote.totals
+                .totalAmount,
+              quote.currencyCode,
+            ),
+
+          strong:
+            true,
+        },
+      ]
+    : hasTax
+      ? [
+          {
+            label: text.valueBeforeDiscount,
+            value: formatProposalMoney(
+              quote.totals.subtotal,
+              quote.currencyCode,
+            ),
+            strong: false,
+          },
+          {
+            label: text.tax,
+            value: formatProposalMoney(
+              quote.totals.taxAmount,
+              quote.currencyCode,
+            ),
+            strong: false,
+          },
+          {
+            label: text.totalProposalValue,
+            value: formatProposalMoney(
+              quote.totals.totalAmount,
+              quote.currencyCode,
+            ),
+            strong: true,
+          },
+        ]
+      : [
+        {
+          label:
+            text.totalProposalValue,
+
+          value:
+            formatProposalMoney(
+              quote.totals
+                .totalAmount,
+              quote.currencyCode,
+            ),
+
+          strong:
+            true,
+        },
+        ];
+
+  const rowHeight =
+    22;
+
+  const cardHeight =
+    rows.length *
+      rowHeight +
+    4;
+
+  drawProposalCard(
+    doc,
+    left,
+    y,
+    width,
+    cardHeight,
+    PROPOSAL_COLOR.white,
+  );
+
+  let currentY =
+    y + 2;
+
+  rows.forEach(
+    (
+      row,
+      index,
+    ) => {
+      if (row.strong) {
+        doc
+          .rect(
+            left + 1,
+            currentY,
+            width - 2,
+            rowHeight,
+          )
+          .fill(
+            brand.softStrong,
+          );
+      }
+
+      if (index > 0) {
+        doc
+          .moveTo(
+            left + 8,
+            currentY,
+          )
+          .lineTo(
+            left + width - 8,
+            currentY,
+          )
+          .lineWidth(0.35)
+          .strokeColor(
+            PROPOSAL_COLOR.line,
+          )
+          .stroke();
+      }
+
+      doc
+        .fillColor(
+          row.strong
+            ? brand.primary
+            : PROPOSAL_COLOR.slate,
+        )
+        .fontSize(
+          row.strong ? 8.5 : 7.5,
+        )
+        .text(
+          row.label,
+          left + 10,
+          currentY + 6,
+          proposalTextOptions(
+            align,
+            width * 0.58,
+          ),
+        );
+
+      doc
+        .fillColor(
+          row.strong
+            ? brand.primary
+            : PROPOSAL_COLOR.navy,
+        )
+        .fontSize(
+          row.strong ? 9 : 7.5,
+        )
+        .text(
+          row.value,
+          left + width * 0.61,
+          currentY + 6,
+          proposalTextOptions(
+            "right",
+            width * 0.35,
+          ),
+        );
+
+      currentY +=
+        rowHeight;
+    },
+  );
+
+  return y + cardHeight;
+}
+
 
 function drawCommercialBoq(doc: ProposalPdfDocument, snapshot: ProposalSnapshot, title: string): boolean[] {
   const letterheadFlags: boolean[] = [];
@@ -255,7 +517,7 @@ function drawCommercialBoq(doc: ProposalPdfDocument, snapshot: ProposalSnapshot,
   const left = 38;
   const totalWidth = doc.page.width - 76;
   let y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
-  y = drawProposalSubject(doc, snapshot, y);
+  y = drawCommercialSubject(doc, snapshot, y, title);
 
   drawProposalCard(doc, left, y, totalWidth, 58);
   const metaWidth = totalWidth / 4;
@@ -338,8 +600,8 @@ function drawCommercialBoq(doc: ProposalPdfDocument, snapshot: ProposalSnapshot,
     hasLetterhead = startPage();
     y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
   }
-  y = drawTotals(doc, snapshot, y) + 8;
-  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(6.2).text(text.continuation, left + 14, y + 5, proposalTextOptions("center", totalWidth - 28, 12));
+  y = drawCommercialTotals(doc, snapshot, y) + 8;
+  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(6.2).text(locale === "ar" ? "هذه الصفحة جزء لا يتجزأ من المستند." : "This page forms an integral part of the document.", left + 14, y + 5, proposalTextOptions("center", totalWidth - 28, 12));
   y += 28;
   if (snapshot.quotation.status === "APPROVED" && snapshot.quotation.approvedAt) {
     drawProposalCompanyApproval(doc, snapshot, y, 112, null);
@@ -404,7 +666,8 @@ export async function renderCommercialProposalPdf(snapshot: ProposalSnapshot, ki
     doc.on("error", reject);
   });
   doc.registerFont("VOKA", path.join(process.cwd(), "assets", "fonts", "Cairo-Variable.ttf")).font("VOKA");
-  configureProposalTextDirection(doc, snapshot.locale);
+  // Mixed Arabic fallback content also needs bidi runs in an English document.
+  configureProposalTextDirection(doc, "ar");
   const coverLetterhead = drawCommercialCover(doc, snapshot, title);
   const boqLetterheads = drawCommercialBoq(doc, snapshot, title);
   decoratePages(doc, snapshot, [coverLetterhead, ...boqLetterheads]);

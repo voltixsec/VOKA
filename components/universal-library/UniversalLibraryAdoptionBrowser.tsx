@@ -250,6 +250,7 @@ export default function UniversalLibraryAdoptionBrowser() {
                     <div role="status" className="space-y-1 text-emerald-300">
                       <p>{t("أُضيف إلى كتالوج الشركة", "Added to Company Catalog")}</p>
                       <p>{result.name} · {result.code}</p>
+                      <p>{result.salePrice === null ? t("السعر غير محدد", "Price not set") : result.salePrice.toFixed(3)}</p>
                       <Link href="/dashboard/products" className="underline">{t("فتح كتالوج الشركة", "Open Company Catalog")}</Link>
                     </div>
                   ) : adoptableTypes.has(item.type) && item.isActive ? (
@@ -266,6 +267,8 @@ export default function UniversalLibraryAdoptionBrowser() {
       ) : null}
       <Modal open={!!selected} title={selected ? itemName(selected) : ""} onClose={() => { if (!saving) setSelected(null); }} closeLabel={t("إغلاق", "Close modal")}>
         <form onSubmit={adopt} className="space-y-4">
+          {selected?.identifiers?.map(identifier => <p key={identifier.id}>{identifier.identifierType}: {identifier.value}</p>)}
+          {selected?.provenances?.map(provenance => <p key={provenance.id} className="text-sm text-slate-400">{t("مصدر الإثبات", "Evidence source")}: {provenance.source?.name || provenance.externalRef || t("مصدر مسجل", "Recorded source")}</p>)}
           <p className="text-sm text-slate-400">{t("اترك السعر فارغًا إذا لم يُحدد. الصفر سعر صريح.", "Leave the price blank if it is not set. Zero is an explicit price.")}</p>
           <label className="block">{t("الكود (اختياري)", "Code (optional)")}<Input value={code} onChange={(event) => setCode(event.target.value)} disabled={saving} /></label>
           <label className="block">{t("سعر البيع (اختياري)", "Sale Price (optional)")}<Input type="number" min="0" step="0.001" value={salePrice} onChange={(event) => setSalePrice(event.target.value)} disabled={saving} /></label>

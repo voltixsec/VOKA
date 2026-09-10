@@ -9,6 +9,7 @@ const reply = (data: unknown, status = 200) => new Response(JSON.stringify({ dat
 afterEach(() => vi.restoreAllMocks());
 function mockApi(salePrice: number | null, status = 201) {
   return vi.spyOn(global, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/company-sectors')) return reply({ available: [{ id: 'security-root', name: 'Security' }], selected: ['security-root'] });
     if (init?.method === 'POST') return reply({ catalogItem: { id: 'tenant-item', code: 'TENANT-CAM', name: 'Tenant camera', salePrice }, isNewAdoption: status === 201 }, status);
     if (String(url).includes('?limit=50')) return reply([item]);
     if (String(url).endsWith('/published-camera')) return reply({ ...item, identifiers: [{ id: 'mpn', identifierType: 'MPN', value: 'MAKER-4K' }], provenances: [{ id: 'evidence', source: { name: 'Manufacturer datasheet' } }] });
@@ -19,6 +20,7 @@ describe('tenant published-library adoption', () => {
   it.each([['', null], ['0', 0], ['123.456', 123.456]] as const)('submits price %s without client identity fields', async (input, expected) => {
     const fetchMock = mockApi(expected);
     render(<Page />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Security' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to Company Catalog' }));
     const modal = screen.getByRole('dialog');
     await within(modal).findByText('MPN: MAKER-4K');
@@ -26,7 +28,7 @@ describe('tenant published-library adoption', () => {
     if (input) fireEvent.change(within(modal).getByLabelText('Sale Price (optional)'), { target: { value: input } });
     fireEvent.click(within(modal).getByRole('button', { name: 'Add to Company Catalog' }));
     await screen.findByText('Added to Company Catalog');
-    expect(fetchMock).toHaveBeenCalledWith('/api/universal-library/items?limit=50&isActive=true', expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith('/api/universal-library/items?limit=50&isActive=true&categoryId=security-root', expect.any(Object));
     const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
     expect(posts).toHaveLength(1);
     expect(posts[0][0]).toBe('/api/universal-library/items/published-camera/adopt');
@@ -38,6 +40,7 @@ describe('tenant published-library adoption', () => {
   it('shows existing tenant truth returned by an idempotent adoption', async () => {
     mockApi(75, 200);
     render(<Page />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Security' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to Company Catalog' }));
     const modal = screen.getByRole('dialog');
     fireEvent.change(within(modal).getByLabelText('Sale Price (optional)'), { target: { value: '0' } });
@@ -49,6 +52,7 @@ describe('tenant published-library adoption', () => {
   it('keeps server rejection visible without claiming adoption', async () => {
     const fetchMock = mockApi(null);
     render(<Page />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Security' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Add to Company Catalog' }));
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: { message: 'Forbidden' } }), { status: 403 }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add to Company Catalog' }));
