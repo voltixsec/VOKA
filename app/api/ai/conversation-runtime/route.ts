@@ -23,7 +23,7 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     try { priorState = await verifyConversationState(supplied.stateToken, company.companyId); }
     catch { throw ApiError.forbidden("CONVERSATION_STATE_INVALID", "The conversation state is invalid or belongs to another company."); }
   }
-  const state = await runtime.execute({ state: priorState, message, locale: body.locale, source: body.source, attachment: body.attachment as { id?: string; name: string; type: string; size: number } | null, companyId: company.companyId, action });
+  const state = await runtime.execute({ state: priorState, message, locale: body.locale, source: body.source, attachment: body.attachment as { id?: string; name: string; type: string; size: number } | null, companyId: company.companyId, userId: _auth.user?.id ?? null, action });
   if (state.handoff) state.handoffToken = await signCommercialHandoff(state.handoff, company.companyId);
   state.stateToken = await signConversationState(state, company.companyId);
   return apiSuccess(state, { headers: { "Cache-Control": "private, no-store" } });

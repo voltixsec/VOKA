@@ -1,13 +1,130 @@
+<!-- VOKA-REQUIREMENT-EVIDENCE-ATTACHMENT-FOUNDATION-2026-09-10 -->
+
+## Current execution — Requirement + Evidence + real attachment foundation — 2026-09-10
+
+Implementation is on the Arena-fixed branch `arena/01a08c94-voka`. The requested
+`e46857f` is available as `origin/v1-live-certification` after fetch, but this
+checkout was not switched or reset because the Arena branch contained pre-existing
+user work. The sprint checkpoint is
+[Requirement + Evidence + Attachment Foundation](../checkpoints/2026-09-10-requirement-evidence-attachment-foundation.md).
+
+Delivered: tenant-owned persisted SourceArtifact intake with real multipart bytes,
+SHA-256 and local storage seam; bounded machine-readable PDF extraction with page
+citations; Citation / Requirement / RequirementCitation additive schema; truthful
+attachment, BOQ, and drawing inspection statuses; conservative BOQ review-required
+requirements; shared Takeoff SourceArtifact linkage; Composer picker/drop/paste; and
+active Sales Assistant governed workspace synchronization.
+
+The active Vehicle Elevator regression now preserves system identity, quantity 1,
+and six stops/floors through corrections and reconciliation without inventing an
+engineering BOM. Images remain `STORED_PENDING_VISION`; drawing visual analysis,
+OCR, XLSX/DOCX, automatic quantity extraction, Requirement review UI, and object
+storage remain unavailable. Supplier/RFQ/PO/messaging/scraping and Data Factory
+remain out of scope and paused.
+
+Recovery validation is green for the affected foundation/runtime groups: 44 files
+and 271 tests passed, with targeted ESLint and diff-check passing. Full Vitest
+reached 334 passing files / 2,185 passing tests, with 15 files failing / 4 tests
+failing because the generated Prisma client is absent. `npx prisma generate` was
+attempted with local placeholder database URLs and was blocked downloading the
+Prisma engine; `npm run typecheck` has the resulting generated-client cascade,
+and `npm run build` is additionally blocked by Google Fonts network failures.
+No database migration was deployed from this environment.
+
+Exact next slice: validate the additive migration/generated client in the target
+environment, then add only a small human Requirement review/correction surface.
+Do not start Supplier Intelligence, RFQ/PO, drawing visual intelligence, or Data
+Factory.
+
+---
+
+<!-- VOKA-V1-FINAL-CLOSURE-VOLTX-2026-09-10 -->
+
+## VOKA V1 final product closure — 2026-09-10
+
+Execution is on Arena-fixed branch `arena/01a08c94-voka`, with authoritative base
+`f31b12fbb11339aa65698044c03e76189434f7fe`. This sprint is the current product
+state for the Sales Assistant, Quotation, and Drawing Takeoff surfaces. Customer
+identity is optional while a quotation remains a DRAFT; final approval/send still
+requires a customer, resolved pricing, quantities, and product readiness.
+
+Implemented in this slice: customer-optional quotation handoff/API/composer, explicit
+candidate rejection and researched-fact approval, confirmed takeoff → quotation
+draft conversion with provenance and unresolved pricing, preservation of multi-line
+takeoff review state, terms/notes handoff, and quotation combobox ARIA ownership.
+DB data and schema remain untouched. Data Factory remains paused. See the durable
+checkpoint `../checkpoints/2026-09-10-v1-final-product-closure-voltx-arena.md`.
+
+<!-- VOKA-PHASE4E-BIG-CLOSURE-SPRINT-2026-09-10 -->
+
+## Phase 4E big closure sprint (execution-branch, non-authoritative) — 2026-09-10
+
+A bounded shared-chrome + localization polish sprint ran on Arena execution
+branch `arena/01a08bf6-voka`, based on authoritative HEAD
+`f75b0c75fa376d5ab354f2ad1471747e4ec7bb1a`. It closed Group A (dashboard chrome
+localization/nav consistency), Group B (catalog polish), Group C (Drawing Takeoff
+XLSX localization), and a bounded Group D AR/EN error-leak sweep. Frozen areas,
+DB data, and DB schema were untouched; typecheck/build are environment-deferred
+(no Prisma client / network). Details:
+[Phase 4E big closure sprint](../checkpoints/2026-09-10-phase4e-big-closure-sprint.md).
+No authoritative-branch update, PR, merge, or tag from this sprint. No acceptance
+status below is changed.
+
+---
+
+## Current Phase 4D handoff — 2026-09-10 office close
+
+This section supersedes the night-close PENDING-visual language and older current-state/slice instructions below. Phase 4C and payment re-acceptance remain CLOSED. A/B/E remain PASS and must not be reopened.
+
+Phase 4D **software engineering is CLOSED** on Arena `3d570b1f688d8bcf0806f9caf3587e15fb616bb1`.
+
+- A Customers: PASS
+- B Invoice list + Sales Order picker: PASS
+- C Commercial documents: ENGINEERING PASS + **CEO VISUAL PASS**
+- D Catalog XLSX import: PASS
+- D2 Catalog Arabic UX: PASS
+- E Catalog XLSX export: PASS
+- F Sector installer: ENGINEERING/BEHAVIOR PASS
+- UCL production content: **NOT MATERIALIZED** (taxonomy-only Security tree; JSONL artifacts not in Git; Data Factory PAUSED)
+
+Do not keep 4D code open because a test DB lacks published items. Do not claim UCL production-content PASS.
+
+Home resume: [office session close](../checkpoints/2026-09-10-office-session-close-home-resume.md). Night proof details remain in [night checkpoint](../checkpoints/2026-09-10-phase4d-night-close.md).
+
+Next execution package (audit only, no 4E code yet): [Phase 4E readiness audit](../checkpoints/2026-09-10-phase4e-readiness-audit.md). First home implementation slice: **P1 Sales Order list localization**.
+
+Quotation/Sales Assistant remain frozen. Data Factory remains PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E implementation, PR, merge, tag or official-branch update from this audit.
+
+---
+
+<!-- VOKA-SLICE1-CANONICAL-CLOSURE-2026-09-09 -->
+
+## Current resume point - 2026-09-09 (Slice 1 canonical closure)
+
+**PHASE 4C = CLOSED.**
+
+**LIVE-FAIL-001 / CEO-R1-030 = CLOSED.**
+
+Official base: `7b00c857a39d4d0d8bd6d8fbe4434b2595ba5287`
+
+- Engineering validation = PASS
+- Live auth/session/platform acceptance = PASS
+- Cross-Tenant Isolation = PASS 8/8 (`AUTH-DIRECT-ROUTE-GATE` CLOSED)
+- Payment live re-acceptance = PASS (10.000 ISSUED; 4.000 → 201 PARTIALLY_PAID 4/6; register/statement/dashboard PASS; 6.000 → 201 PAID 10/0 form hidden; overpay 1.000 → 409 PAYMENT_CONFLICT, no extra payment)
+
+Deferred, not blockers: D4 multi-membership selector (fail-closed); D5 refresh revocation (Phase 5); D6 broader expired-session UX.
+
+Sales Assistant and Quotation remain CEO-FROZEN. Data Factory remains PAUSED. Do not reopen UCL foundation. **Do not start Phase 4D in this slice.**
+
+Read the [current canonical acceptance ledger](../product/MASTER_PRODUCT_ACCEPTANCE_LEDGER.md) and [final verification checkpoint](../checkpoints/2026-09-09-phase4c-final-verification.md).
+
+This resume point supersedes the older current-state instructions below, including the same-day Phase 4C PARTIAL / payment-not-closed snapshot.
+
 <!-- VOKA-PHASE4C-FINAL-VERIFICATION-2026-09-09 -->
 
-## Current resume point - 2026-09-09
+## Historical resume snapshot - 2026-09-09 (superseded)
 
-Phase 4C: **ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING**.
-The bounded unauthorized API code correction is validated on the official feature branch, starting from `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`.
-
-Read the [current canonical acceptance ledger](../product/MASTER_PRODUCT_ACCEPTANCE_LEDGER.md) and [final verification checkpoint](../checkpoints/2026-09-09-phase4c-final-verification.md) for exact evidence, test exclusions and deferred items.
-
-Next: CEO cross-tenant live proof on an explicitly safe home/test DB and Payment live re-acceptance, then governed Phase 4D review. Payment is not closed. Sales Assistant/Quotation remain frozen and Data Factory paused. No merge/tag/push was performed. This resume point supersedes the older current-state instructions below.
+Phase 4C was then ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING at `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`. That snapshot is superseded by Slice 1 canonical closure above.
 
 <!-- VOKA-UCL-PHASE4A-FINAL-CLOSE-2026-09-08 -->
 

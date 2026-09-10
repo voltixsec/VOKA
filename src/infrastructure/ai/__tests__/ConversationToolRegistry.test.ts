@@ -34,6 +34,17 @@ describe("ConversationToolRegistry staged product retrieval", () => {
     expect(result).toMatchObject({ kind: "RESEARCH", status: "COMPLETED", evidence: [{ url: "https://authority.gov.kw/fm200" }] });
   });
 
+  it("executes tenant-scoped attachment inspection and refuses metadata-only inspection", async () => {
+    const graph = buildSystemConfigurationGraph({ "system.identity": fact("system.identity", "CCTV") });
+    const inspection = { inspect: vi.fn().mockResolvedValue({ kind: "ATTACHMENT_INSPECTION", status: "COMPLETED", artifactId: "artifact-1", summary: "PDF read", evidence: [], citations: [], createdAt: now }) };
+    const registry = new ConversationToolRegistry(null, null, () => now, inspection);
+    const completed = await registry.execute({ request: { kind: "ATTACHMENT_INSPECTION", query: "read the attached PDF", attachmentId: "artifact-1" }, companyId: "tenant-1", locale: "en", graph });
+    const missing = await registry.execute({ request: { kind: "ATTACHMENT_INSPECTION", query: "read the attached PDF", attachmentId: null }, companyId: "tenant-1", locale: "en", graph });
+    expect(inspection.inspect).toHaveBeenCalledWith({ companyId: "tenant-1", artifactId: "artifact-1", kind: "ATTACHMENT_INSPECTION", query: "read the attached PDF" });
+    expect(completed).toMatchObject({ status: "COMPLETED", artifactId: "artifact-1" });
+    expect(missing).toMatchObject({ status: "ATTACHMENT_REQUIRED" });
+  });
+
   it("accepts jurisdiction rules only when the governed evidence source has matching authority classification", async () => {
     const graph = buildSystemConfigurationGraph({ "system.identity": fact("system.identity", "CCTV"), "system.cameraCount": fact("system.cameraCount", 8), "system.jurisdiction": fact("system.jurisdiction", "Kuwait") });
     const rule = { systemType: "CCTV", jurisdiction: "Kuwait", profileId: "kw-rule", profileVersion: "2026", authoritySourceUrl: "https://authority.gov.kw/rule", authoritySourceTitle: "Authority rule", sourceType: "GOVERNMENT_AUTHORITY" as const, values: { retentionDays: 90 } };

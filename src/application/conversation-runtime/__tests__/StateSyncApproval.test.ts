@@ -1,8 +1,9 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ConfirmedFact } from "../types";
 import {
   promotePendingCandidateFacts,
   reduceFactProposals,
+  rejectPendingCandidateFacts,
 } from "../fact-reducer";
 import { buildSystemConfigurationGraph } from "../solution-graph";
 import { adaptCommercialHandoffToQuotationDraft } from "../quotation-handoff";
@@ -21,6 +22,16 @@ function explicitFact(
 }
 
 describe("Conversation solution approval state sync", () => {
+  it("keeps researched facts pending until approval and records explicit rejection", () => {
+    const proposed = reduceFactProposals({}, [{ key: "system.jurisdiction", value: "Kuwait", provenance: "RESEARCHED", evidence: "authoritative market research" }], "research", "2026-08-31T18:00:00.000Z", "group-1");
+    expect(proposed.candidates[0]).toMatchObject({ status: "PENDING_APPROVAL", provenance: "RESEARCHED" });
+    const rejected = rejectPendingCandidateFacts(proposed.candidates, "No, not this", "2026-08-31T18:01:00.000Z");
+    expect(rejected.rejectedKeys).toEqual(["system.jurisdiction"]);
+    expect(rejected.candidates[0]).toMatchObject({ status: "REJECTED", rejectionReason: "USER_REJECTED" });
+    const approved = promotePendingCandidateFacts(proposed.confirmed, proposed.candidates, "confirm", "2026-08-31T18:02:00.000Z");
+    expect(approved.confirmed["system.jurisdiction"]).toMatchObject({ value: "Kuwait", provenance: "USER_APPROVED" });
+  });
+
   it("promotes approved ceramic estimates and rebuilds the exact governed workspace and draft state", () => {
     const base: Record<string, ConfirmedFact> = {
       "system.identity": explicitFact("system.identity", "سيراميك أرضيات"),

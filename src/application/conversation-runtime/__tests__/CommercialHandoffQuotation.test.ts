@@ -72,13 +72,13 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(draft.termsAndConditionsEn).not.toContain("stale installation");
   });
 
-  it("requires a customer name before persisting a new Draft", async () => {
+  it("creates a reviewable Draft before a customer is known", async () => {
     const gateway = port();
     const value = handoff(); delete value.confirmedFacts["customer.name"];
     const result = await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: value, locale: "ar" });
-    expect(result).toEqual({ status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] });
+    expect(result.status).toBe("CREATED");
     expect(gateway.resolveCustomer).not.toHaveBeenCalled();
-    expect(gateway.createDraft).not.toHaveBeenCalled();
+    expect(vi.mocked(gateway.createDraft).mock.calls[0][0]).toMatchObject({ customerId: null, customer: null });
   });
 
   it("preserves an ambiguous proposed customer in the Draft without guessing a canonical id", async () => {
