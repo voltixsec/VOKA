@@ -26,7 +26,7 @@ function evidence(citations: ToolCitation[]) {
 
 export class PrismaSourceArtifactInspection implements SourceArtifactInspectionPort {
   async inspect(input: Parameters<SourceArtifactInspectionPort["inspect"]>[0]): Promise<ToolObservation> {
-    const artifact = await prisma.sourceArtifact.findFirst({ where: { id: input.artifactId, companyId: input.companyId }, include: { citations: { orderBy: [{ pageNumber: "asc" }, { createdAt: "asc" }] } } });
+    const artifact = await prisma.sourceArtifact.findFirst({ where: { id: input.artifactId, companyId: input.companyId }, include: { citations: { orderBy: [{ pageNumber: "asc" }, { observedAt: "asc" }] } } });
     if (!artifact) return { kind: input.kind, status: "UNAVAILABLE", artifactId: input.artifactId, summary: "The source artifact was not found for the active company.", evidence: [], citations: [], createdAt: new Date().toISOString() };
     const citations = citationsFor(artifact);
     let bytes: Buffer;
@@ -44,14 +44,15 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     if (!extractedText) {
       try { extractedText = extractPdfText(bytes).text.trim(); } catch { extractedText = ""; }
     }
-    if (!extractedText || artifact.processingState === "FAILED") return { kind: input.kind, status: "UNAVAILABLE", artifactId: artifact.id, summary: "The PDF was retained but machine-readable text could not be extracted.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
+    if (!extractedText || artifact.processingState === "FAILED") return { kind: input.kind, status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "STORED_PENDING_VISION", artifactId: artifact.id, summary: "The PDF was retained but machine-readable text could not be extracted.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
     if (input.kind === "DRAWING_INSPECTION") return { kind: input.kind, status: "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: "The PDF text was read and retained, but visual drawing analysis is not available in this sprint.", evidence: evidence(citations), citations, extractedText, createdAt: new Date().toISOString() };
     const candidates = input.kind === "BOQ_INSPECTION" ? parseBoqCandidates(extractedText, artifact.id, citations) : [];
-    if (candidates.length) {
+    if (candidates.length && input.runtimeId) {
       for (const candidate of candidates) {
+        const stableKey = `runtime:${input.runtimeId}:${candidate.stableKey}`;
         const requirement = await prisma.requirement.upsert({
-          where: { companyId_stableKey: { companyId: input.companyId, stableKey: candidate.stableKey } },
-          create: { companyId: input.companyId, stableKey: candidate.stableKey, sourceContext: "SALES_ASSISTANT", description: candidate.description, quantity: candidate.quantity, unit: candidate.unit, technicalRequirement: candidate.technicalRequirement, quantityStatus: "EXTRACTED_REVIEW_REQUIRED", reviewState: "NEEDS_REVIEW", provenance: "SOURCE_ARTIFACT_TEXT", correctionTrace: { sourceArtifactId: artifact.id } },
+          where: { companyId_stableKey: { companyId: input.companyId, stableKey } },
+          create: { companyId: input.companyId, stableKey, sourceContext: "SALES_ASSISTANT", description: candidate.description, quantity: candidate.quantity, unit: candidate.unit, technicalRequirement: candidate.technicalRequirement, quantityStatus: "EXTRACTED_REVIEW_REQUIRED", reviewState: "NEEDS_REVIEW", provenance: "SOURCE_ARTIFACT_TEXT", correctionTrace: { sourceArtifactId: artifact.id } },
           update: { description: candidate.description, quantity: candidate.quantity, unit: candidate.unit, technicalRequirement: candidate.technicalRequirement, quantityStatus: "EXTRACTED_REVIEW_REQUIRED", provenance: "SOURCE_ARTIFACT_TEXT" },
           select: { id: true },
         });

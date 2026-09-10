@@ -176,6 +176,7 @@ model DrawingTakeoffSession {
   @@unique([companyId, sourceSha256, userIntent])
   @@index([companyId, status, createdAt])
   @@index([companyId, quotationId])
+  @@index([companyId, sourceArtifactId])
 }
 
 model DrawingTakeoffLine {

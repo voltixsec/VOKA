@@ -25,7 +25,13 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     }
     const sourceSha256 = artifact.contentSha256;
     const existing = await prisma.drawingTakeoffSession.findUnique({ where: { companyId_sourceSha256_userIntent: { companyId: company.companyId, sourceSha256, userIntent: input.userIntent } }, include: { lines: true } });
-    if (existing) return apiSuccess({ session: serializeSession(existing), idempotent: true }, { headers: { "Cache-Control": "private, no-store" } });
+    if (existing) {
+      if (!existing.sourceArtifactId) {
+        await prisma.drawingTakeoffSession.updateMany({ where: { id: existing.id, companyId: company.companyId, sourceSha256, sourceArtifactId: null }, data: { sourceArtifactId: artifact.id } });
+      }
+      const linked = await prisma.drawingTakeoffSession.findFirst({ where: { id: existing.id, companyId: company.companyId }, include: { lines: true } });
+      return apiSuccess({ session: serializeSession(linked ?? existing), idempotent: true }, { headers: { "Cache-Control": "private, no-store" } });
+    }
     const session = await prisma.drawingTakeoffSession.create({ data: { companyId: company.companyId, createdByUserId: auth.user.id, sourceArtifactId: artifact.id, ...input, sourceSha256 }, include: { lines: true } });
     return apiSuccess({ session: serializeSession(session), idempotent: false, analysis: { status: "EXTERNAL_PENDING", message: "Automated drawing extraction is not configured. Add reviewable observations without inventing quantities." } }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { policyError(error); }

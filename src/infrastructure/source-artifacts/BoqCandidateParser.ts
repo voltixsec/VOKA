@@ -9,7 +9,7 @@ export function parseBoqCandidates(text: string, artifactId: string, citations: 
     if (!match) continue;
     const description = match[2]?.replace(/\s+/gu, " ").trim();
     if (!description || description.length < 2) continue;
-    const citation = citations.find((item) => item.pageNumber === 1) ?? citations[0];
+    const citation = citations.find((item) => item.sourceArtifactId === artifactId && item.supportedClaimSummary.includes(line.trim()));
     candidates.push({ stableKey: `artifact:${artifactId}:boq:${index + 1}`, description, quantity: Number(match[1]), unit: match[3], technicalRequirement: description, quantityStatus: "EXTRACTED_REVIEW_REQUIRED", reviewState: "NEEDS_REVIEW", citationId: citation?.id });
   }
   return candidates.slice(0, 100);

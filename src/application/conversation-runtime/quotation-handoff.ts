@@ -63,11 +63,7 @@ function localizedNotes(handoff: CommercialSolutionHandoff, locale: "ar" | "en")
     const value = normalizeCommercialText(raw);
     return value ? [label + ": " + value] : [];
   })) : [];
-  const citedSourceClaims = handoff.toolEvidence.flatMap((observation) => (observation.citations ?? []).map((citation) => {
-    const locator = citation.pageNumber ? `, ${locale === "ar" ? "صفحة" : "page"} ${citation.pageNumber}` : "";
-    return `${locale === "ar" ? "مصدر" : "Source"}: ${citation.title}${locator} — ${citation.supportedClaimSummary}`;
-  }));
-  return normalizeCommercialText([...new Set([...meaningful, ...structured, ...citedSourceClaims])].join("\n"));
+  return normalizeCommercialText([...new Set([...meaningful, ...structured])].join("\n"));
 }
 
 function localizedSubject(system: string, scopeType: QuotationScopeType | null, locale: "ar" | "en") {

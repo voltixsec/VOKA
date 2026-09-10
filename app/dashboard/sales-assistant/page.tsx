@@ -98,7 +98,7 @@ export default function SalesAssistantPage(props: any) {
   };
 
   const advanceConversation = async (explicitMessage?: string, explicitSource = sourceRef.current) => {
-    const message = (explicitMessage ?? prompt).trim(); if (!message || turnInFlightRef.current) return;
+    const message = (explicitMessage ?? prompt).trim(); if ((!message && !attachment) || turnInFlightRef.current) return;
     const generation = ++generationRef.current;
     turnInFlightRef.current = true;
     setIsGenerating(true); setError(false); setHandoffError(null); setPendingUserMessage(message); setPendingResearch(isResearchRequest(message)); setActivityStage("UNDERSTANDING");

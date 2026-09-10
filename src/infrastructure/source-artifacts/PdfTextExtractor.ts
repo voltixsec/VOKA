@@ -32,7 +32,7 @@ function decodedStreams(bytes: Buffer) {
     const dictionaryStart = Math.max(0, (match.index ?? 0) - 600);
     const dictionary = raw.slice(dictionaryStart, match.index ?? 0);
     if (/\/FlateDecode/iu.test(dictionary)) {
-      try { chunks.push(inflateRawSync(payload).toString("latin1")); continue; } catch { try { chunks.push(inflateSync(payload).toString("latin1")); continue; } catch { /* preserve honest empty extraction */ } }
+      try { chunks.push(inflateRawSync(payload, { maxOutputLength: 4 * 1024 * 1024 }).toString("latin1")); continue; } catch { try { chunks.push(inflateSync(payload, { maxOutputLength: 4 * 1024 * 1024 }).toString("latin1")); continue; } catch { /* preserve honest empty extraction */ } }
     }
     chunks.push(payload.toString("latin1"));
   }
@@ -43,14 +43,11 @@ export function extractPdfText(bytes: Uint8Array): ExtractedPdf {
   const buffer = Buffer.from(bytes);
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("PDF_CONTENT_INVALID");
   const raw = buffer.toString("latin1");
+  if (/\/ToUnicode|\/Identity-[HV]|\/Encrypt/u.test(raw)) return { text: "", pages: [] };
   const streams = decodedStreams(buffer);
   const allText = [...streams.map(operatorText), ...(streams.length ? [] : [operatorText(raw)])].filter(Boolean).join("\n").replace(/[ \t]+/gu, " ").replace(/\n{2,}/gu, "\n").trim();
-  const explicitPages = allText.split("\f").map((text) => text.trim()).filter(Boolean);
-  const pageCount = Math.max(1, (raw.match(/\/Type\s*\/Page(?!s)/gu) ?? []).length);
-  const pageTexts = explicitPages.length > 1 ? explicitPages : [allText];
-  const pages = Array.from({ length: Math.max(pageCount, pageTexts.length) }, (_, index) => {
-    const text = pageTexts[index] ?? "";
-    return { pageNumber: index + 1, text, characterCount: text.length };
-  });
+  // Content streams are not mapped to page objects by this bounded extractor.
+  // Unknown attribution is null, including a visually single-page document.
+  const pages: ArtifactPage[] = allText ? [{ pageNumber: null, text: allText, characterCount: allText.length }] : [];
   return { text: allText, pages };
 }

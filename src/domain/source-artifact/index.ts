@@ -46,5 +46,5 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
   if (!valid) throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_CONTENT_INVALID", "The attachment content does not match its declared file type.");
 }
 
-export type ArtifactPage = { pageNumber: number; text: string; characterCount: number };
+export type ArtifactPage = { pageNumber: number | null; text: string; characterCount: number };
 export type ExtractedPdf = { text: string; pages: ArtifactPage[] };
