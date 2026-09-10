@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import path from 'node:path';
 import { drawTotals } from '@/src/infrastructure/document/pdfkit/ProposalPdfBoq';
 import { drawCommercialTotals } from '../commercial-pdf';
 import { describe, expect, it, vi } from "vitest";
@@ -75,6 +76,8 @@ describe('commercial totals retain frozen proposal geometry', () => {
     const snapshot = commercialSnapshotFromParts({ kind: 'INVOICE', locale: 'en', company: { name: 'Company' }, number: 'INV-1', status: 'ISSUED', issueDate: new Date('2026-09-10'), currencyCode: 'KWD', customerName: 'Customer', lines: [], totals });
     const original = new PDFDocument({ size: 'A4' });
     const commercial = new PDFDocument({ size: 'A4' });
+    commercial.registerFont('VOKA', path.join(process.cwd(), 'assets/fonts/Cairo-Variable.ttf'));
+    commercial.registerFont('VOKA-Semibold', path.join(process.cwd(), 'assets/fonts/Cairo-SemiBold.ttf'));
     const originalText = vi.spyOn(original, 'text');
     const commercialText = vi.spyOn(commercial, 'text');
     expect(drawCommercialTotals(commercial, snapshot, 200)).toBe(drawTotals(original, snapshot, 200));

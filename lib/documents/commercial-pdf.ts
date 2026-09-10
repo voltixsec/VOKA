@@ -1,5 +1,6 @@
 import path from "node:path";
 import PDFDocument from "pdfkit";
+import { COMMERCIAL_LABEL_STYLE as LABEL, COMMERCIAL_ROW_STYLE, commercialRowHeight, wrapCommercialText } from "./commercial-pdf-layout";
 import { commercialUnitLabel } from "@/lib/i18n/unit-labels";
 import { displayLabel } from "@/lib/i18n/display-labels";
 import type { QuotationDocumentSnapshot } from "@/src/application/document";
@@ -120,7 +121,7 @@ function drawCommercialSubject(doc: ProposalPdfDocument, snapshot: ProposalSnaps
   const subject = (snapshot.locale === "ar" ? snapshot.quotation.subjectAr : snapshot.quotation.subjectEn) || title;
   // Preserve ProposalPdfShared subject card geometry; change only commercial labels.
   drawProposalCard(doc, 38, y, width, 72, brand.soft);
-  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(9).text(snapshot.locale === "ar" ? "الموضوع" : "Subject", 50, y + 10, proposalTextOptions("center", width - 24));
+  doc.font(LABEL.font).fillColor(PROPOSAL_COLOR.muted).fontSize(LABEL.subject).text(snapshot.locale === "ar" ? "الموضوع" : "Subject", 50, y + 10, proposalTextOptions("center", width - 24)).font("VOKA");
   doc.fillColor(brand.primary).fontSize(16).text(subject, 50, y + 31, proposalTextOptions("center", width - 24, 31));
   return y + 84;
 }
@@ -134,7 +135,7 @@ function drawField(
   width: number,
   align: "left" | "right",
 ): void {
-  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(7).text(label, x, y, proposalTextOptions(align, width));
+  doc.font(LABEL.font).fillColor(PROPOSAL_COLOR.muted).fontSize(LABEL.field).text(label, x, y, proposalTextOptions(align, width)).font("VOKA");
   doc.fillColor(PROPOSAL_COLOR.navy).fontSize(9).text(value || "-", x, y + 15, proposalTextOptions(align, width, 27));
 }
 
@@ -147,7 +148,7 @@ function drawCompactField(
   width: number,
   align: "left" | "right",
 ): void {
-  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(6.5).text(label, x, y, proposalTextOptions(align, width));
+  doc.font(LABEL.font).fillColor(PROPOSAL_COLOR.muted).fontSize(LABEL.compact).text(label, x, y, proposalTextOptions(align, width)).font("VOKA");
   doc.fillColor(PROPOSAL_COLOR.navy).fontSize(8).text(value || "-", x, y + 14, proposalTextOptions(align, width, 20));
 }
 
@@ -168,7 +169,7 @@ function drawCoverCommercialSummary(doc: ProposalPdfDocument, snapshot: Proposal
   if (notes) {
     const notesHeight = compactForLetterhead ? 60 : 68;
     drawProposalCard(doc, left, currentY, width, notesHeight, brand.soft);
-    doc.fillColor(brand.primary).fontSize(8).text(notesLabel, left + 14, currentY + 10, proposalTextOptions(align, width - 28, 14));
+    doc.font(LABEL.font).fillColor(brand.primary).fontSize(LABEL.section).text(notesLabel, left + 14, currentY + 10, proposalTextOptions(align, width - 28)).font("VOKA");
     doc.fillColor(PROPOSAL_COLOR.slate).fontSize(8).text(notes, left + 14, currentY + 29, proposalTextOptions(align, width - 28, 30));
     currentY += notesHeight + (compactForLetterhead ? 6 : 10);
   }
@@ -180,14 +181,14 @@ function drawCoverCommercialSummary(doc: ProposalPdfDocument, snapshot: Proposal
     const availableHeight = doc.page.height - 82 - (compactForLetterhead ? 56 : 70) - currentY;
     const termsHeight = Math.max(compactForLetterhead ? 74 : 86, Math.min(textHeight + 42, availableHeight));
     drawProposalCard(doc, left, currentY, width, termsHeight, PROPOSAL_COLOR.pale);
-    doc.fillColor(brand.primary).fontSize(8).text(termsLabel, left + 14, currentY + 10, proposalTextOptions(align, width - 28, 14));
+    doc.font(LABEL.font).fillColor(brand.primary).fontSize(LABEL.section).text(termsLabel, left + 14, currentY + 10, proposalTextOptions(align, width - 28)).font("VOKA");
     doc.fillColor(PROPOSAL_COLOR.slate).fontSize(8).text(displayTerms, left + 14, currentY + 29, proposalTextOptions(align, width - 28, termsHeight - 38));
     currentY += termsHeight + (compactForLetterhead ? 6 : 12);
   }
 
   const valueHeight = compactForLetterhead ? 50 : 58;
   doc.roundedRect(left, currentY, width, valueHeight, 8).fill(brand.primary);
-  doc.fillColor(brand.textOnPrimary).fontSize(8).text(netLabel, left + 16, currentY + 10, proposalTextOptions(locale === "ar" ? "right" : "left", width - 32, 14));
+  doc.font(LABEL.font).fillColor(brand.textOnPrimary).fontSize(LABEL.section).text(netLabel, left + 16, currentY + 10, proposalTextOptions(locale === "ar" ? "right" : "left", width - 32)).font("VOKA");
   doc.fillColor(brand.textOnPrimary).fontSize(15).text(
     formatProposalMoney(quote.totals.totalAmount, quote.currencyCode),
     left + 16,
@@ -240,7 +241,7 @@ function drawCommercialCover(doc: ProposalPdfDocument, snapshot: ProposalSnapsho
   drawProposalCard(doc, left, y, width, 132);
   drawField(doc, text.scope, proposalScopeLabel(quote.scopeType, locale), left + 14, y + 13, width - 28, align);
   doc.moveTo(left + 14, y + 56).lineTo(left + width - 14, y + 56).lineWidth(0.4).strokeColor(PROPOSAL_COLOR.line).stroke();
-  doc.fillColor(PROPOSAL_COLOR.muted).fontSize(10.5).text(locale === "ar" ? "الملخص" : "Summary", left + 14, y + 67, proposalTextOptions(align, width - 28));
+  doc.font(LABEL.font).fillColor(PROPOSAL_COLOR.muted).fontSize(LABEL.summary).text(locale === "ar" ? "الملخص" : "Summary", left + 14, y + 67, proposalTextOptions(align, width - 28)).font("VOKA");
   const brief = locale === "ar" ? quote.briefAr : quote.briefEn;
   doc.fillColor(PROPOSAL_COLOR.navy).fontSize(10.5).text(brief || "-", left + 14, y + 87, proposalTextOptions(align, width - 28, 34));
   y += 144 + 14;
@@ -459,8 +460,9 @@ const left = 38;
             : PROPOSAL_COLOR.slate,
         )
         .fontSize(
-          row.strong ? 8.5 : 7.5,
+          row.strong ? LABEL.strongTotal : LABEL.total,
         )
+        .font(LABEL.font)
         .text(
           row.label,
           left + 10,
@@ -472,6 +474,7 @@ const left = 38;
         );
 
       doc
+        .font("VOKA")
         .fillColor(
           row.strong
             ? brand.primary
@@ -549,53 +552,65 @@ function drawCommercialBoq(doc: ProposalPdfDocument, snapshot: ProposalSnapshot,
   const drawTableHead = () => {
     doc.rect(left, y, totalWidth, 24).fill(brand.softStrong);
     headers.forEach((header, index) => {
-      doc.fillColor(PROPOSAL_COLOR.navy).fontSize(6.8).text(header, positions[index] + 4, y + 7, proposalTextOptions(columns[index].align, columns[index].width - 8, 12));
+      doc.font(LABEL.font).fillColor(PROPOSAL_COLOR.navy).fontSize(LABEL.table).text(header, positions[index] + 4, y + 5, proposalTextOptions(columns[index].align, columns[index].width - 8)).font("VOKA");
     });
     y += 24;
   };
   drawTableHead();
 
-  const lineCount = Math.max(quote.lines.length, 1);
-  const rowHeight = Math.max(12, Math.min(30, 150 / lineCount));
-  const itemFontSize = rowHeight >= 25 ? 7.2 : rowHeight >= 18 ? 6.2 : 5.2;
-  const pageBottom = doc.page.height - 80;
+  const { fontSize: itemFontSize, padding } = COMMERCIAL_ROW_STYLE;
+  const pageBottom = () => doc.page.height - (hasLetterhead ? LETTERHEAD_SAFE_AREA.bottom + 24 : 80);
+  const continueTable = () => {
+    doc.addPage();
+    hasLetterhead = startPage();
+    y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
+    drawTableHead();
+  };
 
   quote.lines.forEach((line, rowIndex) => {
-    if (y + rowHeight > pageBottom) {
-      doc.addPage();
-      hasLetterhead = startPage();
-      y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
-      drawTableHead();
-    }
-    if (rowIndex % 2 === 1) doc.rect(left, y, totalWidth, rowHeight).fill("#fbfdff");
-    doc.fillColor(PROPOSAL_COLOR.navy).fontSize(itemFontSize).text(
-      proposalBoqItemText(line, locale),
-      positions[0] + 4,
-      y + 4,
-      proposalTextOptions(align, columns[0].width - 8, Math.max(8, rowHeight - 7)),
-    );
     const values = [
+      proposalBoqItemText(line, locale),
       commercialUnitLabel(line, locale === "ar") || "-",
       String(line.quantity),
       formatProposalMoney(line.unitPrice, quote.currencyCode),
       formatProposalMoney(line.taxAmount, quote.currencyCode),
       formatProposalMoney(line.totalAmount, quote.currencyCode),
     ];
-    values.forEach((value, valueIndex) => {
-      const columnIndex = valueIndex + 1;
-      doc.fillColor(PROPOSAL_COLOR.navy).fontSize(itemFontSize).text(
-        value,
-        positions[columnIndex] + (locale === "en" ? 6 : 3),
-        y + 4,
-        proposalTextOptions(columns[columnIndex].align, columns[columnIndex].width - (locale === "en" ? 12 : 6), Math.max(8, rowHeight - 7)),
-      );
-    });
-    doc.moveTo(left, y + rowHeight).lineTo(left + totalWidth, y + rowHeight).lineWidth(0.35).strokeColor(PROPOSAL_COLOR.line).stroke();
-    y += rowHeight;
+    doc.font("VOKA").fontSize(itemFontSize);
+    const lineHeight = doc.currentLineHeight(true);
+    const insets = columns.map((_, index) => index === 0 ? padding : locale === "en" ? 6 : 3);
+    const wrapped = values.map((value, index) => wrapCommercialText(doc, value, columns[index].width - insets[index] * 2));
+    const count = Math.max(...wrapped.map((cell) => cell.length));
+    const height = commercialRowHeight(count, lineHeight);
+    // Keep ordinary rows together; oversized rows continue in bounded fragments.
+    const freshTableY = (hasLetterhead ? LETTERHEAD_SAFE_AREA.top + 38 : 146) + 24;
+    if (y + height > pageBottom() && height <= pageBottom() - freshTableY) continueTable();
+    let offset = 0;
+    while (offset < count) {
+      const capacity = Math.floor((pageBottom() - y - padding * 2) / lineHeight);
+      if (capacity < 1 || pageBottom() - y < COMMERCIAL_ROW_STYLE.minHeight) { continueTable(); continue; }
+      const fragmentLines = Math.min(count - offset, capacity);
+      const rowHeight = commercialRowHeight(fragmentLines, lineHeight);
+      if (rowIndex % 2 === 1) doc.rect(left, y, totalWidth, rowHeight).fill("#fbfdff");
+      wrapped.forEach((cell, columnIndex) => {
+        cell.slice(offset, offset + fragmentLines).forEach((value, lineIndex) => {
+          doc.font("VOKA").fillColor(PROPOSAL_COLOR.navy).fontSize(itemFontSize).text(
+            value, positions[columnIndex] + insets[columnIndex], y + padding + lineIndex * lineHeight,
+            { ...proposalTextOptions(columns[columnIndex].align, columns[columnIndex].width - insets[columnIndex] * 2), lineBreak: false, ellipsis: false },
+          );
+        });
+      });
+      doc.moveTo(left, y + rowHeight).lineTo(left + totalWidth, y + rowHeight).lineWidth(0.35).strokeColor(PROPOSAL_COLOR.line).stroke();
+      y += rowHeight;
+      offset += fragmentLines;
+      if (offset < count) continueTable();
+    }
   });
 
   y += 8;
-  if (y > pageBottom - 80) {
+  const totalRows = quote.totals.discountAmount > 0 ? 3 + Number(quote.totals.taxAmount > 0) : quote.totals.taxAmount > 0 ? 3 : 1;
+  const approvalHeight = snapshot.quotation.status === "APPROVED" && snapshot.quotation.approvedAt ? 112 : 0;
+  if (y + totalRows * 22 + 4 + 36 + approvalHeight > pageBottom()) {
     doc.addPage();
     hasLetterhead = startPage();
     y = drawCommercialHeader(doc, snapshot, title, hasLetterhead);
@@ -666,6 +681,7 @@ export async function renderCommercialProposalPdf(snapshot: ProposalSnapshot, ki
     doc.on("error", reject);
   });
   doc.registerFont("VOKA", path.join(process.cwd(), "assets", "fonts", "Cairo-Variable.ttf")).font("VOKA");
+  doc.registerFont(LABEL.font, path.join(process.cwd(), "assets", "fonts", "Cairo-SemiBold.ttf"));
   // Mixed Arabic fallback content also needs bidi runs in an English document.
   configureProposalTextDirection(doc, "ar");
   const coverLetterhead = drawCommercialCover(doc, snapshot, title);
