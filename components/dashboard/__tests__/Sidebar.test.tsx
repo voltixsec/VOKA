@@ -37,6 +37,12 @@ describe('Sidebar localized chrome', () => {
     expect(screen.getByText('AI Sales OS')).toBeInTheDocument();
   });
 
+  it('renders the established VO brand monogram', () => {
+    isArabic = false;
+    render(<Sidebar />);
+    expect(screen.getByText('VO', { exact: true })).toBeInTheDocument();
+  });
+
   it('does not expose leftover technical jargon descriptions', () => {
     isArabic = false;
     const { container } = render(<Sidebar />);

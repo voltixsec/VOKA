@@ -103,6 +103,13 @@ describe("drawing takeoff xlsx localization", () => {
     const boqText = book.worksheets[1].getSheetValues().join(" ");
     expect(boqText).toContain("Needs confirmation");
     expect(boqText).not.toContain("NEEDS_CONFIRMATION");
+
+    // Boolean data cells stay typed booleans (contract), not localized strings.
+    expect(book.worksheets[1].getCell("I2").value).toBe(true);
+    const summaryValues = book.worksheets[0].getSheetValues();
+    expect(summaryValues.some((row) => Array.isArray(row) && row.includes(true))).toBe(true);
+    expect(summaryText).not.toContain("Yes");
+    expect(boqText).not.toContain("Yes");
   });
 
   it("produces Arabic labels and localized status for an Arabic locale", async () => {
@@ -112,7 +119,8 @@ describe("drawing takeoff xlsx localization", () => {
     const book = await loadWorkbook(response);
 
     expect(book.worksheets[0].name).toBe("ملخص");
-    expect(book.worksheets[1].name).toBe("جدول الكميات");
+    // BOQ worksheet name is a file/compatibility contract — stable across locales.
+    expect(book.worksheets[1].name).toBe("BOQ");
 
     expect(cellText(book, 0, "A1")).toBe("رقم الحصر");
     const summaryText = book.worksheets[0].getSheetValues().join(" ");
@@ -124,6 +132,11 @@ describe("drawing takeoff xlsx localization", () => {
     const boqText = book.worksheets[1].getSheetValues().join(" ");
     expect(boqText).not.toContain("Position");
     expect(boqText).not.toContain("NEEDS_CONFIRMATION");
+
+    // Boolean data cells stay typed booleans, not localized "نعم/لا" strings.
+    expect(book.worksheets[1].getCell("I2").value).toBe(true);
+    expect(boqText).not.toContain("نعم");
+    expect(book.worksheets[0].getSheetValues().join(" ")).not.toContain("نعم");
   });
 
   it("keeps the RTL view flag aligned with the requested locale", async () => {

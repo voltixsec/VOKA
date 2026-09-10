@@ -288,11 +288,8 @@ export function Sidebar({ isPlatformAdmin = false }: { isPlatformAdmin?: boolean
 
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-sm font-bold text-sky-300"
-            aria-hidden="true"
-          >
-            V
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-sm font-bold text-sky-300">
+            VO
           </div>
 
           <div className="min-w-0">

@@ -87,7 +87,7 @@ export function DashboardHeader() {
         .join("")
         .toUpperCase()
         .slice(0, 2)
-    : "V";
+    : "VO";
 
   return (
     <>
