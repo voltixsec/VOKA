@@ -11,6 +11,7 @@ export interface SearchUniversalLibraryInput {
   query?: string;
   type?: UniversalItemType;
   categoryId?: string;
+  categoryIds?: string[];
   manufacturerId?: string;
   brandId?: string;
   familyId?: string;
@@ -35,6 +36,7 @@ export class SearchUniversalLibrary {
       query: input.query?.trim() || undefined,
       type: input.type,
       categoryId: input.categoryId,
+      categoryIds: input.categoryIds,
       manufacturerId: input.manufacturerId,
       brandId: input.brandId,
       familyId: input.familyId,

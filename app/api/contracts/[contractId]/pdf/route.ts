@@ -1,13 +1,16 @@
-import path from "node:path";
-import PDFDocument from "pdfkit";
 import { NextResponse } from "next/server";
-import { withCompanyAuth } from "@/lib/api";
+import { ApiError, withCompanyAuth } from "@/lib/api";
+import { localizeCompanyDocumentIdentity } from "@/lib/documents/company-document-identity";
+import { commercialSnapshotFromParts, renderCommercialProposalPdf } from "@/lib/documents/commercial-pdf";
+import { displayLabel } from "@/lib/i18n/display-labels";
 import {
   contractIdFromDocumentRequest,
   getContractDocumentSnapshot,
 } from "@/lib/documents/contract-snapshot";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
 export const GET = withCompanyAuth(
   ["OWNER", "ADMIN", "SALES", "VIEWER"],
   async (request, auth, company) => {
@@ -15,103 +18,87 @@ export const GET = withCompanyAuth(
       company.companyId,
       contractIdFromDocumentRequest(request, "pdf"),
     );
-    const ar = auth.user.locale.startsWith("ar"),
-      t = (a: string, e: string) => (ar ? a : e),
-    text = (a: string | null | undefined, e: string | null | undefined, f = "") =>
-        ar ? (a ?? e ?? f) : (e ?? a ?? f),
-      o = { align: ar ? ("right" as const) : ("left" as const) };
-    const d = new PDFDocument({
-        size: "A4",
-        margin: 42,
-        info: { Title: s.number, Author: "VOKA" },
-      }),
-      chunks: Buffer[] = [];
-    d.on("data", (x) => chunks.push(Buffer.from(x)));
-    const done = new Promise<Buffer>((resolve, reject) => {
-      d.on("end", () => resolve(Buffer.concat(chunks)));
-      d.on("error", reject);
+    const requestedLocale = new URL(request.url).searchParams.get("locale");
+    if (requestedLocale && requestedLocale !== "ar" && requestedLocale !== "en") {
+      throw ApiError.badRequest("DOCUMENT_LOCALE_INVALID", "locale must be ar or en.");
+    }
+    const locale: "ar" | "en" = (requestedLocale === "ar" || requestedLocale === "en" ? requestedLocale : null) || (auth.user.locale.toLowerCase().startsWith("ar") ? "ar" : "en");
+    const ar = locale === "ar";
+    const identity = localizeCompanyDocumentIdentity(s.companyIdentity, locale, s.companyIdentity.name || "VOKA");
+    const text = (a: string | null | undefined, e: string | null | undefined, f = "") =>
+      ar ? (a ?? e ?? f) : (e ?? a ?? f);
+    const milestoneNotes = s.milestones
+      .map((m) => `${m.position}. ${text(m.titleAr, m.titleEn, m.title)} — ${m.amountType === "PERCENTAGE" ? m.percentage : m.fixedAmount} (${displayLabel(m.amountType, locale)})`)
+      .join("\n");
+    const snapshot = commercialSnapshotFromParts({
+      kind: "CONTRACT",
+      locale,
+      company: {
+        name: identity.name,
+        address: identity.address,
+        poBox: identity.poBox,
+        phone: identity.phone,
+        mobile: identity.mobile,
+        whatsapp: identity.whatsapp,
+        logoUrl: identity.logoUrl,
+        letterheadUrl: identity.letterheadUrl,
+        brandTheme: identity.brandTheme,
+      },
+      number: s.number,
+      status: s.status,
+      issueDate: new Date(s.contractDate),
+      currencyCode: s.currencyCode,
+      customerName: text(s.customer.nameAr, s.customer.nameEn, s.customer.name),
+      customerEmail: s.customer.email,
+      customerPhone: s.customer.phone,
+      customerTaxNo: s.customer.taxNumber,
+      billingAddress: s.customer.billingAddress,
+      subjectAr: s.subjectAr,
+      subjectEn: s.subjectEn,
+      briefAr: s.briefAr,
+      briefEn: s.briefEn,
+      projectName: s.projectName,
+      projectNameAr: s.projectNameAr,
+      projectNameEn: s.projectNameEn,
+      attentionName: s.attentionName,
+      attentionNameAr: s.attentionNameAr,
+      attentionNameEn: s.attentionNameEn,
+      scopeType: s.scopeType,
+      lines: s.lines.map((l) => ({
+        position: l.position,
+        type: l.type,
+        itemCode: l.itemCode,
+        itemName: l.itemName,
+        itemNameAr: l.itemNameAr,
+        itemNameEn: l.itemNameEn,
+        description: l.description,
+        descriptionAr: l.descriptionAr,
+        descriptionEn: l.descriptionEn,
+        unitName: l.unitName,
+        unitNameAr: l.unitNameAr,
+        unitNameEn: l.unitNameEn,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        discountAmount: l.discountAmount,
+        taxAmount: l.taxAmount,
+        totalAmount: l.totalAmount,
+      })),
+      discountType: s.discountType === "PERCENTAGE" || s.discountType === "FIXED" ? s.discountType : null,
+      discountValue: s.discountValue,
+      totals: {
+        subtotal: s.subtotal,
+        discountAmount: s.discountAmount,
+        taxAmount: s.taxAmount,
+        totalAmount: s.totalAmount,
+      },
+      notes: s.notes,
+      notesAr: s.notesAr,
+      notesEn: s.notesEn,
+      terms: [s.termsAndConditions, milestoneNotes].filter(Boolean).join("\n") || null,
+      termsAr: s.termsAndConditionsAr,
+      termsEn: s.termsAndConditionsEn,
     });
-    d.registerFont(
-      "VOKA",
-      path.join(process.cwd(), "assets", "fonts", "Cairo-Variable.ttf"),
-    )
-      .font("VOKA")
-      .fontSize(22)
-      .fillColor("#0f172a")
-      .text(t("عقد", "CONTRACT"), o)
-      .fontSize(18)
-      .fillColor("#0369a1")
-      .text(s.number, o)
-      .fontSize(10)
-      .fillColor("#334155")
-      .text(`${t("الحالة", "Status")}: ${s.status}`, o)
-      .text(
-        `${t("العميل", "Customer")}: ${text(s.customer.nameAr, s.customer.nameEn, s.customer.name)}`,
-        o,
-      )
-      .text(`${t("التاريخ", "Date")}: ${s.contractDate.slice(0, 10)}`, o)
-      .text(`${t("العملة", "Currency")}: ${s.currencyCode}`, o)
-      .text(
-        `${t("المصدر", "Source")}: ${s.provenance.origin} / ${s.provenance.sourceKind ?? "—"} / ${s.provenance.sourceId ?? "—"}`,
-        o,
-      )
-      .moveDown();
-    for (const l of s.lines) {
-      if (d.y > 690) d.addPage();
-      d.fillColor("#0f172a")
-        .fontSize(10)
-        .text(
-          `${l.position}. ${text(l.itemNameAr, l.itemNameEn, l.itemName)}`,
-          o,
-        )
-        .fontSize(9)
-        .fillColor("#64748b")
-        .text(
-          `${l.quantity.toFixed(3)} × ${l.unitPrice.toFixed(3)} = ${l.totalAmount.toFixed(3)} ${s.currencyCode}`,
-          o,
-        )
-        .moveDown(0.4);
-    }
-    d.moveDown()
-      .fontSize(10)
-      .fillColor("#334155")
-      .text(
-        `${t("المجموع الفرعي", "Subtotal")}: ${s.subtotal.toFixed(3)} ${s.currencyCode}`,
-        o,
-      )
-      .text(
-        `${t("الخصم", "Discount")}: ${s.discountAmount.toFixed(3)} ${s.currencyCode}`,
-        o,
-      )
-      .text(
-        `${t("الضريبة", "Tax")}: ${s.taxAmount.toFixed(3)} ${s.currencyCode}`,
-        o,
-      )
-      .fontSize(14)
-      .fillColor("#0369a1")
-      .text(
-        `${t("الإجمالي", "Total")}: ${s.totalAmount.toFixed(3)} ${s.currencyCode}`,
-        o,
-      );
-    if (s.milestones.length) {
-      d.moveDown().fontSize(12).text(t("جدول الدفعات", "Milestones"), o);
-      for (const m of s.milestones)
-        d.fontSize(9).text(
-        `${m.position}. ${text(m.titleAr, m.titleEn, m.title)} — ${m.amountType === "PERCENTAGE" ? m.percentage : m.fixedAmount} (${m.amountType})`,
-          o,
-        );
-    }
-    const terms = text(
-      s.termsAndConditionsAr,
-      s.termsAndConditionsEn,
-      s.termsAndConditions ?? "",
-    );
-    if (terms)
-      d.moveDown()
-        .fontSize(9)
-        .text(`${t("الشروط", "Terms")}: ${terms}`, o);
-    d.end();
-    const bytes = await done;
+    const bytes = await renderCommercialProposalPdf(snapshot, "CONTRACT");
     return new NextResponse(bytes, {
       headers: {
         "Content-Type": "application/pdf",

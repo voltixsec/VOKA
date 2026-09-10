@@ -332,7 +332,7 @@ describe('proposed customer in the real quotation composer', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<NewQuotationPage />);
     await screen.findByText('Unregistered');
-    expect(screen.getByRole('button', { name: 'Create proposal' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create proposal' })).not.toBeDisabled();
     expect(inputFor('Project name').value).toBe('Factory');
     expect(screen.getByDisplayValue('Engineer Khaled')).toBeTruthy();
     expect(screen.getByDisplayValue('2030-09-27')).toBeTruthy();
@@ -515,7 +515,7 @@ async function quickCreateLine(
 
   const createButton =
     await screen.findByRole(
-      "button",
+      "option",
       {
         name: `Create "${value}"`,
       },
@@ -540,7 +540,7 @@ async function selectCatalogItem(
 
   const option =
     await screen.findByRole(
-      "button",
+      "option",
       {
         name: /Taxed service/,
       },
@@ -1201,7 +1201,7 @@ describe(
 
         fireEvent.click(
           await screen.findByRole(
-            "button",
+            "option",
             {
               name:
                 'Create & Edit "Created product"',

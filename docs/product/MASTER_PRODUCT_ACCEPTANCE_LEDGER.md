@@ -1,22 +1,76 @@
+## Current Phase 4D handoff — 2026-09-10 office close
+
+This section supersedes older current-state/slice instructions below. Phase 4C and payment re-acceptance remain CLOSED. A/B/E remain PASS and must not be reopened.
+
+**Phase 4D software engineering = CLOSED** on Arena `3d570b1f688d8bcf0806f9caf3587e15fb616bb1`.
+
+| Gate | Status |
+| --- | --- |
+| A Customers | PASS |
+| B Invoice list + SO picker | PASS |
+| C Commercial documents | ENGINEERING PASS + CEO VISUAL PASS |
+| D Catalog XLSX import | PASS |
+| D2 Catalog Arabic UX | PASS |
+| E Catalog XLSX export | PASS |
+| F Sector installer | ENGINEERING/BEHAVIOR PASS |
+| UCL production content | NOT MATERIALIZED |
+
+Installer ≠ content. Security has descendant taxonomy (ETIM) and zero published items because Data Factory JSONL (`VOKA_UCL_LIBRARY_CURRENT.jsonl` and siblings) is **outside Git**. Hydration path exists: platform-admin `POST /api/universal-library/bulk-import` then Review → Publish. Do not invent records. Do not reopen 4D code for empty DB.
+
+Home resume: `docs/checkpoints/2026-09-10-office-session-close-home-resume.md`. Night proof: `docs/checkpoints/2026-09-10-phase4d-night-close.md`.
+
+Quotation/Sales Assistant frozen. Data Factory PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E, PR, merge, tag or official-branch update from this closeout.
+
+---
+
+<!-- VOKA-SLICE1-CANONICAL-CLOSURE-2026-09-09 -->
+
+## CURRENT CANONICAL CLOSURE — 2026-09-09
+
+🟢 **PHASE 4C = CLOSED**
+
+🟢 **LIVE-FAIL-001 / CEO-R1-030 = CLOSED** (Payment live re-acceptance PASS)
+
+Official documentation-closure base:
+
+`7b00c857a39d4d0d8bd6d8fbe4434b2595ba5287`
+
+- Engineering validation = PASS
+- Live auth/session/platform acceptance = PASS
+- Cross-Tenant Isolation = PASS **8/8**
+- `AUTH-DIRECT-ROUTE-GATE` = CLOSED
+
+Cross-tenant live proof:
+
+- A reads A = 200; B reads B = 200
+- A reads B = 404; B reads A = 404
+- A PATCH B = 404; B PATCH A = 404
+- A list excludes B; B list excludes A
+- Denied foreign resources: `CUSTOMER_NOT_FOUND` / `"Customer not found."`
+
+Payment live evidence:
+
+- 10.000 KWD ISSUED
+- pay 4.000 → HTTP 201 → PARTIALLY_PAID, paid 4.000, outstanding 6.000
+- Payment Register PASS; Customer Statement PASS; Dashboard PASS
+- pay 6.000 → HTTP 201 → PAID, paid 10.000, outstanding 0.000; payment form hidden
+- overpay 1.000 → HTTP 409 `PAYMENT_CONFLICT`; no extra payment persisted
+
+Deferred, **not** blockers: D4 multi-membership selector (fail-closed); D5 server-side refresh revocation (Phase 5); D6 broader expired-session UX.
+
+Sales Assistant and Quotation remain CEO-FROZEN. Data Factory remains PAUSED. UCL foundation is not reopened. This slice does **not** start Phase 4D.
+
+Canonical checkpoint:
+
+`docs/checkpoints/2026-09-09-phase4c-final-verification.md`
+
+This current section supersedes earlier OPEN / PENDING / PARTIAL / RED current-status claims for Phase 4C, `AUTH-DIRECT-ROUTE-GATE`, and `LIVE-FAIL-001`. Historical entries below remain evidence of what was true at their dates.
+
 <!-- VOKA-PHASE4C-FINAL-VERIFICATION-2026-09-09 -->
 
-## Current Phase 4C verification - 2026-09-09
+## Historical Phase 4C verification snapshot - 2026-09-09 (superseded)
 
-**ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING.**
-
-- Review baseline: `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`, official feature branch.
-- Unauthorized API code defect: FIXED. Four incorrect call signatures now separate stable machine codes from human messages; response envelope unchanged.
-- Validation: 96/96 tests in an explicit 16-file non-frozen allowlist PASS; typecheck, schema validation, production build and diff check PASS. No DB-backed tests ran.
-- CEO reported successful nested direct-route/returnTo, refresh recovery/failure, safe redirect, logout, logged-out API and platform-admin/ordinary OWNER checks. Those supplied live results are accepted evidence; they were not re-executed by this review.
-- `AUTH-DIRECT-ROUTE-GATE`: reported non-frozen nested route checks PASS. Full Phase 4C acceptance remains PARTIAL; cross-tenant live proof is PENDING.
-- D4: multi-membership selector DEFERRED / FAIL-CLOSED. D5: refresh revocation DEFERRED to Phase 5. D6: bounded 401 UX DEFERRED.
-- Payment `LIVE-FAIL-001 / CEO-R1-030`: current code path appears complete; no implementation needed from reviewed evidence. **CEO LIVE RE-ACCEPTANCE REQUIRED; release gate OPEN, not ACCEPTED/CLOSED.** Historical live failure remains evidence, not a new reproduction.
-- Sales Assistant and Quotation remain CEO-FROZEN. Data Factory remains PAUSED.
-- No office/shared DB touched; no merge, tag, push or Arena cherry-pick.
-
-Evidence, exact test allowlist, safety limits, accepted live checks and remaining payment scenario: [Phase 4C final verification checkpoint](../checkpoints/2026-09-09-phase4c-final-verification.md).
-
-This section supersedes earlier current-status claims about Phase 4C validation/auth acceptance and the payment implementation diagnosis. Historical entries below remain evidence and do not close the outstanding live gates.
+**SUPERSEDED by CURRENT CANONICAL CLOSURE above.** Originally recorded as ENGINEERING PASS / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING at review baseline `fbc79c2ad435aada3d6c451dbd57f91c0f6e2573`. Unauthorized API code defect FIXED; 96/96 allowlist tests PASS. Payment was then LIVE RE-ACCEPTANCE REQUIRED. That payment gate is now CLOSED by CEO live evidence in the current section.
 
 # VOKA — Master Product Acceptance Ledger
 
@@ -53,10 +107,10 @@ Fresh final UCL-UX-01 evidence:
 - diff check PASS;
 - live Published and Review server-side search accepted by CEO.
 
-Current remaining release gates are outside Phase 4A:
+Historical remaining gates outside Phase 4A (as of 2026-09-08; **superseded 2026-09-09**):
 
-- `LIVE-FAIL-001 / CEO-R1-030` remains RED / RELEASE BLOCKER.
-- `AUTH-DIRECT-ROUTE-GATE` remains OPEN for Phase 4C.
+- `LIVE-FAIL-001 / CEO-R1-030` — now 🟢 CLOSED (CEO live re-acceptance PASS).
+- `AUTH-DIRECT-ROUTE-GATE` — now 🟢 CLOSED (Phase 4C CLOSED).
 
 Exact next execution slice:
 
@@ -154,18 +208,25 @@ Automated tests alone do not close browser/manual workflow findings.
 
 ---
 
-# 🔴 CONFIRMED LIVE RELEASE BLOCKER
+# 🟢 LIVE-FAIL-001 CLOSED — Payment Registration End-to-End
 
 ## LIVE-FAIL-001 / CEO-R1-030 — Payment Registration End-to-End
 
 Status:
 
-🔴 **BROKEN LIVE / BLOCKER — REMAINS OPEN**
+🟢 **CLOSED — CEO LIVE RE-ACCEPTANCE PASS — 2026-09-09**
 
-The pre-existing Master Ledger records a CEO-observed live failure in the
-Invoice → Payment commercial lifecycle.
+Historical CEO-observed live failure remains recorded in Round 1 and §7 below.
+It is **no longer** the current release blocker.
 
-No later live CEO acceptance has been recorded that closes it.
+CEO live re-acceptance (KWD, issued 10.000):
+
+- pay 4.000 → HTTP 201 → PARTIALLY_PAID, paid 4.000, outstanding 6.000
+- Payment Register, Customer Statement, Dashboard PASS
+- pay 6.000 → HTTP 201 → PAID, paid 10.000, outstanding 0.000, form hidden
+- overpay 1.000 → HTTP 409 PAYMENT_CONFLICT, no extra payment persisted
+
+Do not reopen as RED from code inspection or stale ledger text.
 
 Required governed journey:
 
@@ -182,22 +243,21 @@ Issued Invoice
 
 A code implementation or isolated passing test is not sufficient for closure.
 
-This blocker may leave V1 only through one of two explicit paths:
-
-1. successful live end-to-end acceptance; or
-2. explicit CEO decision to remove/hide/defer the affected Payment workflow from V1.
-
-Do not silently downgrade it.
+Closed via path 1: successful live end-to-end acceptance on 2026-09-09. Do not silently reopen it.
 
 ---
 
-# 🟡 NEW MANDATORY AUTHENTICATION ACCEPTANCE GATE
+# 🟢 AUTH-DIRECT-ROUTE-GATE CLOSED
 
 ## AUTH-DIRECT-ROUTE-GATE
 
 Status:
 
-🟡 **OPEN / ACCEPTANCE REQUIRED**
+🟢 **CLOSED — LIVE AUTH / SESSION / PLATFORM ACCEPTANCE PASS — 2026-09-09**
+
+Phase 4C live auth/session/platform acceptance PASS. Cross-Tenant Isolation PASS 8/8.
+
+Historical required scenario (preserved):
 
 Scenario:
 
@@ -240,7 +300,7 @@ If protected UI/data is available without authentication:
 
 🔴 **P0 RELEASE BLOCKER**
 
-This finding must remain in the Master Ledger until directly accepted.
+This finding is CLOSED by Phase 4C live acceptance. The scenario text above remains the accepted contract.
 
 ---
 
@@ -288,9 +348,13 @@ It recorded tenant isolation as unverified.
 
 Canonical treatment:
 
-🟡 **SECURITY ACCEPTANCE GATE**
+🟢 **PHASE 4C CROSS-TENANT LIVE PROOF PASS 8/8 — 2026-09-09**
 
-Required:
+Customer isolation live: A/B read own 200; cross-read/PATCH 404; lists exclude foreign; `CUSTOMER_NOT_FOUND` / `"Customer not found."`
+
+Broader module isolation beyond this accepted customer proof remains ordinary regression, not an open Phase 4C gate.
+
+Required historically:
 representative tenant-isolation verification across customers, quotations,
 orders, invoices/payments, Company Catalog, settings, and global UCL boundaries.
 
@@ -727,9 +791,10 @@ Close governed conversational/commercial journey.
 
 ### 4C — Authentication / Tenant / Security Acceptance
 
-Mandatory:
-`AUTH-DIRECT-ROUTE-GATE`
-plus representative tenant-isolation proof.
+🟢 **CLOSED — 2026-09-09**
+
+Engineering validation PASS. Live auth/session/platform PASS.
+Cross-Tenant Isolation PASS 8/8. `AUTH-DIRECT-ROUTE-GATE` CLOSED.
 
 ### 4D — Remaining Visible V1 Modules
 
@@ -1242,7 +1307,10 @@ Source:
 
 `CEO-R1-030`
 
-Status: 🔴 **BROKEN LIVE / BLOCKER**
+**Historical status (Round 1):** 🔴 BROKEN LIVE / BLOCKER
+**Current status (2026-09-09):** 🟢 **CLOSED — CEO LIVE RE-ACCEPTANCE PASS**
+
+Do not treat the historical observation below as the current release gate.
 
 CEO observed and reconfirmed that registering a payment from the Invoice workflow does not successfully complete the required commercial lifecycle.
 
@@ -1767,19 +1835,13 @@ Remaining:
 
 ## CEO-R1-030 — Payment Registration Fails End-to-End
 
-Status: 🔴 **BROKEN LIVE / BLOCKER**
+Status: 🟢 **CLOSED — CEO LIVE RE-ACCEPTANCE PASS — 2026-09-09**
 
-Estimated implementation maturity is not a closure metric.
+Historical Round 1 observation: live workflow failed; code existed. See `LIVE-FAIL-001`.
 
-Code exists.
+Current live evidence: issued 10.000 KWD; pay 4.000 → 201 PARTIALLY_PAID 4/6; register/statement/dashboard PASS; pay 6.000 → 201 PAID 10/0 form hidden; overpay 1.000 → 409 PAYMENT_CONFLICT with no extra payment.
 
-Live workflow failed.
-
-See:
-
-`LIVE-FAIL-001`
-
-This item stays RED until the complete dependent lifecycle succeeds.
+This item does **not** stay RED.
 
 ---
 
@@ -1967,7 +2029,7 @@ They must not be confused with historical numeric workstreams such as WS8, WS9, 
 
 | Workstream | Area | Current State |
 |---|---|---|
-| R1-WS-A | Session/Auth | 🟡 IMPLEMENTED / LIVE ACCEPTANCE PENDING |
+| R1-WS-A | Session/Auth | 🟢 PHASE 4C CLOSED / LIVE AUTH PASS |
 | R1-WS-B | Localization/Typography | 🟡 COMPLETE IN CODE / FINAL ACCEPTANCE PENDING |
 | R1-WS-C | Notifications | 🟡 COMPLETE IN CODE / BROWSER ACCEPTANCE PENDING |
 | R1-WS-D | Voice + Commercial AI | 🟡 MAJOR IMPLEMENTATION / PAUSED |
@@ -1979,7 +2041,7 @@ They must not be confused with historical numeric workstreams such as WS8, WS9, 
 | R1-WS-J | Shared Commercial Documents | 🟡 PARTIAL / STRONG FOUNDATION |
 | R1-WS-K | Sales Order | 🟡 STRONG IMPLEMENTATION / FINAL ACCEPTANCE PENDING |
 | R1-WS-L | Invoice Composer/Source | 🟡 STRONG PARTIAL / E2E ACCEPTANCE PENDING |
-| R1-WS-M | Payments | 🔴 BROKEN LIVE / BLOCKER |
+| R1-WS-M | Payments | 🟢 LIVE-FAIL-001 CLOSED / LIVE RE-ACCEPTANCE PASS |
 | R1-WS-N | Company Settings | 🟡 PARTIAL / SUBSTANTIAL IMPLEMENTATION |
 | R1-WS-O | Signatories | 🟡 STRONG IMPLEMENTATION / FINAL GOVERNANCE ACCEPTANCE |
 | R1-WS-P | Company Logo Studio | 🔴 OPEN |
@@ -2462,8 +2524,7 @@ Migration:
 
 **UCL-CLOSE-06 — E2E Batch Wizard is IMPLEMENTED / ENGINEERING VALIDATED / PENDING CEO LIVE UI ACCEPTANCE. Not closed.**
 
-Existing release gates remain unchanged, including:
-- `LIVE-FAIL-001` Payment Registration — RED / BLOCKER.
-- `AUTH-DIRECT-ROUTE-GATE` — OPEN for Phase 4C.
+**Historical note (UCL-CLOSE-05 era):** those gates were then RED/OPEN.
+**Current (2026-09-09):** `LIVE-FAIL-001` CLOSED; `AUTH-DIRECT-ROUTE-GATE` CLOSED; Phase 4C CLOSED.
 
-Do not claim UCL V1 fully closed until UCL-CLOSE-06 is accepted.
+UCL-CLOSE-06 later reached CLOSED / LIVE ACCEPTED in the Phase 4A final-closure current section. Do not reopen UCL foundation.

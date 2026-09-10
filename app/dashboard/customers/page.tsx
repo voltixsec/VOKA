@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import {
-  useMemo,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -20,6 +20,7 @@ import { CustomerLoading } from "../../../features/customers/components/Customer
 import { CustomerTable } from "../../../features/customers/components/CustomerTable";
 import {
   type Customer,
+  fetchAllMatchingCustomers,
   useCustomers,
 } from "../../../hooks/useCustomers";
 
@@ -163,50 +164,44 @@ async function exportCustomersXlsx(customers: Customer[], isArabic: boolean) {
 }
 
 export default function CustomersPage() {
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [exportOpen, setExportOpen] =
-    useState(false);
+  const [status, setStatus] = useState("");
+  const [type, setType] = useState("");
+  const [page, setPage] = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const { isArabic } = useLanguage();
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
   const {
     customers,
+    pagination,
+    summaries,
     loading,
     error,
-  } = useCustomers();
+  } = useCustomers({ search, status, type, page, pageSize: 20 });
 
-  const filteredCustomers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    if (!query) {
-      return customers;
+  async function exportMatching(kind: "csv" | "xlsx") {
+    try {
+      setExporting(true);
+      const rows = await fetchAllMatchingCustomers({ search, status, type });
+      if (kind === "csv") exportCustomersCsv(rows, isArabic);
+      else await exportCustomersXlsx(rows, isArabic);
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
     }
-
-    return customers.filter((customer) =>
-      [
-        customer.code,
-        customer.name,
-        customer.type,
-        customer.status,
-        customer.phone,
-        customer.mobile,
-        customer.whatsapp,
-        customer.email,
-      ]
-        .filter(Boolean)
-        .some((value) =>
-          String(value)
-            .toLowerCase()
-            .includes(query)
-        )
-    );
-  }, [customers, search]);
-
-  const countStatus = (status: string) =>
-    customers.filter(
-      (customer) =>
-        customer.status.toUpperCase() === status
-    ).length;
+  }
 
   return (
     <section className="space-y-6">
@@ -241,7 +236,7 @@ export default function CustomersPage() {
                 ? "إجمالي العملاء"
                 : "Total Customers"
             }
-            value={customers.length}
+            value={summaries.total}
             badge={
               isArabic
                 ? "الكل"
@@ -273,7 +268,7 @@ export default function CustomersPage() {
                 ? "العملاء النشطون"
                 : "Active Customers"
             }
-            value={countStatus("ACTIVE")}
+            value={summaries.ACTIVE}
             badge={
               isArabic
                 ? "نشط"
@@ -303,7 +298,7 @@ export default function CustomersPage() {
                 ? "العملاء المحتملون"
                 : "Leads"
             }
-            value={countStatus("LEAD")}
+            value={summaries.LEAD}
             badge={
               isArabic
                 ? "عميل محتمل"
@@ -329,14 +324,14 @@ export default function CustomersPage() {
           <StatCard
             title={
               isArabic
-                ? "فرص البيع"
-                : "Prospects"
+                ? "محظور"
+                : "Blocked"
             }
-            value={countStatus("PROSPECT")}
+            value={summaries.BLOCKED}
             badge={
               isArabic
-                ? "فرصة بيع"
-                : "Prospect"
+                ? "محظور"
+                : "Blocked"
             }
             badgeVariant="neutral"
             icon={
@@ -351,8 +346,8 @@ export default function CustomersPage() {
                 aria-hidden="true"
               >
                 <circle cx="12" cy="12" r="9" />
-                <circle cx="12" cy="12" r="5" />
-                <circle cx="12" cy="12" r="1.5" />
+                <path d="m9 9 6 6" />
+                <path d="m15 9-6 6" />
               </svg>
             }
           />
@@ -367,9 +362,9 @@ export default function CustomersPage() {
           <div className="w-full lg:max-w-md">
             <Input
               dir={isArabic ? "rtl" : "ltr"}
-              value={search}
+              value={searchInput}
               onChange={(event) =>
-                setSearch(event.target.value)
+                setSearchInput(event.target.value)
               }
               placeholder={
                 isArabic
@@ -398,7 +393,10 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="secondary">
+            <Button
+              variant={filtersOpen ? "primary" : "secondary"}
+              onClick={() => setFiltersOpen((value) => !value)}
+            >
               {isArabic
                 ? "تصفية"
                 : "Filter"}
@@ -407,6 +405,7 @@ export default function CustomersPage() {
             <div className="relative">
               <Button
                 variant="secondary"
+                disabled={exporting}
                 onClick={() =>
                   setExportOpen((value) => !value)
                 }
@@ -431,14 +430,7 @@ export default function CustomersPage() {
                 <div className="absolute end-0 top-[calc(100%+8px)] z-50 w-48 overflow-hidden rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl">
                   <button
                     type="button"
-                    onClick={() => {
-                      exportCustomersCsv(
-                        filteredCustomers,
-                        isArabic
-                      );
-
-                      setExportOpen(false);
-                    }}
+                    onClick={() => { void exportMatching("csv"); }}
                     className="block w-full rounded-lg px-3 py-2 text-start text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
                   >
                     {isArabic
@@ -446,7 +438,7 @@ export default function CustomersPage() {
                       : "Export CSV"}
                   </button>
 
-                  <button type="button" onClick={() => { void exportCustomersXlsx(filteredCustomers, isArabic); setExportOpen(false); }} className="block w-full rounded-lg px-3 py-2 text-start text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">
+                  <button type="button" onClick={() => { void exportMatching("xlsx"); }} className="block w-full rounded-lg px-3 py-2 text-start text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">
                     {isArabic ? "تصدير Excel" : "Export Excel"}
                   </button>
 
@@ -465,15 +457,54 @@ export default function CustomersPage() {
 
             <span className="text-sm text-slate-500">
               {isArabic
-                ? `${filteredCustomers.length} نتيجة`
-                : `${filteredCustomers.length} ${
-                    filteredCustomers.length === 1
+                ? `${pagination.total} نتيجة`
+                : `${pagination.total} ${
+                    pagination.total === 1
                       ? "result"
                       : "results"
                   }`}
             </span>
           </div>
         </div>
+
+        {filtersOpen && (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-400">
+              <span>{isArabic ? "الحالة" : "Status"}</span>
+              <select
+                aria-label={isArabic ? "الحالة" : "Status"}
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setPage(1);
+                }}
+                className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3 text-slate-100"
+              >
+                <option value="">{isArabic ? "الكل" : "All"}</option>
+                <option value="LEAD">{isArabic ? "عميل محتمل" : "Lead"}</option>
+                <option value="ACTIVE">{isArabic ? "نشط" : "Active"}</option>
+                <option value="INACTIVE">{isArabic ? "غير نشط" : "Inactive"}</option>
+                <option value="BLOCKED">{isArabic ? "محظور" : "Blocked"}</option>
+              </select>
+            </label>
+            <label className="space-y-2 text-sm text-slate-400">
+              <span>{isArabic ? "النوع" : "Type"}</span>
+              <select
+                aria-label={isArabic ? "النوع" : "Type"}
+                value={type}
+                onChange={(event) => {
+                  setType(event.target.value);
+                  setPage(1);
+                }}
+                className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3 text-slate-100"
+              >
+                <option value="">{isArabic ? "الكل" : "All"}</option>
+                <option value="COMPANY">{isArabic ? "شركة" : "Company"}</option>
+                <option value="INDIVIDUAL">{isArabic ? "فرد" : "Individual"}</option>
+              </select>
+            </label>
+          </div>
+        )}
       </Card>
 
       {loading && <CustomerLoading />}
@@ -494,7 +525,7 @@ export default function CustomersPage() {
 
       {!loading &&
         !error &&
-        filteredCustomers.length === 0 && (
+        customers.length === 0 && (
           <CustomerEmptyState
             isArabic={isArabic}
           />
@@ -502,13 +533,34 @@ export default function CustomersPage() {
 
       {!loading &&
         !error &&
-        filteredCustomers.length > 0 && (
+        customers.length > 0 && (
           <CustomerTable
-            customers={filteredCustomers}
+            customers={customers}
             isArabic={isArabic}
           />
         )}
+
+      {!loading && !error && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <Button
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            {isArabic ? "السابق" : "Previous"}
+          </Button>
+          <span className="text-sm text-slate-500">
+            {pagination.page} / {pagination.totalPages}
+          </span>
+          <Button
+            variant="secondary"
+            disabled={page >= pagination.totalPages}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            {isArabic ? "التالي" : "Next"}
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
-

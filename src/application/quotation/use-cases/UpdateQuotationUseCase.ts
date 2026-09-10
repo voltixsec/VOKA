@@ -122,7 +122,9 @@ export class UpdateQuotationUseCase {
     });
 
     try {
-      if (processedDto.customerId && processedDto.customerId !== quotation.customerIdOrNull) {
+      if (processedDto.customerId === null) {
+        quotation.clearCustomer();
+      } else if (processedDto.customerId && processedDto.customerId !== quotation.customerIdOrNull) {
         const customer = await this.referenceValidator.getCustomerSnapshot(processedDto.companyId, processedDto.customerId);
         if (!customer) return { success: false, error: { code: "CUSTOMER_NOT_FOUND", message: "Customer was not found for the active company." } };
         quotation.assignCustomer(processedDto.customerId, customer);

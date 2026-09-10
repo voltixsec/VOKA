@@ -2,7 +2,78 @@
 
 Date: 2026-09-09. Branch: `feature/pre-staging-product-coherence`.
 
-**ENGINEERING PASS (bounded non-frozen validation) / LIVE ACCEPTANCE PARTIAL / CROSS-TENANT LIVE PENDING.**
+<!-- VOKA-SLICE1-CANONICAL-CLOSURE-2026-09-09 -->
+
+## CURRENT CANONICAL CLOSURE — 2026-09-09 (Slice 1)
+
+**PHASE 4C = CLOSED.**
+
+**LIVE-FAIL-001 / CEO-R1-030 = CLOSED.**
+
+Official product base for this documentation closure:
+
+`7b00c857a39d4d0d8bd6d8fbe4434b2595ba5287`
+
+This current section supersedes earlier claims in this same file that Phase 4C live acceptance is PARTIAL, that cross-tenant live proof is PENDING, and that Payment remains LIVE RE-ACCEPTANCE REQUIRED. Historical engineering evidence below remains immutable.
+
+### Phase 4C
+
+| Gate | Status |
+|---|---|
+| Engineering validation | PASS |
+| Live auth / session / platform acceptance | PASS |
+| Cross-Tenant Isolation | PASS 8/8 |
+| `AUTH-DIRECT-ROUTE-GATE` | CLOSED |
+
+Cross-tenant live proof (customers):
+
+- A reads A = 200
+- B reads B = 200
+- A reads B = 404
+- B reads A = 404
+- A PATCH B = 404
+- B PATCH A = 404
+- A list excludes B
+- B list excludes A
+
+Denied foreign resources returned:
+
+`CUSTOMER_NOT_FOUND`
+`"Customer not found."`
+
+### Payment live re-acceptance
+
+**PASS. LIVE-FAIL-001 = CLOSED.**
+
+Live evidence:
+
+- Issued invoice **10.000 KWD**
+- Pay **4.000** → HTTP **201** → `PARTIALLY_PAID`, paid **4.000**, outstanding **6.000**
+- Payment Register PASS
+- Customer Statement PASS
+- Dashboard PASS
+- Pay **6.000** → HTTP **201** → `PAID`, paid **10.000**, outstanding **0.000**, payment form hidden
+- Overpay **1.000** → HTTP **409** `PAYMENT_CONFLICT`, no extra payment persisted
+
+### Deferred, not blockers
+
+- D4 multi-membership selector = fail-closed / deferred
+- D5 server-side refresh revocation = Phase 5
+- D6 broader expired-session UX = deferred
+
+### Freeze / pause (unchanged)
+
+- Sales Assistant = CEO-FROZEN
+- Quotation = CEO-FROZEN
+- Data Factory = PAUSED
+- UCL foundation not reopened
+- This documentation slice does **not** start Phase 4D
+
+---
+
+**Prior checkpoint body (engineering review at `fbc79c2` / correction at `7b00c85`) follows. Treat PARTIAL / PENDING / Payment-not-closed sentences below as superseded historical evidence.**
+
+**ENGINEERING PASS (bounded non-frozen validation).** Historical live-status lines in the original body are superseded by the current closure section above.
 
 ## Baseline and authority
 

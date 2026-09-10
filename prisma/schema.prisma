@@ -124,6 +124,7 @@ model Company {
   citations                Citation[]
   requirements             Requirement[]
   universalAdoptions       UniversalItemAdoption[]
+  universalLibrarySectors  CompanyUniversalLibrarySector[]
   localizedContents        LocalizedContent[]
   notifications            Notification[]
   createdAt                DateTime                        @default(now())
@@ -1540,6 +1541,7 @@ model UniversalCategory {
   source               UniversalSource?               @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   items                UniversalCatalogItem[]
   attributeDefinitions UniversalAttributeDefinition[]
+  companyLibrarySectors CompanyUniversalLibrarySector[]
 
   @@unique([code])
   @@unique([sourceId, sourceExternalId])
@@ -1893,6 +1895,21 @@ model UniversalItemProvenance {
   @@index([universalItemId])
   @@index([sourceId])
   @@index([acquisitionRunId])
+}
+
+model CompanyUniversalLibrarySector {
+  id         String   @id @default(cuid())
+  companyId  String
+  categoryId String
+  isActive   Boolean  @default(true)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category   UniversalCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, categoryId])
+  @@index([companyId, isActive])
+  @@index([categoryId])
 }
 
 model UniversalItemAdoption {

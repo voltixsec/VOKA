@@ -56,7 +56,7 @@ export default function ContractsPage() {
       setContracts(json.data.contracts || []);
       setPagination(json.data.pagination || { total: 0, page: 1, pageSize: 20, totalPages: 0 });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
+      setError(e instanceof Error ? e.message : (isArabic ? "حدث خطأ غير متوقع" : "Unknown error"));
     } finally {
       setLoading(false);
     }

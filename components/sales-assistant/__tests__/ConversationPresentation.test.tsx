@@ -9,19 +9,19 @@ import { ContextSummaryCard } from "../ContextSummaryCard";
 const fact = (key: string, value: string | number, provenance: ConfirmedFact["provenance"] = "USER_EXPLICIT"): ConfirmedFact => ({ key, value, provenance, evidence: String(value), updatedAt: "2026-08-31T00:00:00.000Z" });
 
 describe("conversation presentation", () => {
-  it("requires only customer for Draft while clearly labelling pending commercial work as non-blocking", () => {
+  it("opens a customer-optional Draft while clearly labelling pending commercial work as non-blocking", () => {
     const facts = { "system.identity": fact("system.identity", "Gypsum board"), "system.areaM2": fact("system.areaM2", 2000), "system.layersCount": fact("system.layersCount", 1) };
     const onOpenDraft = vi.fn();
     const { rerender } = render(<SolutionWorkspace graph={buildSystemConfigurationGraph(facts)} isArabic={false} onOpenDraft={onOpenDraft} draftLoading={false} />);
-    expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeDisabled();
-    expect(screen.getByText("Required before opening Draft: Customer")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeEnabled();
+    expect(screen.queryByText("Required before opening Draft: Customer")).toBeNull();
     expect(screen.getByText(/Pending commercial work \(does not block Draft\):/)).toHaveTextContent("Pricing");
+    fireEvent.click(screen.getByRole("button", { name: "Prepare quotation" }));
+    expect(onOpenDraft).toHaveBeenCalledOnce();
     const graph = buildSystemConfigurationGraph({ ...facts, "customer.name": fact("customer.name", "Proposed Customer") });
     rerender(<SolutionWorkspace graph={graph} isArabic={false} onOpenDraft={onOpenDraft} draftLoading={false} />);
     expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeEnabled();
     expect(screen.queryByText("Required before opening Draft: Customer")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Prepare quotation" }));
-    expect(onOpenDraft).toHaveBeenCalledOnce();
   });
   it("localizes raw scope enums at the compact-summary boundary", () => {
     render(<ContextSummaryCard isArabic={false} result={{ summary: [{ key: "scope.type", labelAr: "النطاق", labelEn: "Scope", value: "SUPPLY_AND_INSTALLATION" }], stillNeeded: [], evidence: [], commercial: { draftReady: false } }} />);

@@ -30,4 +30,19 @@ describe("Dashboard commercial AI entry", () => {
     expect(screen.getByRole("button", { name: "افتح الإدخال الصوتي التجاري" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("7")).toBeInTheDocument());
   });
+
+  it("uses an LTR lifecycle separator in English", async () => {
+    mocks.isArabic = false;
+    const { container } = render(<DashboardCommandCenter />);
+    expect(container.textContent).toContain("→");
+    expect(container.textContent).not.toContain("←");
+  });
+
+  it("uses an RTL lifecycle separator in Arabic", async () => {
+    mocks.isArabic = true;
+    const { container } = render(<DashboardCommandCenter />);
+    expect(container.textContent).toContain("←");
+    // The only arrow glyphs in Arabic chrome must be RTL-correct.
+    expect(container.textContent).not.toContain("→");
+  });
 });

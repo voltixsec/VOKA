@@ -66,6 +66,12 @@ vi.mock("../../../../lib/prisma", () => ({
     catalogItem: {
       findUnique: vi.fn().mockResolvedValue(null),
     },
+    companyUniversalLibrarySector: {
+      findMany: vi.fn().mockResolvedValue([{ categoryId: "cat-solar", companyId: "company-authenticated-456", isActive: true }]),
+    },
+    universalCategory: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     $transaction: vi.fn().mockImplementation(async (callback: any) => {
       const tx = {
         universalCatalogItem: {
@@ -166,7 +172,7 @@ describe("Universal Library API Surface", () => {
   it("GET /api/universal-library/items returns bounded universal results", async () => {
     const { GET } = await import("../items/route");
 
-    const req = new Request("http://localhost:3000/api/universal-library/items?q=solar&limit=10");
+    const req = new Request("http://localhost:3000/api/universal-library/items?q=solar&limit=10&categoryId=cat-solar");
     const res = await GET(req as any);
     const body = await res.json();
 

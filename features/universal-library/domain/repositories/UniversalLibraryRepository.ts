@@ -25,6 +25,7 @@ export interface SearchUniversalLibraryParams {
   query?: string;
   type?: UniversalItemType;
   categoryId?: string;
+  categoryIds?: string[];
   manufacturerId?: string;
   brandId?: string;
   familyId?: string;

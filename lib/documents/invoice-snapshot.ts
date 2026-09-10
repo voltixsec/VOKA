@@ -1,5 +1,6 @@
 import { ApiError } from '@/lib/api';
 import { prisma } from '@/lib/prisma';
+import { COMPANY_IDENTITY_SELECT } from './company-document-identity';
 
 export function invoiceIdFromDocumentRequest(request: Request, format: 'pdf' | 'xlsx') {
   const parts = new URL(request.url).pathname.split('/').filter(Boolean);
@@ -9,7 +10,10 @@ export function invoiceIdFromDocumentRequest(request: Request, format: 'pdf' | '
 }
 
 export async function getInvoiceDocumentSnapshot(companyId: string, invoiceId: string) {
-  const row = await prisma.invoice.findFirst({ where: { id: invoiceId, companyId }, include: { company: true, lines: { orderBy: { position: 'asc' } } } });
+  const row = await prisma.invoice.findFirst({
+    where: { id: invoiceId, companyId },
+    include: { company: { select: COMPANY_IDENTITY_SELECT }, lines: { orderBy: { position: 'asc' } } },
+  });
   if (!row) throw ApiError.notFound('INVOICE_NOT_FOUND', 'Invoice not found.');
   return row;
 }

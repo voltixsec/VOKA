@@ -64,9 +64,9 @@ describe("POST /api/quotations localization resilience", () => {
     savedQuotation = null;
     mocks.save.mockImplementation(async (quotation: Quotation) => {
       savedQuotation = Quotation.restore({
-      id: "saved-quotation-1", companyId: quotation.companyId, customerId: quotation.customerId,
+      id: "saved-quotation-1", companyId: quotation.companyId, customerId: quotation.customerIdOrNull,
       number: quotation.number.toString(), status: quotation.status, issueDate: quotation.issueDate,
-      expiryDate: quotation.expiryDate, currencyCode: quotation.currencyCode, customer: quotation.customer.toJSON(),
+      expiryDate: quotation.expiryDate, currencyCode: quotation.currencyCode, customer: quotation.customerOrNull?.toJSON() ?? null,
       lines: [...quotation.lines], subjectAr: quotation.subjectAr, subjectEn: quotation.subjectEn,
       localizationStatus: quotation.localizationStatus, localizationRequestedAt: quotation.localizationRequestedAt,
         localizationSourceLocale: quotation.localizationSourceLocale, localizationSourceSignature: quotation.localizationSourceSignature,
@@ -88,6 +88,20 @@ describe("POST /api/quotations localization resilience", () => {
     expect(mocks.translationPort).not.toHaveBeenCalled();
     expect(mocks.afterCallbacks).toHaveLength(1);
     expect(JSON.stringify(await response.json())).not.toContain("CUDA");
+  });
+
+  it("creates a customer-free draft while preserving finalization requirements", async () => {
+    const response = await POST(new Request("http://localhost/api/quotations", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        currencyCode: "KWD",
+        customerId: null,
+        customer: null,
+        lines: [{ position: 1, type: "PRODUCT", itemName: "Unpriced drawing item", quantity: 2, unitPrice: null, pricingStatus: "PENDING" }],
+      }),
+    }));
+    expect(response.status).toBe(201);
+    expect(savedQuotation?.customerIdOrNull).toBeNull();
+    expect(savedQuotation?.status).toBe("DRAFT");
   });
 
   it.each([

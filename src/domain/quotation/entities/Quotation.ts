@@ -536,6 +536,12 @@ export class Quotation {
     this._customer = new CustomerSnapshot(customer);
   }
 
+  clearCustomer(): void {
+    this.assertDraft();
+    this._customerId = null;
+    this._customer = null;
+  }
+
   setDiscount(discount: Discount | null): void {
     this.assertDraft();
     this._discount = discount;

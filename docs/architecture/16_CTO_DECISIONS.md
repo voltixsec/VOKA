@@ -1,4 +1,4 @@
-﻿# 16 CTO DECISIONS
+# 16 CTO DECISIONS
 
 > This document is part of the VOKA Master Blueprint.
 
@@ -91,3 +91,12 @@ Approved.
 - The Sales Assistant consumes governed published knowledge; it does not build the library.
 - AI discovery is not canonical authority; provenance, validation, review and publication govern UCL truth.
 - Permanent scaling invariant: **Huge Library, Small Working Set.**
+
+
+## 2026-09-10 — Phase 4D bounded night closeout
+
+Owner-authorized local verification and bounded fixes are recorded in the [night checkpoint](../checkpoints/2026-09-10-phase4d-night-close.md). Commercial Invoice/Contract labels and locale handling preserve frozen Quotation geometry without changing Quotation source/tests. Sector installation stores tenant selection, scopes discovery and does not bulk-adopt products. A narrowly identified existing ETIM alarm hierarchy is linked under Security; missing real published items remain a product-data blocker, not permission to synthesize or populate the library. C/D/D2 engineering gates pass; F installer/linkage gates pass while local real-content acceptance is BLOCKED (45 descendants, zero active items). Data Factory stays paused; Arena-only commit/push is authorized, with no official update, PR, merge or tag.
+
+## 2026-09-10 — Phase 4D software close vs UCL content
+
+Phase 4D module engineering (A–F installer) is CLOSED on Arena `3d570b1`. CEO visual acceptance of Invoice/Contract AR/EN is PASS. UCL **production item** population is a separate deployment/content prerequisite: governed JSONL is produced by Data Factory (paused) and ingested via existing platform-admin bulk-import + Review/Publish. Those files are not in Git. Customer GET must never bootstrap taxonomy or items. Do not fabricate UniversalCatalogItem rows to close F.

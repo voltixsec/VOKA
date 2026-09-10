@@ -224,47 +224,37 @@ export const POST = withCompanyAuth(
 
     const body = rawBody as CreateQuotationBody;
 
-    if (
-      typeof body.customerId !== 'string' ||
-      !body.customerId.trim()
-    ) {
+    const customerId = body.customerId === undefined || body.customerId === null || body.customerId === ''
+      ? null
+      : typeof body.customerId === 'string' && body.customerId.trim()
+        ? body.customerId.trim()
+        : null;
+
+    if (body.customerId !== undefined && body.customerId !== null && body.customerId !== '' && !customerId) {
       throw ApiError.badRequest(
-        'CUSTOMER_ID_REQUIRED',
-        'customerId is required.',
-        {
-          field: 'customerId',
-        },
+        'INVALID_CUSTOMER_ID',
+        'customerId must be a valid customer identifier or null.',
+        { field: 'customerId' },
       );
     }
 
-    if (
-      typeof body.customer !== 'object' ||
-      body.customer === null ||
-      Array.isArray(body.customer)
-    ) {
-      throw ApiError.badRequest(
-        'CUSTOMER_SNAPSHOT_REQUIRED',
-        'customer must contain a valid customer snapshot.',
-        {
-          field: 'customer',
-        },
-      );
-    }
-
-    const customer =
-      body.customer as Record<string, unknown>;
-
-    if (
-      typeof customer.name !== 'string' ||
-      !customer.name.trim()
-    ) {
-      throw ApiError.badRequest(
-        'CUSTOMER_NAME_REQUIRED',
-        'customer.name is required.',
-        {
-          field: 'customer.name',
-        },
-      );
+    let customer: Record<string, unknown> | null = null;
+    if (body.customer !== undefined && body.customer !== null) {
+      if (typeof body.customer !== 'object' || Array.isArray(body.customer)) {
+        throw ApiError.badRequest(
+          'CUSTOMER_SNAPSHOT_INVALID',
+          'customer must contain a valid customer snapshot or be omitted for a draft.',
+          { field: 'customer' },
+        );
+      }
+      customer = body.customer as Record<string, unknown>;
+      if (!customerId || typeof customer.name !== 'string' || !customer.name.trim()) {
+        throw ApiError.badRequest(
+          'CUSTOMER_SNAPSHOT_REQUIRES_ID',
+          'A customer snapshot can only be supplied with a customer selection.',
+          { field: 'customer' },
+        );
+      }
     }
 
     if (
@@ -321,7 +311,7 @@ export const POST = withCompanyAuth(
     const dto: CreateQuotationDto = {
       ...(body as unknown as CreateQuotationDto),
       companyId: company.companyId,
-      customerId: body.customerId.trim(),
+      customerId,
       quotationNumber: undefined,
       familyId: undefined,
       priceListId: parseOptionalString(
@@ -333,7 +323,7 @@ export const POST = withCompanyAuth(
           ? body.currencyCode.trim().toUpperCase()
           : undefined,
 
-      customer: body.customer as
+      customer: customer as
         CreateQuotationDto['customer'],
 
       lines: body.lines as

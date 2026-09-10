@@ -26,8 +26,6 @@ function getStatusVariant(
       return "success";
     case "LEAD":
       return "warning";
-    case "PROSPECT":
-      return "info";
     case "BLOCKED":
     case "INACTIVE":
       return "danger";
@@ -64,7 +62,6 @@ function translateCustomerStatus(
   const translations: Record<string, string> = {
     ACTIVE: "نشط",
     LEAD: "عميل محتمل",
-    PROSPECT: "فرصة بيع",
     BLOCKED: "محظور",
     INACTIVE: "غير نشط",
   };

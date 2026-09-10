@@ -780,13 +780,76 @@ export default function CompanySettingsPage() {
         save: "Save Company Details",
       };
 
+  // Delivery & Messaging readiness labels.
+  // Consolidated here (same isArabic ? {...} : {...} pattern as `labels`) so
+  // Arabic and English stay clean, single-language, and semantically aligned.
+  const deliveryLabels = isArabic
+    ? {
+        sectionTitle: "الإرسال والمراسلات",
+        sectionDescription:
+          "تتم إدارة بيانات اعتماد الإرسال بشكل آمن على الخادم. تعرض هذه الصفحة حالة جاهزية الإعداد فقط.",
+        email: "البريد الإلكتروني",
+        whatsapp: "واتساب",
+        provider: "المزود",
+        notSelected: "غير محدد",
+        providerSelected: "تحديد المزود",
+        selected: "محدد",
+        apiCredentials: "بيانات اعتماد واجهة البرمجة",
+        sender: "البريد المرسِل",
+        accessToken: "رمز الوصول",
+        phoneNumberId: "معرّف رقم الهاتف",
+        graphApiVersion: "إصدار واجهة Graph",
+        arabicTemplate: "قالب العربية",
+        englishTemplate: "قالب الإنجليزية",
+        ready: "جاهز",
+        setupRequired: "مطلوب الإعداد",
+        configured: "جاهز",
+        missing: "غير مهيأ",
+        templateReady: "جاهز",
+        templateMissing: "غير مكتمل",
+        emailIncomplete:
+          "إعدادات البريد الإلكتروني غير مكتملة على الخادم. يرجى تهيئة بيانات اعتماد واجهة البرمجة والبريد المرسِل في متغيرات البيئة.",
+        whatsappIncomplete:
+          "إعدادات واتساب غير مكتملة على الخادم. تأكد من ضبط رمز الوصول، ومعرّف رقم الهاتف، وإعداد القوالب للغتين العربية والإنجليزية.",
+        loadingReadiness: "جارٍ تحميل حالة الإعداد...",
+      }
+    : {
+        sectionTitle: "Delivery & Messaging",
+        sectionDescription:
+          "Delivery credentials are managed securely on the server. This page only shows configuration readiness.",
+        email: "Email",
+        whatsapp: "WhatsApp",
+        provider: "Provider",
+        notSelected: "Not selected",
+        providerSelected: "Provider selected",
+        selected: "Selected",
+        apiCredentials: "API credentials",
+        sender: "Sender",
+        accessToken: "Access token",
+        phoneNumberId: "Phone number ID",
+        graphApiVersion: "Graph API version",
+        arabicTemplate: "Arabic template",
+        englishTemplate: "English template",
+        ready: "Ready",
+        setupRequired: "Setup required",
+        configured: "Configured",
+        missing: "Missing",
+        templateReady: "Ready",
+        templateMissing: "Missing",
+        emailIncomplete:
+          "Email configuration is incomplete on the server. Please set up API credentials and sender address in server environment variables.",
+        whatsappIncomplete:
+          "WhatsApp configuration is incomplete on the server. Ensure access token, phone number ID, and templates for Arabic and English are configured.",
+        loadingReadiness: "Loading configuration readiness...",
+      };
+
   if (loading) {
     return (
       <main
         dir={isArabic ? "rtl" : "ltr"}
-        className="min-h-screen bg-slate-950 p-6 text-white"
+        className="mx-auto max-w-6xl p-6 lg:p-10"
       >
-        <div className="mx-auto max-w-6xl rounded-3xl border border-slate-800 bg-slate-900 p-8">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
           {labels.loading}
         </div>
       </main>
@@ -796,9 +859,9 @@ export default function CompanySettingsPage() {
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="min-h-screen bg-slate-950 p-6 text-white"
+      className="mx-auto max-w-6xl p-6 lg:p-10"
     >
-      <form onSubmit={handleSubmit} className="mx-auto max-w-6xl space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <header className="rounded-3xl border border-slate-800 bg-slate-900 p-7">
           <p className="text-sm font-semibold text-sky-400">
             {labels.eyebrow}
@@ -1026,13 +1089,11 @@ export default function CompanySettingsPage() {
         <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6" data-testid="delivery-readiness-section">
           <div className="flex flex-col gap-2">
             <h2 className="text-xl font-bold">
-              {isArabic ? "الإرسال والمراسلات" : "Delivery & Messaging"}
+              {deliveryLabels.sectionTitle}
             </h2>
 
             <p className="max-w-4xl text-sm leading-7 text-slate-400">
-              {isArabic
-                ? "تتم إدارة بيانات اعتماد الإرسال بشكل آمن على الخادم. تعرض هذه الصفحة حالة جاهزية الإعداد فقط."
-                : "Delivery credentials are managed securely on the server. This page only shows configuration readiness."}
+              {deliveryLabels.sectionDescription}
             </p>
           </div>
 
@@ -1042,7 +1103,7 @@ export default function CompanySettingsPage() {
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5" data-testid="email-readiness-card">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                   <h3 className="font-bold text-slate-100">
-                    {isArabic ? "البريد الإلكتروني" : "EMAIL"}
+                    {deliveryLabels.email}
                   </h3>
 
                   <span
@@ -1053,29 +1114,25 @@ export default function CompanySettingsPage() {
                     }`}
                   >
                     {deliverySettings.email.configured
-                      ? isArabic
-                        ? "جاهز"
-                        : "Ready"
-                      : isArabic
-                        ? "مطلوب الإعداد"
-                        : "Setup required"}
+                      ? deliveryLabels.ready
+                      : deliveryLabels.setupRequired}
                   </span>
                 </div>
 
                 <div className="mt-4 space-y-3 text-sm">
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "المزود" : "Provider"}
+                      {deliveryLabels.provider}
                     </span>
                     <span className="font-medium">
                       {deliverySettings.email.provider ??
-                        (isArabic ? "غير محدد" : "Not selected")}
+                        deliveryLabels.notSelected}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "تحديد المزود" : "Provider selected"}
+                      {deliveryLabels.providerSelected}
                     </span>
                     <span
                       className={
@@ -1085,18 +1142,14 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.email.requirements.providerSelected
-                        ? isArabic
-                          ? "محدد"
-                          : "Selected"
-                        : isArabic
-                          ? "غير محدد"
-                          : "Not selected"}
+                        ? deliveryLabels.selected
+                        : deliveryLabels.notSelected}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "بيانات مفتاح API" : "API credentials configured"}
+                      {deliveryLabels.apiCredentials}
                     </span>
                     <span
                       className={
@@ -1106,18 +1159,14 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.email.requirements.apiKeyConfigured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Configured"
-                        : isArabic
-                          ? "غير مهيأ"
-                          : "Missing"}
+                        ? deliveryLabels.configured
+                        : deliveryLabels.missing}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "البريد المرسِل" : "Sender configured"}
+                      {deliveryLabels.sender}
                     </span>
                     <span
                       className={
@@ -1127,21 +1176,15 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.email.requirements.senderConfigured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Configured"
-                        : isArabic
-                          ? "غير مهيأ"
-                          : "Missing"}
+                        ? deliveryLabels.configured
+                        : deliveryLabels.missing}
                     </span>
                   </div>
                 </div>
 
                 {!deliverySettings.email.configured && (
                   <p className="mt-4 rounded-xl border border-amber-900/50 bg-amber-950/30 p-3 text-xs leading-5 text-amber-300">
-                    {isArabic
-                      ? "إعدادات البريد الإلكتروني غير مكتملة على الخادم. يرجى تهيئة مفتاح API والبريد المرسِل في متغيرات البيئة."
-                      : "Email configuration is incomplete on the server. Please set up API key and sender address in server environment variables."}
+                    {deliveryLabels.emailIncomplete}
                   </p>
                 )}
               </div>
@@ -1150,7 +1193,7 @@ export default function CompanySettingsPage() {
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5" data-testid="whatsapp-readiness-card">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                   <h3 className="font-bold text-slate-100">
-                    {isArabic ? "واتساب" : "WHATSAPP"}
+                    {deliveryLabels.whatsapp}
                   </h3>
 
                   <span
@@ -1161,29 +1204,25 @@ export default function CompanySettingsPage() {
                     }`}
                   >
                     {deliverySettings.whatsapp.configured
-                      ? isArabic
-                        ? "جاهز"
-                        : "Ready"
-                      : isArabic
-                        ? "مطلوب الإعداد"
-                        : "Setup required"}
+                      ? deliveryLabels.ready
+                      : deliveryLabels.setupRequired}
                   </span>
                 </div>
 
                 <div className="mt-4 space-y-3 text-sm">
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "المزود" : "Provider"}
+                      {deliveryLabels.provider}
                     </span>
                     <span className="font-medium">
                       {deliverySettings.whatsapp.provider ??
-                        (isArabic ? "غير محدد" : "Not selected")}
+                        deliveryLabels.notSelected}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "رمز الوصول Access Token" : "Access credentials configured"}
+                      {deliveryLabels.accessToken}
                     </span>
                     <span
                       className={
@@ -1193,18 +1232,14 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.whatsapp.requirements.accessTokenConfigured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Configured"
-                        : isArabic
-                          ? "غير مهيأ"
-                          : "Missing"}
+                        ? deliveryLabels.configured
+                        : deliveryLabels.missing}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "معرّف رقم الهاتف Phone ID" : "Phone number configured"}
+                      {deliveryLabels.phoneNumberId}
                     </span>
                     <span
                       className={
@@ -1214,18 +1249,14 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.whatsapp.requirements.phoneNumberIdConfigured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Configured"
-                        : isArabic
-                          ? "غير مهيأ"
-                          : "Missing"}
+                        ? deliveryLabels.configured
+                        : deliveryLabels.missing}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "إصدار Graph API" : "Graph API version configured"}
+                      {deliveryLabels.graphApiVersion}
                     </span>
                     <span
                       className={
@@ -1235,18 +1266,14 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.whatsapp.requirements.graphApiVersionConfigured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Configured"
-                        : isArabic
-                          ? "غير مهيأ"
-                          : "Missing"}
+                        ? deliveryLabels.configured
+                        : deliveryLabels.missing}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "قالب العربية (ar)" : "Arabic template"}
+                      {deliveryLabels.arabicTemplate}
                     </span>
                     <span
                       className={
@@ -1256,18 +1283,14 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.whatsapp.locales.ar.configured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Ready"
-                        : isArabic
-                          ? "غير مكتمل"
-                          : "Missing"}
+                        ? deliveryLabels.templateReady
+                        : deliveryLabels.templateMissing}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-400">
-                      {isArabic ? "قالب الإنجليزية (en)" : "English template"}
+                      {deliveryLabels.englishTemplate}
                     </span>
                     <span
                       className={
@@ -1277,12 +1300,8 @@ export default function CompanySettingsPage() {
                       }
                     >
                       {deliverySettings.whatsapp.locales.en.configured
-                        ? isArabic
-                          ? "جاهز"
-                          : "Ready"
-                        : isArabic
-                          ? "غير مكتمل"
-                          : "Missing"}
+                        ? deliveryLabels.templateReady
+                        : deliveryLabels.templateMissing}
                     </span>
                   </div>
                 </div>
@@ -1291,16 +1310,14 @@ export default function CompanySettingsPage() {
                   !deliverySettings.whatsapp.locales.ar.configured ||
                   !deliverySettings.whatsapp.locales.en.configured) && (
                   <p className="mt-4 rounded-xl border border-amber-900/50 bg-amber-950/30 p-3 text-xs leading-5 text-amber-300">
-                    {isArabic
-                      ? "إعدادات واتساب غير مكتملة على الخادم. تأكد من ضبط رمز الوصول، رقم الهاتف، وإعداد القوالب للغتين العربية والإنجليزية."
-                      : "WhatsApp configuration is incomplete on the server. Ensure access token, phone number ID, and templates for Arabic and English are configured."}
+                    {deliveryLabels.whatsappIncomplete}
                   </p>
                 )}
               </div>
             </div>
           ) : (
             <div className="mt-5 text-sm text-slate-500">
-              {isArabic ? "جارٍ تحميل حالة الإعداد..." : "Loading configuration readiness..."}
+              {deliveryLabels.loadingReadiness}
             </div>
           )}
         </section>
