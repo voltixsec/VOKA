@@ -72,7 +72,7 @@ Focused tests pass:
 - Source-artifact policy, exact-byte local storage, PDF re-read/hash verification, cross-tenant rejection, and tool routing: 13 tests
 - Existing ConversationRuntime, commercial handoff, StateSyncApproval, and tool-registry regressions remain green in the affected run
 
-Affected validation: 44 files / 271 tests passed. Targeted ESLint passes for the changed foundation/runtime/UI files, and `git diff --check` passes.
+The broader affected validation recorded 44 files / 271 tests passed. The latest focused rerun of source-artifact, attachment, and conversation-runtime paths passed 22 files / 145 tests, including the real-byte ingestion regression. Targeted ESLint passes for the changed foundation/runtime/UI files, and `git diff --check` passes.
 
 Full Vitest reached 334 passing files / 2,185 passing tests, 15 files failing / 4 tests failing, and 7 skipped files / 49 skipped tests. The failures are environment-related Prisma-client import failures because the generated client is absent; no foundation test failed. `npx prisma generate` loads the Prisma config with supplied local placeholder URLs but cannot download the Prisma engine because the sandbox network disconnects. `npm run typecheck` reports the same missing-generated-client cascade (169 diagnostics; no diagnostics in the changed foundation files after filtering). `npm run build` is blocked by the same absent generated client plus Google Fonts `ECONNRESET` for Cairo and IBM Plex Arabic. The existing repository also retains unrelated dirty work from before this sprint.
 

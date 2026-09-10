@@ -22,10 +22,11 @@ OCR, XLSX/DOCX, automatic quantity extraction, Requirement review UI, and object
 storage remain unavailable. Supplier/RFQ/PO/messaging/scraping and Data Factory
 remain out of scope and paused.
 
-Recovery validation is green for the affected foundation/runtime groups: 44 files
-and 271 tests passed, with targeted ESLint and diff-check passing. Full Vitest
-reached 334 passing files / 2,185 passing tests, with 15 files failing / 4 tests
-failing because the generated Prisma client is absent. `npx prisma generate` was
+Recovery validation is green for the affected foundation/runtime groups: the
+broader run passed 44 files / 271 tests, and the latest focused rerun passed 22
+files / 145 tests including real-byte ingestion. Targeted ESLint and diff-check
+pass. Full Vitest reached 334 passing files / 2,185 passing tests, with 15 files
+failing / 4 tests failing because the generated Prisma client is absent. `npx prisma generate` was
 attempted with local placeholder database URLs and was blocked downloading the
 Prisma engine; `npm run typecheck` has the resulting generated-client cascade,
 and `npm run build` is additionally blocked by Google Fonts network failures.
