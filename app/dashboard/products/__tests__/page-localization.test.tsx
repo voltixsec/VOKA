@@ -54,7 +54,6 @@ describe("Products page localization polish", () => {
       vi.fn(async (input: string) => {
         if (input.includes("/api/catalog/items")) {
           // Simulate a thrown non-Error rejection path so the catch fallback is exercised.
-          // eslint-disable-next-line @typescript-eslint/no-throw-literal
           return Promise.reject("boom");
         }
         return okJson([]);
