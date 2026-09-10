@@ -1,12 +1,25 @@
-## Current Phase 4D handoff — 2026-09-10
+## Current Phase 4D handoff — 2026-09-10 office close
 
 This section supersedes older current-state/slice instructions below. Phase 4C and payment re-acceptance remain CLOSED. A/B/E remain PASS and must not be reopened.
 
-C document engineering, D XLSX import and D2 Arabic UX: PASS. F installer/scoping/persistence and Security taxonomy linkage: PASS; F real-content acceptance is blocked on localhost/voka (45 Security descendants, zero active items). CEO visual/product acceptance remains PENDING; do not claim full Phase 4D closure.
+**Phase 4D software engineering = CLOSED** on Arena `3d570b1f688d8bcf0806f9caf3587e15fb616bb1`.
 
-Full tests: 2312 passed / 0 failed / 50 skipped (2362 total; 343 files). Typecheck, build and Prisma status PASS (52 migrations applied). Quotation/Sales Assistant remain frozen; Data Factory remains PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E, PR, merge, tag or official-branch update.
+| Gate | Status |
+| --- | --- |
+| A Customers | PASS |
+| B Invoice list + SO picker | PASS |
+| C Commercial documents | ENGINEERING PASS + CEO VISUAL PASS |
+| D Catalog XLSX import | PASS |
+| D2 Catalog Arabic UX | PASS |
+| E Catalog XLSX export | PASS |
+| F Sector installer | ENGINEERING/BEHAVIOR PASS |
+| UCL production content | NOT MATERIALIZED |
 
-Final Arena SHA is the commit containing the [night checkpoint](../checkpoints/2026-09-10-phase4d-night-close.md); that checkpoint records migration IDs, data effects, all six root counts, local proof and morning-only acceptance steps.
+Installer ≠ content. Security has descendant taxonomy (ETIM) and zero published items because Data Factory JSONL (`VOKA_UCL_LIBRARY_CURRENT.jsonl` and siblings) is **outside Git**. Hydration path exists: platform-admin `POST /api/universal-library/bulk-import` then Review → Publish. Do not invent records. Do not reopen 4D code for empty DB.
+
+Home resume: `docs/checkpoints/2026-09-10-office-session-close-home-resume.md`. Night proof: `docs/checkpoints/2026-09-10-phase4d-night-close.md`.
+
+Quotation/Sales Assistant frozen. Data Factory PAUSED at System 008 / SEC-SYS008-B004. No Phase 4E, PR, merge, tag or official-branch update from this closeout.
 
 ---
 
