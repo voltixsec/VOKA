@@ -39,7 +39,9 @@ export type WorkspacePatch = {
 export type FlexibleRecommendation = { id: string; title: string; rationale: string; candidateId: string | null };
 
 export type ToolRequest = { kind: ConversationToolKind; query: string; attachmentId: string | null; purpose?: "JURISDICTION_RULE" | "PRODUCT_RESEARCH" };
-export type ToolObservation = { kind: ConversationToolKind; purpose?: ToolRequest["purpose"]; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; createdAt: string; candidateProducts?: CandidateProduct[]; engineeringRules?: import("@/src/application/agentic-commercial-intelligence").ResearchedEngineeringRule[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
+export type ToolCitation = { id?: string; sourceArtifactId?: string | null; sourceType: string; title: string; pageNumber?: number | null; sheet?: string | null; section?: string | null; lineLocator?: string | null; url?: string | null; publisher?: string | null; provenance: string; verificationState: string; confidence?: number | null; supportedClaimSummary: string };
+export type RequirementCandidate = { stableKey: string; description: string; quantity: number | null; unit: string | null; technicalRequirement?: string | null; quantityStatus: "EXTRACTED_REVIEW_REQUIRED" | "USER_PROVIDED" | "DETERMINISTIC" | "UNKNOWN"; reviewState: "NEEDS_REVIEW" | "CONFIRMED"; citationId?: string };
+export type ToolObservation = { kind: ConversationToolKind; purpose?: ToolRequest["purpose"]; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED" | "STORED_PENDING_VISION" | "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; citations?: ToolCitation[]; artifactId?: string; extractedText?: string; requirementCandidates?: RequirementCandidate[]; createdAt: string; candidateProducts?: CandidateProduct[]; engineeringRules?: import("@/src/application/agentic-commercial-intelligence").ResearchedEngineeringRule[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
 
 export type PendingState = "CONFIRMED" | "PENDING";
 export type ProductSelectionState = "PENDING" | "GENERIC" | "SELECTED";
@@ -258,5 +260,6 @@ export type ConversationTurnInput = {
   source: ConversationMessageSource;
   attachment?: { id?: string; name: string; type: string; size: number } | null;
   companyId: string;
+  userId?: string | null;
   action?: "TURN" | "RECONCILE";
 };

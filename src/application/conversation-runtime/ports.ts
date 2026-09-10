@@ -16,7 +16,7 @@ export interface ConversationBrainPort {
 }
 
 export interface ConversationToolPort {
-  execute(input: { request: ToolRequest; companyId: string; locale: ConversationLocale; graph: SystemConfigurationGraph }): Promise<ToolObservation>;
+  execute(input: { runtimeId?: string; request: ToolRequest; companyId: string; locale: ConversationLocale; graph: SystemConfigurationGraph }): Promise<ToolObservation>;
 }
 
 export interface SolutionCandidateResolverPort {

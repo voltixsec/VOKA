@@ -112,9 +112,10 @@ export function synchronizeWorkspace(
   );
   const emptySiteState = { siteRequirements: [], supplierResponsibilities: [], customerResponsibilities: [], exclusions: [], notes: [] };
   const commercialTerms = Object.fromEntries(TERM_KEYS.map((key) => [key, explicitTerm(prior, facts, key, Boolean(sameSystem))])) as Record<typeof TERM_KEYS[number], { value: string | null; source: "EXPLICIT" | "COMPANY_DEFAULT" | null }>;
-  const engineeringBom = governedBom(prior?.engineering.bom, graph.engineeringBom, Boolean(sameSystem))
+  const retainEngineering = Boolean(sameSystem) && graph.system?.key !== "VEHICLE_ELEVATOR";
+  const engineeringBom = governedBom(prior?.engineering.bom, graph.engineeringBom, retainEngineering)
     .map((line) => applyApprovedProductSelection(line, facts));
-  const commercialBom = governedBom(prior?.commercialSolution.bom, graph.salesBom, Boolean(sameSystem))
+  const commercialBom = governedBom(prior?.commercialSolution.bom, graph.salesBom, retainEngineering)
     .map((line) => projectCommercialBomLine(applyApprovedProductSelection(line, facts)));
   return {
     commercialContext: {

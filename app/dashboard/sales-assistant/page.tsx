@@ -24,6 +24,7 @@ export default function SalesAssistantPage(props: any) {
   const [prompt, setPrompt] = useState("");
   const [runtimeState, setRuntimeState] = useState<ConversationRuntimeState | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentStatus, setAttachmentStatus] = useState<"READY" | "UPLOADING" | "INSPECTING">("READY");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(false);
   const [handoffError, setHandoffError] = useState<string | null>(null);
@@ -97,16 +98,30 @@ export default function SalesAssistantPage(props: any) {
   };
 
   const advanceConversation = async (explicitMessage?: string, explicitSource = sourceRef.current) => {
-    const message = (explicitMessage ?? prompt).trim(); if (!message || turnInFlightRef.current) return;
+    const message = (explicitMessage ?? prompt).trim(); if ((!message && !attachment) || turnInFlightRef.current) return;
     const generation = ++generationRef.current;
     turnInFlightRef.current = true;
     setIsGenerating(true); setError(false); setHandoffError(null); setPendingUserMessage(message); setPendingResearch(isResearchRequest(message)); setActivityStage("UNDERSTANDING");
     try {
-      const response = await fetch("/api/ai/conversation-runtime", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: runtimeState, message, source: explicitSource, reply: message, replySource: explicitSource, locale: isArabic ? "ar" : "en", attachment: attachment ? { id: `${attachment.name}:${attachment.size}:${attachment.lastModified}`, name: attachment.name, type: attachment.type, size: attachment.size } : null }) });
+      let attachmentPayload: { id: string; name: string; type: string; size: number } | null = null;
+      if (attachment) {
+        setAttachmentStatus("UPLOADING");
+        const form = new FormData();
+        form.set("file", attachment);
+        form.set("context", "SALES_ASSISTANT");
+        if (runtimeState?.runtimeId) form.set("conversationRuntimeId", runtimeState.runtimeId);
+        const uploadResponse = await fetch("/api/source-artifacts", { method: "POST", body: form });
+        const uploadJson = await uploadResponse.json();
+        if (!uploadResponse.ok || typeof uploadJson.data?.artifact?.id !== "string") throw new Error(uploadJson.error?.message ?? "Attachment upload failed");
+        const artifact = uploadJson.data.artifact as { id: string; originalFilename: string; mimeType: string; sizeBytes: number };
+        attachmentPayload = { id: artifact.id, name: artifact.originalFilename, type: artifact.mimeType, size: artifact.sizeBytes };
+        setAttachmentStatus("INSPECTING");
+      }
+      const response = await fetch("/api/ai/conversation-runtime", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: runtimeState, message, source: explicitSource, reply: message, replySource: explicitSource, locale: isArabic ? "ar" : "en", attachment: attachmentPayload }) });
       const json = await response.json(); if (generation !== generationRef.current) return; if (!response.ok) throw new Error(json.error?.message ?? "Conversation failed");
       if (!isRuntimeState(json.data)) throw new Error("Invalid conversation runtime response");
-      setRuntimeState(json.data); setPrompt(""); sourceRef.current = "TEXT";
-    } catch { if (generation === generationRef.current) setError(true); }
+      setRuntimeState(json.data); setPrompt(""); setAttachment(null); setAttachmentStatus("READY"); sourceRef.current = "TEXT";
+    } catch { if (generation === generationRef.current) { setAttachmentStatus("READY"); setError(true); } }
     finally { if (generation === generationRef.current) { turnInFlightRef.current = false; setIsGenerating(false); setPendingUserMessage(null); setPendingResearch(false); } }
   };
   recordedTranscriptHandlerRef.current = (text) => { if (!text || text === previousRecordingTranscriptRef.current) return; previousRecordingTranscriptRef.current = text; sourceRef.current = "VOICE"; setPrompt(text); void advanceConversation(text, "VOICE"); };
@@ -117,8 +132,8 @@ export default function SalesAssistantPage(props: any) {
   const voiceUnavailable = voiceCapabilityKnown && !recorded.isSupported && !voice.isSupported;
   const hasText = Boolean(prompt.trim());
   const handleVoiceToggle = () => { if (recorded.isSupported) { if (recorded.state === "RECORDING") recorded.stopRecording(); else if (recorded.state !== "TRANSCRIBING") { previousRecordingTranscriptRef.current = ""; void recorded.startRecording(); } } else if (voice.state === "LISTENING" || voice.state === "PROCESSING") voice.stopListening(); else { prevFinalRef.current = ""; voice.startListening(isArabic ? "ar-KW" : "en-US"); } };
-  const handlePrimaryAction = () => { if (isGenerating || isVoiceProcessing) return; if (isListening || !hasText) handleVoiceToggle(); else void advanceConversation(); };
-  const newRequest = () => { generationRef.current++; quotationRequestRef.current++; turnInFlightRef.current = false; handoffPreparationRef.current = false; quotationInFlightRef.current = false; quotationNavigationStartedRef.current = false; recorded.resetRecording(); voice.resetVoiceInput(); setPrompt(""); setRuntimeState(null); setAttachment(null); setError(false); setHandoffError(null); setIsGenerating(false); setIsCreatingQuotation(false); setQuotationNavigationStarted(false); setPendingUserMessage(null); setPendingResearch(false); setShowLatest(false); sourceRef.current = "TEXT"; sessionStorage.removeItem(RUNTIME_STORAGE_KEY); };
+  const handlePrimaryAction = () => { if (isGenerating || isVoiceProcessing) return; if (isListening || (!hasText && !attachment)) handleVoiceToggle(); else void advanceConversation(); };
+  const newRequest = () => { generationRef.current++; quotationRequestRef.current++; turnInFlightRef.current = false; handoffPreparationRef.current = false; quotationInFlightRef.current = false; quotationNavigationStartedRef.current = false; recorded.resetRecording(); voice.resetVoiceInput(); setPrompt(""); setRuntimeState(null); setAttachment(null); setAttachmentStatus("READY"); setError(false); setHandoffError(null); setIsGenerating(false); setIsCreatingQuotation(false); setQuotationNavigationStarted(false); setPendingUserMessage(null); setPendingResearch(false); setShowLatest(false); sourceRef.current = "TEXT"; sessionStorage.removeItem(RUNTIME_STORAGE_KEY); };
   const copyMessage = async (text: string, index: number) => { try { await navigator.clipboard.writeText(text); setCopiedMessage(index); window.setTimeout(() => setCopiedMessage((value) => value === index ? null : value), 1_500); } catch { /* optional */ } };
   const handleTimelineScroll = () => { const timeline = timelineRef.current; if (!timeline) return; const near = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 96; nearBottomRef.current = near; setShowLatest(!near); };
   const scrollToLatest = () => { const timeline = timelineRef.current; if (!timeline) return; nearBottomRef.current = true; setShowLatest(false); typeof timeline.scrollTo === "function" ? timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" }) : (timeline.scrollTop = timeline.scrollHeight); };
@@ -160,7 +175,7 @@ export default function SalesAssistantPage(props: any) {
     } catch { if (generation === generationRef.current) setError(true); }
     finally { if (generation === generationRef.current) { turnInFlightRef.current = false; setIsGenerating(false); } }
   };
-  const primaryActionLabel = isGenerating || isVoiceProcessing ? (isArabic ? "جارٍ الفهم..." : "Understanding...") : isListening ? (isArabic ? "إيقاف وإرسال" : "Stop & Send") : hasText ? (isArabic ? "ابدأ الطلب" : "Start Request") : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice");
+  const primaryActionLabel = isGenerating || isVoiceProcessing ? (isArabic ? "جارٍ الفهم..." : "Understanding...") : isListening ? (isArabic ? "إيقاف وإرسال" : "Stop & Send") : (hasText || attachment) ? (isArabic ? "ابدأ الطلب" : "Start Request") : (isArabic ? "ابدأ الطلب صوتيًا" : "Start by Voice");
   const controls = <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 px-2">{!hasConversation ? <NewRequestCTA isArabic={isArabic} onClick={newRequest} /> : null}</div>;
   const voiceStatus = recorded.isSupported
     ? recorded.state === "RECORDING" ? (isArabic ? "جاري تسجيل الصوت... اضغط الميكروفون للإيقاف." : "Recording audio… Press the microphone to stop.")
@@ -182,7 +197,7 @@ export default function SalesAssistantPage(props: any) {
         <label htmlFor="sales-prompt-input" className="sr-only">{isArabic ? "تحدث مع فوكا" : "Talk to VOKA"}</label>
         {hasConversation ? <MessageList ref={timelineRef} messages={messages} pendingUserMessage={pendingUserMessage} isArabic={isArabic} copiedMessage={copiedMessage} onCopy={(text, index) => void copyMessage(text, index)} onScroll={handleTimelineScroll} showLatest={showLatest} onLatest={scrollToLatest} latestAssistantContent={runtimeState ? <AssistantContextCues state={runtimeState} isArabic={isArabic} /> : null} activity={isGenerating ? <ActivityIndicator stage={activityStage} isArabic={isArabic} /> : null} /> : <div className="mt-auto pb-5 pt-10 text-center"><p className="text-sm font-medium text-slate-300">{isArabic ? "ابدأ بفكرة، سؤال، أو مستند" : "Start with an idea, a question, or a document"}</p><p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">{isArabic ? "تحدث بطبيعتك، وفوكا يحافظ على السياق ويطوّر الحل معك." : "Speak naturally; VOKA keeps context and develops the solution with you."}</p><div className="mt-4 flex flex-wrap justify-center gap-2">{SAMPLES.map((sample) => <button key={sample.labelEn} type="button" onClick={() => setPrompt(isArabic ? sample.textAr : sample.textEn)} className="rounded-2xl border border-white/[0.075] bg-white/[0.03] px-3.5 py-2 text-xs text-sky-200 outline-none transition hover:border-sky-300/20 hover:bg-sky-300/[0.06] focus-visible:ring-2 focus-visible:ring-sky-400">{isArabic ? sample.labelAr : sample.labelEn}</button>)}</div></div>}
         {runtimeState?.suggestedReplies.length ? <div className="mb-3 flex flex-wrap gap-2" data-testid="compact-conversation-actions">{runtimeState.suggestedReplies.map((reply) => <button key={reply} type="button" disabled={isGenerating} onClick={() => void advanceConversation(reply, "CHIP")} className="rounded-xl border border-sky-400/25 bg-sky-300/[0.035] px-3 py-2 text-xs text-sky-100 outline-none hover:bg-sky-300/[0.07] focus-visible:ring-2 focus-visible:ring-sky-400">{reply}</button>)}</div> : null}
-        <Composer isArabic={isArabic} value={prompt} inputRef={promptInputRef} attachment={attachment} primaryActionLabel={primaryActionLabel} hasText={hasText} isListening={isListening} disabled={isGenerating || isVoiceProcessing || (voiceUnavailable && !hasText)} voiceUnavailable={voiceUnavailable} interimTranscript={voice.transcript.interim} onChange={(event) => { generationRef.current++; setIsGenerating(false); setPendingUserMessage(null); setPrompt(event.target.value); sourceRef.current = "TEXT"; }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && hasText) { event.preventDefault(); handlePrimaryAction(); } }} onPrimaryAction={handlePrimaryAction} onAttachment={setAttachment} onRemoveAttachment={() => setAttachment(null)} controls={controls} status={status} elevated={hasConversation} />
+        <Composer isArabic={isArabic} value={prompt} inputRef={promptInputRef} attachment={attachment} attachmentStatus={attachmentStatus} primaryActionLabel={primaryActionLabel} hasText={hasText || Boolean(attachment)} isListening={isListening} disabled={isGenerating || isVoiceProcessing || (voiceUnavailable && !hasText && !attachment)} voiceUnavailable={voiceUnavailable} interimTranscript={voice.transcript.interim} onChange={(event) => { generationRef.current++; setIsGenerating(false); setPendingUserMessage(null); setPrompt(event.target.value); sourceRef.current = "TEXT"; }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && (hasText || attachment)) { event.preventDefault(); handlePrimaryAction(); } }} onPrimaryAction={handlePrimaryAction} onAttachment={(file) => { setAttachment(file); setAttachmentStatus("READY"); }} onRemoveAttachment={() => { setAttachment(null); setAttachmentStatus("READY"); }} controls={controls} status={status} elevated={hasConversation} />
         {!hasConversation ? <div className="mb-auto h-12" /> : null}
       </main>
     </div>

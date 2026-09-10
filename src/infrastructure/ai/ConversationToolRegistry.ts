@@ -1,11 +1,16 @@
 import type { CommercialSystemResearchPort } from "@/src/application/agentic-commercial-intelligence";
 import type { ConversationToolPort, SolutionCandidateResolverPort, ToolObservation } from "@/src/application/conversation-runtime";
+import type { SourceArtifactInspectionPort } from "@/src/application/source-artifacts";
 
 export class ConversationToolRegistry implements ConversationToolPort {
-  constructor(private readonly research: CommercialSystemResearchPort | null, private readonly candidates: SolutionCandidateResolverPort | null, private readonly now = () => new Date().toISOString()) {}
+  constructor(private readonly research: CommercialSystemResearchPort | null, private readonly candidates: SolutionCandidateResolverPort | null, private readonly now = () => new Date().toISOString(), private readonly inspection: SourceArtifactInspectionPort | null = null) {}
 
   async execute(input: Parameters<ConversationToolPort["execute"]>[0]): Promise<ToolObservation> {
-    if (["ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"].includes(input.request.kind) && !input.request.attachmentId) return { kind: input.request.kind, status: "ATTACHMENT_REQUIRED", summary: "The referenced evidence must be attached before it can be inspected.", evidence: [], createdAt: this.now() };
+    if (["ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"].includes(input.request.kind) && !input.request.attachmentId) return { kind: input.request.kind, status: "ATTACHMENT_REQUIRED", summary: "The referenced evidence must be attached before it can be inspected.", evidence: [], citations: [], createdAt: this.now() };
+    if (["ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"].includes(input.request.kind)) {
+      if (!this.inspection) return { kind: input.request.kind, status: "UNAVAILABLE", artifactId: input.request.attachmentId ?? undefined, summary: "Source artifact inspection is not configured.", evidence: [], citations: [], createdAt: this.now() };
+      return this.inspection.inspect({ runtimeId: input.runtimeId, companyId: input.companyId, artifactId: input.request.attachmentId!, kind: input.request.kind as "ATTACHMENT_INSPECTION" | "DRAWING_INSPECTION" | "BOQ_INSPECTION", query: input.request.query });
+    }
     if (input.request.kind === "CATALOG_LOOKUP" && this.candidates) {
       const resolved = await this.candidates.resolve({ graph: input.graph, companyId: input.companyId, locale: input.locale, mode: "CATALOG_ONLY", query: input.request.query, requestedCount: requestedCount(input.request.query) });
       return {

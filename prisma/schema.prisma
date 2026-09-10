@@ -33,6 +33,38 @@ enum MembershipStatus {
   SUSPENDED
 }
 
+enum SourceArtifactContext {
+  SALES_ASSISTANT
+  TAKEOFF
+  ENGINEERING_TENDER
+}
+
+enum SourceArtifactKind {
+  PDF
+  IMAGE
+}
+
+enum SourceArtifactProcessingState {
+  RECEIVED
+  TEXT_EXTRACTED
+  STORED_PENDING_VISION
+  DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE
+  FAILED
+}
+
+enum RequirementQuantityStatus {
+  USER_PROVIDED
+  EXTRACTED_REVIEW_REQUIRED
+  DETERMINISTIC
+  UNKNOWN
+}
+
+enum RequirementReviewState {
+  NEEDS_REVIEW
+  CONFIRMED
+  REJECTED
+}
+
 enum CustomerType {
   COMPANY
   INDIVIDUAL
@@ -88,6 +120,9 @@ model Company {
   invoiceEvents            InvoiceEvent[]
   authorizedSignatories    AuthorizedSignatory[]
   drawingTakeoffSessions   DrawingTakeoffSession[]
+  sourceArtifacts          SourceArtifact[]
+  citations                Citation[]
+  requirements             Requirement[]
   universalAdoptions       UniversalItemAdoption[]
   universalLibrarySectors  CompanyUniversalLibrarySector[]
   localizedContents        LocalizedContent[]
@@ -130,8 +165,10 @@ model DrawingTakeoffSession {
   confirmedAt     DateTime?
   convertedAt     DateTime?
   quotationId     String?
+  sourceArtifactId String?
   version         Int                  @default(1)
   company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceArtifact  SourceArtifact?     @relation(fields: [sourceArtifactId], references: [id], onDelete: SetNull)
   lines           DrawingTakeoffLine[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -139,6 +176,7 @@ model DrawingTakeoffSession {
   @@unique([companyId, sourceSha256, userIntent])
   @@index([companyId, status, createdAt])
   @@index([companyId, quotationId])
+  @@index([companyId, sourceArtifactId])
 }
 
 model DrawingTakeoffLine {
@@ -161,6 +199,104 @@ model DrawingTakeoffLine {
 
   @@unique([sessionId, position])
   @@index([sessionId, isConfirmed])
+}
+
+model SourceArtifact {
+  id                       String                       @id @default(cuid())
+  companyId                String
+  originalFilename         String
+  mimeType                 String
+  sizeBytes                Int
+  contentSha256            String
+  kind                     SourceArtifactKind
+  storageRef               String
+  context                  SourceArtifactContext
+  conversationRuntimeId    String?
+  processingState          SourceArtifactProcessingState @default(RECEIVED)
+  extractedText            String?
+  extractedPages           Json?
+  processingError          String?
+  createdByUserId          String?
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  company                  Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy                User?                        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  citations                Citation[]
+  takeoffSessions          DrawingTakeoffSession[]
+
+  @@unique([companyId, contentSha256, originalFilename])
+  @@index([companyId, context, createdAt])
+  @@index([companyId, processingState])
+}
+
+model Citation {
+  id                    String    @id @default(cuid())
+  companyId             String
+  sourceArtifactId      String?
+  sourceType            String
+  title                 String
+  pageNumber            Int?
+  sheet                 String?
+  section               String?
+  lineLocator           String?
+  url                   String?
+  publisher             String?
+  observedAt            DateTime  @default(now())
+  provenance            String
+  verificationState     String
+  confidence            Decimal?  @db.Decimal(5, 4)
+  supportedClaimSummary String
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceArtifact        SourceArtifact? @relation(fields: [sourceArtifactId], references: [id], onDelete: SetNull)
+  requirementLinks      RequirementCitation[]
+
+  @@index([companyId, sourceArtifactId])
+  @@index([companyId, sourceType])
+}
+
+model Requirement {
+  id                    String                    @id @default(cuid())
+  companyId             String
+  stableKey             String
+  revision              Int                       @default(1)
+  sourceContext         SourceArtifactContext
+  parentId              String?
+  systemKey             String?
+  componentKey          String?
+  materialKey           String?
+  serviceKey            String?
+  description           String
+  quantity              Decimal?                  @db.Decimal(18, 3)
+  unit                  String?
+  technicalRequirement  String?
+  quantityStatus        RequirementQuantityStatus @default(UNKNOWN)
+  reviewState           RequirementReviewState    @default(NEEDS_REVIEW)
+  locality              String?
+  provenance             String
+  correctionTrace       Json?
+  createdByUserId       String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  company               Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy             User?                     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  parent                Requirement?              @relation("RequirementHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children              Requirement[]              @relation("RequirementHierarchy")
+  citations             RequirementCitation[]
+
+  @@unique([companyId, stableKey])
+  @@index([companyId, sourceContext, reviewState])
+  @@index([companyId, systemKey, componentKey])
+}
+
+model RequirementCitation {
+  requirementId String
+  citationId    String
+  claimSummary  String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  citation      Citation   @relation(fields: [citationId], references: [id], onDelete: Cascade)
+
+  @@id([requirementId, citationId])
+  @@index([citationId])
 }
 
 model AuthorizedSignatory {
@@ -202,6 +338,8 @@ model User {
   invoiceEvents        InvoiceEvent[]
   universalAdoptions   UniversalItemAdoption[]
   quotationDeliveries  QuotationDelivery[]
+  createdSourceArtifacts SourceArtifact[]
+  createdRequirements  Requirement[]
   notifications        Notification[]
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt

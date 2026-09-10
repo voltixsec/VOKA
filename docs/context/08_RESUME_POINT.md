@@ -1,3 +1,38 @@
+<!-- VOKA-REQUIREMENT-EVIDENCE-ATTACHMENT-FOUNDATION-2026-09-10 -->
+
+## Current execution — Requirement + Evidence + real attachment foundation — 2026-09-10
+
+Implementation is on the Arena-fixed branch `arena/01a08c94-voka`. The requested
+`e46857f` is available as `origin/v1-live-certification` after fetch, but this
+checkout was not switched or reset because the Arena branch contained pre-existing
+user work. The sprint checkpoint is
+[Requirement + Evidence + Attachment Foundation](../checkpoints/2026-09-10-requirement-evidence-attachment-foundation.md).
+
+Delivered: tenant-owned persisted SourceArtifact intake with real multipart bytes,
+SHA-256 and local storage seam; bounded machine-readable PDF extraction with page
+citations; Citation / Requirement / RequirementCitation additive schema; truthful
+attachment, BOQ, and drawing inspection statuses; conservative BOQ review-required
+requirements; shared Takeoff SourceArtifact linkage; Composer picker/drop/paste; and
+active Sales Assistant governed workspace synchronization.
+
+The active Vehicle Elevator regression now preserves system identity, quantity 1,
+and six stops/floors through corrections and reconciliation without inventing an
+engineering BOM. Images remain `STORED_PENDING_VISION`; drawing visual analysis,
+OCR, XLSX/DOCX, automatic quantity extraction, Requirement review UI, and object
+storage remain unavailable. Supplier/RFQ/PO/messaging/scraping and Data Factory
+remain out of scope and paused.
+
+Focused tests and diff-check pass. Full typecheck/full Vitest/build are still
+blocked by the pre-existing absent generated Prisma client and blocked Prisma
+engine download; no database migration was deployed from this environment.
+
+Exact next slice: validate the additive migration/generated client in the target
+environment, then add only a small human Requirement review/correction surface.
+Do not start Supplier Intelligence, RFQ/PO, drawing visual intelligence, or Data
+Factory.
+
+---
+
 <!-- VOKA-V1-FINAL-CLOSURE-VOLTX-2026-09-10 -->
 
 ## VOKA V1 final product closure — 2026-09-10

@@ -31,6 +31,11 @@ const SYSTEM_PATTERNS: SystemPattern[] = [
     valueEn: "FM-200 suppression system",
     pattern: /(?:fm\s*-?\s*200|\u0627\u0641\s*\u0627\u0645\s*200)/iu,
   },
+  {
+    valueAr: "مصعد سيارات",
+    valueEn: "Vehicle elevator",
+    pattern: /(?:vehicle\s*elevator|car\s*elevator|مصعد\s*(?:سيارات|سيارة)|رافعة\s*سيارات)/iu,
+  },
 ];
 
 const SMART_SYSTEM_NAMES: Record<string, { ar: string; en: string }> = {
@@ -74,6 +79,27 @@ export function detectExplicitSystemIdentity(
   }
 
   return null;
+}
+
+export function detectExplicitVehicleElevatorFacts(message: string, now: string): Record<string, ConfirmedFact> {
+  const clean = message.normalize("NFKC").trim();
+  const words: Record<string, number> = { واحد: 1, واحدة: 1, اثنان: 2, اثنين: 2, اثنتان: 2, اثنتين: 2, ثلاثة: 3, ثلاث: 3, أربعة: 4, اربع: 4, خمسة: 5, خمس: 5, ستة: 6, ست: 6, سبعة: 7, سبع: 7, ثمانية: 8, ثمان: 8, تسعة: 9, تسع: 9, عشرة: 10, عشر: 10, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  const number = (value: string) => /^\d+$/u.test(value) ? Number(value) : words[value.toLocaleLowerCase()];
+  const facts: Record<string, ConfirmedFact> = {};
+  const quantityMatch = clean.match(/(?:(?:مصعد\s*(?:سيارات|سيارة)|vehicle\s*elevator|car\s*elevator)\s+(?:عدد\s*)?|(?:ال)?عدد(?:\s*المصعد)?\s*(?:إلى|ل|to)?\s*)([\d٠-٩]+|واحد|واحدة|اثنان|اثنين|اثنتان|اثنتين|one|two|three|four|five|six|seven|eight|nine|ten)/iu);
+  if (quantityMatch?.[1]) {
+    const raw = quantityMatch[1].replace(/[٠-٩]/gu, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+    const value = number(raw);
+    if (Number.isFinite(value) && value > 0) facts["system.quantity"] = { key: "system.quantity", value, provenance: "USER_EXPLICIT", evidence: quantityMatch[0], updatedAt: now };
+  }
+  const stopsMatch = clean.match(/(?:(?:ل|for|with|up\s*to)?\s*([\d٠-٩]+|واحد|واحدة|اثنان|اثنين|ثلاثة|ثلاث|أربعة|اربعة|خمسة|خمس|ستة|ست|سبعة|سبع|ثمانية|ثمان|تسعة|تسع|عشرة|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:طوابق|طابق|أدوار|دور|وقفات|وقفة|floors?|stops?)|(?:(?:عدد\s*)?(?:الوقفات|الطوابق|الأدوار)|stops?|floors?)\s*(?:إلى|ل|to)?\s*([\d٠-٩]+|واحد|واحدة|اثنان|اثنين|ثلاثة|ثلاث|أربعة|اربعة|خمسة|خمس|ستة|ست|سبعة|سبع|ثمانية|ثمان|تسعة|تسع|عشرة|one|two|three|four|five|six|seven|eight|nine|ten))/iu);
+  const stopsToken = stopsMatch?.[1] ?? stopsMatch?.[2];
+  if (stopsToken) {
+    const raw = stopsToken.replace(/[٠-٩]/gu, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+    const value = number(raw);
+    if (Number.isFinite(value) && value > 0) facts["system.numberOfStops"] = { key: "system.numberOfStops", value, provenance: "USER_EXPLICIT", evidence: stopsMatch?.[0] ?? stopsToken, updatedAt: now };
+  }
+  return facts;
 }
 
 export function detectExplicitScopeType(message: string, now: string): ConfirmedFact | null {
