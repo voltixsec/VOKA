@@ -901,7 +901,6 @@ export default function NewQuotationPage() {
     event.preventDefault();
 
     if (
-      !selectedCustomer ||
       lines.length === 0 || hasUnknownPrices || replacingTerms
     ) {
       return;
@@ -922,7 +921,7 @@ export default function NewQuotationPage() {
           body: JSON.stringify({
             localizationSourceLocale:
               isArabic ? "ar" : "en",
-            customerId,
+            customerId: customerId || null,
             currencyCode,
 
             ...(expiryDate
@@ -932,10 +931,13 @@ export default function NewQuotationPage() {
                 }
               : {}),
 
-            customer: {
-              name:
-                selectedCustomer.name,
-            },
+            ...(selectedCustomer
+              ? {
+                  customer: {
+                    name: selectedCustomer.name,
+                  },
+                }
+              : { customer: null }),
 
             projectName,
             attentionName,
@@ -1076,8 +1078,8 @@ export default function NewQuotationPage() {
             <div className="space-y-2">
               <span className="text-sm text-slate-400">
                 {t(
-                  "\u0627\u0644\u0639\u0645\u064a\u0644",
-                  "Customer",
+                  "\u0627\u0644\u0639\u0645\u064a\u0644 (اختياري في المسودة)",
+                  "Customer (optional for a draft)",
                 )}
               </span>
 
@@ -1734,7 +1736,6 @@ export default function NewQuotationPage() {
                 type="submit"
                 disabled={
                   saving ||
-                  !customerId ||
                   lines.length === 0 || hasUnknownPrices || replacingTerms
                 }
               >

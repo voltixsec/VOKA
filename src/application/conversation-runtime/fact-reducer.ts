@@ -103,6 +103,33 @@ export function reduceFactProposals(
 
 const APPROVAL_UTTERANCE =
   /(?:\u0627\u0639\u062a\u0645\u062f|\u0627\u0639\u062a\u0645\u062f\u0647\u0627|\u0627\u0639\u062a\u0645\u062f\u0647\u0645|\u0645\u0648\u0627\u0641\u0642|\u0648\u0627\u0641\u0642|approve|approved|confirm|confirmed|accept|accepted|go\s+with\s+(?:it|them|these))/iu;
+const REJECTION_UTTERANCE =
+  /^(?:(?:no|nope)(?:[\s،,!.؟?].*)?|(?:reject|rejected)(?:[\s،,!.؟?].*)?|not\s+(?:this|that|these|those)|don't\s+use\s+(?:this|that|them)|(?:لا|لأ|مش\s+موافق|غير\s+موافق|ارفض|ارفضها|مش\s+ده|مش\s+دي|مش\s+دول)(?:[\s،,!.؟?].*)?)$/iu;
+
+/** Explicitly reject the latest pending proposal group without erasing an older confirmed fact. */
+export function rejectPendingCandidateFacts(
+  candidates: CandidateFact[],
+  userMessage: string,
+  now: string,
+) {
+  if (APPROVAL_UTTERANCE.test(userMessage.trim()) || !REJECTION_UTTERANCE.test(userMessage.trim())) {
+    return { candidates: [...candidates], rejectedKeys: [] as string[] };
+  }
+  const pending = candidates.filter((candidate) => candidate.status === "PENDING_APPROVAL");
+  const latest = pending.at(-1);
+  if (!latest) return { candidates: [...candidates], rejectedKeys: [] as string[] };
+  const group = latest.proposalGroupId
+    ? pending.filter((candidate) => candidate.proposalGroupId === latest.proposalGroupId)
+    : pending.filter((candidate) => candidate.updatedAt === latest.updatedAt);
+  const groupMembers = new Set(group);
+  const rejectedKeys = [...new Set(group.map((candidate) => candidate.key))];
+  return {
+    candidates: candidates.map((candidate) => groupMembers.has(candidate)
+      ? { ...candidate, status: "REJECTED" as const, rejectionReason: "USER_REJECTED", updatedAt: now }
+      : candidate),
+    rejectedKeys,
+  };
+}
 
 export function promotePendingCandidateFacts(
   current: Record<string, ConfirmedFact>,
@@ -124,7 +151,7 @@ export function promotePendingCandidateFacts(
   const pending = candidates.filter(
     (candidate) =>
       candidate.status === "PENDING_APPROVAL" &&
-      candidate.provenance === "AI_INFERRED",
+      (candidate.provenance === "AI_INFERRED" || candidate.provenance === "RESEARCHED"),
   );
 
   const latest = pending.at(-1);

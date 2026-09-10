@@ -264,9 +264,12 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
 /** Draft policy is independent of product selection, engineering estimates and pricing. */
 export function constrainDocumentDraftReadiness(graph: SystemConfigurationGraph, facts: Record<string, ConfirmedFact>): SystemConfigurationGraph {
   const target = text(facts, "document.target");
-  const required = [!graph.system && "System", !text(facts, "customer.name") && "Customer", target && target !== "QUOTATION" && "Document type"].filter((value): value is string => Boolean(value));
+  // A quotation draft is a review workspace, not a final commercial commitment.
+  // Customer identity can be bound later from the composer without blocking the
+  // assistant handoff; finalization still requires it via QuotationFinalizationValidator.
+  const required = [!graph.system && "System", target && target !== "QUOTATION" && "Document type"].filter((value): value is string => Boolean(value));
   return { ...graph, readiness: { ...graph.readiness, draftReady: required.length === 0, pendingBeforeDraftOpen: required,
-    pendingBeforeFinalIssue: graph.readiness.pendingBeforeFinalIssue.filter((field) => field !== "Customer"),
+    pendingBeforeFinalIssue: graph.readiness.pendingBeforeFinalIssue,
   } };
 }
 

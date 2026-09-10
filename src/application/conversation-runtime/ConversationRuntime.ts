@@ -2,7 +2,7 @@ import { detectExplicitScopeType, detectExplicitSystemIdentity } from "./explici
 import { asksForFreshProductResearch, asksForProductOptions, renderProductOptionsReply } from "./product-options";
 import { resolveProductSelection } from "./product-selection";
 import type { ConversationBrainPort, ConversationToolPort, WorkspaceDefaultsPort } from "./ports";
-import { promotePendingCandidateFacts, reduceFactProposals } from "./fact-reducer";
+import { promotePendingCandidateFacts, reduceFactProposals, rejectPendingCandidateFacts } from "./fact-reducer";
 import type { CommercialSolutionHandoff, ConversationRuntimeState, ConversationToolKind, ConversationTurnInput, FlexibleTurnProposal, RuntimeMessage, ToolRequest } from "./types";
 import { buildSystemConfigurationGraph, emptySystemConfigurationGraph } from "./solution-graph";
 import { StrictBrain } from "./StrictBrain";
@@ -20,9 +20,14 @@ export class ConversationRuntime {
     if (!message || message.length > 4_000) throw new Error("CONVERSATION_RUNTIME_MESSAGE_INVALID");
     const base = this.normalizeState(input.state, input.locale);
     const userMessage: RuntimeMessage = { id: this.id(), role: "USER", text: message, source: input.source, createdAt: this.now() };
+    const candidateResolution = rejectPendingCandidateFacts(
+      base.candidateFacts,
+      message,
+      this.now(),
+    );
     const approval = promotePendingCandidateFacts(
       base.confirmedFacts,
-      base.candidateFacts,
+      candidateResolution.candidates,
       message,
       this.now(),
     );

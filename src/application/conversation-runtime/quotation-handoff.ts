@@ -150,7 +150,8 @@ export class CreateQuotationFromCommercialHandoff {
     const customerName = textFact(input.handoff, "customer.name");
     const existing = await this.port.findByHandoff(input.companyId, input.handoff.runtimeId);
     if (existing) return { status: "EXISTING", quotationId: existing.id, navigationTarget: `/dashboard/quotations/${existing.id}/edit`, localizationPending: existing.localizationPending };
-    if (!customerName) return { status: "NEEDS_COMMERCIAL_INFO", blockingFields: [{ key: "customer.name" }] };
+    // A handoff creates a reviewable DRAFT. Customer matching is best effort;
+    // an absent customer must not turn a safe draft handoff into a dead end.
     const resolution = customerName ? await this.port.resolveCustomer(input.companyId, customerName, input.locale) : { status: "PENDING" as const };
     const customer = resolution.status === "RESOLVED"
       ? resolution

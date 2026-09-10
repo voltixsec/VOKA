@@ -23,7 +23,9 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
   if (!confirmedFacts["system.identity"]) throw ApiError.badRequest("CONFIRMED_SYSTEM_REQUIRED", "A confirmed system is required.");
   const target = confirmedFacts["document.target"]?.value;
   if (typeof target === "string" && target !== "QUOTATION") throw new ApiError(409, "DOCUMENT_TARGET_UNAVAILABLE", "This document type is not available from the Sales Assistant yet.");
-  if (typeof confirmedFacts["customer.name"]?.value !== "string" || !String(confirmedFacts["customer.name"].value).trim()) throw ApiError.badRequest("CUSTOMER_NAME_REQUIRED", "A customer name is required to prepare a quotation draft.");
+  // Customer identity and attention are intentionally optional at draft stage.
+  // The quotation editor can bind them later; approval/finalization remains
+  // guarded by the quotation readiness validator.
   const baseGraph = buildSystemConfigurationGraph(confirmedFacts);
   const graph = state.workspace ? projectWorkspaceGraph(state.workspace, baseGraph) : baseGraph;
   const commercialLines = graph.salesBom.map((line) => ({
