@@ -134,6 +134,127 @@ describe("CompanySettingsPage Delivery UX", () => {
     expect(screen.queryByLabelText(/ACCESS_TOKEN/i)).toBeNull();
   });
 
+  it("uses clean single-language headers and no shout-case in English", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) => {
+        if (input === "/api/companies/current") return response(companyPayload());
+        if (input === "/api/companies/current/delivery-settings") {
+          return response(deliverySettingsPayload(true, false));
+        }
+        if (input === "/api/companies/current/quotation-terms") {
+          return response({ data: { templates: [] } });
+        }
+        return response({});
+      }),
+    );
+
+    render(createElement(CompanySettingsPage));
+
+    await screen.findByText("Delivery & Messaging");
+
+    const emailCard = screen.getByTestId("email-readiness-card");
+    const whatsappCard = screen.getByTestId("whatsapp-readiness-card");
+
+    // Title-case headers, not shout-case enums.
+    expect(emailCard.textContent).toContain("Email");
+    expect(emailCard.textContent).not.toContain("EMAIL");
+    expect(whatsappCard.textContent).toContain("WhatsApp");
+    expect(whatsappCard.textContent).not.toContain("WHATSAPP");
+  });
+
+  it("renders clean, semantically aligned Arabic delivery labels without mixed English", async () => {
+    isArabic = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) => {
+        if (input === "/api/companies/current") return response(companyPayload());
+        if (input === "/api/companies/current/delivery-settings") {
+          return response(deliverySettingsPayload(true, false));
+        }
+        if (input === "/api/companies/current/quotation-terms") {
+          return response({ data: { templates: [] } });
+        }
+        return response({});
+      }),
+    );
+
+    render(createElement(CompanySettingsPage));
+
+    await screen.findByText("الإرسال والمراسلات");
+
+    const section = screen.getByTestId("delivery-readiness-section");
+
+    // Clean Arabic equivalents present.
+    expect(section.textContent).toContain("رمز الوصول");
+    expect(section.textContent).toContain("معرّف رقم الهاتف");
+    expect(section.textContent).toContain("إصدار واجهة Graph");
+    expect(section.textContent).toContain("بيانات اعتماد واجهة البرمجة");
+
+    // No mixed-language fragments leaking into the Arabic view.
+    expect(section.textContent).not.toContain("Access Token");
+    expect(section.textContent).not.toContain("Phone ID");
+    expect(section.textContent).not.toContain("Graph API version");
+    expect(section.textContent).not.toContain("API credentials");
+    expect(section.textContent).not.toContain("EMAIL");
+    expect(section.textContent).not.toContain("WHATSAPP");
+  });
+
+  it("keeps access-token and phone-id labels semantically aligned across locales", async () => {
+    // English label check.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) => {
+        if (input === "/api/companies/current") return response(companyPayload());
+        if (input === "/api/companies/current/delivery-settings") {
+          return response(deliverySettingsPayload(true, false));
+        }
+        if (input === "/api/companies/current/quotation-terms") {
+          return response({ data: { templates: [] } });
+        }
+        return response({});
+      }),
+    );
+
+    render(createElement(CompanySettingsPage));
+    const enCard = await screen.findByTestId("whatsapp-readiness-card");
+    expect(enCard.textContent).toContain("Access token");
+    expect(enCard.textContent).toContain("Phone number ID");
+    cleanup();
+
+    // Arabic label check for the same underlying fields.
+    isArabic = true;
+    render(createElement(CompanySettingsPage));
+    const arCard = await screen.findByTestId("whatsapp-readiness-card");
+    expect(arCard.textContent).toContain("رمز الوصول");
+    expect(arCard.textContent).toContain("معرّف رقم الهاتف");
+  });
+
+  it("does not render a nested full-page chrome shell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) => {
+        if (input === "/api/companies/current") return response(companyPayload());
+        if (input === "/api/companies/current/delivery-settings") {
+          return response(deliverySettingsPayload(true, false));
+        }
+        if (input === "/api/companies/current/quotation-terms") {
+          return response({ data: { templates: [] } });
+        }
+        return response({});
+      }),
+    );
+
+    const { container } = render(createElement(CompanySettingsPage));
+    await screen.findByText("Delivery & Messaging");
+
+    const main = container.querySelector("main");
+    expect(main).not.toBeNull();
+    const className = main?.getAttribute("class") ?? "";
+    expect(className).not.toContain("min-h-screen");
+    expect(className).not.toContain("bg-slate-950");
+  });
+
   it("renders Delivery & Messaging section in Arabic", async () => {
     isArabic = true;
     vi.stubGlobal(
