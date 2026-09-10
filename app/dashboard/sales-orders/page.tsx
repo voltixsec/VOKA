@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Input, SectionHeader } from "../../../components/ui";
 import { useLanguage } from "../../../components/i18n/LanguageProvider";
 
+import { displayLabel } from "@/lib/i18n/display-labels";
+
 type SalesOrderStatusFilter = "ALL" | "DRAFT" | "CONFIRMED" | "CANCELLED";
 
 type SalesOrderListItem = {
@@ -39,14 +41,14 @@ export default function SalesOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<SalesOrderStatusFilter>("ALL");
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
 
   const t = (ar: string, en: string) => (isArabic ? ar : en);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      setError("");
+      setError(false);
       setUnauthorized(false);
       const params = new URLSearchParams({
         page: String(page),
@@ -61,14 +63,13 @@ export default function SalesOrdersPage() {
         setUnauthorized(true);
         return;
       }
-      if (!response.ok) throw new Error("Unable to load Sales Orders");
+      if (!response.ok) throw new Error(`Sales Order list request failed (${response.status})`);
       const body = await response.json();
       setSalesOrders(body.data.salesOrders);
       setPagination(body.data.pagination);
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Unable to load Sales Orders",
-      );
+      console.error("Sales Order list load failed", caught);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -89,12 +90,12 @@ export default function SalesOrdersPage() {
 
   const renderBadge = (status: "DRAFT" | "CONFIRMED" | "CANCELLED") => {
     if (status === "CONFIRMED") {
-      return <Badge variant="success">{t("مؤكد", "CONFIRMED")}</Badge>;
+      return <Badge variant="success">{displayLabel(status, isArabic ? "ar" : "en")}</Badge>;
     }
     if (status === "CANCELLED") {
-      return <Badge variant="danger">{t("ملغى", "CANCELLED")}</Badge>;
+      return <Badge variant="danger">{displayLabel(status, isArabic ? "ar" : "en")}</Badge>;
     }
-    return <Badge variant="info">{t("مسودة", "DRAFT")}</Badge>;
+    return <Badge variant="info">{displayLabel(status, isArabic ? "ar" : "en")}</Badge>;
   };
 
   return (
@@ -124,30 +125,25 @@ export default function SalesOrdersPage() {
 
         <div className="flex flex-wrap gap-2">
           {(
-            [
-              { key: "ALL", ar: "الكل", en: "All" },
-              { key: "DRAFT", ar: "مسودة", en: "Draft" },
-              { key: "CONFIRMED", ar: "مؤكد", en: "Confirmed" },
-              { key: "CANCELLED", ar: "ملغى", en: "Cancelled" },
-            ] as const
+            ["ALL", "DRAFT", "CONFIRMED", "CANCELLED"] as const
           ).map((item) => (
             <Button
-              key={item.key}
-              variant={statusFilter === item.key ? "primary" : "secondary"}
+              key={item}
+              variant={statusFilter === item ? "primary" : "secondary"}
               size="sm"
               onClick={() => {
-                setStatusFilter(item.key);
+                setStatusFilter(item);
                 setPage(1);
               }}
             >
-              {t(item.ar, item.en)}
+              {item === "ALL" ? t("الكل", "All") : displayLabel(item, isArabic ? "ar" : "en")}
             </Button>
           ))}
         </div>
       </Card>
 
       {loading && (
-        <Card aria-busy="true">
+        <Card aria-busy="true" aria-label={t("جارٍ تحميل أوامر البيع", "Loading Sales Orders")}>
           <div className="h-28 animate-pulse rounded-2xl bg-white/5" />
         </Card>
       )}
