@@ -1,3 +1,28 @@
+<!-- VOKA-FOUNDATION-RECOVERY-HARDENING-2026-09-10 -->
+
+## Current execution — Foundation recovery hardening — 2026-09-10
+
+Recovery hardening of the unaccepted foundation commit `f95954b` ran on isolated
+Arena branch `arena/01a08d38-voka` (accepted baseline still `e46857f`). Durable
+record: [Foundation recovery hardening](../checkpoints/2026-09-10-foundation-recovery-hardening.md).
+
+Closed: citation `observedAt` ordering; attachment-only turns with explicit
+`ATTACHMENT_ANALYSIS` intent (no fake prose); runtime-scoped requirement identity;
+claim-specific citation linkage; reference-safe shared storage (no delete on failure);
+truthful PDF extraction (`TEXT_NOT_EXTRACTABLE`, null pages when undetermined);
+localization test suppression removed; schema/migration reconciled additively; single
+Vehicle Elevator authority with honest `engineeringState`; hash-proven Takeoff artifact
+linkage; quotation notes restricted to verified evidence.
+
+Validation: focused Vitest 474 passing, `prisma generate`, typecheck, diff-check and
+build green in the sandbox (offline font/engine stubs; no database touched).
+
+Exact next slice: apply the additive migrations in the target environment, then the
+small human Requirement review/correction surface. Do not start Supplier Intelligence,
+RFQ/PO, Procurement, Messaging, OCR/Vision, or Data Factory.
+
+---
+
 <!-- VOKA-REQUIREMENT-EVIDENCE-ATTACHMENT-FOUNDATION-2026-09-10 -->
 
 ## Current execution — Requirement + Evidence + real attachment foundation — 2026-09-10
