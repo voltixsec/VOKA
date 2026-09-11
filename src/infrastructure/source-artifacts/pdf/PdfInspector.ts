@@ -51,7 +51,7 @@ export function inspectPdf(bytes: Uint8Array): PdfInspection {
     for (const stream of orphans) {
       const data = parser.decode(stream);
       if (!data || !/\bBT\b[\s\S]*?\bET\b/u.test(data.toString("latin1"))) continue;
-      const page = inspectPage({ pageNumber: 0, ref: null, dict: new Map(), mediaBox: null, rotation: 0, resources: null, contents: [stream], annotations: [], inheritedFromParent: false }, interpreter, false);
+      const page = inspectPage({ pageNumber: 0, ref: null, dict: new Map(), mediaBox: null, cropBox: null, rotation: 0, resources: null, contents: [stream], annotations: [], inheritedFromParent: false }, interpreter, false);
       if (!page.text.trim()) continue;
       page.limitations = [...(page.limitations ?? []), "content stream was not linked to a page object; attribution is unknown"];
       pages.push(page);
