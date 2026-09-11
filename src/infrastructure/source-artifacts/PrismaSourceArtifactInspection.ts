@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { OcrPort, SourceArtifactInspectionPort, VisualInspectionPort } from "@/src/application/source-artifacts";
-import { projectArtifactInspection, renderInspectionBrief, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
+import { projectArtifactInspection, projectSpreadsheetInspection, renderInspectionBrief, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
 import type { ToolCitation, ToolObservation } from "@/src/application/conversation-runtime";
 import { isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
 import { LocalSourceArtifactStorage } from "./LocalSourceArtifactStorage";
@@ -15,6 +15,22 @@ import { createProductionVisionPort, resolveProductionVisionConfig } from "./vis
 import { analyzeDrawingPages, analyzeImageBytesAsDrawing, resolveDrawingVisionLimits, type DrawingVisionLimits, type DrawingPassSummary } from "./vision/DrawingInspectionAnalyzer";
 import { analyzeDrawingGeometry, analyzeDrawingImageGeometry, toDrawingGeometryProjection, type DrawingGeometryResult } from "./DrawingGeometryAnalyzer";
 import type { PageRasterizerPort } from "./ocr/PageRasterizer";
+// Phase 2A-6: the workbook channel. ExcelJS stays inside the spreadsheet folder.
+import { detectSpreadsheetFormat, SpreadsheetInspectionError } from "./spreadsheet/ExcelWorkbookInspector";
+import { analyzeXlsxBytes } from "./spreadsheet/SpreadsheetInspectionAnalyzer";
+
+/**
+ * Phase 2A-6: truthful, localized message for a workbook VOKA will not open.
+ *
+ * The reason comes from the format decision itself, so an unsupported format is
+ * named for what it is instead of being reported as a generic failure.
+ */
+function unsupportedWorkbookMessage(decision: { format: string; reason: string }, locale: "ar" | "en"): string {
+  const ar = locale === "ar";
+  const detail = decision.reason;
+  if (ar) return `لم أفتح هذا الملف كجدول بيانات: ${detail}`;
+  return `I did not open this file as a workbook: ${detail}`;
+}
 
 const storage = new LocalSourceArtifactStorage();
 
@@ -119,6 +135,13 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
         return { kind: input.kind, status: "STORED_PENDING_VISION", artifactId: artifact.id, summary: imageSummary, evidence: evidence(citations), citations, artifactInspection: imageInspection, artifactCandidates: imageInspection.candidates, createdAt: new Date().toISOString() };
       }
       return { kind: input.kind, status: "COMPLETED", artifactId: artifact.id, summary: imageSummary, evidence: evidence(citations), citations, artifactInspection: imageInspection, artifactCandidates: imageInspection.candidates, createdAt: new Date().toISOString() };
+    }
+    // Phase 2A-6: an .xlsx artifact takes the workbook channel. It returns
+    // before the PDF/BOQ-text path on purpose: a workbook must never be
+    // flattened into extracted text and pushed through the legacy BOQ line
+    // regex, and that path is the only place requirements are created.
+    if (artifact.kind === "XLSX" || isXlsxArtifact(artifact)) {
+      return inspectSpreadsheetArtifact({ artifact, bytes, citations, input });
     }
     // The brief language follows the runtime locale only; it is never inferred from the file contents.
     const briefLocale = input.locale ?? "en";
@@ -253,6 +276,99 @@ async function projectImage(bytes: Buffer, artifact: { id: string; originalFilen
       summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "IMAGE", analysis: null, status: "UNAVAILABLE", failure: `the image could not be analyzed safely (${reason})` }),
     };
   }
+}
+
+/**
+ * True when the stored record could be a workbook even if its kind predates
+ * the XLSX enum value: the MIME type and the file name are corroborating
+ * evidence, and the byte-level format decision is what actually decides.
+ */
+function isXlsxArtifact(artifact: { kind: string; mimeType: string; originalFilename: string }): boolean {
+  if (artifact.kind === "XLSX") return true;
+  if (artifact.mimeType.toLowerCase() === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") return true;
+  return /\.xlsx$/iu.test(artifact.originalFilename.trim());
+}
+
+/**
+ * Phase 2A-6: the governed workbook inspection path.
+ *
+ * It is deliberately self-contained: format detection, structural analysis, and
+ * bounded projection happen here, and the method returns without ever reaching
+ * the requirement-creation code below. XLSX evidence cannot create a
+ * Requirement, a QuotationLine, a BOM, or any procurement object, and there is
+ * no promotion path from a line candidate into governed state.
+ */
+async function inspectSpreadsheetArtifact(context: {
+  artifact: { id: string; originalFilename: string; mimeType: string; processingState: string };
+  bytes: Buffer;
+  citations: ToolCitation[];
+  input: Parameters<SourceArtifactInspectionPort["inspect"]>[0];
+}): Promise<ToolObservation> {
+  const { artifact, bytes, citations, input } = context;
+  const locale = input.locale ?? "en";
+  const decision = detectSpreadsheetFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
+  if (!decision.supported) {
+    // An unsupported workbook is still a truthful answer: VOKA says what it
+    // found and that it did not read the file, rather than implying otherwise.
+    const summary = projectSpreadsheetInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      analysis: null,
+      status: "UNAVAILABLE",
+      failure: decision.reason,
+    });
+    return {
+      kind: input.kind,
+      status: "UNAVAILABLE",
+      artifactId: artifact.id,
+      summary: unsupportedWorkbookMessage(decision, locale),
+      evidence: evidence(citations),
+      citations,
+      artifactInspection: summary,
+      artifactCandidates: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+  let analysis;
+  try {
+    analysis = await analyzeXlsxBytes(bytes, { filename: artifact.originalFilename, mimeType: artifact.mimeType });
+  } catch (error) {
+    const reason = error instanceof SpreadsheetInspectionError || error instanceof Error ? error.message : "unknown";
+    const summary = projectSpreadsheetInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      analysis: null,
+      status: "UNAVAILABLE",
+      failure: `the workbook could not be inspected safely (${reason})`,
+    });
+    return {
+      kind: input.kind,
+      status: "UNAVAILABLE",
+      artifactId: artifact.id,
+      summary: renderInspectionBrief(summary, locale),
+      evidence: evidence(citations),
+      citations,
+      artifactInspection: summary,
+      artifactCandidates: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+  const summary = projectSpreadsheetInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis });
+  return {
+    kind: input.kind,
+    status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "COMPLETED",
+    artifactId: artifact.id,
+    summary: renderInspectionBrief(summary, locale),
+    evidence: evidence(citations),
+    citations,
+    // Never populated for a workbook: observed structured line candidates are
+    // not requirement candidates, and only an explicit user confirmation
+    // creates governed state.
+    requirementCandidates: [],
+    artifactInspection: summary,
+    artifactCandidates: [],
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export { storage };

@@ -1,12 +1,18 @@
+/** Phase 2A-6: the canonical MIME type for an OOXML (non-macro) workbook. */
+export const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 export const SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES = new Set([
   "application/pdf",
   "image/png",
   "image/jpeg",
   "image/webp",
+  XLSX_MIME_TYPE,
 ]);
 
 export type SourceArtifactContext = "SALES_ASSISTANT" | "TAKEOFF" | "ENGINEERING_TENDER";
-export type SourceArtifactKind = "PDF" | "IMAGE";
+export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX";
+
+const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, and XLSX files are supported.";
 
 export class SourceArtifactPolicyError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -17,28 +23,54 @@ export class SourceArtifactPolicyError extends Error {
 
 export function artifactKindForMime(mimeType: string): SourceArtifactKind {
   if (mimeType === "application/pdf") return "PDF";
+  if (mimeType === XLSX_MIME_TYPE) return "XLSX";
   if (mimeType.startsWith("image/")) return "IMAGE";
-  throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", "Only PDF, PNG, JPG/JPEG, and WebP files are supported.");
+  throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
+}
+
+/**
+ * Resolves the artifact kind from the declared MIME type.
+ *
+ * A browser sometimes hands over a workbook with an empty or generic
+ * `application/octet-stream` type. The `.xlsx` extension is accepted as
+ * corroborating evidence for that one case, and the real decision is made
+ * later from the bytes: `validateSourceArtifactBytes` checks the ZIP container
+ * signature and the workbook inspector verifies the OOXML structure, so a
+ * renamed file still cannot talk its way into the parser.
+ */
+function resolveKind(file: File): { mimeType: string; kind: SourceArtifactKind } {
+  const mimeType = file.type.toLowerCase();
+  if (SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES.has(mimeType)) return { mimeType, kind: artifactKindForMime(mimeType) };
+  const extension = /\.([A-Za-z0-9]{1,8})$/u.exec(file.name.trim().toLowerCase())?.[1];
+  if ((mimeType === "" || mimeType === "application/octet-stream") && extension === "xlsx") {
+    return { mimeType: XLSX_MIME_TYPE, kind: "XLSX" };
+  }
+  throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
 
 export function validateSourceArtifactInput(file: File, contextValue: unknown) {
-  const mimeType = file.type.toLowerCase();
-  if (!SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES.has(mimeType)) {
-    throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", "Only PDF, PNG, JPG/JPEG, and WebP files are supported.");
-  }
+  const { mimeType, kind } = resolveKind(file);
   const maxBytes = 25 * 1024 * 1024;
   if (!Number.isInteger(file.size) || file.size <= 0 || file.size > maxBytes) {
     throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_SIZE_INVALID", "The attachment must be between 1 byte and 25 MB.");
   }
   const context = contextValue === "TAKEOFF" || contextValue === "ENGINEERING_TENDER" ? contextValue : "SALES_ASSISTANT";
-  return { mimeType, kind: artifactKindForMime(mimeType), context } as const;
+  return { mimeType, kind, context } as const;
 }
 
 export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uint8Array) {
   const ascii = (start: number, length: number) => String.fromCharCode(...bytes.slice(start, start + length));
+  // Phase 2A-6: a workbook is a ZIP container (PK\x03\x04, or PK\x05\x06 for an
+  // empty archive). The full OOXML structure check belongs to the workbook
+  // inspector, which reports exactly what it found instead of failing the
+  // upload with a generic message.
+  const hasZipContainer = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
+    && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07);
   const valid = kind === "PDF"
     ? ascii(0, 5) === "%PDF-"
-    : kind === "IMAGE" && (
+    : kind === "XLSX"
+      ? hasZipContainer
+      : kind === "IMAGE" && (
       (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
       || (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
       || (ascii(0, 4) === "RIFF" && ascii(8, 4) === "WEBP")
@@ -171,3 +203,5 @@ export * from "./DrawingSemantics";
 export * from "./DrawingGeometry";
 export * from "./DrawingDimensions";
 export * from "./DrawingSymbols";
+// Phase 2A-6: Excel / structured BOQ workbook evidence.
+export * from "./SpreadsheetInspection";

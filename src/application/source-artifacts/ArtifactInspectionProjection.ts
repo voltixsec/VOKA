@@ -1,6 +1,13 @@
 import { isDrawingObservationType } from "@/src/domain/source-artifact";
-import type { DocumentClassification, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, VisualOrigin } from "@/src/domain/source-artifact";
+import type { DocumentClassification, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, SpreadsheetAnalysis, VisualOrigin } from "@/src/domain/source-artifact";
 import { proposeArtifactCandidates, renderArtifactConflict, type ArtifactCandidateFact, type ArtifactFactConflict, type GovernedFactRef } from "./ArtifactCandidateFacts";
+import {
+  GOVERNANCE_STATEMENTS_SPREADSHEET,
+  emptyProjectedSpreadsheet,
+  projectSpreadsheetAnalysis,
+  renderSpreadsheetBrief,
+  type ProjectedSpreadsheet,
+} from "./SpreadsheetInspectionProjection";
 
 /**
  * Compact, governed projection of an inspected artifact for the assistant and
@@ -346,7 +353,8 @@ export type DrawingVisionOutcome = "RAN" | "NO_QUALIFIED_PAGES" | "NOT_CONFIGURE
 export type ArtifactInspectionSummary = {
   artifactId: string;
   filename: string;
-  kind: "PDF" | "IMAGE";
+  /** Phase 2A-6: XLSX workbooks are a third artifact kind with their own evidence channel. */
+  kind: "PDF" | "IMAGE" | "XLSX";
   status: ArtifactInspectionStatus;
   pageCount: number | null;
   classification: ProjectedClassification | null;
@@ -370,6 +378,8 @@ export type ArtifactInspectionSummary = {
   drawing: ProjectedDrawing;
   /** Phase 2A-5: bounded page-space geometry, dimension, scale, and symbol evidence. */
   geometry: ProjectedArtifactGeometry;
+  /** Phase 2A-6: bounded workbook evidence. Empty for PDF and image artifacts. */
+  spreadsheet: ProjectedSpreadsheet;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -538,6 +548,7 @@ export function projectArtifactInspection(input: {
       vision: { attempted: false, used: false, providers: [], lowConfidence: false },
       drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
       geometry: emptyProjectedGeometry(),
+      spreadsheet: emptyProjectedSpreadsheet(),
     };
   }
 
@@ -663,6 +674,53 @@ export function projectArtifactInspection(input: {
     vision,
     drawing,
     geometry,
+    spreadsheet: emptyProjectedSpreadsheet(),
+  };
+}
+
+/**
+ * Phase 2A-6: projects an inspected XLSX workbook into the bounded governed
+ * view the assistant and the runtime consume.
+ *
+ * A workbook has no pages and no extracted narrative text, so the page-shaped
+ * fields stay empty rather than being filled with stand-ins: `pageCount` is
+ * null and every citation carries a sheet and range locator instead of a page
+ * number. The workbook channel states its own governance, because the generic
+ * document promise ("no calculation was performed") is not the promise a
+ * spreadsheet reading makes: it preserved formulas and never evaluated them,
+ * and it kept units and currency exactly as the workbook wrote them.
+ */
+export function projectSpreadsheetInspection(input: {
+  artifactId: string;
+  filename: string;
+  analysis: SpreadsheetAnalysis | null;
+  status?: ArtifactInspectionStatus;
+  failure?: string | null;
+}): ArtifactInspectionSummary {
+  const spreadsheet = projectSpreadsheetAnalysis(input.analysis);
+  const status: ArtifactInspectionStatus = input.status ?? (input.analysis ? "INSPECTED" : "NOT_INSPECTED");
+  const limitations = [...new Set([...spreadsheet.limitations, ...(input.failure ? [input.failure] : [])])].slice(0, MAX_PROJECTED_LIMITATIONS);
+  return {
+    artifactId: input.artifactId,
+    filename: input.filename,
+    kind: "XLSX",
+    status,
+    pageCount: null,
+    classification: null,
+    pageClassifications: [],
+    observations: [],
+    observationCount: 0,
+    candidates: [],
+    conflicts: [],
+    limitations,
+    excerpt: null,
+    excerptTruncated: false,
+    governance: [...GOVERNANCE_STATEMENTS_SPREADSHEET],
+    ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
+    vision: { attempted: false, used: false, providers: [], lowConfidence: false },
+    drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
+    geometry: emptyProjectedGeometry(),
+    spreadsheet: { ...spreadsheet, limitations },
   };
 }
 
@@ -724,6 +782,11 @@ function drawingInspectionSentence(summary: ArtifactInspectionSummary, ar: boole
  * when the content could not be read.
  */
 export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale: "ar" | "en" = "en"): string {
+  // Phase 2A-6: a workbook has its own evidence channel and its own vocabulary.
+  // Routing it through the page-based brief would either invent page numbers or
+  // describe cells in a language built for scanned pages, so it is rendered
+  // separately for both languages.
+  if (summary.kind === "XLSX") return renderSpreadsheetBrief(summary, locale);
   const ar = locale === "ar";
   const status = STATUS_LABEL[summary.status][locale];
   if (summary.status === "NOT_INSPECTED" || summary.status === "UNAVAILABLE") {

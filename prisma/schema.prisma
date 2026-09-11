@@ -42,6 +42,8 @@ enum SourceArtifactContext {
 enum SourceArtifactKind {
   PDF
   IMAGE
+  /// Phase 2A-6: structured .xlsx workbooks (Excel / BOQ intelligence).
+  XLSX
 }
 
 enum SourceArtifactProcessingState {

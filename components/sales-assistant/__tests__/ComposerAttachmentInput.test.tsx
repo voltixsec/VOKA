@@ -20,6 +20,16 @@ describe("Sales Assistant attachment intake", () => {
     expect(onAttachment).toHaveBeenCalledWith(image);
     const unsupported = new File(["doc"], "document.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
     fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [unsupported] } });
-    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, and WebP files are supported.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, WebP, and XLSX files are supported.");
+  });
+
+  // Phase 2A-6: a workbook is an attachable source artifact, so the composer
+  // hands it to the same governed inspection pipeline.
+  it("accepts a dropped .xlsx workbook", () => {
+    const onAttachment = vi.fn();
+    render(<Composer isArabic={false} value="" inputRef={{ current: null }} attachment={null} primaryActionLabel="Send" hasText={false} isListening={false} disabled={false} voiceUnavailable={false} onChange={vi.fn()} onKeyDown={vi.fn()} onPrimaryAction={vi.fn()} onAttachment={onAttachment} onRemoveAttachment={vi.fn()} />);
+    const file = new File(["workbook"], "boq.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [file] } });
+    expect(onAttachment).toHaveBeenCalledWith(file);
   });
 });
