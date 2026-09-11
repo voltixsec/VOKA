@@ -46,5 +46,79 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
   if (!valid) throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_CONTENT_INVALID", "The attachment content does not match its declared file type.");
 }
 
-export type ArtifactPage = { pageNumber: number | null; text: string; characterCount: number };
+// ---------------------------------------------------------------------------
+// Page model (truthful, page-aware inspection result)
+// ---------------------------------------------------------------------------
+
+/** How the text on a page was obtained. `NONE` means no machine-readable text was found. */
+export type PdfTextExtractionMethod = "CONTENT_STREAM_TEXT" | "ANNOTATION_TEXT" | "NONE";
+
+/**
+ * `PAGE_TREE`: the page was reached by traversing the PDF catalog page tree, so its
+ * page number is proven. `UNATTRIBUTED`: content was read but could not be tied to
+ * an ordered page object, so `pageNumber` stays null.
+ */
+export type PageAttribution = "PAGE_TREE" | "UNATTRIBUTED";
+
+export type ArtifactPageMetrics = {
+  visibleTextCharacters: number;
+  invisibleTextCharacters: number;
+  annotationCharacters: number;
+  textLines: number;
+  vectorPathSegments: number;
+  imageCount: number;
+  /** Fraction (0..1) of the page area covered by image XObjects, capped at 1. */
+  imageCoverage: number;
+  formXObjectCount: number;
+  fontCount: number;
+  undecodableGlyphs: number;
+};
+
+export type ArtifactPage = {
+  pageNumber: number | null;
+  /** Visible content-stream text plus annotation text, in reading order. */
+  text: string;
+  characterCount: number;
+  /** Text drawn with an invisible render mode (typically an OCR layer). Unverified against the page image. */
+  hiddenText?: string;
+  attribution?: PageAttribution;
+  widthPt?: number | null;
+  heightPt?: number | null;
+  rotation?: number;
+  /** Matched standard paper size such as "A1 landscape"; null when no standard size matches. */
+  paperSize?: string | null;
+  extractionMethods?: PdfTextExtractionMethod[];
+  metrics?: ArtifactPageMetrics;
+  limitations?: string[];
+};
+
+export type PdfDocumentFacts = {
+  pageCount: number | null;
+  pageAttributionReliable: boolean;
+  encrypted: boolean;
+  producer: string | null;
+  creator: string | null;
+  title: string | null;
+  limitations: string[];
+};
+
 export type ExtractedPdf = { text: string; pages: ArtifactPage[] };
+
+export type PdfInspection = ExtractedPdf & { format: "PDF"; document: PdfDocumentFacts };
+
+/** JSON persisted in SourceArtifact.extractedPages since Phase 2A block 1. Legacy rows hold a bare page array. */
+export type StoredPdfPageModel = { version: 2; document: PdfDocumentFacts; pages: ArtifactPage[] };
+
+export function isStoredPdfPageModel(value: unknown): value is StoredPdfPageModel {
+  const candidate = value as Partial<StoredPdfPageModel> | null;
+  return Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && candidate.version === 2 && Array.isArray(candidate.pages) && candidate.document && typeof candidate.document === "object");
+}
+
+export function legacyPagesFrom(value: unknown): ArtifactPage[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const page = item as Partial<ArtifactPage> | null;
+    if (!page || typeof page !== "object" || typeof page.text !== "string") return [];
+    return [{ pageNumber: typeof page.pageNumber === "number" ? page.pageNumber : null, text: page.text, characterCount: typeof page.characterCount === "number" ? page.characterCount : page.text.length, attribution: typeof page.pageNumber === "number" ? "PAGE_TREE" : "UNATTRIBUTED" }];
+  });
+}
