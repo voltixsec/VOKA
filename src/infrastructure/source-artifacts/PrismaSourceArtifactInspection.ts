@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { SourceArtifactInspectionPort } from "@/src/application/source-artifacts";
+import { projectArtifactInspection, renderInspectionBrief, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
 import type { ToolCitation, ToolObservation } from "@/src/application/conversation-runtime";
 import { LocalSourceArtifactStorage } from "./LocalSourceArtifactStorage";
 import { parseBoqCandidates } from "./BoqCandidateParser";
 import { extractPdfText } from "./PdfTextExtractor";
+import { analyzePdfBytes } from "./DocumentInspectionAnalyzer";
 
 const storage = new LocalSourceArtifactStorage();
 
@@ -40,12 +42,21 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
       const status = input.kind === "DRAWING_INSPECTION" ? "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE" : "STORED_PENDING_VISION";
       return { kind: input.kind, status, artifactId: artifact.id, summary: status === "STORED_PENDING_VISION" ? "The image was received and retained, but no vision inspection was run." : "The drawing image was received and retained; visual drawing analysis is not available in this sprint.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
     }
-    let extractedText = artifact.extractedText?.trim() ?? "";
+    // The brief language follows the runtime locale only; it is never inferred from the file contents.
+    const briefLocale = input.locale ?? "en";
+    // 2A-1C: run the accepted analysis layer (inspection -> classification -> observations)
+    // so the assistant receives a bounded, governed projection instead of raw text.
+    // A failure to analyze never becomes a claim that the file was analyzed.
+    const projection = await projectPdf(bytes, artifact, input.governedFacts);
+    let extractedText = artifact.extractedText?.trim() || projection.extractedText || "";
     if (!extractedText) {
       try { extractedText = extractPdfText(bytes).text.trim(); } catch { extractedText = ""; }
     }
-    if (!extractedText || artifact.processingState === "FAILED") return { kind: input.kind, status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "STORED_PENDING_VISION", artifactId: artifact.id, summary: "The PDF was retained but machine-readable text could not be extracted.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
-    if (input.kind === "DRAWING_INSPECTION") return { kind: input.kind, status: "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: "The PDF text was read and retained, but visual drawing analysis is not available in this sprint.", evidence: evidence(citations), citations, extractedText, createdAt: new Date().toISOString() };
+    const artifactInspection = projection.summary;
+    if (!extractedText || artifact.processingState === "FAILED") {
+      return { kind: input.kind, status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "STORED_PENDING_VISION", artifactId: artifact.id, summary: renderInspectionBrief(artifactInspection, briefLocale), evidence: evidence(citations), citations, artifactInspection, artifactCandidates: artifactInspection.candidates, createdAt: new Date().toISOString() };
+    }
+    if (input.kind === "DRAWING_INSPECTION") return { kind: input.kind, status: "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: renderInspectionBrief(artifactInspection, briefLocale), evidence: evidence(citations), citations, extractedText, artifactInspection, artifactCandidates: artifactInspection.candidates, createdAt: new Date().toISOString() };
     const candidates = input.kind === "BOQ_INSPECTION" ? parseBoqCandidates(extractedText, artifact.id, citations) : [];
     if (candidates.length && input.runtimeId) {
       for (const candidate of candidates) {
@@ -59,7 +70,28 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
         if (candidate.citationId) await prisma.requirementCitation.upsert({ where: { requirementId_citationId: { requirementId: requirement.id, citationId: candidate.citationId } }, create: { requirementId: requirement.id, citationId: candidate.citationId, claimSummary: candidate.description }, update: { claimSummary: candidate.description } });
       }
     }
-    return { kind: input.kind, status: "COMPLETED", artifactId: artifact.id, summary: input.kind === "BOQ_INSPECTION" ? `Read ${extractedText.length} characters from ${artifact.originalFilename}; ${candidates.length} reviewable BOQ candidate(s) were found. No quantity was approved automatically.` : `Read ${extractedText.length} characters from ${artifact.originalFilename}.`, evidence: evidence(citations), citations, extractedText, requirementCandidates: candidates, createdAt: new Date().toISOString() };
+    return { kind: input.kind, status: "COMPLETED", artifactId: artifact.id, summary: renderInspectionBrief(artifactInspection, briefLocale), evidence: evidence(citations), citations, extractedText, requirementCandidates: candidates, artifactInspection, artifactCandidates: artifactInspection.candidates, createdAt: new Date().toISOString() };
+  }
+}
+
+/**
+ * Runs the 2A-1B analyzer and projects it for the assistant. Analysis is best
+ * effort: when it cannot run, the projection says the content was not inspected
+ * rather than implying otherwise.
+ */
+async function projectPdf(bytes: Buffer, artifact: { id: string; originalFilename: string }, governedFacts?: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"]) {
+  try {
+    const analyzed = analyzePdfBytes(bytes);
+    const hasText = analyzed.inspection.text.trim().length > 0;
+    const status: ArtifactInspectionStatus = analyzed.inspection.document.encrypted ? "ENCRYPTED" : hasText ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT";
+    const summary = projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: analyzed, status, governedFacts });
+    return { summary, extractedText: analyzed.inspection.text.trim() };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown";
+    return {
+      summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: null, status: "UNAVAILABLE", failure: `the PDF could not be analyzed safely (${reason})` }),
+      extractedText: "",
+    };
   }
 }
 
