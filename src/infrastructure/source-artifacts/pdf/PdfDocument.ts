@@ -6,6 +6,12 @@ export type PdfPageRecord = {
   ref: PdfRef | null;
   dict: PdfDict;
   mediaBox: [number, number, number, number] | null;
+  /**
+   * Phase 2A-5: the visible page box when the page declares one. It is the
+   * preferred box for page-space normalization; MediaBox remains the fallback
+   * and the accepted 2A-1A page metrics keep using it unchanged.
+   */
+  cropBox: [number, number, number, number] | null;
   rotation: number;
   resources: PdfDict | null;
   contents: PdfStream[];
@@ -348,8 +354,12 @@ export class PdfDocumentParser {
   }
 
   private pageRecord(dict: PdfDict, ref: PdfRef | null, merged: PdfDict, pageNumber: number, inheritedFromParent: boolean): PdfPageRecord {
-    const box = (this.resolve(merged.get("MediaBox")) as PdfValue[] | undefined)?.map((item) => numberOf(this.resolve(item)));
-    const mediaBox = box && box.length === 4 && box.every((item): item is number => item !== null) ? [Math.min(box[0], box[2]), Math.min(box[1], box[3]), Math.max(box[0], box[2]), Math.max(box[1], box[3])] as [number, number, number, number] : null;
+    const readBox = (key: string): [number, number, number, number] | null => {
+      const box = (this.resolve(merged.get(key)) as PdfValue[] | undefined)?.map((item) => numberOf(this.resolve(item)));
+      return box && box.length === 4 && box.every((item): item is number => item !== null) ? [Math.min(box[0], box[2]), Math.min(box[1], box[3]), Math.max(box[0], box[2]), Math.max(box[1], box[3])] as [number, number, number, number] : null;
+    };
+    const mediaBox = readBox("MediaBox");
+    const cropBox = readBox("CropBox");
     const rotateRaw = numberOf(this.resolve(merged.get("Rotate")), 0) ?? 0;
     const rotation = ((Math.round(rotateRaw / 90) * 90) % 360 + 360) % 360;
     const contentsValue = this.resolve(dict.get("Contents"));
@@ -360,7 +370,7 @@ export class PdfDocumentParser {
     }
     const annotsValue = this.resolve(dict.get("Annots"));
     const annotations = (Array.isArray(annotsValue) ? annotsValue : []).map((item) => this.dictOf(item)).filter((item): item is PdfDict => Boolean(item));
-    return { pageNumber, ref, dict, mediaBox, rotation, resources: this.dictOf(merged.get("Resources")), contents, annotations, inheritedFromParent };
+    return { pageNumber, ref, dict, mediaBox, cropBox, rotation, resources: this.dictOf(merged.get("Resources")), contents, annotations, inheritedFromParent };
   }
 }
 

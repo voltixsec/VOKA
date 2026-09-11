@@ -40,6 +40,67 @@ export type PageContentStats = {
   unsupportedFilters: number;
 };
 
+/**
+ * Phase 2A-5: bounded capture of painted vector paths and text anchor positions
+ * for ONE page. It is collected alongside the accepted text statistics, and
+ * only when a caller explicitly asks for it: the 2A-1A text path never builds
+ * this structure and is therefore unchanged.
+ *
+ * This is not a CAD engine. Curves are reduced to their endpoints, clipping is
+ * not applied, and every capture is bounded so a vector-heavy sheet cannot
+ * explode memory.
+ */
+export type CapturedPath = {
+  /** Path points in PDF user space, already transformed by the CTM at capture time. */
+  points: { x: number; y: number }[];
+  closed: boolean;
+  stroked: boolean;
+  filled: boolean;
+  /** How many Bézier segments built the path; the curve interior is not reconstructed. */
+  curveSegments: number;
+  /** True when the path was produced by the `re` rectangle operator. */
+  fromRectangle: boolean;
+  /** The painting operator that made the path visible, e.g. "S", "f", "B". */
+  paintOperator: string | null;
+  /** Form XObject nesting depth; 0 is page content. */
+  formDepth: number;
+};
+
+/** A positioned text run, used only as a spatial anchor for association. */
+export type CapturedTextAnchor = {
+  text: string;
+  /** Pen origin in PDF user space. */
+  x: number;
+  y: number;
+  fontSize: number;
+  /** 0 → left-to-right, 1 → bottom-to-top, 2 → right-to-left, 3 → top-to-bottom. */
+  orientation: 0 | 1 | 2 | 3;
+};
+
+export type PageGeometryStats = {
+  paths: CapturedPath[];
+  anchors: CapturedTextAnchor[];
+  /** Paths seen before the capture bound was applied. */
+  pathsObserved: number;
+  /** Anchors seen before the capture bound was applied. */
+  anchorsObserved: number;
+  truncated: boolean;
+  unsupportedFilters: number;
+  /** Stroked paths whose points fell outside the page box and were dropped later. */
+  outOfPagePaths: number;
+};
+
+/** Upper bound of captured paths per page. Beyond it, capture stops and the truncation is disclosed. */
+export const MAX_CAPTURED_PATHS_PER_PAGE = 4_000;
+/** Upper bound of captured text anchors per page. */
+export const MAX_CAPTURED_ANCHORS_PER_PAGE = 4_000;
+/** Upper bound of points retained for one captured path (the curve interior is never reconstructed). */
+export const MAX_CAPTURED_POINTS_PER_PATH = 64;
+
+export function createPageGeometryStats(): PageGeometryStats {
+  return { paths: [], anchors: [], pathsObserved: 0, anchorsObserved: 0, truncated: false, unsupportedFilters: 0, outOfPagePaths: 0 };
+}
+
 type TextState = { font: LoadedFont | null; size: number; charSpacing: number; wordSpacing: number; horizontalScale: number; leading: number; rise: number; renderMode: number };
 type GraphicsState = { ctm: Matrix; text: TextState };
 
@@ -68,6 +129,31 @@ export class PdfContentInterpreter {
     if (parts.length) this.run(Buffer.concat(parts), page.resources, IDENTITY, stats, budget, 0, new Set());
     this.collectAnnotations(page, stats);
     return stats;
+  }
+
+  /**
+   * Phase 2A-5: interprets one page for bounded vector geometry and text
+   * anchor positions.
+   *
+   * It reuses the accepted content-stream parser — the same lexer, the same
+   * CTM stack, the same Form XObject walk, the same operator budget — and adds
+   * a path/anchor collector. The 2A-1A text result is not used, not altered,
+   * and not re-emitted here: `interpretPage` remains the text path.
+   */
+  interpretPageGeometry(page: PdfPageRecord): PageGeometryStats {
+    const geometry = createPageGeometryStats();
+    // A minimal stats sink keeps the shared `run` contract intact without
+    // building the text structures this pass does not need.
+    const sink: PageContentStats = { chunks: [], annotationTexts: [], vectorPathSegments: 0, imageCount: 0, imageArea: 0, formXObjectCount: 0, fontKeys: new Set(), undecodableGlyphs: 0, invisibleCharacters: 0, missingFontResources: 0, truncated: false, unsupportedFilters: 0 };
+    const budget = { operators: 0, forms: 0 };
+    const parts: Buffer[] = [];
+    for (const stream of page.contents) {
+      const data = this.decodeCached(stream);
+      if (data) parts.push(data, Buffer.from("\n"));
+      else geometry.unsupportedFilters += 1;
+    }
+    if (parts.length) this.run(Buffer.concat(parts), page.resources, IDENTITY, sink, budget, 0, new Set(), geometry);
+    return geometry;
   }
 
   private decodeCached(stream: PdfStream) {
@@ -109,7 +195,13 @@ export class PdfContentInterpreter {
     return fallback;
   }
 
-  private run(content: Buffer, resources: PdfDict | null, baseCtm: Matrix, stats: PageContentStats, budget: { operators: number; forms: number }, depth: number, activeForms: Set<PdfStream>) {
+  /**
+   * `geometry` is the optional Phase 2A-5 collector. When it is absent — which
+   * is the case for every accepted 2A-1A/2A-2/2A-4 caller — the path and anchor
+   * capture below is skipped entirely and the operator handling is byte-for-byte
+   * the accepted behavior.
+   */
+  private run(content: Buffer, resources: PdfDict | null, baseCtm: Matrix, stats: PageContentStats, budget: { operators: number; forms: number }, depth: number, activeForms: Set<PdfStream>, geometry?: PageGeometryStats) {
     const lexer = new PdfLexer(content);
     const operands: PdfValue[] = [];
     const stack: GraphicsState[] = [];
@@ -119,6 +211,53 @@ export class PdfContentInterpreter {
     let pendingSegments = 0;
     let pathStarted = false;
     const num = (index: number) => { const value = operands[index]; return typeof value === "number" && Number.isFinite(value) ? value : 0; };
+
+    // --- Phase 2A-5 path capture state (inactive unless `geometry` is given) ---
+    type Subpath = { points: { x: number; y: number }[]; closed: boolean; curveSegments: number; fromRectangle: boolean };
+    let subpaths: Subpath[] = [];
+    let current: Subpath | null = null;
+    /** Transforms a user-space operand pair through the current CTM into page space. */
+    const project = (x: number, y: number) => {
+      const ctm = state.ctm;
+      return { x: ctm[0] * x + ctm[2] * y + ctm[4], y: ctm[1] * x + ctm[3] * y + ctm[5] };
+    };
+    const captureEnabled = () => Boolean(geometry) && (geometry!.paths.length < MAX_CAPTURED_PATHS_PER_PAGE);
+    const lastSubpath = (): Subpath | null => (subpaths.length ? subpaths[subpaths.length - 1]! : null);
+    const beginSubpath = (point: { x: number; y: number }, fromRectangle = false) => {
+      if (!geometry || !captureEnabled()) return;
+      subpaths.push({ points: [point], closed: false, curveSegments: 0, fromRectangle });
+    };
+    const appendPoint = (point: { x: number; y: number }, curved = false) => {
+      if (!geometry) return;
+      const subpath = lastSubpath();
+      if (!subpath) return;
+      subpath.points.push(point);
+      if (curved) subpath.curveSegments += 1;
+    };
+    const closeSubpath = () => {
+      const subpath = lastSubpath();
+      if (subpath) subpath.closed = true;
+    };
+    /** Turns accumulated subpaths into captured paths when a painting operator runs. */
+    const finalizePath = (paintOperator: string, stroked: boolean, filled: boolean, closeFirst: boolean) => {
+      if (!geometry) return;
+      for (const subpath of subpaths) {
+        if (subpath.points.length < 2) continue;
+        geometry.pathsObserved += 1;
+        if (!captureEnabled()) { geometry.truncated = true; continue; }
+        geometry.paths.push({
+          points: subpath.points.slice(0, MAX_CAPTURED_POINTS_PER_PATH),
+          closed: subpath.closed || closeFirst,
+          stroked,
+          filled,
+          curveSegments: subpath.curveSegments,
+          fromRectangle: subpath.fromRectangle,
+          paintOperator,
+          formDepth: depth,
+        });
+      }
+      subpaths = [];
+    };
 
     const showText = (bytes: Buffer) => {
       const text = state.text;
@@ -146,6 +285,15 @@ export class PdfContentInterpreter {
         if (invisible) stats.invisibleCharacters += visibleText.replace(/\s/gu, "").length;
         stats.chunks.push({ text: visibleText, orientation, along: start.x * r[0]! + start.y * r[1]!, alongEnd: end.x * r[0]! + end.y * r[1]!, line: start.x * down[0]! + start.y * down[1]!, fontSize, invisible });
       } else if (visibleText) stats.truncated = true;
+      // Phase 2A-5: visible text only. An invisible (render-mode 3/7) OCR layer
+      // is deliberately not used as a spatial anchor; it is unverified against
+      // the page image and must never position a dimension association.
+      if (geometry && visibleText && !invisible) {
+        geometry.anchorsObserved += 1;
+        if (geometry.anchors.length < MAX_CAPTURED_ANCHORS_PER_PAGE) {
+          geometry.anchors.push({ text: visibleText, x: start.x, y: start.y, fontSize, orientation });
+        } else geometry.truncated = true;
+      }
       tm = multiply([1, 0, 0, 1, advance, 0], tm);
     };
 
@@ -189,12 +337,36 @@ export class PdfContentInterpreter {
           }
           break;
         }
-        case "m": pathStarted = true; break;
-        case "l": case "c": case "v": case "y": if (pathStarted || true) pendingSegments += 1; break;
-        case "h": break;
-        case "re": pendingSegments += 4; pathStarted = true; break;
-        case "S": case "s": case "f": case "F": case "f*": case "B": case "B*": case "b": case "b*": stats.vectorPathSegments += pendingSegments; pendingSegments = 0; pathStarted = false; break;
-        case "n": pendingSegments = 0; pathStarted = false; break;
+        // --- Phase 2A-5 path capture. The accepted `pendingSegments` /
+        // `pathStarted` accounting above it is untouched, so 2A-1A metrics and
+        // 2A-1B classification see exactly the same numbers as before. ---
+        case "m": pathStarted = true; if (geometry) beginSubpath(project(num(operands.length - 2), num(operands.length - 1))); break;
+        case "l": if (pathStarted || true) pendingSegments += 1; if (geometry) appendPoint(project(num(operands.length - 2), num(operands.length - 1))); break;
+        // Curves are reduced to their endpoint: no curve interior is reconstructed.
+        case "c": if (pathStarted || true) pendingSegments += 1; if (geometry) appendPoint(project(num(operands.length - 2), num(operands.length - 1)), true); break;
+        case "v": if (pathStarted || true) pendingSegments += 1; if (geometry) appendPoint(project(num(operands.length - 2), num(operands.length - 1)), true); break;
+        case "y": if (pathStarted || true) pendingSegments += 1; if (geometry) appendPoint(project(num(operands.length - 2), num(operands.length - 1)), true); break;
+        case "h": if (geometry) closeSubpath(); break;
+        case "re": {
+          pendingSegments += 4; pathStarted = true;
+          if (geometry) {
+            const x = num(operands.length - 4);
+            const y = num(operands.length - 3);
+            const w = num(operands.length - 2);
+            const h = num(operands.length - 1);
+            beginSubpath(project(x, y), true);
+            appendPoint(project(x + w, y));
+            appendPoint(project(x + w, y + h));
+            appendPoint(project(x, y + h));
+            closeSubpath();
+          }
+          break;
+        }
+        case "S": case "s": stats.vectorPathSegments += pendingSegments; pendingSegments = 0; pathStarted = false; finalizePath(op, true, false, false); break;
+        case "f": case "F": case "f*": stats.vectorPathSegments += pendingSegments; pendingSegments = 0; pathStarted = false; finalizePath(op, false, true, false); break;
+        case "B": case "B*": stats.vectorPathSegments += pendingSegments; pendingSegments = 0; pathStarted = false; finalizePath(op, true, true, false); break;
+        case "b": case "b*": stats.vectorPathSegments += pendingSegments; pendingSegments = 0; pathStarted = false; finalizePath(op, true, true, true); break;
+        case "n": pendingSegments = 0; pathStarted = false; if (geometry) { subpaths = []; } break;
         case "W": case "W*": break;
         case "BI": {
           this.skipInlineImage(lexer);
@@ -222,7 +394,7 @@ export class PdfContentInterpreter {
             const data = this.decodeCached(xobject);
             if (!data) { stats.unsupportedFilters += 1; break; }
             activeForms.add(xobject);
-            this.run(data, formResources, multiply(matrix, state.ctm), stats, budget, depth + 1, activeForms);
+            this.run(data, formResources, multiply(matrix, state.ctm), stats, budget, depth + 1, activeForms, geometry);
             activeForms.delete(xobject);
           }
           break;
