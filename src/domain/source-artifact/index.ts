@@ -51,7 +51,7 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
 // ---------------------------------------------------------------------------
 
 /** How the text on a page was obtained. `NONE` means no machine-readable text was found. */
-export type PdfTextExtractionMethod = "CONTENT_STREAM_TEXT" | "ANNOTATION_TEXT" | "NONE";
+export type PdfTextExtractionMethod = "CONTENT_STREAM_TEXT" | "ANNOTATION_TEXT" | "OCR_TEXT" | "NONE";
 
 /**
  * `PAGE_TREE`: the page was reached by traversing the PDF catalog page tree, so its
@@ -76,11 +76,22 @@ export type ArtifactPageMetrics = {
 
 export type ArtifactPage = {
   pageNumber: number | null;
-  /** Visible content-stream text plus annotation text, in reading order. */
+  /**
+   * Primary analysis text. Normally the visible content-stream text plus
+   * annotation text in reading order; for OCR-primary pages (`textSource`
+   * "OCR") it is the OCR-recovered text, always marked as such and never
+   * silently merged with native text.
+   */
   text: string;
   characterCount: number;
   /** Text drawn with an invisible render mode (typically an OCR layer). Unverified against the page image. */
   hiddenText?: string;
+  /** Verbatim OCR output for the page. Present only when OCR produced usable text; never merged into `text` silently. */
+  ocrText?: string;
+  /** OCR attempt provenance. Present only when OCR was requested for the page. */
+  ocr?: import("./PdfOcr").PageOcrProvenance;
+  /** What `text` contains. Absent on legacy/2A-1A pages, which are native readings. */
+  textSource?: import("./PdfOcr").PdfTextSource;
   attribution?: PageAttribution;
   widthPt?: number | null;
   heightPt?: number | null;
@@ -131,3 +142,4 @@ export function legacyPagesFrom(value: unknown): ArtifactPage[] {
 
 export * from "./PdfClassification";
 export * from "./PdfObservations";
+export * from "./PdfOcr";

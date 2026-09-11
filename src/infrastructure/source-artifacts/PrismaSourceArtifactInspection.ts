@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import type { SourceArtifactInspectionPort } from "@/src/application/source-artifacts";
+import type { OcrPort, SourceArtifactInspectionPort } from "@/src/application/source-artifacts";
 import { projectArtifactInspection, renderInspectionBrief, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
 import type { ToolCitation, ToolObservation } from "@/src/application/conversation-runtime";
+import { isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
 import { LocalSourceArtifactStorage } from "./LocalSourceArtifactStorage";
 import { parseBoqCandidates } from "./BoqCandidateParser";
 import { extractPdfText } from "./PdfTextExtractor";
 import { analyzePdfBytes } from "./DocumentInspectionAnalyzer";
+import { analyzePdfBytesWithOcr, priorOcrFromStoredPages } from "./ocr/OcrDocumentAnalyzer";
+import { createProductionOcrPort, resolveProductionOcrConfig } from "./ocr/createProductionOcrPort";
 
 const storage = new LocalSourceArtifactStorage();
 
@@ -27,6 +30,13 @@ function evidence(citations: ToolCitation[]) {
 }
 
 export class PrismaSourceArtifactInspection implements SourceArtifactInspectionPort {
+  /**
+   * Phase 2A-2B: the OCR engine is injected, defaulting to the production
+   * resolution (real engine when `VOKA_OCR_ENGINE` is configured, otherwise
+   * native-only analysis). Pass an explicit engine in tests; pass null to
+   * force the native-only path.
+   */
+  constructor(private readonly ocr: OcrPort | null = createProductionOcrPort()) {}
   async inspect(input: Parameters<SourceArtifactInspectionPort["inspect"]>[0]): Promise<ToolObservation> {
     const artifact = await prisma.sourceArtifact.findFirst({ where: { id: input.artifactId, companyId: input.companyId }, include: { citations: { orderBy: [{ pageNumber: "asc" }, { observedAt: "asc" }] } } });
     if (!artifact) return { kind: input.kind, status: "UNAVAILABLE", artifactId: input.artifactId, summary: "The source artifact was not found for the active company.", evidence: [], citations: [], createdAt: new Date().toISOString() };
@@ -47,7 +57,7 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     // 2A-1C: run the accepted analysis layer (inspection -> classification -> observations)
     // so the assistant receives a bounded, governed projection instead of raw text.
     // A failure to analyze never becomes a claim that the file was analyzed.
-    const projection = await projectPdf(bytes, artifact, input.governedFacts);
+    const projection = await projectPdf(bytes, artifact, input.governedFacts, this.ocr);
     let extractedText = artifact.extractedText?.trim() || projection.extractedText || "";
     if (!extractedText) {
       try { extractedText = extractPdfText(bytes).text.trim(); } catch { extractedText = ""; }
@@ -78,10 +88,22 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
  * Runs the 2A-1B analyzer and projects it for the assistant. Analysis is best
  * effort: when it cannot run, the projection says the content was not inspected
  * rather than implying otherwise.
+ *
+ * Phase 2A-2B: when an OCR engine is available the OCR-augmented analyzer
+ * runs instead, reusing persisted OCR results from ingest (the artifact bytes
+ * were hash-verified above, so reuse is sound) and calling the engine only
+ * for pages without one. A null engine keeps the native-only analysis.
  */
-async function projectPdf(bytes: Buffer, artifact: { id: string; originalFilename: string }, governedFacts?: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"]) {
+async function projectPdf(bytes: Buffer, artifact: { id: string; originalFilename: string; extractedPages?: unknown }, governedFacts: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"], ocr: OcrPort | null) {
   try {
-    const analyzed = analyzePdfBytes(bytes);
+    const storedPages: ArtifactPage[] | undefined = isStoredPdfPageModel(artifact.extractedPages) ? artifact.extractedPages.pages : undefined;
+    const analyzed = ocr
+      ? await analyzePdfBytesWithOcr(bytes, ocr, {
+        artifactId: artifact.id,
+        priorOcr: priorOcrFromStoredPages(storedPages),
+        maxOcrPages: resolveProductionOcrConfig().maxPages,
+      })
+      : analyzePdfBytes(bytes);
     const hasText = analyzed.inspection.text.trim().length > 0;
     const status: ArtifactInspectionStatus = analyzed.inspection.document.encrypted ? "ENCRYPTED" : hasText ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT";
     const summary = projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: analyzed, status, governedFacts });

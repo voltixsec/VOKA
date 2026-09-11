@@ -1,4 +1,4 @@
-import type { ArtifactPage, PageAttribution } from "./index";
+import type { ArtifactPage, ObservationOrigin, PageAttribution } from "./index";
 import { assessPageTextReliability } from "./PdfClassification";
 
 /**
@@ -67,6 +67,12 @@ export type ObservedFact = {
   reliability: ObservationReliability;
   evidence: ObservationEvidence;
   limitations: string[];
+  /**
+   * Which reading the observation was taken from. Absent for native readings
+   * (legacy shape preserved); always present with `textSource: "OCR"` and the
+   * engine identity for OCR-derived observations.
+   */
+  origin?: ObservationOrigin;
 };
 
 export type PdfObservationResult = {
@@ -169,6 +175,11 @@ export function extractObservations(pages: ArtifactPage[]): PdfObservationResult
     // A page number is only claimable when the page tree proved the attribution.
     const pageNumber = page.attribution === "PAGE_TREE" ? page.pageNumber ?? null : null;
     const attribution: PageAttribution = page.attribution ?? "UNATTRIBUTED";
+    // Phase 2A-2: OCR-derived readings are stamped so they can never
+    // masquerade as native text. Native pages keep the legacy key shape.
+    const origin: ObservationOrigin | undefined = page.textSource === "OCR"
+      ? { textSource: "OCR", engineId: page.ocr?.engineId ?? null }
+      : undefined;
     const textReliability = assessPageTextReliability(page);
     const pageReliability: ObservationReliability = textReliability.reliability;
     const pageLimitations = [...textReliability.limitations];
@@ -211,6 +222,7 @@ export function extractObservations(pages: ArtifactPage[]): PdfObservationResult
         attribution,
         reliability: weaker(reliability, pageReliability),
         evidence: { snippet: clippedSnippet.text, locator, lineNumber },
+        ...(origin ? { origin } : {}),
         limitations: [
           ...pageLimitations,
           ...extraLimitations,

@@ -1,4 +1,4 @@
-import type { DocumentClassification, ObservedFact, ObservationReliability, ObservationType, PdfInspection } from "@/src/domain/source-artifact";
+import type { DocumentClassification, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection } from "@/src/domain/source-artifact";
 import { proposeArtifactCandidates, renderArtifactConflict, type ArtifactCandidateFact, type ArtifactFactConflict, type GovernedFactRef } from "./ArtifactCandidateFacts";
 
 /**
@@ -32,6 +32,23 @@ export type ProjectedObservation = {
   locator: string;
   reliability: ObservationReliability;
   status: "OBSERVED_NOT_APPROVED";
+  /** Present with `textSource: "OCR"` for OCR-derived observations; absent for native readings. */
+  origin?: ObservationOrigin;
+};
+
+/**
+ * Phase 2A-2 OCR summary. `attempted` means OCR was requested for at least one
+ * page; `used` means OCR-derived text was actually analyzed. `pages` holds the
+ * proven numbers of pages that contributed OCR-derived text; null entries are
+ * unattributed pages and are never replaced with an invented number.
+ */
+export type ProjectedOcr = {
+  attempted: boolean;
+  used: boolean;
+  pages: (number | null)[];
+  engines: string[];
+  /** Phase 2A-2B: true when any used OCR reading has low confidence/reliability. */
+  lowConfidence: boolean;
 };
 
 export type ProjectedClassification = {
@@ -68,12 +85,21 @@ export type ArtifactInspectionSummary = {
   excerptTruncated: boolean;
   /** Always-present boundary statements so no consumer reads this as approval or understanding. */
   governance: string[];
+  /** Phase 2A-2: whether OCR was attempted/used and which pages it read. */
+  ocr: ProjectedOcr;
 };
 
 const GOVERNANCE_STATEMENTS = [
   "observed values are not approved, verified, or selected",
   "document classification is a document-handling hint, not engineering understanding",
   "no OCR, image interpretation, or geometry interpretation was performed",
+];
+
+/** Phase 2A-2: stated instead of GOVERNANCE_STATEMENTS when OCR-derived text was analyzed. */
+const GOVERNANCE_STATEMENTS_OCR = [
+  "observed values are not approved, verified, or selected",
+  "document classification is a document-handling hint, not engineering understanding",
+  "OCR text recovery was performed on scanned pages; image interpretation and geometry interpretation were not performed",
 ];
 
 /** User-facing labels: the brief never prints raw enum tokens. */
@@ -155,6 +181,7 @@ export function projectArtifactInspection(input: {
       excerpt: null,
       excerptTruncated: false,
       governance: [...GOVERNANCE_STATEMENTS],
+      ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
     };
   }
 
@@ -165,6 +192,20 @@ export function projectArtifactInspection(input: {
     governedFacts: input.governedFacts,
     existing: input.existingCandidates,
   });
+  // Phase 2A-2: OCR usage is detected from page provenance, so the projection
+  // stays truthful without any new input channel. Engine ids stay structured;
+  // the brief only ever says that OCR was used, in plain words.
+  const ocrPages = inspection.pages.filter((page) =>
+    page.ocr?.requested && typeof page.ocrText === "string" && page.ocrText.trim().length > 0
+    && (page.textSource === "OCR" || page.textSource === "NATIVE_AND_OCR"),
+  );
+  const ocr: ProjectedOcr = {
+    attempted: inspection.pages.some((page) => page.ocr?.requested === true),
+    used: ocrPages.length > 0,
+    pages: ocrPages.map((page) => page.pageNumber ?? null),
+    engines: [...new Set(ocrPages.map((page) => page.ocr?.engineId ?? "unknown"))],
+    lowConfidence: ocrPages.some((page) => page.ocr?.status === "LOW_CONFIDENCE" || page.ocr?.reliability === "LOW"),
+  };
   const text = inspection.text.trim();
   return {
     artifactId: input.artifactId,
@@ -186,6 +227,7 @@ export function projectArtifactInspection(input: {
       locator: observation.evidence.locator,
       reliability: observation.reliability,
       status: observation.status,
+      ...(observation.origin ? { origin: observation.origin } : {}),
     })),
     observationCount: observations.length,
     candidates: proposed.candidates.slice(0, MAX_PROJECTED_CANDIDATES),
@@ -193,8 +235,41 @@ export function projectArtifactInspection(input: {
     limitations: [...new Set([...limitations, ...(input.failure ? [input.failure] : [])])].slice(0, MAX_PROJECTED_LIMITATIONS),
     excerpt: text ? text.slice(0, MAX_EXCERPT_CHARACTERS) : null,
     excerptTruncated: text.length > MAX_EXCERPT_CHARACTERS,
-    governance: [...GOVERNANCE_STATEMENTS],
+    governance: [...(ocr.used ? GOVERNANCE_STATEMENTS_OCR : GOVERNANCE_STATEMENTS)],
+    ocr,
   };
+}
+
+/**
+ * Phase 2A-2: plain-words OCR sentence for the brief. It names the pages that
+ * were read with OCR (proven numbers only; unattributed pages are said
+ * plainly) and never prints engine ids or status tokens.
+ */
+function ocrUsedSentence(pages: (number | null)[], locale: "ar" | "en"): string {
+  const proven = pages.filter((page): page is number => typeof page === "number");
+  const unattributed = pages.length - proven.length;
+  if (locale === "ar") {
+    if (proven.length === 1 && unattributed === 0) {
+      return `تمت قراءة الصفحة ${proven[0]} باستخدام التعرف الضوئي على الحروف (OCR). تم استخراج النص من صفحة ممسوحة ضوئياً وقد يحتاج إلى مراجعة.`;
+    }
+    if (proven.length > 1 && unattributed === 0) {
+      return `تمت قراءة الصفحات ${proven.join("، ")} باستخدام التعرف الضوئي على الحروف (OCR). تم استخراج النص من صفحات ممسوحة ضوئياً وقد يحتاج إلى مراجعة.`;
+    }
+    if (proven.length === 0) {
+      return `تمت قراءة صفحة غير منسوبة باستخدام التعرف الضوئي على الحروف (OCR). تم استخراج النص من صفحة ممسوحة ضوئياً وقد يحتاج إلى مراجعة.`;
+    }
+    return `تمت قراءة الصفحات ${proven.join("، ")} وصفحة غير منسوبة باستخدام التعرف الضوئي على الحروف (OCR). تم استخراج النص من صفحات ممسوحة ضوئياً وقد يحتاج إلى مراجعة.`;
+  }
+  if (proven.length === 1 && unattributed === 0) {
+    return `Page ${proven[0]} was read using OCR. The text was extracted from a scanned page and may require review.`;
+  }
+  if (proven.length > 1 && unattributed === 0) {
+    return `Pages ${proven.join(", ")} were read using OCR. The text was extracted from scanned pages and may require review.`;
+  }
+  if (proven.length === 0) {
+    return `An unattributed page was read using OCR. The text was extracted from a scanned page and may require review.`;
+  }
+  return `Pages ${proven.join(", ")} and an unattributed page were read using OCR. The text was extracted from scanned pages and may require review.`;
 }
 
 /**
@@ -217,6 +292,13 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
   }
   if (summary.status === "INSPECTED_NO_MACHINE_READABLE_TEXT") {
     const pages = summary.pageCount == null ? "" : ar ? ` (${summary.pageCount} صفحة)` : ` (${summary.pageCount} page(s))`;
+    // Phase 2A-2: when OCR was attempted but recovered nothing, the brief says
+    // so truthfully instead of claiming OCR was never tried.
+    if (summary.ocr.attempted) {
+      return ar
+        ? `قرأت بنية الملف "${summary.filename}"${pages} ولم أجد نصاً مقروءاً آلياً؛ حاولت أيضاً قراءة الصفحات الممسوحة باستخدام التعرف الضوئي (OCR) لكن لم أتمكن من استخراج نص قابل للاستخدام.`
+        : `I read the structure of "${summary.filename}"${pages} and found no machine-readable text. I also tried reading the scanned pages with OCR but could not recover usable text.`;
+    }
     return ar
       ? `قرأت بنية الملف "${summary.filename}"${pages} ولم أجد نصاً مقروءاً آلياً؛ فهم الصور والـ OCR غير متاح، لذلك لا أستطيع قراءة المحتوى.`
       : `I read the structure of "${summary.filename}"${pages} and found no machine-readable text. OCR and image understanding are not available, so I cannot read its content.`;
@@ -231,6 +313,16 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
     parts.push(ar
       ? `التصنيف: ${classLabel} (موثوقية ${reliabilityLabel}، وهو تصنيف مستندي لا يعني فهماً هندسياً).`
       : `Classification: ${classLabel} (reliability ${reliabilityLabel}); this is a document-handling hint, not engineering understanding.`);
+  }
+  // Phase 2A-2: the brief always discloses OCR-derived readings in plain words.
+  if (summary.ocr.used) {
+    parts.push(ocrUsedSentence(summary.ocr.pages, locale));
+  }
+  // Phase 2A-2B: low-confidence OCR is surfaced as an explicit review limitation.
+  if (summary.ocr.used && summary.ocr.lowConfidence) {
+    parts.push(ar
+      ? `بعض نتائج التعرف الضوئي منخفضة الثقة؛ تحقق من الصياغة مقابل الصفحات الأصلية.`
+      : `Some OCR results have low confidence; verify the wording against the original pages.`);
   }
   if (summary.observations.length) {
     const listed = summary.observations.slice(0, 6).map((observation) => {

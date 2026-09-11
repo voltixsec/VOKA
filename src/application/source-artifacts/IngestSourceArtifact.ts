@@ -3,10 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { SourceArtifactPolicyError, validateSourceArtifactBytes, validateSourceArtifactInput, type StoredPdfPageModel } from "@/src/domain/source-artifact";
 import { inspectPdfBytes } from "@/src/infrastructure/source-artifacts/PdfTextExtractor";
 import { LocalSourceArtifactStorage } from "@/src/infrastructure/source-artifacts/LocalSourceArtifactStorage";
+import { analyzePdfInspectionWithOcr } from "@/src/infrastructure/source-artifacts/ocr/OcrDocumentAnalyzer";
+import { createProductionOcrPort, resolveProductionOcrConfig } from "@/src/infrastructure/source-artifacts/ocr/createProductionOcrPort";
+import type { OcrPort } from "./ports";
 
 const storage = new LocalSourceArtifactStorage();
 
-export async function ingestSourceArtifact(input: { companyId: string; userId: string; file: File; context: unknown; conversationRuntimeId?: string | null }) {
+export async function ingestSourceArtifact(input: { companyId: string; userId: string; file: File; context: unknown; conversationRuntimeId?: string | null; ocr?: OcrPort | null }) {
   const policy = validateSourceArtifactInput(input.file, input.context);
   const bytes = Buffer.from(await input.file.arrayBuffer());
   validateSourceArtifactBytes(policy.kind, bytes);
@@ -22,11 +25,33 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
     if (policy.kind === "PDF") {
       try {
         const inspection = inspectPdfBytes(bytes);
-        extractedText = inspection.text;
-        extractedPages = { version: 2, document: inspection.document, pages: inspection.pages };
-        processingState = inspection.text.trim() ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
+        // Phase 2A-2B: run gated OCR once at ingest and persist the augmented
+        // pages, so later inspections reuse the result instead of re-running
+        // recognition. No engine configured (or explicit null) keeps the
+        // native-only behavior; any OCR failure falls back to native rather
+        // than failing the upload.
+        const ocr = input.ocr === undefined ? createProductionOcrPort() : input.ocr;
+        let pages = inspection.pages;
+        let text = inspection.text;
+        if (ocr) {
+          try {
+            const augmented = await analyzePdfInspectionWithOcr(inspection, ocr, {
+              artifactId: `pending:${contentSha256}`,
+              pdfBytes: bytes,
+              maxOcrPages: resolveProductionOcrConfig().maxPages,
+            });
+            pages = augmented.inspection.pages;
+            text = augmented.inspection.text;
+          } catch {
+            pages = inspection.pages;
+            text = inspection.text;
+          }
+        }
+        extractedText = text;
+        extractedPages = { version: 2, document: inspection.document, pages };
+        processingState = text.trim() ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
         // Extraction limitations are source truth too: keep them with the artifact, never silently drop them.
-        const limitations = [...new Set([...inspection.document.limitations, ...inspection.pages.flatMap((page) => page.limitations ?? [])])];
+        const limitations = [...new Set([...inspection.document.limitations, ...pages.flatMap((page) => page.limitations ?? [])])];
         processingError = limitations.length ? limitations.join(" | ").slice(0, 2_000) : null;
       } catch {
         throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_PDF_UNREADABLE", "The PDF was received but its content could not be read safely.");

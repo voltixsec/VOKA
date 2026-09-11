@@ -130,6 +130,30 @@ export function assessPageTextReliability(page: ArtifactPage): PageTextReliabili
   if (page.limitations?.some((item) => /right-to-left/iu.test(item))) lower("MEDIUM", "right-to-left text was reordered by heuristic; wording must be verified against the original");
   if (page.extractionMethods?.includes("ANNOTATION_TEXT")) lower("MEDIUM", "page text includes annotation text, which is not distinguished from body text");
   if (page.attribution !== "PAGE_TREE") lower("MEDIUM", "page attribution is unproven, so page evidence is not tied to a page number");
+  // Phase 2A-2: OCR-derived readings flow through this same function so they
+  // can never masquerade as native text. OCR caps reliability and always
+  // carries a review limitation; native text supplemented by OCR keeps its own
+  // reliability while the OCR reading stays separately reviewable.
+  const ocr = page.ocr;
+  const ocrTextPresent = typeof page.ocrText === "string" && page.ocrText.trim().length > 0;
+  if (page.textSource === "OCR") {
+    const low = ocr?.status === "LOW_CONFIDENCE" || ocr?.reliability === "LOW";
+    lower(
+      low ? "LOW" : "MEDIUM",
+      low
+        ? "page text was recovered by OCR from a scanned page with low confidence and must be verified against the original"
+        : "page text was recovered by OCR from a scanned page and may require review",
+    );
+    if (typeof ocr?.confidence === "number" && Number.isFinite(ocr.confidence)) {
+      limitations.push(`OCR engine-reported confidence ${ocr.confidence.toFixed(2)} on a 0..1 scale`);
+    }
+  } else if (page.textSource === "NATIVE_AND_OCR") {
+    limitations.push("page also carries OCR-recovered text, analyzed separately; the native text analyzed here stays primary");
+  } else if (ocr?.requested && !ocrTextPresent) {
+    if (ocr.status === "UNAVAILABLE") limitations.push("OCR was requested for this page but no OCR engine is available in this runtime");
+    else if (ocr.status === "FAILED") limitations.push(`OCR was attempted for this page but failed${ocr.error ? `: ${ocr.error}` : ""}; native text, if any, stays primary`);
+    else limitations.push("OCR was attempted for this page but recovered no usable text");
+  }
   return { reliability, limitations };
 }
 

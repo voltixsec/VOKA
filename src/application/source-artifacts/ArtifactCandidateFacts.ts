@@ -1,4 +1,4 @@
-import type { ObservedFact, ObservationReliability, ObservationStatus, ObservationType, PageAttribution } from "@/src/domain/source-artifact";
+import type { ObservationOrigin, ObservedFact, ObservationReliability, ObservationStatus, ObservationType, PageAttribution } from "@/src/domain/source-artifact";
 import type { BrainFactProposal, FactProvenance, FactValue } from "@/src/application/conversation-runtime";
 
 /**
@@ -38,6 +38,13 @@ export type ArtifactCandidateFact = {
   reliability: ObservationReliability;
   limitations: string[];
   conflicts: ArtifactFactConflict[];
+  /**
+   * Phase 2A-2: which reading the candidate came from. Absent for native
+   * readings; present with `textSource: "OCR"` and the engine identity for
+   * OCR-derived candidates. Promotion rules are unchanged: OCR-derived
+   * quantities, models, and tags still have no governed fact key.
+   */
+  origin?: ObservationOrigin;
 };
 
 export type ArtifactFactConflict = {
@@ -110,6 +117,7 @@ export function proposeArtifactCandidates(input: {
       reliability: observation.reliability,
       limitations: [...observation.limitations],
       conflicts: observationConflicts,
+      ...(observation.origin ? { origin: observation.origin } : {}),
     };
   });
   return { candidates: mergeArtifactCandidates(input.existing ?? [], candidates), conflicts };
