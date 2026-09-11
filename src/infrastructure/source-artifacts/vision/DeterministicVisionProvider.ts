@@ -26,11 +26,23 @@ export type DeterministicVisualFixture =
     error?: string | null;
   };
 
+/**
+ * Fixture key for a request (2A-4): a page-numbered request keys on
+ * `<artifactId>:page:<pageNumber>` so several pages of one artifact can carry
+ * different fixtures; any request without a proven page number (a standalone
+ * image, or an unattributed page) keeps the accepted `<artifactId>` key. A
+ * numbered page request never falls back to the artifact-wide fixture: an
+ * unregistered page honestly observes nothing.
+ */
+export function visionFixtureKeyFor(request: Pick<VisualInspectionRequest, "artifactId" | "pageNumber">): string {
+  return request.pageNumber === null ? request.artifactId : `${request.artifactId}:page:${request.pageNumber}`;
+}
+
 export function deterministicVisionProvider(fixtures: Record<string, DeterministicVisualFixture>): VisualInspectionPort {
   return {
     providerId: DETERMINISTIC_VISION_PROVIDER_ID,
     inspect: async (request: VisualInspectionRequest): Promise<VisualInspectionResult> => {
-      const fixture = fixtures[request.artifactId];
+      const fixture = fixtures[visionFixtureKeyFor(request)];
       if (!fixture) {
         return {
           pageNumber: request.pageNumber,
@@ -39,7 +51,7 @@ export function deterministicVisionProvider(fixtures: Record<string, Determinist
           confidence: null,
           reliability: "LOW",
           providerId: DETERMINISTIC_VISION_PROVIDER_ID,
-          limitations: ["no fixture is registered for this artifact; the test double observed nothing"],
+          limitations: ["no fixture is registered for this artifact page; the test double observed nothing"],
           error: null,
         };
       }

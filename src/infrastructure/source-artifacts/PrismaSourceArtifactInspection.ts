@@ -12,6 +12,8 @@ import { analyzePdfBytesWithOcr, priorOcrFromStoredPages } from "./ocr/OcrDocume
 import { createProductionOcrPort, resolveProductionOcrConfig } from "./ocr/createProductionOcrPort";
 import { analyzeImageBytesWithVision } from "./vision/ImageInspectionAnalyzer";
 import { createProductionVisionPort, resolveProductionVisionConfig } from "./vision/createProductionVisionPort";
+import { analyzeDrawingPages, analyzeImageBytesAsDrawing, resolveDrawingVisionLimits, type DrawingVisionLimits, type DrawingPassSummary } from "./vision/DrawingInspectionAnalyzer";
+import type { PageRasterizerPort } from "./ocr/PageRasterizer";
 
 const storage = new LocalSourceArtifactStorage();
 
@@ -47,7 +49,18 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
      * tests; pass null to force the vision-unavailable path.
      */
     private readonly vision: VisualInspectionPort | null = createProductionVisionPort(),
+    /**
+     * Phase 2A-4 drawing pass wiring: operational limits and an injectable
+     * rasterizer (tests fake the renderer; production lazily uses the real
+     * 2A-2 pdf.js rasterizer at drawing-specific bounds). Nothing runs when
+     * no page passes the drawing gate or no vision port is configured.
+     */
+    private readonly drawing: { limits?: Partial<DrawingVisionLimits>; rasterizer?: PageRasterizerPort | null } = {},
   ) {}
+
+  private drawingLimits(): DrawingVisionLimits {
+    return { ...resolveDrawingVisionLimits(), ...(this.drawing.limits ?? {}) };
+  }
   async inspect(input: Parameters<SourceArtifactInspectionPort["inspect"]>[0]): Promise<ToolObservation> {
     const artifact = await prisma.sourceArtifact.findFirst({ where: { id: input.artifactId, companyId: input.companyId }, include: { citations: { orderBy: [{ pageNumber: "asc" }, { observedAt: "asc" }] } } });
     if (!artifact) return { kind: input.kind, status: "UNAVAILABLE", artifactId: input.artifactId, summary: "The source artifact was not found for the active company.", evidence: [], citations: [], createdAt: new Date().toISOString() };
@@ -60,10 +73,35 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
       return { kind: input.kind, status: "UNAVAILABLE", artifactId: artifact.id, summary: "The source artifact record exists, but its retained bytes could not be verified.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
     }
     if (artifact.kind === "IMAGE") {
-      // Phase 2A-3: drawing images keep the explicit drawing-analysis
-      // boundary; drawing symbol/geometry understanding is out of scope.
+      // Phase 2A-4: a standalone image explicitly requested as a drawing is
+      // read by the drawing-specific bounded vision profile over the same
+      // production port. Geometry, symbol counting, and takeoff remain out of
+      // scope: the path produces bounded non-approved observations only.
       if (input.kind === "DRAWING_INSPECTION") {
-        return { kind: input.kind, status: "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: "The drawing image was received and retained; visual drawing analysis is not available in this sprint.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
+        const drawing = await analyzeImageBytesAsDrawing(bytes, artifact.mimeType, this.vision, {
+          artifactId: artifact.id,
+          maxImageBytes: this.drawingLimits().maxImageBytes,
+        });
+        const drawingSummary = projectArtifactInspection({
+          artifactId: artifact.id,
+          filename: artifact.originalFilename,
+          kind: "IMAGE",
+          analysis: drawing.analysis,
+          status: drawing.pass.used ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT",
+          governedFacts: input.governedFacts,
+        });
+        const drawingObservation: ToolObservation = {
+          kind: input.kind,
+          status: drawingSummary.drawing.used ? "COMPLETED" : "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE",
+          artifactId: artifact.id,
+          summary: renderInspectionBrief(drawingSummary, input.locale ?? "en"),
+          evidence: evidence(citations),
+          citations,
+          artifactInspection: drawingSummary,
+          artifactCandidates: drawingSummary.candidates,
+          createdAt: new Date().toISOString(),
+        };
+        return drawingObservation;
       }
       // Semantic image understanding runs through the same governed
       // projection. Visual observations never become requirement candidates:
@@ -82,7 +120,12 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     // 2A-1C: run the accepted analysis layer (inspection -> classification -> observations)
     // so the assistant receives a bounded, governed projection instead of raw text.
     // A failure to analyze never becomes a claim that the file was analyzed.
-    const projection = await projectPdf(bytes, artifact, input.governedFacts, this.ocr);
+    const projection = await projectPdf(bytes, artifact, input.governedFacts, this.ocr, {
+      vision: this.vision,
+      limits: this.drawingLimits(),
+      rasterizer: this.drawing.rasterizer,
+      intent: input.kind === "DRAWING_INSPECTION" ? "DRAWING_INSPECTION" : "ATTACHMENT",
+    });
     let extractedText = artifact.extractedText?.trim() || projection.extractedText || "";
     if (!extractedText) {
       try { extractedText = extractPdfText(bytes).text.trim(); } catch { extractedText = ""; }
@@ -91,7 +134,13 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     if (!extractedText || artifact.processingState === "FAILED") {
       return { kind: input.kind, status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "STORED_PENDING_VISION", artifactId: artifact.id, summary: renderInspectionBrief(artifactInspection, briefLocale), evidence: evidence(citations), citations, artifactInspection, artifactCandidates: artifactInspection.candidates, createdAt: new Date().toISOString() };
     }
-    if (input.kind === "DRAWING_INSPECTION") return { kind: input.kind, status: "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: renderInspectionBrief(artifactInspection, briefLocale), evidence: evidence(citations), citations, extractedText, artifactInspection, artifactCandidates: artifactInspection.candidates, createdAt: new Date().toISOString() };
+    // Phase 2A-4: on the drawing path, an explicit DRAWING_INSPECTION is
+    // COMPLETED only when the drawing reading actually produced governed
+    // observations; otherwise the accepted "not available" boundary stays and
+    // the brief says plainly why (gate refusal, unconfigured provider, or an
+    // attempted pass with no usable output). No drawing observations and no
+    // requirement candidates are ever created from the drawing channel here.
+    if (input.kind === "DRAWING_INSPECTION") return { kind: input.kind, status: artifactInspection.drawing.used ? "COMPLETED" : "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: renderInspectionBrief(artifactInspection, briefLocale), evidence: evidence(citations), citations, extractedText, artifactInspection, artifactCandidates: artifactInspection.candidates, createdAt: new Date().toISOString() };
     const candidates = input.kind === "BOQ_INSPECTION" ? parseBoqCandidates(extractedText, artifact.id, citations) : [];
     if (candidates.length && input.runtimeId) {
       for (const candidate of candidates) {
@@ -119,7 +168,13 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
  * were hash-verified above, so reuse is sound) and calling the engine only
  * for pages without one. A null engine keeps the native-only analysis.
  */
-async function projectPdf(bytes: Buffer, artifact: { id: string; originalFilename: string; extractedPages?: unknown }, governedFacts: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"], ocr: OcrPort | null) {
+async function projectPdf(
+  bytes: Buffer,
+  artifact: { id: string; originalFilename: string; extractedPages?: unknown },
+  governedFacts: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"],
+  ocr: OcrPort | null,
+  drawing: { vision: VisualInspectionPort | null; limits: DrawingVisionLimits; rasterizer?: PageRasterizerPort | null; intent: "DRAWING_INSPECTION" | "ATTACHMENT" },
+): Promise<{ summary: ReturnType<typeof projectArtifactInspection>; extractedText: string; pass: DrawingPassSummary | null }> {
   try {
     const storedPages: ArtifactPage[] | undefined = isStoredPdfPageModel(artifact.extractedPages) ? artifact.extractedPages.pages : undefined;
     const analyzed = ocr
@@ -129,15 +184,27 @@ async function projectPdf(bytes: Buffer, artifact: { id: string; originalFilenam
         maxOcrPages: resolveProductionOcrConfig().maxPages,
       })
       : analyzePdfBytes(bytes);
+    // Phase 2A-4: gated drawing semantic pass over the SAME analysis the text
+    // channels produced. It never re-reads bytes for text (no OCR here), only
+    // rasterizes pages the conservative gate qualified.
+    const drawingPass = await analyzeDrawingPages(analyzed, {
+      artifactId: artifact.id,
+      pdfBytes: bytes,
+      vision: drawing.vision,
+      intent: drawing.intent,
+      limits: drawing.limits,
+      rasterizer: drawing.rasterizer,
+    });
     const hasText = analyzed.inspection.text.trim().length > 0;
     const status: ArtifactInspectionStatus = analyzed.inspection.document.encrypted ? "ENCRYPTED" : hasText ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT";
-    const summary = projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: analyzed, status, governedFacts });
-    return { summary, extractedText: analyzed.inspection.text.trim() };
+    const summary = projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: drawingPass.analysis, status, governedFacts });
+    return { summary, extractedText: analyzed.inspection.text.trim(), pass: drawingPass.pass };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "unknown";
     return {
       summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: null, status: "UNAVAILABLE", failure: `the PDF could not be analyzed safely (${reason})` }),
       extractedText: "",
+      pass: null,
     };
   }
 }

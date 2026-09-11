@@ -1,3 +1,4 @@
+import { isDrawingObservationType } from "@/src/domain/source-artifact";
 import type { DocumentClassification, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, VisualOrigin } from "@/src/domain/source-artifact";
 import { proposeArtifactCandidates, renderArtifactConflict, type ArtifactCandidateFact, type ArtifactFactConflict, type GovernedFactRef } from "./ArtifactCandidateFacts";
 
@@ -74,6 +75,23 @@ export type ProjectedVision = {
   lowConfidence: boolean;
 };
 
+/**
+ * Phase 2A-4 drawing-vision summary. `attempted` means drawing pages passed
+ * the gate and the provider path ran; `used` means bounded drawing
+ * observations were actually produced. `pages` names the qualified pages the
+ * reading ran on (proven numbers only). It is separate from `vision` so a
+ * reader can always tell a general image description from a drawing reading.
+ */
+export type ProjectedDrawing = {
+  attempted: boolean;
+  used: boolean;
+  pages: (number | null)[];
+  providers: string[];
+  lowConfidence: boolean;
+  /** Structured outcome of the pass; drives the truthful "did it run?" sentences. */
+  outcome: DrawingVisionOutcome | null;
+};
+
 /** Structural input so the application layer never imports the infrastructure analyzer. */
 export type ArtifactAnalysisInput = {
   inspection: PdfInspection | ImageInspection;
@@ -83,7 +101,17 @@ export type ArtifactAnalysisInput = {
   limitations: string[];
   /** Phase 2A-3: explicit vision-attempt record; images always provide it, PDFs omit it. */
   vision?: { attempted: boolean; providerId: string | null };
+  /**
+   * Phase 2A-4: explicit drawing-vision attempt record. `pages` holds the
+   * proven page numbers of pages the drawing reading was requested for
+   * (null entries are unattributed pages or the standalone image; a number
+   * is never invented). `outcome` is the structured reason the pass ended as
+   * it did; the brief maps it to plain words and never prints it verbatim.
+   */
+  drawing?: { attempted: boolean; pages: (number | null)[]; outcome?: DrawingVisionOutcome };
 };
+
+export type DrawingVisionOutcome = "RAN" | "NO_QUALIFIED_PAGES" | "NOT_CONFIGURED" | "PROVIDER_UNAVAILABLE";
 
 export type ArtifactInspectionSummary = {
   artifactId: string;
@@ -108,6 +136,8 @@ export type ArtifactInspectionSummary = {
   ocr: ProjectedOcr;
   /** Phase 2A-3: whether visual inspection was attempted/used. */
   vision: ProjectedVision;
+  /** Phase 2A-4: whether drawing semantic vision was attempted/used and on which pages. */
+  drawing: ProjectedDrawing;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -134,6 +164,20 @@ const GOVERNANCE_STATEMENTS_VISION = [
 const GOVERNANCE_STATEMENTS_OCR_VISION = [
   "observed values are not approved, verified, or selected",
   "OCR text recovery and visual inspection were both performed; neither reading is verified fact, and geometry interpretation was not performed",
+];
+
+/** Phase 2A-4: stated when drawing-semantic observations were produced. */
+const GOVERNANCE_STATEMENTS_DRAWING = [
+  "observed values are not approved, verified, or selected",
+  "drawing vision produced bounded semantic observations from rendered pages: no measurement, no symbol counting, no quantity takeoff, and no geometry interpretation was performed",
+  "title-block names are observed text only; no supplier, company, or product selection was created from them",
+];
+
+/** Phase 2A-4: stated when OCR-derived text and drawing observations were both analyzed. */
+const GOVERNANCE_STATEMENTS_OCR_DRAWING = [
+  "observed values are not approved, verified, or selected",
+  "OCR text recovery and drawing vision were both performed; the readings stay separate and neither one is verified fact",
+  "no measurement, symbol counting, quantity takeoff, or geometry interpretation was performed; title-block names are observed text only",
 ];
 
 /** User-facing labels: the brief never prints raw enum tokens. */
@@ -172,6 +216,21 @@ const OBSERVATION_LABEL: Record<string, { ar: string; en: string }> = {
   IMAGE_TYPE_HINT: { en: "image type", ar: "نوع الصورة" },
   VISIBLE_CONDITION: { en: "visible condition", ar: "الحالة الظاهرة" },
   VISUAL_CONTEXT: { en: "visual context", ar: "السياق البصري" },
+  DRAWING_TITLE: { en: "drawing title", ar: "عنوان اللوحة" },
+  DRAWING_NUMBER: { en: "drawing no.", ar: "رقم اللوحة" },
+  SHEET_NUMBER: { en: "sheet no.", ar: "رقم الورقة" },
+  PRINTED_SCALE: { en: "printed scale", ar: "المقياس المطبوع" },
+  DRAWING_TYPE: { en: "drawing type hint", ar: "تلميح نوع الرسم" },
+  PROJECT_NAME: { en: "project (title block)", ar: "المشروع (إطار العنوان)" },
+  TITLE_BLOCK_PARTY: { en: "title-block text", ar: "نص إطار العنوان" },
+  LEGEND_ENTRY: { en: "legend entry", ar: "مدخل المفتاح" },
+  NOTE: { en: "note", ar: "ملاحظة" },
+  EQUIPMENT_REFERENCE: { en: "equipment reference", ar: "مرجع معدة" },
+  ROOM_OR_ZONE: { en: "room/zone", ar: "غرفة/منطقة" },
+  DETAIL_REFERENCE: { en: "detail ref.", ar: "مرجع تفصيلي" },
+  SECTION_REFERENCE: { en: "section ref.", ar: "مرجع مقطع" },
+  ELEVATION_REFERENCE: { en: "elevation ref.", ar: "مرجع واجهة" },
+  SYMBOL_CANDIDATE: { en: "symbol candidate", ar: "مرشح رمز" },
 };
 
 function label(map: Record<string, { ar: string; en: string }>, value: string, locale: "ar" | "en") {
@@ -224,6 +283,7 @@ export function projectArtifactInspection(input: {
       governance: [...GOVERNANCE_STATEMENTS],
       ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
       vision: { attempted: false, used: false, providers: [], lowConfidence: false },
+      drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
     };
   }
 
@@ -259,14 +319,50 @@ export function projectArtifactInspection(input: {
     providers: [...new Set(visual.map((observation) => observation.visualOrigin?.providerId ?? "unknown"))],
     lowConfidence: visual.some((observation) => observation.reliability === "LOW"),
   };
+  // Phase 2A-4: drawing-semantic observations are projected under their own
+  // record so a drawing reading is never conflated with a general image
+  // description. The attempt record comes from the analyzer; the used flag is
+  // derived structurally from the observations themselves.
+  const drawingVisual = visual.filter((observation) => isDrawingObservationType(observation.type));
+  const drawing: ProjectedDrawing = {
+    attempted: analysis.drawing?.attempted === true || drawingVisual.length > 0,
+    used: drawingVisual.length > 0,
+    pages: analysis.drawing?.pages ?? [...new Set(drawingVisual.map((observation) => observation.pageNumber))],
+    providers: [...new Set(drawingVisual.map((observation) => observation.visualOrigin?.providerId ?? "unknown"))],
+    lowConfidence: drawingVisual.some((observation) => observation.reliability === "LOW"),
+    outcome: analysis.drawing?.outcome ?? (drawingVisual.length > 0 ? "RAN" : null),
+  };
   const text = inspection.text.trim();
-  const governance = ocr.used && vision.used
-    ? GOVERNANCE_STATEMENTS_OCR_VISION
-    : ocr.used
-      ? GOVERNANCE_STATEMENTS_OCR
-      : vision.used
-        ? GOVERNANCE_STATEMENTS_VISION
-        : GOVERNANCE_STATEMENTS;
+  const governance = drawing.used && ocr.used
+    ? GOVERNANCE_STATEMENTS_OCR_DRAWING
+    : drawing.used
+      ? GOVERNANCE_STATEMENTS_DRAWING
+      : ocr.used && vision.used
+        ? GOVERNANCE_STATEMENTS_OCR_VISION
+        : ocr.used
+          ? GOVERNANCE_STATEMENTS_OCR
+          : vision.used
+            ? GOVERNANCE_STATEMENTS_VISION
+            : GOVERNANCE_STATEMENTS;
+  // A drawing-project-name observation never maps to a governed fact key, so it
+  // cannot be promoted. It can still DISAGREE with governed state; the conflict
+  // is recorded here with both chains so a reviewer sees it, and the governed
+  // value stays untouched. No automatic resolution, ever.
+  let conflicts = proposed.conflicts;
+  const projectFromDrawing = drawingVisual.find((observation) => observation.type === "PROJECT_NAME");
+  if (projectFromDrawing) {
+    const governedProject = (input.governedFacts ?? []).find((fact) => fact.key === "project.name");
+    if (governedProject && String(governedProject.value) !== projectFromDrawing.value
+      && !conflicts.some((item) => item.key === "project.name" && item.observedValue === projectFromDrawing.value)) {
+      conflicts = [...conflicts, {
+        key: "project.name",
+        governedValue: String(governedProject.value),
+        governedProvenance: governedProject.provenance,
+        observedValue: projectFromDrawing.value,
+        candidateId: `${input.artifactId}:drawing-project-name`,
+      }];
+    }
+  }
   return {
     artifactId: input.artifactId,
     filename: input.filename,
@@ -294,13 +390,14 @@ export function projectArtifactInspection(input: {
     })),
     observationCount: observations.length,
     candidates: proposed.candidates.slice(0, MAX_PROJECTED_CANDIDATES),
-    conflicts: proposed.conflicts,
+    conflicts,
     limitations: [...new Set([...limitations, ...(input.failure ? [input.failure] : [])])].slice(0, MAX_PROJECTED_LIMITATIONS),
     excerpt: text ? text.slice(0, MAX_EXCERPT_CHARACTERS) : null,
     excerptTruncated: text.length > MAX_EXCERPT_CHARACTERS,
     governance: [...governance],
     ocr,
     vision,
+    drawing,
   };
 }
 
@@ -334,6 +431,26 @@ function ocrUsedSentence(pages: (number | null)[], locale: "ar" | "en"): string 
     return `An unattributed page was read using OCR. The text was extracted from a scanned page and may require review.`;
   }
   return `Pages ${proven.join(", ")} and an unattributed page were read using OCR. The text was extracted from scanned pages and may require review.`;
+}
+
+/**
+ * Phase 2A-4: plain-words disclosure of the drawing reading. Proven page
+ * numbers only; the standalone-image wording says "drawing image", and an
+ * unproven page is named plainly instead of receiving an invented number.
+ */
+function drawingInspectionSentence(summary: ArtifactInspectionSummary, ar: boolean): string {
+  const proven = summary.drawing.pages.filter((page): page is number => typeof page === "number");
+  const unattributed = summary.drawing.pages.some((page) => page === null);
+  let pagesLabel: string;
+  if (summary.kind === "IMAGE") pagesLabel = ar ? "صورة الرسم" : "the drawing image";
+  else if (proven.length === 1 && !unattributed) pagesLabel = ar ? `صفحة الرسم ${proven[0]}` : `drawing page ${proven[0]}`;
+  else if (proven.length > 1 && !unattributed) pagesLabel = ar ? `صفحات الرسم ${proven.join("، ")}` : `drawing pages ${proven.join(", ")}`;
+  else if (proven.length === 1) pagesLabel = ar ? `صفحة الرسم ${proven[0]} وصفحة غير منسوبة` : `drawing page ${proven[0]} and an unattributed page`;
+  else if (proven.length > 1) pagesLabel = ar ? `صفحات الرسم ${proven.join("، ")} وصفحة غير منسوبة` : `drawing pages ${proven.join(", ")} and an unattributed page`;
+  else pagesLabel = ar ? "صفحة رسم غير منسوبة" : "an unattributed drawing page";
+  return ar
+    ? `فحصت ${pagesLabel} بصرياً لاستخلاص دلالات الرسم. ما يلي ملاحظات رسم محدودة، وليست قياسات ولا حصراً للكميات.`
+    : `I inspected ${pagesLabel} visually for drawing semantics. The following are bounded drawing observations, not measurements and not a quantity takeoff.`;
 }
 
 /**
@@ -402,20 +519,57 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
   }
   // Phase 2A-3: visual inspection is always disclosed in plain words, and
   // low-confidence visual output is surfaced as an explicit review limitation.
-  if (summary.vision.used) {
+  // Phase 2A-4: the general image wording fires only for general image
+  // observations; drawing readings get their own wording below so the two
+  // channels are never conflated.
+  const generalVisualCount = summary.observations.filter((observation) => observation.visualOrigin && !isDrawingObservationType(observation.type)).length;
+  if (summary.vision.used && generalVisualCount > 0) {
     parts.push(ar
       ? `فحصت الصورة بصرياً. ما يلي ملاحظات بصرية وليست حقائق مؤكدة.`
       : `I inspected the image visually. The following are visual observations, not verified facts.`);
   }
-  if (summary.vision.used && summary.vision.lowConfidence) {
+  if (summary.vision.used && generalVisualCount > 0 && summary.vision.lowConfidence) {
     parts.push(ar
       ? `بعض الملاحظات البصرية منخفضة الثقة؛ تحقق منها مقابل الصورة نفسها.`
       : `Some visual observations have low confidence; verify them against the image itself.`);
   }
+  // Phase 2A-4: the brief says plainly whether drawing vision ran, what it
+  // read, and what it did NOT do. A low-confidence reading and a run without
+  // usable output are both disclosed; nothing here ever implies measurement
+  // or takeoff.
+  if (summary.drawing.used) {
+    parts.push(drawingInspectionSentence(summary, ar));
+    if (summary.drawing.lowConfidence) {
+      parts.push(ar
+        ? `بعض ملاحظات الرسم منخفضة الثقة؛ تحقق منها مقابل اللوحة نفسها.`
+        : `Some drawing observations are low confidence; verify them against the sheet itself.`);
+    }
+  } else {
+    // Why the drawing reading did not produce observations, in plain words.
+    // The structured outcome token is never printed itself.
+    if (summary.drawing.outcome === "NO_QUALIFIED_PAGES") {
+      parts.push(ar
+        ? `لم تحمل أي صفحة دلائل رسم موثوقة، لذلك لم يعمل الفحص البصري للرسوم؛ تحتاج الصفحات إلى مراجعة.`
+        : `No page carried credible drawing evidence, so drawing vision was not run; the pages need review.`);
+    } else if (summary.drawing.outcome === "NOT_CONFIGURED") {
+      parts.push(ar
+        ? `الفحص البصري للرسوم غير مُهيّأ في هذه البيئة، لذلك لم تُقرأ صفحات الرسم المؤهلة بصرياً.`
+        : `Drawing vision is not configured in this runtime, so qualified drawing pages were not read visually.`);
+    } else if (summary.drawing.outcome === "PROVIDER_UNAVAILABLE") {
+      parts.push(ar
+        ? `مزوّد الفحص البصري للرسوم غير متاح، لذلك لم تُقرأ صفحات الرسم المؤهلة بصرياً.`
+        : `The drawing vision provider is unavailable, so qualified drawing pages were not read visually.`);
+    } else if (summary.drawing.attempted) {
+      parts.push(ar
+        ? `جُرِبت قراءة الرسم بصرياً للصفحات المؤهلة لكنها لم تُنتج ملاحظات رسم قابلة للاستخدام.`
+        : `The drawing reading was attempted on the qualified pages but produced no usable drawing observations.`);
+    }
+  }
   // Text and visual observations are listed under separate headings so the
   // two readings are never confused.
   const textObservations = summary.observations.filter((observation) => !observation.visualOrigin);
-  const visualObservations = summary.observations.filter((observation) => observation.visualOrigin);
+  const visualObservations = summary.observations.filter((observation) => observation.visualOrigin && !isDrawingObservationType(observation.type));
+  const drawingObservations = summary.observations.filter((observation) => observation.visualOrigin && isDrawingObservationType(observation.type));
   if (textObservations.length) {
     const listed = textObservations.slice(0, 6).map((observation) => {
       const page = observation.pageNumber == null ? (ar ? "صفحة غير منسوبة" : "unattributed page") : (ar ? `ص ${observation.pageNumber}` : `p${observation.pageNumber}`);
@@ -429,6 +583,17 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
       `${label(OBSERVATION_LABEL, observation.type, locale)}: ${observation.value} (${observation.locator})`);
     const more = summary.observationCount > summary.observations.length ? (ar ? ` + المزيد` : " + more") : "";
     parts.push(ar ? `ما رُصد بصرياً: ${listed.join("؛ ")}${more}.` : `Observed visually: ${listed.join("; ")}${more}.`);
+  }
+  if (drawingObservations.length) {
+    const listed = drawingObservations.slice(0, 6).map((observation) => {
+      const page = observation.pageNumber == null ? (ar ? "صفحة غير منسوبة" : "unattributed page") : (ar ? `ص ${observation.pageNumber}` : `p${observation.pageNumber}`);
+      return `${label(OBSERVATION_LABEL, observation.type, locale)}: ${observation.value} (${page})`;
+    });
+    const more = summary.observationCount > summary.observations.length ? (ar ? ` + المزيد` : " + more") : "";
+    parts.push(ar ? `ما رُصد في الرسومات: ${listed.join("؛ ")}${more}.` : `Observed on drawings: ${listed.join("; ")}${more}.`);
+    parts.push(ar
+      ? `مراجع المعدات ومداخل المفتاح والمرشحين الرمزية مرصودة فقط؛ لم يُعَدّ أي رمز ولم يُنتَج حصر كميات أو جدول مواد.`
+      : `Equipment references, legend entries, and symbol candidates are observations only: no symbol was counted and no quantity takeoff or BOM was produced.`);
   }
   if (summary.conflicts.length) parts.push(renderArtifactConflict(summary.conflicts[0]!, locale));
   const promotable = summary.candidates.filter((candidate) => candidate.factKey);

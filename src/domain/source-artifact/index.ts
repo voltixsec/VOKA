@@ -166,3 +166,4 @@ export * from "./PdfClassification";
 export * from "./PdfObservations";
 export * from "./PdfOcr";
 export * from "./ImageVisual";
+export * from "./DrawingSemantics";

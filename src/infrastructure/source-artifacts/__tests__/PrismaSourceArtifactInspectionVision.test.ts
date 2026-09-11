@@ -247,14 +247,36 @@ describe("production inspection path with vision (2A-3)", () => {
     expect(prismaMock.requirementCitation.upsert).not.toHaveBeenCalled();
   });
 
-  it("keeps the drawing-image boundary without calling vision", async () => {
+  // Phase 2A-4 changes this boundary deliberately: a standalone image
+  // explicitly requested as a drawing now reaches the drawing-specific
+  // bounded vision profile through the SAME production port. General image
+  // requests still never run the drawing profile.
+  it("runs the bounded drawing profile for a standalone image explicitly requested as a drawing", async () => {
     resetPrisma();
     prismaMock.sourceArtifact.findFirst.mockResolvedValue(await imageRow(PNG_BYTES));
-    const { calls, provider } = trackingVision(deterministicVisionProvider({ "artifact-1": SITE_PHOTO }));
+    const { calls, provider } = trackingVision(deterministicVisionProvider({ "artifact-1": [
+      { type: "DRAWING_NUMBER", description: "M-201", confidence: 0.92, region: "lower-right" },
+      { type: "REVISION", description: "B", confidence: 0.9 },
+    ] }));
     const observation = await new PrismaSourceArtifactInspection(null, provider).inspect({ ...baseInput, kind: "DRAWING_INSPECTION" });
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ pageNumber: null, analysisProfile: "DRAWING_SEMANTICS" });
+    expect(observation.status).toBe("COMPLETED");
+    expect(observation.summary).toContain("Observed on drawings: drawing no.: M-201 (unattributed page)");
+    // A general attachment request never triggers the drawing profile.
+    resetPrisma();
+    const general = trackingVision(deterministicVisionProvider({ "artifact-1": SITE_PHOTO }));
+    await new PrismaSourceArtifactInspection(null, general.provider).inspect(baseInput);
+    expect(general.calls[0]?.analysisProfile).toBeUndefined();
+  });
+
+  it("reports the drawing-image boundary truthfully when no vision provider is configured", async () => {
+    resetPrisma();
+    prismaMock.sourceArtifact.findFirst.mockResolvedValue(await imageRow(PNG_BYTES));
+    const observation = await new PrismaSourceArtifactInspection(null).inspect({ ...baseInput, kind: "DRAWING_INSPECTION" });
     expect(observation.status).toBe("DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE");
-    expect(observation.summary).toContain("visual drawing analysis is not available");
+    expect(observation.summary).toContain("visual inspection is not available");
+    expect(observation.artifactInspection?.drawing).toMatchObject({ attempted: false, used: false });
   });
 
   it("never creates requirement candidates from vision output on the BOQ path", async () => {

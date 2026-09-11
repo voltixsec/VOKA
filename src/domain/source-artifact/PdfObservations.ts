@@ -33,7 +33,10 @@ export const OBSERVATION_TYPES = [
   "DESCRIPTION_OR_SPEC_TEXT",
 ] as const;
 
-export type ObservationType = (typeof OBSERVATION_TYPES)[number] | import("./ImageVisual").VisualObservationType;
+export type ObservationType =
+  | (typeof OBSERVATION_TYPES)[number]
+  | import("./ImageVisual").VisualObservationType
+  | import("./DrawingSemantics").DrawingObservationType;
 
 /**
  * Ordinal reliability of an observation: how explicit the source text was.
@@ -83,6 +86,12 @@ export type ObservedFact = {
    * text and visual content stay separately attributed.
    */
   visualOrigin?: import("./ImageVisual").VisualOrigin;
+  /**
+   * Artifact the observation belongs to. Optional for compatibility with the
+   * 2A-1B..2A-3 shapes; 2A-4 drawing observations always carry it so every
+   * observation retains its artifact identity end to end.
+   */
+  artifactId?: string;
 };
 
 export type PdfObservationResult = {

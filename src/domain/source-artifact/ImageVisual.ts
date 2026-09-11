@@ -76,6 +76,14 @@ export type VisualOrigin = {
 };
 
 /**
+ * Which bounded task a vision request asks for. `GENERAL_IMAGE` is the 2A-3
+ * image-description reading (the default when absent); `DRAWING_SEMANTICS`
+ * (2A-4) asks for the drawing observation vocabulary instead. Providers treat
+ * a missing profile as `GENERAL_IMAGE` so the accepted behavior is unchanged.
+ */
+export type VisualAnalysisProfile = "GENERAL_IMAGE" | "DRAWING_SEMANTICS";
+
+/**
  * What a vision provider receives for one image. `pageNumber` is always null
  * for standalone images in 2A-3 (it exists so PDF raster pages can reuse this
  * boundary later); providers must echo it.
@@ -87,6 +95,8 @@ export type VisualInspectionRequest = {
   pageNumber: number | null;
   /** Gate explanation: why visual inspection was requested for this image. */
   reason: string;
+  /** 2A-4: bounded drawing-semantics reading instead of the general image reading. */
+  analysisProfile?: VisualAnalysisProfile;
 };
 
 /** Raw provider output for one observation, before vocabulary/bound validation. */
