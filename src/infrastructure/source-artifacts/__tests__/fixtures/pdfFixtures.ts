@@ -151,3 +151,43 @@ export const TEXT_SHEET: PageSpec = {
 
 export const SCANNED_SHEET: PageSpec = { width: 595, height: 842, image: true };
 export const OCR_LAYER_SHEET: PageSpec = { width: 595, height: 842, image: true, invisibleLines: ["DRAWING NO: A-201 REV 0", "SCANNED OCR LAYER"] };
+
+/**
+ * Vector-heavy page with almost no text. It exists to prove that path/vector
+ * counts alone never produce a DRAWING classification.
+ */
+export const VECTOR_ONLY_SHEET: PageSpec = {
+  width: 2384, height: 1684, rectangles: 120,
+  lines: ["LEVEL 6"],
+};
+
+/** Page with neither machine-readable text nor an image XObject. */
+export const EMPTY_SHEET: PageSpec = { width: 595, height: 842, lines: [] };
+
+/**
+ * One page carrying both schedule structure and drawing identifiers. It exists
+ * to prove conflicting evidence degrades instead of choosing a favourite class.
+ */
+export const AMBIGUOUS_SHEET: PageSpec = {
+  width: 1684, height: 1191, rectangles: 20,
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-101 SCALE 1:50",
+    "BILL OF QUANTITIES",
+    "ITEM DESCRIPTION QTY UNIT",
+    "1.1 Internal partition 120 m2",
+    "1.2 Door set D-01 6 nos",
+  ],
+};
+
+/**
+ * PDF with no reachable page tree: the content stream is real but no page object
+ * owns it, so the inspector recovers the text as UNATTRIBUTED with pageNumber null.
+ */
+export function buildOrphanTextPdf(lines: string[]) {
+  const content = lines.map((line, index) => `BT /F1 11 Tf 40 ${780 - index * 16} Td (${escapePdf(line)}) Tj ET`).join("\n");
+  return Buffer.from(
+    `%PDF-1.4\n1 0 obj\n<< /Type /Page /Parent 9 0 R >>\nendobj\n3 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n%%EOF`,
+    "latin1",
+  );
+}

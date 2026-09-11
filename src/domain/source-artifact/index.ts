@@ -122,3 +122,12 @@ export function legacyPagesFrom(value: unknown): ArtifactPage[] {
     return [{ pageNumber: typeof page.pageNumber === "number" ? page.pageNumber : null, text: page.text, characterCount: typeof page.characterCount === "number" ? page.characterCount : page.text.length, attribution: typeof page.pageNumber === "number" ? "PAGE_TREE" : "UNATTRIBUTED" }];
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2A-1B: analysis layers that sit ABOVE the page model.
+// They are pure: they consume an inspection result and produce review-only
+// classification and observed facts. No approval, no inference, no BOM.
+// ---------------------------------------------------------------------------
+
+export * from "./PdfClassification";
+export * from "./PdfObservations";
