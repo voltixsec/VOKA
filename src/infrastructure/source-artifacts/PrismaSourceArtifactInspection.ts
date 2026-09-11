@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import type { OcrPort, SourceArtifactInspectionPort } from "@/src/application/source-artifacts";
+import type { OcrPort, SourceArtifactInspectionPort, VisualInspectionPort } from "@/src/application/source-artifacts";
 import { projectArtifactInspection, renderInspectionBrief, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
 import type { ToolCitation, ToolObservation } from "@/src/application/conversation-runtime";
 import { isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
@@ -10,6 +10,8 @@ import { extractPdfText } from "./PdfTextExtractor";
 import { analyzePdfBytes } from "./DocumentInspectionAnalyzer";
 import { analyzePdfBytesWithOcr, priorOcrFromStoredPages } from "./ocr/OcrDocumentAnalyzer";
 import { createProductionOcrPort, resolveProductionOcrConfig } from "./ocr/createProductionOcrPort";
+import { analyzeImageBytesWithVision } from "./vision/ImageInspectionAnalyzer";
+import { createProductionVisionPort, resolveProductionVisionConfig } from "./vision/createProductionVisionPort";
 
 const storage = new LocalSourceArtifactStorage();
 
@@ -36,7 +38,16 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
    * native-only analysis). Pass an explicit engine in tests; pass null to
    * force the native-only path.
    */
-  constructor(private readonly ocr: OcrPort | null = createProductionOcrPort()) {}
+  constructor(
+    private readonly ocr: OcrPort | null = createProductionOcrPort(),
+    /**
+     * Phase 2A-3: the vision provider is injected, defaulting to the
+     * production resolution (real provider when `VOKA_VISION_PROVIDER` is
+     * configured, otherwise undescribed images). Pass an explicit provider in
+     * tests; pass null to force the vision-unavailable path.
+     */
+    private readonly vision: VisualInspectionPort | null = createProductionVisionPort(),
+  ) {}
   async inspect(input: Parameters<SourceArtifactInspectionPort["inspect"]>[0]): Promise<ToolObservation> {
     const artifact = await prisma.sourceArtifact.findFirst({ where: { id: input.artifactId, companyId: input.companyId }, include: { citations: { orderBy: [{ pageNumber: "asc" }, { observedAt: "asc" }] } } });
     if (!artifact) return { kind: input.kind, status: "UNAVAILABLE", artifactId: input.artifactId, summary: "The source artifact was not found for the active company.", evidence: [], citations: [], createdAt: new Date().toISOString() };
@@ -49,8 +60,22 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
       return { kind: input.kind, status: "UNAVAILABLE", artifactId: artifact.id, summary: "The source artifact record exists, but its retained bytes could not be verified.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
     }
     if (artifact.kind === "IMAGE") {
-      const status = input.kind === "DRAWING_INSPECTION" ? "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE" : "STORED_PENDING_VISION";
-      return { kind: input.kind, status, artifactId: artifact.id, summary: status === "STORED_PENDING_VISION" ? "The image was received and retained, but no vision inspection was run." : "The drawing image was received and retained; visual drawing analysis is not available in this sprint.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
+      // Phase 2A-3: drawing images keep the explicit drawing-analysis
+      // boundary; drawing symbol/geometry understanding is out of scope.
+      if (input.kind === "DRAWING_INSPECTION") {
+        return { kind: input.kind, status: "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE", artifactId: artifact.id, summary: "The drawing image was received and retained; visual drawing analysis is not available in this sprint.", evidence: evidence(citations), citations, createdAt: new Date().toISOString() };
+      }
+      // Semantic image understanding runs through the same governed
+      // projection. Visual observations never become requirement candidates:
+      // there is no text to parse and no promotion path for vision output.
+      const imageLocale = input.locale ?? "en";
+      const image = await projectImage(bytes, artifact, input.governedFacts, this.vision);
+      const imageInspection = image.summary;
+      const imageSummary = renderInspectionBrief(imageInspection, imageLocale);
+      if (!imageInspection.vision.used) {
+        return { kind: input.kind, status: "STORED_PENDING_VISION", artifactId: artifact.id, summary: imageSummary, evidence: evidence(citations), citations, artifactInspection: imageInspection, artifactCandidates: imageInspection.candidates, createdAt: new Date().toISOString() };
+      }
+      return { kind: input.kind, status: "COMPLETED", artifactId: artifact.id, summary: imageSummary, evidence: evidence(citations), citations, artifactInspection: imageInspection, artifactCandidates: imageInspection.candidates, createdAt: new Date().toISOString() };
     }
     // The brief language follows the runtime locale only; it is never inferred from the file contents.
     const briefLocale = input.locale ?? "en";
@@ -113,6 +138,28 @@ async function projectPdf(bytes: Buffer, artifact: { id: string; originalFilenam
     return {
       summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: null, status: "UNAVAILABLE", failure: `the PDF could not be analyzed safely (${reason})` }),
       extractedText: "",
+    };
+  }
+}
+
+/**
+ * Runs the 2A-3 image analyzer and projects it for the assistant. Analysis is
+ * best effort: when it cannot run, the projection says the image was not
+ * described rather than implying otherwise.
+ */
+async function projectImage(bytes: Buffer, artifact: { id: string; originalFilename: string; mimeType: string }, governedFacts: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"], vision: VisualInspectionPort | null) {
+  try {
+    const analysis = await analyzeImageBytesWithVision(bytes, artifact.mimeType, vision, {
+      artifactId: artifact.id,
+      maxImageBytes: resolveProductionVisionConfig().maxImageBytes,
+    });
+    const used = analysis.observations.some((observation) => observation.visualOrigin);
+    const status: ArtifactInspectionStatus = used ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT";
+    return { summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "IMAGE", analysis, status, governedFacts }) };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown";
+    return {
+      summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "IMAGE", analysis: null, status: "UNAVAILABLE", failure: `the image could not be analyzed safely (${reason})` }),
     };
   }
 }

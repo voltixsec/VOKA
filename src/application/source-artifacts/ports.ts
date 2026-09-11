@@ -1,5 +1,5 @@
 import type { ConversationToolKind, ToolObservation } from "@/src/application/conversation-runtime";
-import type { OcrPageRequest, OcrPageResult } from "@/src/domain/source-artifact";
+import type { OcrPageRequest, OcrPageResult, VisualInspectionRequest, VisualInspectionResult } from "@/src/domain/source-artifact";
 
 export interface SourceArtifactInspectionPort {
   /**
@@ -25,6 +25,21 @@ export interface OcrPort {
   /** Engine/provider identity, carried through as provenance. */
   readonly engineId: string;
   recognize(request: OcrPageRequest): Promise<OcrPageResult>;
+}
+
+/**
+ * Phase 2A-3 visual-inspection boundary.
+ *
+ * A vision provider turns one image into bounded candidate descriptions. It
+ * owns no business rules: no classification, no approval, no product
+ * selection, no quantity approval. Implementations must echo the request page
+ * number (null for standalone images, never invented) and must never
+ * fabricate observations when inspection did not run.
+ */
+export interface VisualInspectionPort {
+  /** Provider identity, carried through as provenance. */
+  readonly providerId: string;
+  inspect(request: VisualInspectionRequest): Promise<VisualInspectionResult>;
 }
 
 export interface NormalizedRequirementPort {

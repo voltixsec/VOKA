@@ -1,4 +1,4 @@
-import type { DocumentClassification, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection } from "@/src/domain/source-artifact";
+import type { DocumentClassification, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, VisualOrigin } from "@/src/domain/source-artifact";
 import { proposeArtifactCandidates, renderArtifactConflict, type ArtifactCandidateFact, type ArtifactFactConflict, type GovernedFactRef } from "./ArtifactCandidateFacts";
 
 /**
@@ -34,6 +34,8 @@ export type ProjectedObservation = {
   status: "OBSERVED_NOT_APPROVED";
   /** Present with `textSource: "OCR"` for OCR-derived observations; absent for native readings. */
   origin?: ObservationOrigin;
+  /** Present with `source: "VISION"` for visual observations; they never carry a text `origin`. */
+  visualOrigin?: VisualOrigin;
 };
 
 /**
@@ -58,12 +60,29 @@ export type ProjectedClassification = {
   limitations: string[];
 };
 
+/**
+ * Phase 2A-3 vision summary. `attempted` means a vision provider was invoked;
+ * `used` means visual observations were actually analyzed. Provider ids stay
+ * structured; the brief only ever says that visual inspection was used, in
+ * plain words.
+ */
+export type ProjectedVision = {
+  attempted: boolean;
+  used: boolean;
+  providers: string[];
+  /** Phase 2A-3: true when any used visual observation has low reliability. */
+  lowConfidence: boolean;
+};
+
 /** Structural input so the application layer never imports the infrastructure analyzer. */
 export type ArtifactAnalysisInput = {
-  inspection: PdfInspection;
-  classification: DocumentClassification;
+  inspection: PdfInspection | ImageInspection;
+  /** Null for images: 2A-3 performs no image classification, only bounded visual observations. */
+  classification: DocumentClassification | null;
   observations: ObservedFact[];
   limitations: string[];
+  /** Phase 2A-3: explicit vision-attempt record; images always provide it, PDFs omit it. */
+  vision?: { attempted: boolean; providerId: string | null };
 };
 
 export type ArtifactInspectionSummary = {
@@ -87,6 +106,8 @@ export type ArtifactInspectionSummary = {
   governance: string[];
   /** Phase 2A-2: whether OCR was attempted/used and which pages it read. */
   ocr: ProjectedOcr;
+  /** Phase 2A-3: whether visual inspection was attempted/used. */
+  vision: ProjectedVision;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -100,6 +121,19 @@ const GOVERNANCE_STATEMENTS_OCR = [
   "observed values are not approved, verified, or selected",
   "document classification is a document-handling hint, not engineering understanding",
   "OCR text recovery was performed on scanned pages; image interpretation and geometry interpretation were not performed",
+];
+
+/** Phase 2A-3: stated when visual observations were analyzed. */
+const GOVERNANCE_STATEMENTS_VISION = [
+  "observed values are not approved, verified, or selected",
+  "visual inspection produced bounded visual observations; they are not verified facts, and geometry interpretation was not performed",
+  "no OCR text recovery was performed on this image",
+];
+
+/** Phase 2A-3: stated when both OCR-derived text and visual observations were analyzed. */
+const GOVERNANCE_STATEMENTS_OCR_VISION = [
+  "observed values are not approved, verified, or selected",
+  "OCR text recovery and visual inspection were both performed; neither reading is verified fact, and geometry interpretation was not performed",
 ];
 
 /** User-facing labels: the brief never prints raw enum tokens. */
@@ -131,6 +165,13 @@ const OBSERVATION_LABEL: Record<string, { ar: string; en: string }> = {
   QUANTITY: { en: "quantity", ar: "الكمية" },
   UNIT: { en: "unit", ar: "الوحدة" },
   DESCRIPTION_OR_SPEC_TEXT: { en: "description", ar: "الوصف" },
+  VISIBLE_OBJECT: { en: "visible object", ar: "جسم ظاهر" },
+  VISIBLE_PRODUCT: { en: "visible product", ar: "منتج ظاهر" },
+  VISIBLE_BRAND: { en: "visible brand", ar: "علامة ظاهرة" },
+  VISIBLE_MODEL_REFERENCE: { en: "visible model marking", ar: "علامة موديل ظاهرة" },
+  IMAGE_TYPE_HINT: { en: "image type", ar: "نوع الصورة" },
+  VISIBLE_CONDITION: { en: "visible condition", ar: "الحالة الظاهرة" },
+  VISUAL_CONTEXT: { en: "visual context", ar: "السياق البصري" },
 };
 
 function label(map: Record<string, { ar: string; en: string }>, value: string, locale: "ar" | "en") {
@@ -182,6 +223,7 @@ export function projectArtifactInspection(input: {
       excerptTruncated: false,
       governance: [...GOVERNANCE_STATEMENTS],
       ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
+      vision: { attempted: false, used: false, providers: [], lowConfidence: false },
     };
   }
 
@@ -206,20 +248,40 @@ export function projectArtifactInspection(input: {
     engines: [...new Set(ocrPages.map((page) => page.ocr?.engineId ?? "unknown"))],
     lowConfidence: ocrPages.some((page) => page.ocr?.status === "LOW_CONFIDENCE" || page.ocr?.reliability === "LOW"),
   };
+  // Phase 2A-3: vision usage is detected from observation provenance, with the
+  // explicit attempt record supplied by the image analyzer. Provider ids stay
+  // structured; the brief only ever says that visual inspection was used, in
+  // plain words.
+  const visual = observations.filter((observation) => observation.visualOrigin);
+  const vision: ProjectedVision = {
+    attempted: analysis.vision?.attempted ?? visual.length > 0,
+    used: visual.length > 0,
+    providers: [...new Set(visual.map((observation) => observation.visualOrigin?.providerId ?? "unknown"))],
+    lowConfidence: visual.some((observation) => observation.reliability === "LOW"),
+  };
   const text = inspection.text.trim();
+  const governance = ocr.used && vision.used
+    ? GOVERNANCE_STATEMENTS_OCR_VISION
+    : ocr.used
+      ? GOVERNANCE_STATEMENTS_OCR
+      : vision.used
+        ? GOVERNANCE_STATEMENTS_VISION
+        : GOVERNANCE_STATEMENTS;
   return {
     artifactId: input.artifactId,
     filename: input.filename,
     kind: input.kind,
     status,
     pageCount: inspection.document.pageCount,
-    classification: {
-      value: classification.value,
-      reliability: classification.reliability,
-      confidence: classification.confidence,
-      limitations: classification.limitations.slice(0, MAX_PROJECTED_LIMITATIONS),
-    },
-    pageClassifications: classification.pages.slice(0, MAX_PROJECTED_PAGES).map((page) => ({ pageNumber: page.pageNumber, value: page.value })),
+    classification: classification
+      ? {
+        value: classification.value,
+        reliability: classification.reliability,
+        confidence: classification.confidence,
+        limitations: classification.limitations.slice(0, MAX_PROJECTED_LIMITATIONS),
+      }
+      : null,
+    pageClassifications: (classification?.pages ?? []).slice(0, MAX_PROJECTED_PAGES).map((page) => ({ pageNumber: page.pageNumber, value: page.value })),
     observations: observations.slice(0, MAX_PROJECTED_OBSERVATIONS).map((observation) => ({
       type: observation.type,
       value: observation.value,
@@ -228,6 +290,7 @@ export function projectArtifactInspection(input: {
       reliability: observation.reliability,
       status: observation.status,
       ...(observation.origin ? { origin: observation.origin } : {}),
+      ...(observation.visualOrigin ? { visualOrigin: observation.visualOrigin } : {}),
     })),
     observationCount: observations.length,
     candidates: proposed.candidates.slice(0, MAX_PROJECTED_CANDIDATES),
@@ -235,8 +298,9 @@ export function projectArtifactInspection(input: {
     limitations: [...new Set([...limitations, ...(input.failure ? [input.failure] : [])])].slice(0, MAX_PROJECTED_LIMITATIONS),
     excerpt: text ? text.slice(0, MAX_EXCERPT_CHARACTERS) : null,
     excerptTruncated: text.length > MAX_EXCERPT_CHARACTERS,
-    governance: [...(ocr.used ? GOVERNANCE_STATEMENTS_OCR : GOVERNANCE_STATEMENTS)],
+    governance: [...governance],
     ocr,
+    vision,
   };
 }
 
@@ -291,6 +355,18 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
       : `"${summary.filename}" is encrypted, so its content could not be read.`;
   }
   if (summary.status === "INSPECTED_NO_MACHINE_READABLE_TEXT") {
+    // Phase 2A-3: images have no page structure to read; the brief says
+    // plainly whether visual inspection ran or was unavailable.
+    if (summary.kind === "IMAGE") {
+      if (summary.vision.attempted) {
+        return ar
+          ? `نظرت إلى الصورة "${summary.filename}" لكن لم أتمكن من إنتاج ملاحظات بصرية قابلة للاستخدام.`
+          : `I looked at the image "${summary.filename}" but could not produce usable visual observations.`;
+      }
+      return ar
+        ? `استلمت الصورة "${summary.filename}"، لكن الفحص البصري غير متاح، لذلك لا أستطيع وصف ما يظهر فيها.`
+        : `I received the image "${summary.filename}", but visual inspection is not available, so I cannot describe what it shows.`;
+    }
     const pages = summary.pageCount == null ? "" : ar ? ` (${summary.pageCount} صفحة)` : ` (${summary.pageCount} page(s))`;
     // Phase 2A-2: when OCR was attempted but recovered nothing, the brief says
     // so truthfully instead of claiming OCR was never tried.
@@ -324,13 +400,35 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
       ? `بعض نتائج التعرف الضوئي منخفضة الثقة؛ تحقق من الصياغة مقابل الصفحات الأصلية.`
       : `Some OCR results have low confidence; verify the wording against the original pages.`);
   }
-  if (summary.observations.length) {
-    const listed = summary.observations.slice(0, 6).map((observation) => {
+  // Phase 2A-3: visual inspection is always disclosed in plain words, and
+  // low-confidence visual output is surfaced as an explicit review limitation.
+  if (summary.vision.used) {
+    parts.push(ar
+      ? `فحصت الصورة بصرياً. ما يلي ملاحظات بصرية وليست حقائق مؤكدة.`
+      : `I inspected the image visually. The following are visual observations, not verified facts.`);
+  }
+  if (summary.vision.used && summary.vision.lowConfidence) {
+    parts.push(ar
+      ? `بعض الملاحظات البصرية منخفضة الثقة؛ تحقق منها مقابل الصورة نفسها.`
+      : `Some visual observations have low confidence; verify them against the image itself.`);
+  }
+  // Text and visual observations are listed under separate headings so the
+  // two readings are never confused.
+  const textObservations = summary.observations.filter((observation) => !observation.visualOrigin);
+  const visualObservations = summary.observations.filter((observation) => observation.visualOrigin);
+  if (textObservations.length) {
+    const listed = textObservations.slice(0, 6).map((observation) => {
       const page = observation.pageNumber == null ? (ar ? "صفحة غير منسوبة" : "unattributed page") : (ar ? `ص ${observation.pageNumber}` : `p${observation.pageNumber}`);
       return `${label(OBSERVATION_LABEL, observation.type, locale)}: ${observation.value} (${page})`;
     });
     const more = summary.observationCount > summary.observations.length ? (ar ? ` + المزيد` : " + more") : "";
     parts.push(ar ? `ما رُصد نصياً: ${listed.join("؛ ")}${more}.` : `Observed in text: ${listed.join("; ")}${more}.`);
+  }
+  if (visualObservations.length) {
+    const listed = visualObservations.slice(0, 6).map((observation) =>
+      `${label(OBSERVATION_LABEL, observation.type, locale)}: ${observation.value} (${observation.locator})`);
+    const more = summary.observationCount > summary.observations.length ? (ar ? ` + المزيد` : " + more") : "";
+    parts.push(ar ? `ما رُصد بصرياً: ${listed.join("؛ ")}${more}.` : `Observed visually: ${listed.join("; ")}${more}.`);
   }
   if (summary.conflicts.length) parts.push(renderArtifactConflict(summary.conflicts[0]!, locale));
   const promotable = summary.candidates.filter((candidate) => candidate.factKey);

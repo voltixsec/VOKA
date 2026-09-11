@@ -117,6 +117,28 @@ export type ExtractedPdf = { text: string; pages: ArtifactPage[] };
 
 export type PdfInspection = ExtractedPdf & { format: "PDF"; document: PdfDocumentFacts };
 
+/**
+ * Phase 2A-3 image inspection. Images carry no machine-readable text and no
+ * pages in this slice: `text` is always "" and `pages` always [], so the
+ * governed projector reads the same structural shape without PDF-only
+ * assumptions. Visual observations arrive separately, never as page text.
+ */
+export type ImageDocumentFacts = {
+  pageCount: null;
+  pageAttributionReliable: false;
+  encrypted: false;
+  limitations: string[];
+};
+
+export type ImageInspection = {
+  format: "IMAGE";
+  mimeType: string;
+  sizeBytes: number;
+  text: string;
+  pages: ArtifactPage[];
+  document: ImageDocumentFacts;
+};
+
 /** JSON persisted in SourceArtifact.extractedPages since Phase 2A block 1. Legacy rows hold a bare page array. */
 export type StoredPdfPageModel = { version: 2; document: PdfDocumentFacts; pages: ArtifactPage[] };
 
@@ -143,3 +165,4 @@ export function legacyPagesFrom(value: unknown): ArtifactPage[] {
 export * from "./PdfClassification";
 export * from "./PdfObservations";
 export * from "./PdfOcr";
+export * from "./ImageVisual";

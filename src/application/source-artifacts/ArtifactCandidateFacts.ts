@@ -1,4 +1,4 @@
-import type { ObservationOrigin, ObservedFact, ObservationReliability, ObservationStatus, ObservationType, PageAttribution } from "@/src/domain/source-artifact";
+import type { ObservationOrigin, ObservedFact, ObservationReliability, ObservationStatus, ObservationType, PageAttribution, VisualOrigin } from "@/src/domain/source-artifact";
 import type { BrainFactProposal, FactProvenance, FactValue } from "@/src/application/conversation-runtime";
 
 /**
@@ -45,6 +45,12 @@ export type ArtifactCandidateFact = {
    * quantities, models, and tags still have no governed fact key.
    */
   origin?: ObservationOrigin;
+  /**
+   * Phase 2A-3: present with `source: "VISION"` and the provider identity for
+   * visual observations, which never carry a text `origin`. Visual candidates
+   * are always observation-only: no visual type maps to a governed fact key.
+   */
+  visualOrigin?: VisualOrigin;
 };
 
 export type ArtifactFactConflict = {
@@ -118,6 +124,7 @@ export function proposeArtifactCandidates(input: {
       limitations: [...observation.limitations],
       conflicts: observationConflicts,
       ...(observation.origin ? { origin: observation.origin } : {}),
+      ...(observation.visualOrigin ? { visualOrigin: observation.visualOrigin } : {}),
     };
   });
   return { candidates: mergeArtifactCandidates(input.existing ?? [], candidates), conflicts };

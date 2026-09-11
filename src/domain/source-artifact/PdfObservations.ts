@@ -33,7 +33,7 @@ export const OBSERVATION_TYPES = [
   "DESCRIPTION_OR_SPEC_TEXT",
 ] as const;
 
-export type ObservationType = (typeof OBSERVATION_TYPES)[number];
+export type ObservationType = (typeof OBSERVATION_TYPES)[number] | import("./ImageVisual").VisualObservationType;
 
 /**
  * Ordinal reliability of an observation: how explicit the source text was.
@@ -50,9 +50,13 @@ export const OBSERVATION_STATUS = "OBSERVED_NOT_APPROVED" as const;
 export type ObservationStatus = typeof OBSERVATION_STATUS;
 
 export type ObservationEvidence = {
-  /** Exact text fragment the observation was taken from, copied verbatim. */
+  /**
+   * Exact text fragment the observation was taken from, copied verbatim.
+   * For visual observations this is the provider's bounded literal description
+   * (not transcribed text), with `lineNumber: null` and an image locator.
+   */
   snippet: string;
-  /** Stable locator: "page 3, line 12" or "unattributed page, line 12". */
+  /** Stable locator: "page 3, line 12", "unattributed page, line 12", or "image[, region]". */
   locator: string;
   lineNumber: number | null;
 };
@@ -73,6 +77,12 @@ export type ObservedFact = {
    * engine identity for OCR-derived observations.
    */
   origin?: ObservationOrigin;
+  /**
+   * Which visual reading the observation was taken from. Present only for
+   * 2A-3 visual observations, which never carry a text `origin`, so OCR/native
+   * text and visual content stay separately attributed.
+   */
+  visualOrigin?: import("./ImageVisual").VisualOrigin;
 };
 
 export type PdfObservationResult = {
