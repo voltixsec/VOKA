@@ -3,12 +3,18 @@ export type ConversationMessageSource = "TEXT" | "VOICE" | "CHIP";
 export type FactProvenance = "USER_CORRECTION" | "USER_APPROVED" | "USER_EXPLICIT" | "VERIFIED_DOCUMENT" | "VERIFIED_DATABASE" | "TRUSTED_PROFILE" | "DETERMINISTIC_DERIVATION" | "RESEARCHED" | "AI_INFERRED" | "DEFAULT";
 export type FactValue = string | number | boolean;
 
+export type RuntimeMessageAttachment = { id: string | null; name: string; type: string };
+/** Internal turn intent. ATTACHMENT_ANALYSIS marks a turn where the user sent only an attachment; no user prose is synthesized. */
+export type ConversationTurnIntent = "USER_MESSAGE" | "ATTACHMENT_ANALYSIS";
+
 export type RuntimeMessage = {
   id: string;
   role: "USER" | "ASSISTANT";
   text: string;
   source: ConversationMessageSource | "AI";
   createdAt: string;
+  attachment?: RuntimeMessageAttachment | null;
+  intent?: ConversationTurnIntent;
 };
 
 export type ConfirmedFact = {
@@ -41,7 +47,7 @@ export type FlexibleRecommendation = { id: string; title: string; rationale: str
 export type ToolRequest = { kind: ConversationToolKind; query: string; attachmentId: string | null; purpose?: "JURISDICTION_RULE" | "PRODUCT_RESEARCH" };
 export type ToolCitation = { id?: string; sourceArtifactId?: string | null; sourceType: string; title: string; pageNumber?: number | null; sheet?: string | null; section?: string | null; lineLocator?: string | null; url?: string | null; publisher?: string | null; provenance: string; verificationState: string; confidence?: number | null; supportedClaimSummary: string };
 export type RequirementCandidate = { stableKey: string; description: string; quantity: number | null; unit: string | null; technicalRequirement?: string | null; quantityStatus: "EXTRACTED_REVIEW_REQUIRED" | "USER_PROVIDED" | "DETERMINISTIC" | "UNKNOWN"; reviewState: "NEEDS_REVIEW" | "CONFIRMED"; citationId?: string };
-export type ToolObservation = { kind: ConversationToolKind; purpose?: ToolRequest["purpose"]; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED" | "STORED_PENDING_VISION" | "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; citations?: ToolCitation[]; artifactId?: string; extractedText?: string; requirementCandidates?: RequirementCandidate[]; createdAt: string; candidateProducts?: CandidateProduct[]; engineeringRules?: import("@/src/application/agentic-commercial-intelligence").ResearchedEngineeringRule[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
+export type ToolObservation = { kind: ConversationToolKind; purpose?: ToolRequest["purpose"]; status: "COMPLETED" | "UNAVAILABLE" | "ATTACHMENT_REQUIRED" | "TEXT_NOT_EXTRACTABLE" | "STORED_PENDING_VISION" | "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE"; summary: string; evidence: Array<{ title: string; url: string; publisher: string }>; citations?: ToolCitation[]; artifactId?: string; extractedText?: string; requirementCandidates?: RequirementCandidate[]; createdAt: string; candidateProducts?: CandidateProduct[]; engineeringRules?: import("@/src/application/agentic-commercial-intelligence").ResearchedEngineeringRule[]; catalogResolution?: SystemConfigurationGraph["catalogResolution"] };
 
 export type PendingState = "CONFIRMED" | "PENDING";
 export type ProductSelectionState = "PENDING" | "GENERIC" | "SELECTED";
@@ -114,6 +120,12 @@ export type CandidateProduct = {
   capabilities?: import("@/src/application/agentic-commercial-intelligence").ProductCapabilityFacts | null;
 };
 
+/**
+ * Honest engineering resolution state. When no governed BOM exists the system is described as known/partial/
+ * review-required instead of inventing components.
+ */
+export type EngineeringResolutionState = "SYSTEM_KNOWN" | "REQUIREMENTS_PARTIAL" | "ENGINEERING_REVIEW_REQUIRED" | "BOM_RESOLVED";
+
 export type SystemConfigurationGraph = {
   system: { key: string; nameAr: string; nameEn: string } | null;
   requirements: Array<{ key: string; labelAr: string; labelEn: string; value: FactValue; provenance: FactProvenance }>;
@@ -124,7 +136,7 @@ export type SystemConfigurationGraph = {
   salesBom: SolutionBomLine[];
   candidateProducts: CandidateProduct[];
   catalogResolution: "NOT_REQUIRED" | "PENDING" | "CATALOG_MATCHED" | "CATALOG_INSUFFICIENT" | "RESEARCHED_SUGGESTIONS";
-  readiness: { draftReady: boolean; pendingBeforeDraftOpen: string[]; pendingBeforeFinalIssue: string[] };
+  readiness: { draftReady: boolean; pendingBeforeDraftOpen: string[]; pendingBeforeFinalIssue: string[]; engineeringState?: EngineeringResolutionState };
   engineeringRuleSnapshot?: import("@/src/domain/smart-system").EngineeringRuleSnapshot;
   compatibilityConflicts?: Array<{ code: string; message: string }>;
 };
@@ -255,6 +267,7 @@ export type ConversationBrainDecision = FlexibleTurnProposal | LegacyConversatio
 
 export type ConversationTurnInput = {
   state: ConversationRuntimeState | null;
+  /** May be empty only for an attachment-only turn (attachment with a server-issued id). */
   message: string;
   locale: ConversationLocale;
   source: ConversationMessageSource;

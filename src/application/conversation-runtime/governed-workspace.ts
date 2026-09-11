@@ -10,6 +10,7 @@ import type {
 import type { CommercialDefaultsProfile } from "./commercial-defaults";
 import { normalizeCommercialText } from "./commercial-defaults";
 import { projectCommercialBomLine } from "./commercial-projection";
+import { resolveEngineeringState } from "./solution-graph";
 import { applyApprovedProductSelection } from "./solution-graph";
 import { quotationScopeLabel } from "./scope-labels";
 
@@ -161,9 +162,13 @@ export function synchronizeWorkspace(
       defaultsScope: sameSystem ? prior?.terms.defaultsScope ?? null : null,
       defaultsLoaded: sameSystem ? prior?.terms.defaultsLoaded === true : false,
     },
-    readiness: commercialBom.some((line) => line.engineeringStatus === "CONFLICT")
-      ? { ...graph.readiness, pendingBeforeFinalIssue: [...new Set([...graph.readiness.pendingBeforeFinalIssue, "Compatibility review"])] }
-      : graph.readiness,
+    readiness: {
+      ...(commercialBom.some((line) => line.engineeringStatus === "CONFLICT")
+        ? { ...graph.readiness, pendingBeforeFinalIssue: [...new Set([...graph.readiness.pendingBeforeFinalIssue, "Compatibility review"])] }
+        : graph.readiness),
+      // The workspace is the governed authority: its engineering state reflects the effective (retained) BOM, never an assumed one.
+      engineeringState: resolveEngineeringState({ ...graph, engineeringBom }),
+    },
     updatedAt: now,
   };
 }

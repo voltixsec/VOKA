@@ -45,3 +45,21 @@ describe("ConversationToolRegistry staged product retrieval", () => {
     expect(rejected).toMatchObject({ status: "UNAVAILABLE", engineeringRules: [] });
   });
 });
+
+describe("ConversationToolRegistry artifact inspection routing", () => {
+  const graph = buildSystemConfigurationGraph({});
+  it("forwards tenant and conversation identity to the inspection port and never inspects without an artifact id", async () => {
+    const inspect = vi.fn(async () => ({ kind: "BOQ_INSPECTION" as const, status: "COMPLETED" as const, artifactId: "artifact-1", summary: "ok", evidence: [], citations: [], createdAt: now }));
+    const registry = new ConversationToolRegistry(null, null, () => now, { inspect });
+    const missing = await registry.execute({ request: { kind: "BOQ_INSPECTION", query: "read", attachmentId: null }, companyId: "tenant-1", locale: "en", graph, conversationRuntimeId: "runtime-1" });
+    expect(missing.status).toBe("ATTACHMENT_REQUIRED");
+    expect(inspect).not.toHaveBeenCalled();
+    await registry.execute({ request: { kind: "BOQ_INSPECTION", query: "read", attachmentId: "artifact-1" }, companyId: "tenant-1", locale: "en", graph, conversationRuntimeId: "runtime-1" });
+    expect(inspect).toHaveBeenCalledWith({ companyId: "tenant-1", artifactId: "artifact-1", kind: "BOQ_INSPECTION", query: "read", conversationRuntimeId: "runtime-1" });
+  });
+  it("reports UNAVAILABLE honestly when no inspection port is configured", async () => {
+    const registry = new ConversationToolRegistry(null, null, () => now);
+    const result = await registry.execute({ request: { kind: "DRAWING_INSPECTION", query: "count", attachmentId: "artifact-1" }, companyId: "tenant-1", locale: "en", graph });
+    expect(result).toMatchObject({ status: "UNAVAILABLE", artifactId: "artifact-1", citations: [] });
+  });
+});

@@ -98,10 +98,13 @@ export default function SalesAssistantPage(props: any) {
   };
 
   const advanceConversation = async (explicitMessage?: string, explicitSource = sourceRef.current) => {
-    const message = (explicitMessage ?? prompt).trim(); if (!message || turnInFlightRef.current) return;
+    const message = (explicitMessage ?? prompt).trim();
+    // Attachment-only turns are allowed: the attachment is uploaded first and the runtime receives an explicit attachment-analysis intent (no fake prose).
+    const attachmentOnly = !message && Boolean(attachment) && !explicitMessage;
+    if ((!message && !attachmentOnly) || turnInFlightRef.current) return;
     const generation = ++generationRef.current;
     turnInFlightRef.current = true;
-    setIsGenerating(true); setError(false); setHandoffError(null); setPendingUserMessage(message); setPendingResearch(isResearchRequest(message)); setActivityStage("UNDERSTANDING");
+    setIsGenerating(true); setError(false); setHandoffError(null); setPendingUserMessage(attachmentOnly ? `📎 ${attachment!.name}` : message); setPendingResearch(isResearchRequest(message)); setActivityStage("UNDERSTANDING");
     try {
       let attachmentPayload: { id: string; name: string; type: string; size: number } | null = null;
       if (attachment) {

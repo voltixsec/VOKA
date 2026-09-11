@@ -11,3 +11,4 @@ export * from "./governed-workspace";
 export * from "./commercial-defaults";
 export * from "./scope-labels";
 export * from "./StrictBrain";
+export * from "./attachment-turn";

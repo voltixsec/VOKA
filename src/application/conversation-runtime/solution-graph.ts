@@ -1,6 +1,6 @@
 import { SmartSystemBuilderService } from "@/src/application/smart-system/services/SmartSystemBuilderService";
 import { CCTV_ENGINEERING_DEFAULT, type EngineeringRuleProfile } from "@/src/domain/smart-system";
-import type { ConfirmedFact, FactValue, SolutionBomLine, SystemConfigurationGraph } from "./types";
+import type { ConfirmedFact, EngineeringResolutionState, FactValue, SolutionBomLine, SystemConfigurationGraph } from "./types";
 import { commercialAttributesFromComponent, projectCommercialBomLine } from "./commercial-projection";
 
 const EMPTY_GRAPH: SystemConfigurationGraph = {
@@ -266,8 +266,21 @@ export function buildSystemConfigurationGraph(facts: Record<string, ConfirmedFac
   }
   graph.readiness.pendingBeforeDraftOpen = [];
   graph.readiness.draftReady = true;
+  graph.readiness.engineeringState = resolveEngineeringState(graph);
   graph.readiness.pendingBeforeFinalIssue = [...graph.readiness.pendingBeforeFinalIssue, !facts["customer.name"] && "Customer", !facts["attention.name"] && "Attention", !facts["system.jurisdiction"] && "Jurisdiction", graph.salesBom.some((row) => row.quantityState === "PENDING") && "Quantity", graph.salesBom.some((row) => row.priceState === "PENDING") && "Pricing", graph.salesBom.some((row) => row.type === "PRODUCT" && !row.catalogItemId && row.provenance !== "RESEARCHED") && "Product selection", Boolean(graph.compatibilityConflicts?.length) && "Compatibility review", !facts["commercial.payment"] && "Payment terms"].filter((value): value is string => typeof value === "string");
   return constrainDocumentDraftReadiness(graph, facts);
+}
+
+/**
+ * Honest engineering resolution. A system without a governed BOM is never "complete": it is SYSTEM_KNOWN (identity
+ * only), REQUIREMENTS_PARTIAL (some explicit requirements) or ENGINEERING_REVIEW_REQUIRED (a safety-critical
+ * decision is open). Nothing here invents components.
+ */
+export function resolveEngineeringState(graph: Pick<SystemConfigurationGraph, "system" | "requirements" | "engineeringBom" | "unresolvedDecisions">): EngineeringResolutionState | undefined {
+  if (!graph.system) return undefined;
+  if (graph.engineeringBom.length) return "BOM_RESOLVED";
+  if (graph.unresolvedDecisions.some((decision) => decision.safetyCritical)) return "ENGINEERING_REVIEW_REQUIRED";
+  return graph.requirements.some((item) => item.key !== "system.identity") ? "REQUIREMENTS_PARTIAL" : "SYSTEM_KNOWN";
 }
 
 /** Draft policy is independent of product selection, engineering estimates and pricing. */

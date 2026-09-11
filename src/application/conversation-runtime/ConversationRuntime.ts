@@ -1,3 +1,4 @@
+import { attachmentTurnLabel, resolveTurnIntent } from "./attachment-turn";
 import { detectExplicitScopeType, detectExplicitSystemIdentity, detectExplicitVehicleElevatorFacts } from "./explicit-system-normalizer";
 import { asksForFreshProductResearch, asksForProductOptions, renderProductOptionsReply } from "./product-options";
 import { resolveProductSelection } from "./product-selection";
@@ -17,10 +18,17 @@ export class ConversationRuntime {
 
   async execute(input: ConversationTurnInput): Promise<ConversationRuntimeState> {
     const reconcile = input.action === "RECONCILE";
-    const message = input.message.trim();
-    if (!message || message.length > 4_000) throw new Error("CONVERSATION_RUNTIME_MESSAGE_INVALID");
+    const turn = resolveTurnIntent(input);
+    if (turn.kind === "INVALID") throw new Error(turn.code);
+    // An attachment-only turn keeps the user message empty: the intent travels as structured data, never as fake prose.
+    const attachmentOnly = turn.kind === "ATTACHMENT_ANALYSIS";
+    const message = turn.message;
     const base = this.normalizeState(input.state, input.locale);
-    const userMessage: RuntimeMessage = { id: this.id(), role: "USER", text: message, source: input.source, createdAt: this.now() };
+    const attachment = input.attachment ? { id: input.attachment.id ?? null, name: input.attachment.name, type: input.attachment.type } : null;
+    const userMessage: RuntimeMessage = {
+      id: this.id(), role: "USER", text: attachmentOnly ? attachmentTurnLabel(input.locale, input.attachment!.name) : message, source: input.source, createdAt: this.now(),
+      ...(attachment ? { attachment } : {}), ...(attachmentOnly ? { intent: "ATTACHMENT_ANALYSIS" as const } : {}),
+    };
     const candidateResolution = rejectPendingCandidateFacts(
       base.candidateFacts,
       message,
@@ -71,11 +79,10 @@ export class ConversationRuntime {
     const patchEvidence = reconcile
       ? recentMessages.filter((item) => item.role === "USER").map((item) => item.text).join("\n")
       : message;
-    const attachment = input.attachment ? { id: input.attachment.id ?? null, name: input.attachment.name, type: input.attachment.type } : null;
     const priorEngineeringRules = base.toolResults.flatMap((observation) => observation.engineeringRules ?? []);
     const initialGraph = buildSystemConfigurationGraph(turnFacts, { engineeringRules: priorEngineeringRules });
     let workingGraph = this.strict.project(this.strict.synchronize(base.workspace, turnFacts, initialGraph, this.now()), initialGraph);
-    const brainInput = (toolResults: typeof base.toolResults) => ({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, workspace: this.strict.synchronize(base.workspace, turnFacts, workingGraph, this.now()), compactMemory: base.compactMemory, toolResults, attachmentAvailable: Boolean(input.attachment?.id), attachment, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] as ConversationToolKind[] });
+    const brainInput = (toolResults: typeof base.toolResults) => ({ locale: input.locale, currentMessage: message, recentMessages, confirmedFacts: turnFacts, workspace: this.strict.synchronize(base.workspace, turnFacts, workingGraph, this.now()), compactMemory: base.compactMemory, toolResults, attachmentAvailable: Boolean(input.attachment?.id), attachment, turnIntent: attachmentOnly ? "ATTACHMENT_ANALYSIS" as const : "USER_MESSAGE" as const, availableTools: ["ENGINEERING_KNOWLEDGE", "RESEARCH", "CATALOG_LOOKUP", "PRICING_LOOKUP", "CUSTOMER_LOOKUP", "ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"] as ConversationToolKind[] });
     let decision = this.strict.normalizeProposal(await this.brain.decide(brainInput([])));
     const requiresProductRetrieval = heuristicProductRetrieval || decision.researchRequests.some((request) => request.kind === "CATALOG_LOOKUP");
     const proposals: FlexibleTurnProposal[] = [decision];
@@ -98,7 +105,10 @@ export class ConversationRuntime {
         && workingGraph.engineeringCalculations.some((calculation) => calculation.status === "ESTIMATED"),
       );
       let request: ToolRequest | null = decision.researchRequests[0] ?? null;
-      if (jurisdictionRuleNeeded && !jurisdictionAttempted) {
+      if (attachmentOnly && iteration === 0) {
+        // Explicit internal attachment-analysis intent: the bounded inspection runs deterministically, whatever the brain proposed.
+        request = turn.inspection;
+      } else if (jurisdictionRuleNeeded && !jurisdictionAttempted) {
         const jurisdiction = workingGraph.requirements.find((item) => item.key === "system.jurisdiction")?.value;
         request = { kind: "RESEARCH", purpose: "JURISDICTION_RULE", query: `Authoritative jurisdiction engineering rules for ${workingGraph.system?.nameEn} in ${jurisdiction}. Return only explicit rule values supported by government or standards authority evidence.`, attachmentId: null };
       } else if (requiresProductRetrieval && !catalogObservation) {
@@ -123,7 +133,7 @@ export class ConversationRuntime {
       const requestKey = request.kind + ":" + (request.purpose ?? "") + ":" + request.query + ":" + (request.attachmentId ?? "");
       if (completedRequests.has(requestKey)) break;
       completedRequests.add(requestKey);
-      const rawObservation = await this.tools.execute({ request, companyId: input.companyId, locale: input.locale, graph: workingGraph });
+      const rawObservation = await this.tools.execute({ request, companyId: input.companyId, locale: input.locale, graph: workingGraph, conversationRuntimeId: base.runtimeId });
       const observation = { ...rawObservation, purpose: rawObservation.purpose ?? request.purpose };
       observations.push(observation);
       turnObservations.push(observation);
@@ -217,15 +227,20 @@ export class ConversationRuntime {
       await this.requirements.synchronize({
         companyId: input.companyId,
         userId: input.userId ?? null,
+        conversationRuntimeId: base.runtimeId,
         facts: reduced.confirmed,
         graph: solutionGraph,
         citations: turnObservations.flatMap((observation) => observation.citations ?? []),
       });
     }
+    if (attachmentOnly) {
+      const inspection = turnObservations.find((observation) => observation.kind === turn.inspection.kind);
+      decision = { ...decision, ...describeAttachmentOutcome(inspection, input.locale, input.attachment!.name), blockingQuestion: null, transition: "NONE" };
+    }
     const missingCustomer = !workspace.commercialContext.customer;
     const missingAttention = !workspace.commercialContext.attention;
     const alreadyAsksUsefulQuestion = /[?؟]/u.test(decision.responseContent);
-    if (solutionGraph.system && (missingCustomer || missingAttention) && !decision.blockingQuestion && !alreadyAsksUsefulQuestion && !researchAttempted && !productRetrievalAttempted && decision.responseMode !== "WARNING") {
+    if (!attachmentOnly && solutionGraph.system && (missingCustomer || missingAttention) && !decision.blockingQuestion && !alreadyAsksUsefulQuestion && !researchAttempted && !productRetrievalAttempted && decision.responseMode !== "WARNING") {
       const question = input.locale === "ar"
         ? missingCustomer && missingAttention ? "اسم العميل والعرض لعناية مين؟" : missingCustomer ? "اسم العميل إيه؟" : "العرض لعناية مين؟"
         : missingCustomer && missingAttention ? "What is the customer name, and who should the quotation be addressed to?" : missingCustomer ? "What is the customer name?" : "Who should the quotation be addressed to?";
@@ -262,6 +277,31 @@ export class ConversationRuntime {
     }
     const graph = emptySystemConfigurationGraph();
     return { runtimeId: this.id(), version: 1, locale, messages: [], confirmedFacts: {}, candidateFacts: [], unresolvedImportantQuestions: [], toolResults: [], solutionReadiness: "EXPLORING", transitionState: "EXPLORING", compactMemory: "", suggestedReplies: [], handoff: null, handoffToken: null, solutionGraph: graph, workspace: this.strict.synchronize(undefined, {}, graph, this.now()) };
+  }
+}
+
+/**
+ * Attachment-only reply is derived from the actual inspection observation; status names never overclaim.
+ * Wording deliberately avoids analysis/approval verbs so the truthfulness guards do not need to rewrite it.
+ */
+function describeAttachmentOutcome(observation: ConversationRuntimeState["toolResults"][number] | undefined, locale: "ar" | "en", name: string): Pick<FlexibleTurnProposal, "responseMode" | "responseContent"> {
+  const ar = locale === "ar";
+  if (!observation) return { responseMode: "WARNING", responseContent: ar ? `استلمت المرفق ${name} لكن لم تتم معالجته بعد.` : `The attachment ${name} was received but has not been processed yet.` };
+  switch (observation.status) {
+    case "COMPLETED": {
+      const count = observation.requirementCandidates?.length ?? 0;
+      return { responseMode: "RESULT", responseContent: ar
+        ? `قرأت النص القابل للاستخراج آلياً من ${name}${count ? ` ووجدت ${count} بند(ود) قابلة للمراجعة، وكل الكميات تحتاج مراجعتك` : ""}. ما الذي تريد عمله بهذا الملف؟`
+        : `I read the machine-extractable text of ${name}${count ? ` and found ${count} reviewable BOQ candidate(s); every quantity still needs your review` : ""}. What would you like to do with this file?` };
+    }
+    case "TEXT_NOT_EXTRACTABLE":
+      return { responseMode: "WARNING", responseContent: ar ? `استلمت ${name} واحتفظت به، لكنه لا يحتوي نصاً قابلاً للاستخراج آلياً (ممسوح ضوئياً أو صورة)، فلم تتم معالجة محتواه.` : `${name} was received and retained, but it contains no machine-extractable text (scanned or image-only), so nothing from its content was processed.` };
+    case "STORED_PENDING_VISION":
+      return { responseMode: "WARNING", responseContent: ar ? `استلمت الصورة ${name} واحتفظت بها، لكن لم يتم تشغيل أي معالجة بصرية لها.` : `The image ${name} was received and retained, but no vision processing was run.` };
+    case "DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE":
+      return { responseMode: "WARNING", responseContent: ar ? `استلمت ${name} واحتفظت به؛ التفسير البصري للرسومات غير متاح.` : `${name} was received and retained; visual drawing interpretation is not available.` };
+    default:
+      return { responseMode: "WARNING", responseContent: ar ? `استلمت ${name} لكن تعذر معالجة محتواه.` : `${name} was received, but its content could not be processed.` };
   }
 }
 

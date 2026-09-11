@@ -16,6 +16,7 @@ const ALLOWED_FACTS = new Set([
   "ceramic.levelingThicknessCm",
   "ceramic.packageAreaM2",
 ]);
+const USER_AUTHORED = new Set<FactProvenance>(["USER_EXPLICIT", "USER_CORRECTION", "USER_APPROVED"]);
 const PRECEDENCE: Record<FactProvenance, number> = { DEFAULT: 0, AI_INFERRED: 1, RESEARCHED: 2, DETERMINISTIC_DERIVATION: 3, TRUSTED_PROFILE: 4, VERIFIED_DATABASE: 5, VERIFIED_DOCUMENT: 6, USER_EXPLICIT: 7, USER_APPROVED: 8, USER_CORRECTION: 9 };
 const NON_VALUES = /(?:مش\s*عارف|ما\s*عرفش|اختارلي|إيه\s*(?:رأيك|الأنسب|المتاح)|ساعدني|i\s+don'?t\s+know|what\s+do\s+you\s+recommend|recommend|help\s+me)/iu;
 
@@ -75,6 +76,21 @@ export function reduceFactProposals(
     };
 
     const existing = confirmed[proposal.key];
+
+    // A machine counter-proposal made in the same turn as the user's verbatim statement of that fact is not a
+    // recommendation the user has seen; it must never park as pending and later ride a generic approval over
+    // the user's own words. Later-turn proposals still follow the normal approval flow.
+    if (
+      status === "PENDING_APPROVAL" &&
+      existing &&
+      USER_AUTHORED.has(existing.provenance) &&
+      existing.evidence.trim() &&
+      normalized(userMessage).includes(normalized(existing.evidence)) &&
+      String(existing.value) !== String(proposal.value)
+    ) {
+      rejectionReason = "CONTRADICTS_VERBATIM_USER_STATEMENT";
+      status = "REJECTED";
+    }
 
     if (
       status === "COMMITTED" &&

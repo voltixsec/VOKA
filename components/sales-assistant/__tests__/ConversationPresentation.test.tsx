@@ -23,6 +23,17 @@ describe("conversation presentation", () => {
     expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeEnabled();
     expect(screen.queryByText("Required before opening Draft: Customer")).toBeNull();
   });
+  it("renders the Vehicle Elevator workspace honestly: known facts, no BOM sections, explicit engineering review state, Draft allowed", () => {
+    const graph = buildSystemConfigurationGraph({ "system.identity": fact("system.identity", "مصعد سيارات"), "system.quantity": fact("system.quantity", 1), "system.numberOfStops": fact("system.numberOfStops", 6) });
+    render(<SolutionWorkspace graph={graph} isArabic={false} onOpenDraft={vi.fn()} draftLoading={false} />);
+    expect(screen.getByRole("heading", { name: "Vehicle elevator" })).toBeInTheDocument();
+    expect(screen.queryByText("Engineering / procurement BOM")).toBeNull();
+    expect(screen.queryByText("Sales BOM")).toBeNull();
+    expect(screen.getByTestId("engineering-state")).toHaveAttribute("data-engineering-state", "ENGINEERING_REVIEW_REQUIRED");
+    expect(screen.getByText("Engineering components and elevator drawing")).toBeInTheDocument();
+    expect(screen.getByText(/Pending commercial work \(does not block Draft\):/)).toHaveTextContent("Engineering components");
+    expect(screen.getByRole("button", { name: "Prepare quotation" })).toBeEnabled();
+  });
   it("localizes raw scope enums at the compact-summary boundary", () => {
     render(<ContextSummaryCard isArabic={false} result={{ summary: [{ key: "scope.type", labelAr: "النطاق", labelEn: "Scope", value: "SUPPLY_AND_INSTALLATION" }], stillNeeded: [], evidence: [], commercial: { draftReady: false } }} />);
     expect(screen.getByText("Supply and Installation")).toBeTruthy();

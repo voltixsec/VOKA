@@ -9,7 +9,7 @@ export class ConversationToolRegistry implements ConversationToolPort {
     if (["ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"].includes(input.request.kind) && !input.request.attachmentId) return { kind: input.request.kind, status: "ATTACHMENT_REQUIRED", summary: "The referenced evidence must be attached before it can be inspected.", evidence: [], citations: [], createdAt: this.now() };
     if (["ATTACHMENT_INSPECTION", "DRAWING_INSPECTION", "BOQ_INSPECTION"].includes(input.request.kind)) {
       if (!this.inspection) return { kind: input.request.kind, status: "UNAVAILABLE", artifactId: input.request.attachmentId ?? undefined, summary: "Source artifact inspection is not configured.", evidence: [], citations: [], createdAt: this.now() };
-      return this.inspection.inspect({ companyId: input.companyId, artifactId: input.request.attachmentId!, kind: input.request.kind as "ATTACHMENT_INSPECTION" | "DRAWING_INSPECTION" | "BOQ_INSPECTION", query: input.request.query });
+      return this.inspection.inspect({ companyId: input.companyId, artifactId: input.request.attachmentId!, kind: input.request.kind as "ATTACHMENT_INSPECTION" | "DRAWING_INSPECTION" | "BOQ_INSPECTION", query: input.request.query, conversationRuntimeId: input.conversationRuntimeId ?? null });
     }
     if (input.request.kind === "CATALOG_LOOKUP" && this.candidates) {
       const resolved = await this.candidates.resolve({ graph: input.graph, companyId: input.companyId, locale: input.locale, mode: "CATALOG_ONLY", query: input.request.query, requestedCount: requestedCount(input.request.query) });

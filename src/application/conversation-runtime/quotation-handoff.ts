@@ -63,11 +63,25 @@ function localizedNotes(handoff: CommercialSolutionHandoff, locale: "ar" | "en")
     const value = normalizeCommercialText(raw);
     return value ? [label + ": " + value] : [];
   })) : [];
-  const citedSourceClaims = handoff.toolEvidence.flatMap((observation) => (observation.citations ?? []).map((citation) => {
+  const citedSourceClaims = customerFacingCitations(handoff).map((citation) => {
     const locator = citation.pageNumber ? `, ${locale === "ar" ? "صفحة" : "page"} ${citation.pageNumber}` : "";
     return `${locale === "ar" ? "مصدر" : "Source"}: ${citation.title}${locator} — ${citation.supportedClaimSummary}`;
-  }));
+  });
   return normalizeCommercialText([...new Set([...meaningful, ...structured, ...citedSourceClaims])].join("\n"));
+}
+
+/** Citation verification states whose claims may appear in customer-facing quotation text. */
+export const CUSTOMER_FACING_CITATION_STATES: ReadonlySet<string> = new Set(["USER_VERIFIED", "VERIFIED_DOCUMENT", "VERIFIED_DATABASE", "VERIFIED_AUTHORITY"]);
+
+/**
+ * Evidence safety: only citations in a trust/review state that allows customer-facing use are copied into notes.
+ * Received-but-unverified claims (e.g. RECEIVED_NOT_USER_VERIFIED) stay internal/review-only, and only evidence
+ * from completed tool observations is considered.
+ */
+export function customerFacingCitations(handoff: Pick<CommercialSolutionHandoff, "toolEvidence">) {
+  return handoff.toolEvidence
+    .filter((observation) => observation.status === "COMPLETED")
+    .flatMap((observation) => (observation.citations ?? []).filter((citation) => CUSTOMER_FACING_CITATION_STATES.has(citation.verificationState) && citation.supportedClaimSummary.trim()));
 }
 
 function localizedSubject(system: string, scopeType: QuotationScopeType | null, locale: "ar" | "en") {

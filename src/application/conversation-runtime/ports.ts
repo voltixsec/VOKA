@@ -11,12 +11,14 @@ export interface ConversationBrainPort {
     toolResults: ToolObservation[];
     attachmentAvailable: boolean;
     attachment: { id: string | null; name: string; type: string } | null;
+    /** ATTACHMENT_ANALYSIS: the user sent only an attachment; currentMessage is empty and no user prose was synthesized. */
+    turnIntent?: import("./types").ConversationTurnIntent;
     availableTools: ToolRequest["kind"][];
   }): Promise<ConversationBrainDecision>;
 }
 
 export interface ConversationToolPort {
-  execute(input: { request: ToolRequest; companyId: string; locale: ConversationLocale; graph: SystemConfigurationGraph }): Promise<ToolObservation>;
+  execute(input: { request: ToolRequest; companyId: string; locale: ConversationLocale; graph: SystemConfigurationGraph; conversationRuntimeId?: string | null }): Promise<ToolObservation>;
 }
 
 export interface SolutionCandidateResolverPort {

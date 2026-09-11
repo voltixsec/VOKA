@@ -1,5 +1,5 @@
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
-import type { ConversationRuntimeState } from "@/src/application/conversation-runtime";
+import { MAX_TURN_MESSAGE_LENGTH, resolveTurnIntent, type ConversationRuntimeState } from "@/src/application/conversation-runtime";
 import { createConversationRuntime } from "@/src/infrastructure/ai/createConversationRuntime";
 import { signCommercialHandoff } from "@/src/infrastructure/ai/CommercialHandoffToken";
 import { signConversationState, verifyConversationState } from "@/src/infrastructure/ai/ConversationStateToken";
@@ -10,7 +10,9 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
   const message = action === "RECONCILE"
     ? "Reconcile the full conversation into the governed workspace using the user's latest corrections and approvals."
     : typeof body.message === "string" ? body.message.trim() : "";
-  if (!message || message.length > 4_000) throw ApiError.badRequest("CONVERSATION_RUNTIME_MESSAGE_INVALID", "message must contain 1 to 4000 characters.");
+  const attachment = parseAttachment(body.attachment);
+  // A turn is either user text (optionally with an attachment) or an explicit attachment-only turn; never an empty turn.
+  if (resolveTurnIntent({ message, attachment, action }).kind === "INVALID") throw ApiError.badRequest("CONVERSATION_RUNTIME_MESSAGE_INVALID", `message must contain 1 to ${MAX_TURN_MESSAGE_LENGTH} characters unless a server-issued attachment is provided.`);
   if (body.locale !== "ar" && body.locale !== "en") throw ApiError.badRequest("CONVERSATION_RUNTIME_LOCALE_INVALID", "locale must be ar or en.");
   if (body.source !== "TEXT" && body.source !== "VOICE" && body.source !== "CHIP") throw ApiError.badRequest("CONVERSATION_RUNTIME_SOURCE_INVALID", "source is invalid.");
   if (action === "RECONCILE" && !body.state) throw ApiError.badRequest("CONVERSATION_STATE_REQUIRED", "A conversation state is required for reconciliation.");
@@ -23,8 +25,19 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     try { priorState = await verifyConversationState(supplied.stateToken, company.companyId); }
     catch { throw ApiError.forbidden("CONVERSATION_STATE_INVALID", "The conversation state is invalid or belongs to another company."); }
   }
-  const state = await runtime.execute({ state: priorState, message, locale: body.locale, source: body.source, attachment: body.attachment as { id?: string; name: string; type: string; size: number } | null, companyId: company.companyId, userId: _auth.user.id, action });
+  const state = await runtime.execute({ state: priorState, message, locale: body.locale, source: body.source, attachment, companyId: company.companyId, userId: _auth.user.id, action });
   if (state.handoff) state.handoffToken = await signCommercialHandoff(state.handoff, company.companyId);
   state.stateToken = await signConversationState(state, company.companyId);
   return apiSuccess(state, { headers: { "Cache-Control": "private, no-store" } });
 });
+
+/** Attachment reference from the client: only shape is trusted here; ownership is re-verified when the artifact is inspected. */
+function parseAttachment(value: unknown): { id?: string; name: string; type: string; size: number } | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.name !== "string" || typeof raw.type !== "string" || !raw.name.trim() || raw.name.length > 255 || raw.type.length > 100) throw ApiError.badRequest("CONVERSATION_RUNTIME_ATTACHMENT_INVALID", "attachment is invalid.");
+  const id = typeof raw.id === "string" && /^[A-Za-z0-9_-]{1,64}$/u.test(raw.id) ? raw.id : undefined;
+  if (raw.id !== undefined && raw.id !== null && !id) throw ApiError.badRequest("CONVERSATION_RUNTIME_ATTACHMENT_INVALID", "attachment id is invalid.");
+  const size = typeof raw.size === "number" && Number.isFinite(raw.size) && raw.size >= 0 ? raw.size : 0;
+  return { ...(id ? { id } : {}), name: raw.name.trim(), type: raw.type, size };
+}

@@ -52,6 +52,22 @@ describe("Commercial handoff → authoritative quotation draft", () => {
     expect(draft?.notesEn).toBeNull();
   });
 
+  it("never copies unverified citation claims into customer-facing notes; only trust-state-allowed evidence may appear", () => {
+    const citation = (id: string, verificationState: string, supportedClaimSummary: string) => ({ id, sourceArtifactId: "artifact-1", sourceType: "SOURCE_ARTIFACT_TEXT", title: "tender.pdf", pageNumber: 2, provenance: "FILE_CONTENT", verificationState, supportedClaimSummary });
+    const defaults = { currencyCode: "KWD", termsAr: null, termsEn: "Approved company terms", payment: null, delivery: null, warranty: null, validity: null };
+    const toolEvidence = [
+      { kind: "BOQ_INSPECTION" as const, status: "COMPLETED" as const, summary: "read", evidence: [], createdAt: "2026-08-31T00:00:00.000Z", citations: [citation("c-unverified", "RECEIVED_NOT_USER_VERIFIED", "Unverified extracted claim about 9 stops"), citation("c-verified", "USER_VERIFIED", "Six stops confirmed by the customer drawing")] },
+      { kind: "ATTACHMENT_INSPECTION" as const, status: "UNAVAILABLE" as const, summary: "not verified", evidence: [], createdAt: "2026-08-31T00:00:00.000Z", citations: [citation("c-failed", "USER_VERIFIED", "Claim from a failed inspection")] },
+    ];
+    const draft = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: handoff({ toolEvidence }), customer: null, defaults, locale: "en" });
+    expect(draft?.notesEn).toBe("Source: tender.pdf, page 2 — Six stops confirmed by the customer drawing");
+    expect(draft?.notesEn).not.toContain("Unverified extracted claim");
+    expect(draft?.notesEn).not.toContain("failed inspection");
+    expect(JSON.stringify(draft)).not.toContain("9 stops");
+    const onlyUnverified = adaptCommercialHandoffToQuotationDraft({ companyId: "company-1", handoff: handoff({ toolEvidence: [toolEvidence[0]!].map((observation) => ({ ...observation, citations: [citation("c-unverified", "RECEIVED_NOT_USER_VERIFIED", "Unverified")] })) }), customer: null, defaults, locale: "ar" });
+    expect(onlyUnverified?.notesAr).toBeNull();
+  });
+
   it("reuses company currency and approved scope terms", async () => {
     const gateway = port();
     await new CreateQuotationFromCommercialHandoff(gateway).execute({ companyId: "company-1", handoff: handoff(), locale: "ar" });
