@@ -47,4 +47,20 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
 }
 
 export type ArtifactPage = { pageNumber: number; text: string; characterCount: number };
-export type ExtractedPdf = { text: string; pages: ArtifactPage[] };
+/**
+ * `pageAttribution` states how honestly text can be located:
+ * NONE = no machine-readable text; SINGLE_PAGE / EXPLICIT_PAGE_BREAKS = page numbers are known;
+ * UNDETERMINED = text exists but cannot be attributed to a page (page references must stay null).
+ */
+export type PdfPageAttribution = "NONE" | "SINGLE_PAGE" | "EXPLICIT_PAGE_BREAKS" | "UNDETERMINED";
+export type ExtractedPdf = { text: string; pages: ArtifactPage[]; pageCount: number | null; pageAttribution: PdfPageAttribution };
+
+/** Processing state derived only from what the bounded extractor genuinely produced. */
+export function pdfProcessingState(extracted: Pick<ExtractedPdf, "text">): "TEXT_EXTRACTED" | "TEXT_NOT_EXTRACTABLE" {
+  return extracted.text.trim().length > 0 ? "TEXT_EXTRACTED" : "TEXT_NOT_EXTRACTABLE";
+}
+
+/** Derives the whole-document citation locator: `null` page unless the page is genuinely known. */
+export function citationPageNumber(extracted: Pick<ExtractedPdf, "pages" | "pageAttribution">): number | null {
+  return extracted.pageAttribution === "SINGLE_PAGE" && extracted.pages.length === 1 ? 1 : null;
+}

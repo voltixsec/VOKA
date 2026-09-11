@@ -39,18 +39,33 @@ function decodedStreams(bytes: Buffer) {
   return chunks;
 }
 
+/**
+ * Bounded, honest PDF text extraction.
+ *
+ * - `pageCount` is the number of `/Type /Page` objects that could be counted, or `null` when undetermined.
+ * - `pages` only contains pages whose text location is actually known: either the document declared explicit
+ *   page breaks (`\f`) or it has exactly one page. Text from a multi-page document without explicit breaks is
+ *   returned in `text` with `pages: []` and `pageAttribution: "UNDETERMINED"` — it is never attributed to page 1.
+ * - An empty `text` means no machine-readable text was found (scanned/image-only PDF); nothing is fabricated.
+ */
 export function extractPdfText(bytes: Uint8Array): ExtractedPdf {
   const buffer = Buffer.from(bytes);
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("PDF_CONTENT_INVALID");
   const raw = buffer.toString("latin1");
   const streams = decodedStreams(buffer);
   const allText = [...streams.map(operatorText), ...(streams.length ? [] : [operatorText(raw)])].filter(Boolean).join("\n").replace(/[ \t]+/gu, " ").replace(/\n{2,}/gu, "\n").trim();
-  const explicitPages = allText.split("\f").map((text) => text.trim()).filter(Boolean);
-  const pageCount = Math.max(1, (raw.match(/\/Type\s*\/Page(?!s)/gu) ?? []).length);
-  const pageTexts = explicitPages.length > 1 ? explicitPages : [allText];
-  const pages = Array.from({ length: Math.max(pageCount, pageTexts.length) }, (_, index) => {
-    const text = pageTexts[index] ?? "";
-    return { pageNumber: index + 1, text, characterCount: text.length };
-  });
-  return { text: allText, pages };
+  const countedPages = (raw.match(/\/Type\s*\/Page(?!s)/gu) ?? []).length;
+  const pageCount = countedPages > 0 ? countedPages : null;
+  if (!allText) return { text: "", pages: [], pageCount, pageAttribution: "NONE" };
+  const explicitPages = allText.split("\f").map((text) => text.trim());
+  const pages: ArtifactPage[] = [];
+  if (explicitPages.length > 1) {
+    explicitPages.forEach((text, index) => { if (text) pages.push({ pageNumber: index + 1, text, characterCount: text.length }); });
+    return { text: allText, pages, pageCount, pageAttribution: "EXPLICIT_PAGE_BREAKS" };
+  }
+  if (pageCount === 1) {
+    pages.push({ pageNumber: 1, text: allText, characterCount: allText.length });
+    return { text: allText, pages, pageCount, pageAttribution: "SINGLE_PAGE" };
+  }
+  return { text: allText, pages: [], pageCount, pageAttribution: "UNDETERMINED" };
 }

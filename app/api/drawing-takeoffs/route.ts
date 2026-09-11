@@ -25,7 +25,16 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     }
     const sourceSha256 = artifact.contentSha256;
     const existing = await prisma.drawingTakeoffSession.findUnique({ where: { companyId_sourceSha256_userIntent: { companyId: company.companyId, sourceSha256, userIntent: input.userIntent } }, include: { lines: true } });
-    if (existing) return apiSuccess({ session: serializeSession(existing), idempotent: true }, { headers: { "Cache-Control": "private, no-store" } });
+    if (existing) {
+      // Content-identity linkage only: the artifact is tenant-owned and its SHA-256 equals the session's retained hash.
+      // Never associate by filename, and never overwrite a link to a different artifact; ambiguity stays unlinked.
+      const linkable = existing.sourceArtifactId === null && artifact.companyId === company.companyId && artifact.contentSha256 === existing.sourceSha256;
+      const linked = linkable
+        ? await prisma.drawingTakeoffSession.updateMany({ where: { id: existing.id, companyId: company.companyId, sourceSha256: artifact.contentSha256, sourceArtifactId: null }, data: { sourceArtifactId: artifact.id } })
+        : { count: 0 };
+      const session = linked.count === 1 ? { ...existing, sourceArtifactId: artifact.id } : existing;
+      return apiSuccess({ session: serializeSession(session), idempotent: true }, { headers: { "Cache-Control": "private, no-store" } });
+    }
     const session = await prisma.drawingTakeoffSession.create({ data: { companyId: company.companyId, createdByUserId: auth.user.id, sourceArtifactId: artifact.id, ...input, sourceSha256 }, include: { lines: true } });
     return apiSuccess({ session: serializeSession(session), idempotent: false, analysis: { status: "EXTERNAL_PENDING", message: "Automated drawing extraction is not configured. Add reviewable observations without inventing quantities." } }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { policyError(error); }

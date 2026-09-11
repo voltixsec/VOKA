@@ -30,6 +30,7 @@ export const POST = withCompanyAuth(["OWNER", "ADMIN", "SALES"], async (request,
     if (!(file instanceof File)) throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_REQUIRED", "A file attachment is required.");
     const runtimeIdValue = form.get("conversationRuntimeId");
     const result = await ingestSourceArtifact({ companyId: company.companyId, userId: auth.user.id, file, context: form.get("context"), conversationRuntimeId: typeof runtimeIdValue === "string" ? runtimeIdValue : null });
-    return apiSuccess({ artifact: safeArtifact(result.artifact as unknown as Record<string, unknown>, result.artifact.citations as unknown[]), idempotent: result.idempotent }, { status: result.idempotent ? 200 : 201, headers: { "Cache-Control": "private, no-store" } });
+    const { citations, ...artifact } = result.artifact;
+    return apiSuccess({ artifact: safeArtifact(artifact, citations), idempotent: result.idempotent }, { status: result.idempotent ? 200 : 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { fail(error); }
 });

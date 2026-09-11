@@ -13,7 +13,23 @@ vi.mock("@/lib/api", () => ({
 
 import { POST } from "../route";
 
+const artifact = (overrides: Record<string, unknown> = {}) => ({ id: "artifact-1", originalFilename: "boq.pdf", mimeType: "application/pdf", sizeBytes: 7, contentSha256: "hash", kind: "PDF", context: "SALES_ASSISTANT", processingState: "TEXT_EXTRACTED", conversationRuntimeId: null, createdAt: new Date("2026-09-10T00:00:00.000Z"), extractedText: "BOQ", storageRef: "ha/hash", extractedPages: null, citations: [], ...overrides });
+
 describe("source artifact intake", () => {
+  it("returns the tenant's existing artifact idempotently and never exposes storage or raw extraction internals", async () => {
+    ingest.mockResolvedValueOnce({ idempotent: true, artifact: artifact({ processingState: "TEXT_NOT_EXTRACTABLE", extractedText: null, citations: [{ id: "c1", pageNumber: null }] }) });
+    const form = new FormData();
+    form.set("file", new File(["%PDF-1.4"], "boq.pdf", { type: "application/pdf" }));
+    form.set("conversationRuntimeId", "runtime-A");
+    const response = await POST(new Request("https://voka.local/api/source-artifacts", { method: "POST", body: form }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data).toMatchObject({ idempotent: true, artifact: { id: "artifact-1", processingState: "TEXT_NOT_EXTRACTABLE", hasExtractedText: false, citations: [{ id: "c1", pageNumber: null }] } });
+    expect(body.data.artifact).not.toHaveProperty("storageRef");
+    expect(body.data.artifact).not.toHaveProperty("extractedText");
+    expect(ingest).toHaveBeenCalledWith(expect.objectContaining({ companyId: "tenant-1", conversationRuntimeId: "runtime-A" }));
+  });
+
   it("posts a real multipart File and binds ingestion to the authenticated tenant", async () => {
     ingest.mockResolvedValueOnce({ idempotent: false, artifact: { id: "artifact-1", originalFilename: "boq.pdf", mimeType: "application/pdf", sizeBytes: 7, contentSha256: "hash", kind: "PDF", context: "SALES_ASSISTANT", processingState: "TEXT_EXTRACTED", conversationRuntimeId: null, createdAt: new Date(), extractedText: "BOQ", citations: [] } });
     const form = new FormData();

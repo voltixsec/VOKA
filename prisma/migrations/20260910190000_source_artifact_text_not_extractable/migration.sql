@@ -1,0 +1,1 @@
+ALTER TYPE "SourceArtifactProcessingState" ADD VALUE 'TEXT_NOT_EXTRACTABLE';
