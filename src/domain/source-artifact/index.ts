@@ -167,3 +167,7 @@ export * from "./PdfObservations";
 export * from "./PdfOcr";
 export * from "./ImageVisual";
 export * from "./DrawingSemantics";
+// Phase 2A-5: drawing geometry / printed dimension / symbol-legend evidence.
+export * from "./DrawingGeometry";
+export * from "./DrawingDimensions";
+export * from "./DrawingSymbols";

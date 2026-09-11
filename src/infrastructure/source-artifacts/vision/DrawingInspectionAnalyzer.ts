@@ -12,6 +12,8 @@ import {
   type ArtifactPage,
   type DrawingGateIntent,
   type ObservedFact,
+  type PageAttribution,
+  type VisualObservationDraft,
 } from "@/src/domain/source-artifact";
 import { pdfJsPageRasterizer, type PageRasterizerPort, type RasterizedPage } from "../ocr/PageRasterizer";
 
@@ -87,6 +89,22 @@ export function resolveDrawingVisionLimits(env: DrawingVisionEnv = process.env):
  */
 export type DrawingVisionOutcome = "RAN" | "NO_QUALIFIED_PAGES" | "NOT_CONFIGURED" | "PROVIDER_UNAVAILABLE";
 
+/**
+ * Phase 2A-5: the raw bounded drafts a provider returned for one page, kept
+ * verbatim so the geometry pass can derive dimension, legend, and symbol
+ * evidence from the SAME reading instead of calling vision a second time.
+ * They are provider output and stay untrusted until bounded downstream.
+ */
+export type DrawingVisionDraftPage = {
+  pageNumber: number | null;
+  attribution: PageAttribution;
+  providerId: string;
+  drafts: VisualObservationDraft[];
+};
+
+/** Upper bound of raw drafts retained per page for downstream 2A-5 evidence. */
+export const MAX_DRAWING_DRAFTS_PER_PAGE = 40;
+
 export type DrawingPassSummary = {
   attempted: boolean;
   used: boolean;
@@ -96,6 +114,8 @@ export type DrawingPassSummary = {
   usedPages: (number | null)[];
   providers: string[];
   limitations: string[];
+  /** Phase 2A-5: raw provider drafts per page, for the geometry pass. */
+  drafts: DrawingVisionDraftPage[];
 };
 
 export type DrawingAugmentedAnalysis = {
@@ -140,6 +160,7 @@ export async function analyzeDrawingPages(
     usedPages: [] as (number | null)[],
     providers: [] as string[],
     limitations: [] as string[],
+    drafts: [] as DrawingVisionDraftPage[],
   } satisfies DrawingPassSummary;
   const { pages } = analyzed.inspection;
   const pageClassifications = analyzed.classification?.pages ?? [];
@@ -228,6 +249,9 @@ export async function analyzeDrawingPages(
   const requestedPages: (number | null)[] = [];
   const usedPages: (number | null)[] = [];
   const providers = new Set<string>();
+  // Phase 2A-5: keep the raw bounded drafts per page so the geometry pass can
+  // reuse this reading instead of sending the page to vision again.
+  const drafts: DrawingVisionDraftPage[] = [];
   for (const item of capped) {
     const page = item.page;
     const pageNumber = provenPageNumber(page);
@@ -280,6 +304,14 @@ export async function analyzeDrawingPages(
         usedPages.push(pageNumber);
         providers.add(result.providerId);
       }
+      if (result.observations.length) {
+        drafts.push({
+          pageNumber,
+          attribution: page.attribution === "PAGE_TREE" ? "PAGE_TREE" : "UNATTRIBUTED",
+          providerId: result.providerId,
+          drafts: result.observations.slice(0, MAX_DRAWING_DRAFTS_PER_PAGE),
+        });
+      }
       for (const observation of normalized.observations) {
         if (drawingObservations.length >= MAX_DRAWING_OBSERVATIONS) {
           limitations.push(`the drawing observation total was capped at ${MAX_DRAWING_OBSERVATIONS} for this artifact; further qualified content was not listed`);
@@ -322,6 +354,7 @@ export async function analyzeDrawingPages(
       usedPages,
       providers: [...providers],
       limitations,
+      drafts,
     },
   };
 }
@@ -346,9 +379,9 @@ export async function analyzeImageBytesAsDrawing(
     pages: [],
     document: { pageCount: null, pageAttributionReliable: false, encrypted: false, limitations: [] },
   };
-  const empty = (limitations: string[], attempted: boolean, outcome: DrawingVisionOutcome, pages: (number | null)[] = [], providers: string[] = []): DrawingAugmentedAnalysis => ({
+  const empty = (limitations: string[], attempted: boolean, outcome: DrawingVisionOutcome, pages: (number | null)[] = [], providers: string[] = [], drafts: DrawingVisionDraftPage[] = []): DrawingAugmentedAnalysis => ({
     analysis: { inspection, classification: null, observations: [], limitations, vision: { attempted, providerId: providers[0] ?? null }, drawing: { attempted, pages, outcome } },
-    pass: { attempted, used: false, outcome, requestedPages: pages, usedPages: [], providers, limitations },
+    pass: { attempted, used: false, outcome, requestedPages: pages, usedPages: [], providers, limitations, drafts },
   });
   const gate = shouldRequestVision({ mimeType, byteLength: imageBytes.byteLength, maxImageBytes: options.maxImageBytes });
   if (!gate.requested) {
@@ -385,6 +418,9 @@ export async function analyzeImageBytesAsDrawing(
       surface: "IMAGE",
     });
     const used = normalized.observations.length > 0;
+    const imageDrafts: DrawingVisionDraftPage[] = result.observations.length
+      ? [{ pageNumber: null, attribution: "UNATTRIBUTED", providerId: result.providerId, drafts: result.observations.slice(0, MAX_DRAWING_DRAFTS_PER_PAGE) }]
+      : [];
     return {
       analysis: {
         inspection,
@@ -406,6 +442,7 @@ export async function analyzeImageBytesAsDrawing(
         usedPages: used ? [null] : [],
         providers: [result.providerId],
         limitations: normalized.limitations,
+        drafts: imageDrafts,
       },
     };
   } catch (error) {

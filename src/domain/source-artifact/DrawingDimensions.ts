@@ -66,6 +66,8 @@ export const MAX_DIMENSION_ASSOCIATION_DISTANCE = 0.06;
 export const DIMENSION_AMBIGUITY_MARGIN = 0.01;
 /** Upper bound of association candidates retained per dimension text. */
 export const MAX_ASSOCIATIONS_PER_DIMENSION_TEXT = 4;
+/** Upper bound of printed-scale calibration candidates retained per page. */
+export const MAX_SCALE_CANDIDATES_PER_PAGE = 8;
 /** A credible dimension line is at least this long, as a fraction of the page. */
 export const MIN_DIMENSION_LINE_LENGTH = 0.015;
 /** ... and at most this long. */
@@ -159,6 +161,16 @@ export function parseDimensionToken(raw: string): ParsedDimension | null {
   return null;
 }
 
+/**
+ * Scale expressions as they actually appear on sheets: inside a title block
+ * line ("SCALE 1:100 SHEET 3 OF 12") as often as on their own. The labelled
+ * form keeps its "SCALE" prefix in the verbatim record; the bare form requires
+ * word boundaries so a number such as "12:30" cannot match.
+ */
+const SCALE_SCAN_PATTERN = /\b(?:scale|sc)\b\s*[:.]?\s*(1\s*[:/]\s*\d{1,7}(?:[.,]\d{1,3})?)|\b(1\s*:\s*\d{1,7}(?:[.,]\d{1,3})?)\b/giu;
+/** Longest text scanned for a printed scale, so a runaway line cannot stall the pass. */
+const MAX_SCALE_SCAN_CHARACTERS = 400;
+
 export type ParsedScale = {
   /** Verbatim printed scale text, e.g. "1:100". */
   printed: string;
@@ -166,6 +178,39 @@ export type ParsedScale = {
   ratio: number | null;
   limitations: string[];
 };
+
+/**
+ * Finds every printed scale expression inside a longer run of text.
+ *
+ * The scan is deliberately narrow — it only ever matches an explicit ratio
+ * (`1:n`), optionally introduced by a scale label — because ratio notation is
+ * distinctive enough that finding it inside a line is evidence rather than a
+ * guess. Anything it returns is still only a calibration candidate.
+ */
+export function findScaleTokens(raw: string): ParsedScale[] {
+  const text = raw.trim().replace(/\s+/gu, " ");
+  if (!text || text.length > MAX_SCALE_SCAN_CHARACTERS) return [];
+  if (/^n\.?t\.?s\.?$/iu.test(text) || /\bnot\s+to\s+scale\b/iu.test(text)) {
+    const explicit = parseScaleToken(text);
+    return explicit ? [explicit] : [];
+  }
+  const out: ParsedScale[] = [];
+  const seen = new Set<string>();
+  for (const match of text.matchAll(SCALE_SCAN_PATTERN)) {
+    // The verbatim scale EXPRESSION is kept, not the whole matched line: the
+    // label ("SCALE") is a field name, and the ratio is what was printed.
+    const printed = (match[1] ?? match[2] ?? "").trim();
+    if (!printed) continue;
+    const ratio = Number((printed.split(/[:/]/u)[1] ?? "").trim().replace(/,/gu, "."));
+    if (!Number.isFinite(ratio) || ratio <= 0) continue;
+    const key = `${printed}|${ratio}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ printed, ratio: round(ratio, 4), limitations: [] });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
 
 /**
  * Parses printed scale text into a calibration CANDIDATE.
@@ -266,12 +311,23 @@ export type DimensionConflict = {
 export type PageDimensionResult = {
   pageNumber: number | null;
   texts: DimensionTextRecord[];
+  /**
+   * The dimension-line candidates the associations were drawn from. They are
+   * reported so a reviewer can see what the text was compared against, and so
+   * no consumer has to re-derive them.
+   */
+  lines: DimensionLineCandidate[];
   associations: DimensionAssociation[];
   scales: ScaleCalibrationCandidate[];
   conflicts: DimensionConflict[];
   truncated: boolean;
   limitations: string[];
 };
+
+/** A page result with nothing retained: used when a page could not be analyzed. */
+export function emptyPageDimensionResult(pageNumber: number | null, limitations: string[] = []): PageDimensionResult {
+  return { pageNumber, texts: [], lines: [], associations: [], scales: [], conflicts: [], truncated: false, limitations };
+}
 
 // ---------------------------------------------------------------------------
 // Collection
@@ -297,6 +353,23 @@ function channelRef(channel: DimensionChannel): string {
 }
 
 /**
+ * True when two readings plausibly print the SAME value.
+ *
+ * A review note should name a real disagreement, not two unrelated numbers
+ * that merely share a page. Two readings are paired only when they share a
+ * kind, the same unit state, and the same number of digits: the shape of an
+ * OCR misread ("3500" read as "3508"), not a coincidence. Both readings are
+ * always kept either way; this only decides which pair gets named.
+ */
+function samePrintedShape(left: DimensionTextRecord, right: DimensionTextRecord): boolean {
+  if (left.kind !== right.kind) return false;
+  if ((left.unit ?? null) !== (right.unit ?? null)) return false;
+  const leftDigits = (left.numericText ?? "").replace(/\D/gu, "").length;
+  const rightDigits = (right.numericText ?? "").replace(/\D/gu, "").length;
+  return leftDigits > 0 && leftDigits === rightDigits;
+}
+
+/**
  * Collects printed dimension records from one page's readings.
  *
  * - every channel is kept separate; identical values from different channels
@@ -317,12 +390,20 @@ export function collectDimensionTexts(input: {
   const limitations: string[] = [];
   let truncated = false;
   let dropped = 0;
+  let scaleDropped = 0;
 
   for (const source of input.sources) {
     const value = source.text.trim();
     if (!value) continue;
-    const scale = parseScaleToken(value);
-    if (scale) {
+    // Printed scales are scanned inside the text, not only as a whole-string
+    // match, because a real title block prints "SCALE 1:100" among other
+    // fields. Every reading found is kept; conflicts are surfaced below.
+    for (const scale of findScaleTokens(value)) {
+      if (scales.length >= MAX_SCALE_CANDIDATES_PER_PAGE) {
+        truncated = true;
+        scaleDropped += 1;
+        continue;
+      }
       scales.push({
         id: input.allocateId("SC"),
         pageNumber: input.attribution === "PAGE_TREE" ? input.pageNumber : null,
@@ -339,7 +420,6 @@ export function collectDimensionTexts(input: {
         },
         limitations: clipLimitations([SCALE_NOT_APPLIED_LIMITATION, ...scale.limitations]),
       });
-      continue;
     }
     const parsed = parseDimensionToken(value);
     if (!parsed) continue;
@@ -352,6 +432,7 @@ export function collectDimensionTexts(input: {
     const limitationsForRecord = [...parsed.limitations];
     if (source.channel === "OCR_TEXT") limitationsForRecord.push("this reading came from OCR, which reports no word positions, so no dimension-line association was attempted for it");
     if (source.channel === "DRAWING_VISION") limitationsForRecord.push("this reading came from drawing vision, so its position is a bounded region hint rather than a measured coordinate");
+    if (source.reliability === "LOW") limitationsForRecord.push("the source reading was reported with low confidence; verify this printed dimension against the sheet itself");
     texts.push({
       id: input.allocateId("D"),
       pageNumber: input.attribution === "PAGE_TREE" ? input.pageNumber : null,
@@ -374,11 +455,12 @@ export function collectDimensionTexts(input: {
   }
 
   if (dropped > 0) limitations.push(`${dropped} further printed dimension candidate(s) were not retained because the ${MAX_DIMENSION_CANDIDATES_PER_PAGE}-per-page bound was reached`);
+  if (scaleDropped > 0) limitations.push(`${scaleDropped} further printed scale candidate(s) were not retained because the ${MAX_SCALE_CANDIDATES_PER_PAGE}-per-page bound was reached`);
 
   // Cross-channel disagreement: same page, different printed values, different
   // channels. Both readings are kept; only a review note is added.
   for (const text of texts) {
-    const disagreeing = texts.find((other) => other.id !== text.id && other.channel !== text.channel && other.kind === text.kind && other.raw !== text.raw && other.pageNumber === text.pageNumber);
+    const disagreeing = texts.find((other) => other.id !== text.id && other.channel !== text.channel && other.raw !== text.raw && other.pageNumber === text.pageNumber && samePrintedShape(text, other));
     if (disagreeing && !conflicts.some((conflict) => conflict.detail.includes(text.raw) && conflict.detail.includes(disagreeing.raw))) {
       conflicts.push({
         pageNumber: text.pageNumber,
@@ -525,4 +607,17 @@ export function dimensionRecordTypeFor(record: DimensionTextRecord): DimensionRe
   if (record.kind === "LEVEL") return "LEVEL_REFERENCE";
   if (record.kind === "GRID") return "GRID_REFERENCE";
   return "DIMENSION_TEXT";
+}
+
+/**
+ * Every record type one printed dimension actually supports.
+ *
+ * A unit is emitted as its own record only when the sheet printed one, so a
+ * bare "3500" never acquires a unit record — the printed text is the only
+ * source of units, and this is where that rule is enforced structurally.
+ */
+export function dimensionRecordTypesFor(record: DimensionTextRecord): DimensionRecordType[] {
+  const types: DimensionRecordType[] = [dimensionRecordTypeFor(record)];
+  if (hasExplicitUnit(record)) types.push("DIMENSION_UNIT");
+  return types;
 }

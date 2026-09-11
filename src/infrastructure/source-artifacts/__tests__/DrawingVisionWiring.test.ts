@@ -12,7 +12,7 @@ import { LocalSourceArtifactStorage } from "../LocalSourceArtifactStorage";
 import type { PageRasterizerPort, RasterizedPage } from "../ocr/PageRasterizer";
 import { resolveDrawingVisionLimits } from "../vision/DrawingInspectionAnalyzer";
 import { PNG_BYTES } from "./fixtures/imageFixtures";
-import { DRAWING_SHEET, SCANNED_SHEET, TEXT_SHEET, buildOrphanTextPdf, buildPdf } from "./fixtures/pdfFixtures";
+import { DRAWING_SHEET, GEOMETRY_DRAWING_SHEET, SCANNED_SHEET, TEXT_SHEET, buildOrphanTextPdf, buildPdf } from "./fixtures/pdfFixtures";
 
 /**
  * Phase 2A-4: the drawing pass on the REAL production inspection path.
@@ -409,5 +409,107 @@ describe("gated drawing vision on the production inspection path (2A-4)", () => 
     const invalid = resolveDrawingVisionLimits({ VOKA_DRAWING_MAX_PAGES: "0", VOKA_DRAWING_RASTER_SCALE: "-2" });
     expect(invalid.maxPages).toBe(4);
     expect(invalid.rasterScale).toBe(2.5);
+  });
+});
+
+describe("bounded drawing geometry on the production inspection path (2A-5)", () => {
+  async function imageRow(bytes: Buffer, overrides: Record<string, unknown> = {}) {
+    const contentSha256 = createHash("sha256").update(bytes).digest("hex");
+    const stored = await storage.put(bytes, contentSha256);
+    return {
+      id: "artifact-1", companyId: "company-1", originalFilename: "drawing.png", mimeType: "image/png",
+      sizeBytes: bytes.byteLength, contentSha256, kind: "IMAGE", storageRef: stored.storageRef,
+      context: "SALES_ASSISTANT", processingState: "TEXT_EXTRACTED", extractedText: null, extractedPages: null, citations: [],
+      ...overrides,
+    };
+  }
+
+  it("a qualified drawing page exposes bounded page-space geometry and reuses the one vision reading", async () => {
+    resetPrisma();
+    prismaMock.sourceArtifact.findFirst.mockResolvedValue(await pdfRow(buildPdf([GEOMETRY_DRAWING_SHEET])));
+    const raster = fakeRasterizer();
+    const { calls, provider } = trackingVision(deterministicVisionProvider({
+      "artifact-1:page:1": [
+        { type: "DRAWING_NUMBER", description: "A-101", confidence: 0.9, region: "lower-right" },
+        { type: "LEGEND_ENTRY", description: "SD — Smoke Detector", confidence: 0.9, region: "lower-right" },
+        { type: "SYMBOL_CANDIDATE", description: "small circular device marked SD", confidence: 0.85, region: "center", geometryBox: { x0: 0.4, y0: 0.4, x1: 0.45, y1: 0.45 }, legendRef: "SD", similarity: 0.85 },
+      ],
+    }));
+    const observation = await new PrismaSourceArtifactInspection(null, provider, { rasterizer: raster.port }).inspect(baseInput);
+    const summary = observation.artifactInspection!;
+
+    // One provider call per qualified page: geometry reuses that reading
+    // instead of sending the page to vision a second time.
+    expect(calls).toHaveLength(1);
+    expect(summary.geometry.used).toBe(true);
+    expect(summary.geometry.pageSpaceOnly).toBe(true);
+
+    // Real vector geometry, normalized into page space.
+    expect(summary.geometry.primitives.length).toBeGreaterThan(0);
+    for (const primitive of summary.geometry.primitives) {
+      expect(primitive.source === "PDF_VECTOR" || primitive.source === "DRAWING_VISION").toBe(true);
+      for (const value of [primitive.boundingBox?.x0, primitive.boundingBox?.y0, primitive.boundingBox?.x1, primitive.boundingBox?.y1]) {
+        if (value !== undefined) {
+          expect(value).toBeGreaterThanOrEqual(0);
+          expect(value).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+
+    // A printed dimension, kept as the literal the sheet printed.
+    const dimension = summary.geometry.dimensionTexts.find((item) => item.raw === "3500")!;
+    expect(dimension).toBeDefined();
+    expect(dimension.unit).toBeNull();
+    expect(dimension.positioned).toBe(true);
+
+    // A printed scale, captured but never applied.
+    const scale = summary.geometry.scaleCandidates[0]!;
+    expect(scale.printed).toBe("1:100");
+    expect(scale.limitations.join(" ")).toMatch(/never used to convert/i);
+
+    // Symbol evidence stays individual and uncounted.
+    expect(summary.geometry.symbolCandidates.length).toBeGreaterThan(0);
+    expect(summary.geometry.symbolToLegend.length).toBeGreaterThan(0);
+    expect(Object.keys(summary.geometry).filter((key) => /count|total|quantity|sum/i.test(key))).toEqual([]);
+
+    // And nothing commercial was created anywhere along the path.
+    expect(prismaMock.requirement.upsert).not.toHaveBeenCalled();
+    expect(summary.candidates.every((candidate) => !/requirement|quantity/i.test(candidate.factKey ?? ""))).toBe(true);
+  });
+
+  it("a standalone drawing image yields vision-only evidence and never fabricates PDF vector geometry", async () => {
+    resetPrisma();
+    prismaMock.sourceArtifact.findFirst.mockResolvedValue(await imageRow(Buffer.from(PNG_BYTES)));
+    const { provider } = trackingVision(deterministicVisionProvider({
+      "artifact-1": [
+        { type: "LEGEND_ENTRY", description: "SD — Smoke Detector", confidence: 0.9 },
+        { type: "SYMBOL_CANDIDATE", description: "round ceiling device", confidence: 0.8, geometryBox: { x0: 0.2, y0: 0.2, x1: 0.25, y1: 0.25 }, dimensionText: "3500" },
+      ],
+    }));
+    const observation = await new PrismaSourceArtifactInspection(null, provider).inspect(baseInput);
+    const summary = observation.artifactInspection!;
+
+    expect(summary.geometry.used).toBe(true);
+    // No geometry primitives at all: an image has no page tree and no page box,
+    // so no PDF vector geometry can exist for it.
+    expect(summary.geometry.primitives).toEqual([]);
+    expect(summary.geometry.symbolCandidates.length).toBeGreaterThan(0);
+    expect(summary.geometry.legends.length).toBeGreaterThan(0);
+    expect(summary.geometry.dimensionTexts.some((item) => item.channel === "DRAWING_VISION")).toBe(true);
+    expect(prismaMock.requirement.upsert).not.toHaveBeenCalled();
+  });
+
+  it("a non-drawing PDF yields no geometry at all", async () => {
+    resetPrisma();
+    prismaMock.sourceArtifact.findFirst.mockResolvedValue(await pdfRow(buildPdf([TEXT_SHEET])));
+    const raster = fakeRasterizer();
+    const { calls, provider } = trackingVision(deterministicVisionProvider({}));
+    const observation = await new PrismaSourceArtifactInspection(null, provider, { rasterizer: raster.port }).inspect(baseInput);
+    const summary = observation.artifactInspection!;
+    // Not qualified, so not rasterized and not read visually either.
+    expect(calls).toHaveLength(0);
+    expect(raster.calls).toHaveLength(0);
+    expect(summary.geometry.used).toBe(false);
+    expect(summary.geometry.primitives).toEqual([]);
   });
 });

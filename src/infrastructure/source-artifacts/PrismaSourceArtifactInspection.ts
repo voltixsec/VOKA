@@ -13,6 +13,7 @@ import { createProductionOcrPort, resolveProductionOcrConfig } from "./ocr/creat
 import { analyzeImageBytesWithVision } from "./vision/ImageInspectionAnalyzer";
 import { createProductionVisionPort, resolveProductionVisionConfig } from "./vision/createProductionVisionPort";
 import { analyzeDrawingPages, analyzeImageBytesAsDrawing, resolveDrawingVisionLimits, type DrawingVisionLimits, type DrawingPassSummary } from "./vision/DrawingInspectionAnalyzer";
+import { analyzeDrawingGeometry, analyzeDrawingImageGeometry, toDrawingGeometryProjection, type DrawingGeometryResult } from "./DrawingGeometryAnalyzer";
 import type { PageRasterizerPort } from "./ocr/PageRasterizer";
 
 const storage = new LocalSourceArtifactStorage();
@@ -82,11 +83,15 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
           artifactId: artifact.id,
           maxImageBytes: this.drawingLimits().maxImageBytes,
         });
+        // Phase 2A-5: an image has no PDF page tree and no page box, so it can
+        // only ever carry what the drawing-vision reading reported. No vector
+        // geometry is invented for it.
+        const imageGeometry = analyzeDrawingImageGeometry({ visionDrafts: drawing.pass.drafts });
         const drawingSummary = projectArtifactInspection({
           artifactId: artifact.id,
           filename: artifact.originalFilename,
           kind: "IMAGE",
-          analysis: drawing.analysis,
+          analysis: { ...drawing.analysis, geometry: toDrawingGeometryProjection(imageGeometry) },
           status: drawing.pass.used ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT",
           governedFacts: input.governedFacts,
         });
@@ -174,7 +179,7 @@ async function projectPdf(
   governedFacts: Parameters<SourceArtifactInspectionPort["inspect"]>[0]["governedFacts"],
   ocr: OcrPort | null,
   drawing: { vision: VisualInspectionPort | null; limits: DrawingVisionLimits; rasterizer?: PageRasterizerPort | null; intent: "DRAWING_INSPECTION" | "ATTACHMENT" },
-): Promise<{ summary: ReturnType<typeof projectArtifactInspection>; extractedText: string; pass: DrawingPassSummary | null }> {
+): Promise<{ summary: ReturnType<typeof projectArtifactInspection>; extractedText: string; pass: DrawingPassSummary | null; geometry: DrawingGeometryResult | null }> {
   try {
     const storedPages: ArtifactPage[] | undefined = isStoredPdfPageModel(artifact.extractedPages) ? artifact.extractedPages.pages : undefined;
     const analyzed = ocr
@@ -195,16 +200,35 @@ async function projectPdf(
       limits: drawing.limits,
       rasterizer: drawing.rasterizer,
     });
+    // Phase 2A-5: bounded page-space geometry over the SAME qualified pages and
+    // the SAME provider reading. It only ever runs on pages the accepted 2A-4
+    // gate already qualified, so vector content can never qualify a page by
+    // itself, and it never measures, counts, or takes anything off.
+    const geometryPass = analyzeDrawingGeometry(analyzed, {
+      artifactId: artifact.id,
+      pdfBytes: bytes,
+      intent: drawing.intent,
+      limits: drawing.limits,
+      visionDrafts: drawingPass.pass.drafts,
+    });
     const hasText = analyzed.inspection.text.trim().length > 0;
     const status: ArtifactInspectionStatus = analyzed.inspection.document.encrypted ? "ENCRYPTED" : hasText ? "INSPECTED" : "INSPECTED_NO_MACHINE_READABLE_TEXT";
-    const summary = projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: drawingPass.analysis, status, governedFacts });
-    return { summary, extractedText: analyzed.inspection.text.trim(), pass: drawingPass.pass };
+    const summary = projectArtifactInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      kind: "PDF",
+      analysis: { ...drawingPass.analysis, geometry: toDrawingGeometryProjection(geometryPass) },
+      status,
+      governedFacts,
+    });
+    return { summary, extractedText: analyzed.inspection.text.trim(), pass: drawingPass.pass, geometry: geometryPass };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "unknown";
     return {
       summary: projectArtifactInspection({ artifactId: artifact.id, filename: artifact.originalFilename, kind: "PDF", analysis: null, status: "UNAVAILABLE", failure: `the PDF could not be analyzed safely (${reason})` }),
       extractedText: "",
       pass: null,
+      geometry: null,
     };
   }
 }

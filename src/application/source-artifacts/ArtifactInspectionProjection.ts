@@ -19,6 +19,231 @@ export const MAX_PROJECTED_LIMITATIONS = 8;
 export const MAX_PROJECTED_PAGES = 12;
 export const MAX_EXCERPT_CHARACTERS = 400;
 
+// Phase 2A-5: bounds for the projected drawing-geometry view. They exist so the
+// assistant-facing record stays small and reviewable no matter how much
+// geometry a sheet contains.
+export const MAX_PROJECTED_GEOMETRY_PRIMITIVES = 24;
+export const MAX_PROJECTED_DIMENSION_TEXTS = 12;
+export const MAX_PROJECTED_DIMENSION_LINES = 12;
+export const MAX_PROJECTED_DIMENSION_ASSOCIATIONS = 12;
+export const MAX_PROJECTED_SCALE_CANDIDATES = 6;
+export const MAX_PROJECTED_LEGENDS = 8;
+export const MAX_PROJECTED_SYMBOL_CANDIDATES = 8;
+export const MAX_PROJECTED_SYMBOL_RELATIONSHIPS = 12;
+export const MAX_PROJECTED_GEOMETRY_CONFLICTS = 6;
+
+/**
+ * Phase 2A-5: bounded, governed view of drawing geometry evidence.
+ *
+ * Every record here is page-space evidence: it says where something sits on
+ * the sheet and what was printed there. There is deliberately NO count of
+ * symbols, no total, no quantity, and no aggregate of any kind — the individual
+ * candidates are the whole output, and counting them is out of scope by design.
+ */
+export type ProjectedGeometryPrimitive = {
+  id: string;
+  /** Primitive type, carried structurally for rendering; the brief uses plain words. */
+  type: string;
+  source: "PDF_VECTOR" | "DRAWING_VISION";
+  pageNumber: number | null;
+  reliability: ObservationReliability;
+  boundingBox: { x0: number; y0: number; x1: number; y1: number } | null;
+  evidence: { locator: string; reason: string };
+};
+
+export type ProjectedDimensionText = {
+  id: string;
+  pageNumber: number | null;
+  /** Which reading produced it; kept distinct so channels never silently merge. */
+  channel: "NATIVE_TEXT" | "OCR_TEXT" | "DRAWING_VISION";
+  /** Verbatim printed text, e.g. "1200 mm". Never converted. */
+  raw: string;
+  numericText: string | null;
+  /** Present only when the sheet printed one; never inferred. */
+  unit: string | null;
+  kind: "LENGTH" | "DIAMETER" | "RADIUS" | "LEVEL" | "GRID" | "UNKNOWN";
+  /** False for OCR readings, which carry no word positions. */
+  positioned: boolean;
+  region: string | null;
+  reliability: ObservationReliability;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedDimensionLine = {
+  id: string;
+  pageNumber: number | null;
+  /** Length as a fraction of the page, never a real-world distance. */
+  length: number;
+  horizontal: boolean;
+  vertical: boolean;
+};
+
+export type ProjectedDimensionAssociation = {
+  id: string;
+  pageNumber: number | null;
+  dimensionTextId: string;
+  dimensionLineCandidateId: string;
+  /** Distance in normalized page space, never a real-world distance. */
+  distance: number;
+  confidence: number;
+  reliability: ObservationReliability;
+  /** True when another line candidate was equally plausible; nothing was preferred. */
+  ambiguous: boolean;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedScaleCandidate = {
+  id: string;
+  pageNumber: number | null;
+  /** Verbatim printed scale, e.g. "1:100". */
+  printed: string;
+  /** Ratio metadata only. Never applied to any distance. */
+  ratio: number | null;
+  channel: "NATIVE_TEXT" | "OCR_TEXT" | "DRAWING_VISION";
+  reliability: ObservationReliability;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedLegendDefinition = {
+  id: string;
+  pageNumber: number | null;
+  label: string;
+  code: string | null;
+  reliability: ObservationReliability;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedSymbolCandidate = {
+  id: string;
+  pageNumber: number | null;
+  description: string | null;
+  region: { x0: number; y0: number; x1: number; y1: number } | null;
+  reliability: ObservationReliability;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedSymbolToLegend = {
+  id: string;
+  pageNumber: number | null;
+  symbolId: string;
+  legendId: string;
+  method: string;
+  confidence: number;
+  reliability: ObservationReliability;
+  ambiguous: boolean;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedSymbolToEquipment = {
+  id: string;
+  pageNumber: number | null;
+  symbolId: string;
+  equipmentReference: string;
+  method: string;
+  confidence: number;
+  reliability: ObservationReliability;
+  evidence: { locator: string; reason: string };
+  limitations: string[];
+};
+
+export type ProjectedArtifactGeometry = {
+  attempted: boolean;
+  used: boolean;
+  /** Proven page numbers the pass ran on; null entries are unattributed pages. */
+  pages: (number | null)[];
+  /** Always true. Every geometry record is normalized page space, never a measurement. */
+  pageSpaceOnly: true;
+  primitives: ProjectedGeometryPrimitive[];
+  dimensionTexts: ProjectedDimensionText[];
+  dimensionLines: ProjectedDimensionLine[];
+  dimensionAssociations: ProjectedDimensionAssociation[];
+  scaleCandidates: ProjectedScaleCandidate[];
+  legends: ProjectedLegendDefinition[];
+  symbolCandidates: ProjectedSymbolCandidate[];
+  symbolToLegend: ProjectedSymbolToLegend[];
+  symbolToEquipment: ProjectedSymbolToEquipment[];
+  /** Plain-language review notes naming both sides of every disagreement. */
+  conflicts: string[];
+  limitations: string[];
+  truncated: boolean;
+};
+
+/** Structural input so the application layer never imports the infrastructure analyzer. */
+export type DrawingGeometryProjectionInput = {
+  attempted: boolean;
+  pages: (number | null)[];
+  primitives: ProjectedGeometryPrimitive[];
+  dimensionTexts: ProjectedDimensionText[];
+  dimensionLines: ProjectedDimensionLine[];
+  dimensionAssociations: ProjectedDimensionAssociation[];
+  scaleCandidates: ProjectedScaleCandidate[];
+  legends: ProjectedLegendDefinition[];
+  symbolCandidates: ProjectedSymbolCandidate[];
+  symbolToLegend: ProjectedSymbolToLegend[];
+  symbolToEquipment: ProjectedSymbolToEquipment[];
+  conflicts: string[];
+  limitations: string[];
+  truncated: boolean;
+};
+
+export function emptyProjectedGeometry(): ProjectedArtifactGeometry {
+  return {
+    attempted: false,
+    used: false,
+    pages: [],
+    pageSpaceOnly: true,
+    primitives: [],
+    dimensionTexts: [],
+    dimensionLines: [],
+    dimensionAssociations: [],
+    scaleCandidates: [],
+    legends: [],
+    symbolCandidates: [],
+    symbolToLegend: [],
+    symbolToEquipment: [],
+    conflicts: [],
+    limitations: [],
+    truncated: false,
+  };
+}
+
+/**
+ * Projects the infrastructure geometry result into the bounded governed view.
+ *
+ * Bounding happens here, at the boundary, so nothing downstream can see an
+ * unbounded primitive list. `used` is derived structurally from the records
+ * themselves rather than trusted from the caller, so the brief can never claim
+ * geometry that is not actually present.
+ */
+export function projectDrawingGeometry(input: DrawingGeometryProjectionInput | null | undefined): ProjectedArtifactGeometry {
+  if (!input) return emptyProjectedGeometry();
+  const used = Boolean(input.primitives.length || input.dimensionTexts.length || input.scaleCandidates.length || input.symbolCandidates.length);
+  return {
+    attempted: input.attempted,
+    used,
+    pages: input.pages.slice(0, MAX_PROJECTED_PAGES),
+    pageSpaceOnly: true,
+    primitives: input.primitives.slice(0, MAX_PROJECTED_GEOMETRY_PRIMITIVES),
+    dimensionTexts: input.dimensionTexts.slice(0, MAX_PROJECTED_DIMENSION_TEXTS),
+    dimensionLines: input.dimensionLines.slice(0, MAX_PROJECTED_DIMENSION_LINES),
+    dimensionAssociations: input.dimensionAssociations.slice(0, MAX_PROJECTED_DIMENSION_ASSOCIATIONS),
+    scaleCandidates: input.scaleCandidates.slice(0, MAX_PROJECTED_SCALE_CANDIDATES),
+    legends: input.legends.slice(0, MAX_PROJECTED_LEGENDS),
+    symbolCandidates: input.symbolCandidates.slice(0, MAX_PROJECTED_SYMBOL_CANDIDATES),
+    symbolToLegend: input.symbolToLegend.slice(0, MAX_PROJECTED_SYMBOL_RELATIONSHIPS),
+    symbolToEquipment: input.symbolToEquipment.slice(0, MAX_PROJECTED_SYMBOL_RELATIONSHIPS),
+    conflicts: input.conflicts.slice(0, MAX_PROJECTED_GEOMETRY_CONFLICTS),
+    limitations: input.limitations.slice(0, MAX_PROJECTED_LIMITATIONS),
+    truncated: input.truncated,
+  };
+}
+
 export type ArtifactInspectionStatus =
   | "INSPECTED"
   | "INSPECTED_NO_MACHINE_READABLE_TEXT"
@@ -109,6 +334,11 @@ export type ArtifactAnalysisInput = {
    * it did; the brief maps it to plain words and never prints it verbatim.
    */
   drawing?: { attempted: boolean; pages: (number | null)[]; outcome?: DrawingVisionOutcome };
+  /**
+   * Phase 2A-5: bounded drawing geometry evidence (page space, printed
+   * dimensions, scale candidates, and symbol/legend relationships).
+   */
+  geometry?: DrawingGeometryProjectionInput;
 };
 
 export type DrawingVisionOutcome = "RAN" | "NO_QUALIFIED_PAGES" | "NOT_CONFIGURED" | "PROVIDER_UNAVAILABLE";
@@ -138,6 +368,8 @@ export type ArtifactInspectionSummary = {
   vision: ProjectedVision;
   /** Phase 2A-4: whether drawing semantic vision was attempted/used and on which pages. */
   drawing: ProjectedDrawing;
+  /** Phase 2A-5: bounded page-space geometry, dimension, scale, and symbol evidence. */
+  geometry: ProjectedArtifactGeometry;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -179,6 +411,27 @@ const GOVERNANCE_STATEMENTS_OCR_DRAWING = [
   "OCR text recovery and drawing vision were both performed; the readings stay separate and neither one is verified fact",
   "no measurement, symbol counting, quantity takeoff, or geometry interpretation was performed; title-block names are observed text only",
 ];
+
+/**
+ * Phase 2A-5: stated when drawing geometry was actually read.
+ *
+ * It replaces the 2A-4 wording rather than sitting beside it, because the 2A-4
+ * promise that "no geometry interpretation was performed" stops being true the
+ * moment this pass runs. The replacement states exactly what the pass did and
+ * did not do: it read page-space positions, and it did not measure, count,
+ * take off, or build a BOM.
+ */
+const GOVERNANCE_STATEMENTS_GEOMETRY = [
+  "observed values are not approved, verified, or selected",
+  "drawing geometry is normalized page-space position evidence only: no real-world measurement was derived, and any printed scale was captured as a calibration candidate and never applied",
+  "printed dimensions are the literal text printed on the sheet; symbol candidates are individual observations that were not counted, and no quantity takeoff or BOM was produced",
+];
+
+const GOVERNANCE_STATEMENT_TITLE_BLOCK_PARTIES =
+  "title-block names are observed text only; no supplier, company, or product selection was created from them";
+
+const GOVERNANCE_STATEMENT_OCR_SEPARATION =
+  "OCR readings carry no word positions, so they contribute page-level dimension evidence only and are never used to associate a dimension with a line";
 
 /** User-facing labels: the brief never prints raw enum tokens. */
 const CLASSIFICATION_LABEL: Record<string, { ar: string; en: string }> = {
@@ -284,6 +537,7 @@ export function projectArtifactInspection(input: {
       ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
       vision: { attempted: false, used: false, providers: [], lowConfidence: false },
       drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
+      geometry: emptyProjectedGeometry(),
     };
   }
 
@@ -333,17 +587,27 @@ export function projectArtifactInspection(input: {
     outcome: analysis.drawing?.outcome ?? (drawingVisual.length > 0 ? "RAN" : null),
   };
   const text = inspection.text.trim();
-  const governance = drawing.used && ocr.used
-    ? GOVERNANCE_STATEMENTS_OCR_DRAWING
-    : drawing.used
-      ? GOVERNANCE_STATEMENTS_DRAWING
-      : ocr.used && vision.used
-        ? GOVERNANCE_STATEMENTS_OCR_VISION
-        : ocr.used
-          ? GOVERNANCE_STATEMENTS_OCR
-          : vision.used
-            ? GOVERNANCE_STATEMENTS_VISION
-            : GOVERNANCE_STATEMENTS;
+  const geometry = projectDrawingGeometry(analysis.geometry);
+  // Phase 2A-5: the 2A-4 promise that no geometry interpretation was performed
+  // stops being true once this pass runs, so the geometry set replaces it and
+  // restates the measurement, counting, and takeoff boundaries accurately.
+  const governance: string[] = geometry.used
+    ? [
+      ...GOVERNANCE_STATEMENTS_GEOMETRY,
+      ...(drawing.used ? [GOVERNANCE_STATEMENT_TITLE_BLOCK_PARTIES] : []),
+      ...(ocr.used ? [GOVERNANCE_STATEMENT_OCR_SEPARATION] : []),
+    ]
+    : drawing.used && ocr.used
+      ? [...GOVERNANCE_STATEMENTS_OCR_DRAWING]
+      : drawing.used
+        ? [...GOVERNANCE_STATEMENTS_DRAWING]
+        : ocr.used && vision.used
+          ? [...GOVERNANCE_STATEMENTS_OCR_VISION]
+          : ocr.used
+            ? [...GOVERNANCE_STATEMENTS_OCR]
+            : vision.used
+              ? [...GOVERNANCE_STATEMENTS_VISION]
+              : [...GOVERNANCE_STATEMENTS];
   // A drawing-project-name observation never maps to a governed fact key, so it
   // cannot be promoted. It can still DISAGREE with governed state; the conflict
   // is recorded here with both chains so a reviewer sees it, and the governed
@@ -398,6 +662,7 @@ export function projectArtifactInspection(input: {
     ocr,
     vision,
     drawing,
+    geometry,
   };
 }
 
@@ -564,6 +829,107 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
         ? `جُرِبت قراءة الرسم بصرياً للصفحات المؤهلة لكنها لم تُنتج ملاحظات رسم قابلة للاستخدام.`
         : `The drawing reading was attempted on the qualified pages but produced no usable drawing observations.`);
     }
+  }
+/**
+ * Phase 2A-5: plain-words page label for a geometry record. An unproven page
+ * is named plainly instead of being given an invented number.
+ */
+function geometryPageLabel(pageNumber: number | null, ar: boolean): string {
+  if (pageNumber === null) return ar ? "صفحة غير منسوبة" : "an unattributed page";
+  return ar ? `الصفحة ${pageNumber}` : `page ${pageNumber}`;
+}
+
+/**
+ * Phase 2A-5: the printed-dimension sentence. It quotes the literal characters
+ * printed on the sheet and says plainly that nothing was converted, whether or
+ * not the reading could be associated with a dimension line.
+ */
+function geometryDimensionSentence(geometry: ProjectedArtifactGeometry, ar: boolean): string | null {
+  const association = geometry.dimensionAssociations[0];
+  const record = association
+    ? geometry.dimensionTexts.find((item) => item.id === association.dimensionTextId)
+    : geometry.dimensionTexts[0];
+  if (!record) return null;
+  const where = geometryPageLabel(record.pageNumber, ar);
+  if (ar) {
+    return association
+      ? `أستطيع قراءة بُعد مطبوع قيمته ${record.raw} بالقرب من مرشح خط أبعاد في ${where}. لم أحوّله إلى قياس حقيقي.`
+      : `أستطيع قراءة بُعد مطبوع قيمته ${record.raw} في ${where}. لم أحوّله إلى قياس حقيقي.`;
+  }
+  return association
+    ? `I can read a printed dimension of ${record.raw} near a dimension-line candidate on ${where}. I have not converted it into a real-world measurement.`
+    : `I can read a printed dimension of ${record.raw} on ${where}. I have not converted it into a real-world measurement.`;
+}
+
+/** Phase 2A-5: the printed-scale sentence. A captured scale is never applied. */
+function geometryScaleSentence(geometry: ProjectedArtifactGeometry, ar: boolean): string | null {
+  const scale = geometry.scaleCandidates[0];
+  if (!scale) return null;
+  return ar
+    ? `اللوحة تطبع مقياساً قدره ${scale.printed}. سجلته كمرشح معايرة فقط، ولم أستخدمه لقياس أي مسافة.`
+    : `The sheet prints a scale of ${scale.printed}. I recorded it as a calibration candidate only, and I did not use it to measure any distance.`;
+}
+
+/**
+ * Phase 2A-5: the symbol sentence. It names the legend entry the candidate is
+ * consistent with and states plainly that nothing was counted.
+ */
+function geometrySymbolSentence(geometry: ProjectedArtifactGeometry, ar: boolean): string | null {
+  const match = geometry.symbolToLegend[0];
+  if (!match) return null;
+  const legend = geometry.legends.find((item) => item.id === match.legendId);
+  if (!legend) return null;
+  return ar
+    ? `وجدت مرشح رمز يبدو متوافقاً مع مدخل المفتاح «${legend.label}». لم أعدّ حالات الرمز.`
+    : `I found a symbol candidate that appears consistent with the legend entry '${legend.label}'. I have not counted symbol instances.`;
+}
+
+/** Phase 2A-5: true when any retained geometry reading is low reliability. */
+function geometryHasLowConfidence(geometry: ProjectedArtifactGeometry): boolean {
+  return [
+    ...geometry.primitives.map((item) => item.reliability),
+    ...geometry.dimensionTexts.map((item) => item.reliability),
+    ...geometry.dimensionAssociations.map((item) => item.reliability),
+    ...geometry.scaleCandidates.map((item) => item.reliability),
+    ...geometry.symbolCandidates.map((item) => item.reliability),
+    ...geometry.symbolToLegend.map((item) => item.reliability),
+  ].includes("LOW");
+}
+
+const GEOMETRY_PAGE_SPACE_SENTENCE = {
+  en: "The geometry I read is page-space position only, from 0 to 1 across the sheet as displayed; it is not a measurement in millimetres, metres, or any other unit.",
+  ar: "الهندسة التي قرأتها هي مواضع داخل مساحة الصفحة فقط، من 0 إلى 1 على اللوحة كما تُعرض؛ وليست قياساً بالمليمتر أو المتر أو أي وحدة أخرى.",
+} as const;
+
+const GEOMETRY_NO_TAKEOFF_SENTENCE = {
+  en: "No symbol was counted and no quantity takeoff or bill of materials was produced from this geometry.",
+  ar: "لم يُعَدّ أي رمز، ولم يُنتَج أي حصر كميات أو جدول مواد من هذه الهندسة.",
+} as const;
+
+const GEOMETRY_CONFLICT_SENTENCE = {
+  en: "Some of these readings disagree with each other; every reading was kept for review and none was preferred.",
+  ar: "بعض هذه القراءات تختلف عن بعضها؛ احتفظت بكل قراءة للمراجعة ولم أفضّل أياً منها.",
+} as const;
+
+const GEOMETRY_LOW_CONFIDENCE_SENTENCE = {
+  en: "Some geometry, dimension, or symbol readings are low confidence; verify them against the sheet itself.",
+  ar: "بعض قراءات الهندسة أو الأبعاد أو الرموز منخفضة الثقة؛ تحقق منها مقابل اللوحة نفسها.",
+} as const;
+
+  // Phase 2A-5: drawing geometry is disclosed in plain words, with the
+  // page-space, no-measurement, no-counting, and no-takeoff boundaries stated
+  // explicitly. Nothing here ever prints a raw type, channel, or status token.
+  if (summary.geometry.used) {
+    const dimensionSentence = geometryDimensionSentence(summary.geometry, ar);
+    if (dimensionSentence) parts.push(dimensionSentence);
+    const scaleSentence = geometryScaleSentence(summary.geometry, ar);
+    if (scaleSentence) parts.push(scaleSentence);
+    const symbolSentence = geometrySymbolSentence(summary.geometry, ar);
+    if (symbolSentence) parts.push(symbolSentence);
+    parts.push(GEOMETRY_PAGE_SPACE_SENTENCE[locale]);
+    parts.push(GEOMETRY_NO_TAKEOFF_SENTENCE[locale]);
+    if (summary.geometry.conflicts.length) parts.push(GEOMETRY_CONFLICT_SENTENCE[locale]);
+    if (geometryHasLowConfidence(summary.geometry)) parts.push(GEOMETRY_LOW_CONFIDENCE_SENTENCE[locale]);
   }
   // Text and visual observations are listed under separate headings so the
   // two readings are never confused.

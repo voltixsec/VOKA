@@ -32,6 +32,13 @@ import type { ObservationReliability } from "./PdfObservations";
 // Vocabulary
 // ---------------------------------------------------------------------------
 
+/**
+ * Only primitive types the 2A-5 analyzer can actually evidence are declared.
+ * Extension lines, leader lines, and callout regions were deliberately NOT
+ * included: distinguishing them from ordinary line work would require
+ * inference this slice does not perform, and a vocabulary entry no code can
+ * produce is an invitation to fabricate it later.
+ */
 export const GEOMETRY_PRIMITIVE_TYPES = [
   "LINE_SEGMENT",
   "POLYLINE",
@@ -39,9 +46,6 @@ export const GEOMETRY_PRIMITIVE_TYPES = [
   "CIRCLE_OR_ARC",
   "REGION",
   "DIMENSION_LINE_CANDIDATE",
-  "EXTENSION_LINE_CANDIDATE",
-  "LEADER_LINE_CANDIDATE",
-  "CALLOUT_REGION",
   "SYMBOL_REGION",
 ] as const;
 
@@ -70,9 +74,6 @@ export const DISTILLABLE_GEOMETRY_TYPES = [
   "CIRCLE_OR_ARC",
   "REGION",
   "DIMENSION_LINE_CANDIDATE",
-  "EXTENSION_LINE_CANDIDATE",
-  "LEADER_LINE_CANDIDATE",
-  "CALLOUT_REGION",
 ] as const satisfies readonly GeometryPrimitiveType[];
 
 const DISTILLABLE_GEOMETRY_TYPE_SET = new Set<string>(DISTILLABLE_GEOMETRY_TYPES);
@@ -96,14 +97,8 @@ export const MAX_SYMBOL_CANDIDATES_PER_PAGE = 40;
 export const MAX_DIMENSION_CANDIDATES_PER_PAGE = 60;
 /** Maximum symbol/legend relationship candidates per page. */
 export const MAX_SYMBOL_RELATIONSHIPS_PER_PAGE = 60;
-/** Maximum dimension-line candidates per page. */
+/** Maximum dimension-line candidates retained per page. */
 export const MAX_DIMENSION_LINE_CANDIDATES_PER_PAGE = 60;
-/** Maximum extension-line candidates per page. */
-export const MAX_EXTENSION_LINE_CANDIDATES_PER_PAGE = 60;
-/** Maximum leader-line candidates per page. */
-export const MAX_LEADER_LINE_CANDIDATES_PER_PAGE = 40;
-/** Maximum callout-region candidates per page. */
-export const MAX_CALLOUT_REGIONS_PER_PAGE = 40;
 /** Maximum coordinate samples included in the distilled geometry context. */
 export const MAX_DISTILLED_SAMPLES_PER_PAGE = 6;
 /** Maximum characters of distilled geometry handed to a language model for one page. */

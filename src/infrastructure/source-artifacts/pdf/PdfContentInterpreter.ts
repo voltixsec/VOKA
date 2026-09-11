@@ -86,8 +86,6 @@ export type PageGeometryStats = {
   anchorsObserved: number;
   truncated: boolean;
   unsupportedFilters: number;
-  /** Stroked paths whose points fell outside the page box and were dropped later. */
-  outOfPagePaths: number;
 };
 
 /** Upper bound of captured paths per page. Beyond it, capture stops and the truncation is disclosed. */
@@ -98,7 +96,7 @@ export const MAX_CAPTURED_ANCHORS_PER_PAGE = 4_000;
 export const MAX_CAPTURED_POINTS_PER_PATH = 64;
 
 export function createPageGeometryStats(): PageGeometryStats {
-  return { paths: [], anchors: [], pathsObserved: 0, anchorsObserved: 0, truncated: false, unsupportedFilters: 0, outOfPagePaths: 0 };
+  return { paths: [], anchors: [], pathsObserved: 0, anchorsObserved: 0, truncated: false, unsupportedFilters: 0 };
 }
 
 type TextState = { font: LoadedFont | null; size: number; charSpacing: number; wordSpacing: number; horizontalScale: number; leading: number; rise: number; renderMode: number };
@@ -215,7 +213,6 @@ export class PdfContentInterpreter {
     // --- Phase 2A-5 path capture state (inactive unless `geometry` is given) ---
     type Subpath = { points: { x: number; y: number }[]; closed: boolean; curveSegments: number; fromRectangle: boolean };
     let subpaths: Subpath[] = [];
-    let current: Subpath | null = null;
     /** Transforms a user-space operand pair through the current CTM into page space. */
     const project = (x: number, y: number) => {
       const ctm = state.ctm;

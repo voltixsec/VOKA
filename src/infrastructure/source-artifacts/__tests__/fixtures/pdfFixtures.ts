@@ -34,7 +34,25 @@ export function assemblePdf(objects: Obj[], rootNum: number, infoNum: number | n
 
 function escapePdf(text: string) { return text.replace(/[\\()]/gu, (char) => `\\${char}`); }
 
-export type PageSpec = { width: number; height: number; lines?: string[]; invisibleLines?: string[]; rectangles?: number; image?: boolean; rotate?: number; annotations?: string[] };
+/**
+ * Phase 2A-5 added `cropBox` and `extraContent` only. Every earlier field and
+ * the PDFs built without them are byte-for-byte unchanged, so the accepted
+ * 2A-1A/2A-2/2A-3/2A-4 fixtures keep their existing behavior.
+ */
+export type PageSpec = {
+  width: number;
+  height: number;
+  lines?: string[];
+  invisibleLines?: string[];
+  rectangles?: number;
+  image?: boolean;
+  rotate?: number;
+  annotations?: string[];
+  /** Emitted as a literal /CropBox array on the page object. */
+  cropBox?: [number, number, number, number];
+  /** Raw content-stream operators appended after the generated text runs. */
+  extraContent?: string;
+};
 
 /**
  * Builds a multi-page PDF with a real page tree. Each page gets a Helvetica
@@ -60,13 +78,14 @@ export function buildPdf(pages: PageSpec[], options: { producer?: string; creato
     if (page.image) content += `q ${page.width} 0 0 ${page.height} 0 0 cm /Im1 Do Q\n`;
     (page.lines ?? []).forEach((line, index) => { content += `BT /F1 11 Tf 40 ${page.height - 60 - index * 16} Td (${escapePdf(line)}) Tj ET\n`; });
     (page.invisibleLines ?? []).forEach((line, index) => { content += `BT 3 Tr /F1 11 Tf 40 ${page.height - 300 - index * 16} Td (${escapePdf(line)}) Tj ET\n`; });
+    if (page.extraContent) content += `${page.extraContent}\n`;
     objects.push(obj(contentNum, stream("", Buffer.from(content, "latin1"), options.compress ?? false)));
     for (const annotation of page.annotations ?? []) {
       const annotNum = next++;
       annotNums.push(annotNum);
       objects.push(obj(annotNum, `<< /Type /Annot /Subtype /FreeText /Rect [10 10 100 40] /Contents (${escapePdf(annotation)}) >>`));
     }
-    objects.push(obj(pageNum, `<< /Type /Page /Parent ${pagesNum} 0 R /MediaBox [0 0 ${page.width} ${page.height}]${page.rotate ? ` /Rotate ${page.rotate}` : ""} /Contents ${contentNum} 0 R /Resources << /Font << /F1 ${font} 0 R >> /XObject << /Im1 ${image} 0 R >> >>${annotNums.length ? ` /Annots [${annotNums.map((num) => `${num} 0 R`).join(" ")}]` : ""} >>`));
+    objects.push(obj(pageNum, `<< /Type /Page /Parent ${pagesNum} 0 R /MediaBox [0 0 ${page.width} ${page.height}]${page.cropBox ? ` /CropBox [${page.cropBox.join(" ")}]` : ""}${page.rotate ? ` /Rotate ${page.rotate}` : ""} /Contents ${contentNum} 0 R /Resources << /Font << /F1 ${font} 0 R >> /XObject << /Im1 ${image} 0 R >> >>${annotNums.length ? ` /Annots [${annotNums.map((num) => `${num} 0 R`).join(" ")}]` : ""} >>`));
   }
   objects.push(obj(catalog, `<< /Type /Catalog /Pages ${pagesNum} 0 R >>`));
   objects.push(obj(pagesNum, `<< /Type /Pages /Kids [${kids.map((num) => `${num} 0 R`).join(" ")}] /Count ${kids.length} >>`));
@@ -191,3 +210,107 @@ export function buildOrphanTextPdf(lines: string[]) {
     "latin1",
   );
 }
+
+/**
+ * Phase 2A-5: a drawing sheet that carries real vector content AND explicit
+ * drawing markers. The markers are what qualify it; the vectors are only what
+ * gets measured once it is qualified.
+ *
+ * Layout (PDF user space, 1000 x 800, origin bottom-left):
+ * - a horizontal dimension line from (200,400) to (600,400);
+ * - the printed literal "3500" anchored at (380,412), just above that line;
+ * - an axis-aligned rectangle from (100,100) to (300,300);
+ * - the printed literal "1200 mm" on its own text run, carrying an explicit unit.
+ */
+export const GEOMETRY_DRAWING_SHEET: PageSpec = {
+  width: 1000,
+  height: 800,
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-101",
+    "SCALE 1:100",
+    "1200 mm",
+    "AHU-01",
+  ],
+  extraContent: [
+    "0.8 w",
+    "200 400 m 600 400 l S",
+    "BT /F1 12 Tf 380 412 Td (3500) Tj ET",
+    "100 100 200 200 re S",
+  ].join("\n"),
+};
+
+/**
+ * Phase 2A-5: the same dimension literal sits exactly between two parallel
+ * dimension-line candidates, so neither can be preferred. Both must survive as
+ * ambiguous rather than one being chosen by confidence.
+ */
+export const GEOMETRY_AMBIGUOUS_SHEET: PageSpec = {
+  width: 1000,
+  height: 800,
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-102",
+    "SCALE 1:100",
+  ],
+  extraContent: [
+    "0.8 w",
+    "200 400 m 600 400 l S",
+    "200 424 m 600 424 l S",
+    "BT /F1 12 Tf 380 412 Td (3500) Tj ET",
+  ].join("\n"),
+};
+
+/** Phase 2A-5: one sheet printing two different scales. Neither may win. */
+export const GEOMETRY_CONFLICTING_SCALE_SHEET: PageSpec = {
+  width: 1000,
+  height: 800,
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-103",
+    "SCALE 1:50",
+    "SCALE 1:100",
+  ],
+  extraContent: "200 400 m 600 400 l S",
+};
+
+/** Phase 2A-5: a sheet whose declared CropBox is smaller than its MediaBox. */
+export const GEOMETRY_CROP_BOX_SHEET: PageSpec = {
+  width: 1000,
+  height: 800,
+  cropBox: [0, 0, 500, 400],
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-104",
+    "SCALE 1:100",
+  ],
+  extraContent: [
+    "100 100 m 400 100 l S",
+    "BT /F1 12 Tf 150 120 Td (3500) Tj ET",
+  ].join("\n"),
+};
+
+/** Phase 2A-5: the same geometry as the drawing sheet, rotated a quarter turn. */
+export const GEOMETRY_ROTATED_SHEET: PageSpec = {
+  width: 1000,
+  height: 800,
+  rotate: 90,
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-105",
+    "SCALE 1:100",
+  ],
+  extraContent: "200 400 m 600 400 l S",
+};
+
+/** Phase 2A-5: more vector paths than the per-page retention bound allows. */
+export const GEOMETRY_OVERFLOW_SHEET: PageSpec = {
+  width: 1000,
+  height: 800,
+  lines: [
+    "DRAWING TITLE: LEVEL 6 PART PLAN",
+    "DRAWING NO: A-106",
+    "SCALE 1:100",
+  ],
+  extraContent: Array.from({ length: 500 }, (_, index) => `${10 + (index % 400)} ${10 + (index % 300)} 4 4 re S`).join("\n"),
+};

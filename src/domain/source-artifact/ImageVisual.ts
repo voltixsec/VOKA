@@ -1,4 +1,5 @@
 import { OBSERVATION_STATUS, type ObservedFact, type ObservationReliability } from "./PdfObservations";
+import type { NormalizedBox } from "./DrawingGeometry";
 
 /**
  * Phase 2A-3: visual (image/screenshot) semantic inspection boundary.
@@ -99,7 +100,15 @@ export type VisualInspectionRequest = {
   analysisProfile?: VisualAnalysisProfile;
 };
 
-/** Raw provider output for one observation, before vocabulary/bound validation. */
+/**
+ * Raw provider output for one observation, before vocabulary/bound validation.
+ *
+ * The 2A-5 fields at the bottom were added without touching any earlier one,
+ * so the accepted 2A-3 image reading and the 2A-4 drawing reading behave
+ * exactly as before when a provider does not supply them. They are hints from
+ * the vision channel only: a box is a reported region, never a measured
+ * coordinate, and a similarity is the provider's own number.
+ */
 export type VisualObservationDraft = {
   type: string;
   description: string;
@@ -107,7 +116,34 @@ export type VisualObservationDraft = {
   /** Image region hint such as "upper-left"; null/unknown means the whole image. */
   region?: string | null;
   limitations?: string[];
+  /** 2A-5: normalized 0..1 page-space box (origin bottom-left) reported for this reading. */
+  geometryBox?: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** 2A-5: printed dimension text observed in this region, e.g. "1200 mm". */
+  dimensionText?: string | null;
+  /** 2A-5: legend code or label this candidate appears consistent with. */
+  legendRef?: string | null;
+  /** 2A-5: equipment or tag reference observed near this candidate. */
+  equipmentRef?: string | null;
+  /** 2A-5: provider-reported visual similarity in 0..1. */
+  similarity?: number | null;
 };
+
+/**
+ * Clamps a provider-reported normalized box into the page-space contract.
+ * A box that is not finite, or whose corners are not ordered, carries no
+ * usable position at all: it is rejected rather than silently repaired into a
+ * plausible-looking region.
+ */
+export function normalizeGeometryBox(box: { x0: number; y0: number; x1: number; y1: number } | null | undefined): NormalizedBox | null {
+  if (!box) return null;
+  const values = [box.x0, box.y0, box.x1, box.y1];
+  if (!values.every((value) => typeof value === "number" && Number.isFinite(value))) return null;
+  const x0 = Math.min(box.x0, box.x1);
+  const x1 = Math.max(box.x0, box.x1);
+  const y0 = Math.min(box.y0, box.y1);
+  const y1 = Math.max(box.y0, box.y1);
+  return { x0: Math.max(0, Math.min(1, x0)), y0: Math.max(0, Math.min(1, y0)), x1: Math.max(0, Math.min(1, x1)), y1: Math.max(0, Math.min(1, y1)) };
+}
 
 export type VisualInspectionResult = {
   /** Echo of the request page number. Providers never invent one. */

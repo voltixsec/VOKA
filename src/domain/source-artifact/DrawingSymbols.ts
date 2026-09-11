@@ -53,6 +53,14 @@ export const SYMBOL_AMBIGUITY_MARGIN = 0.1;
 /** Widest normalized page-space distance at which nearby tag text is accepted as evidence. */
 export const MAX_TAG_TEXT_DISTANCE = 0.05;
 
+/**
+ * Confidence assigned to same-page legend corroboration. It sits exactly at
+ * the reporting floor so it can be surfaced as context yet can never outrank
+ * a real match: same-page presence says the legend is defined on the sheet,
+ * nothing about whether this candidate is that symbol.
+ */
+export const SAME_PAGE_CORROBORATION_CONFIDENCE = MIN_SYMBOL_MATCH_CONFIDENCE;
+
 export const SYMBOL_NO_COUNT_LIMITATION =
   "symbol candidates are individual observations only: no symbol instance was counted, no quantity was derived, and no takeoff or BOM was produced";
 
@@ -193,14 +201,27 @@ export function shapeSignatureOf(input: {
   return { aspect, area: round(boxArea(input.box), 6), closed: input.closed ?? false, curveRatio };
 }
 
-/** Coarse similarity between two shape signatures, 0..1. Never an identification. */
+/**
+ * Coarse similarity between two shape signatures, 0..1. Never an
+ * identification.
+ *
+ * Every input is checked for finiteness first: a zero or non-finite aspect or
+ * area would otherwise propagate NaN through the logarithm and produce a
+ * similarity that is neither true nor usable, so unusable input scores 0
+ * (no evidence) rather than a misleading number.
+ */
 export function shapeSimilarity(a: ShapeSignature | null, b: ShapeSignature | null): number {
   if (!a || !b) return 0;
+  const finite = [a.aspect, b.aspect, a.area, b.area, a.curveRatio, b.curveRatio].every((value) => typeof value === "number" && Number.isFinite(value));
+  if (!finite) return 0;
+  if (a.aspect <= 0 || b.aspect <= 0) return 0;
+  if (a.area < 0 || b.area < 0) return 0;
   const aspectScore = 1 - Math.min(1, Math.abs(Math.log(a.aspect / b.aspect)) / Math.log(4));
   const areaScore = a.area === 0 && b.area === 0 ? 1 : 1 - Math.min(1, Math.abs(Math.log((a.area + 1e-6) / (b.area + 1e-6))) / Math.log(20));
   const closedScore = a.closed === b.closed ? 1 : 0.4;
   const curveScore = 1 - Math.min(1, Math.abs(a.curveRatio - b.curveRatio));
-  return round(aspectScore * 0.4 + areaScore * 0.3 + closedScore * 0.15 + curveScore * 0.15, 3);
+  const score = aspectScore * 0.4 + areaScore * 0.3 + closedScore * 0.15 + curveScore * 0.15;
+  return Number.isFinite(score) ? round(Math.max(0, Math.min(1, score)), 3) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,11 +244,22 @@ export function parseLegendLabel(label: string): { code: string | null; descript
   return { code: null, description: text };
 }
 
-/** True when `code` appears as a standalone token in `text`. */
+/**
+ * True when `code` appears as a standalone token in `text`.
+ *
+ * The boundary classes are plain string constants rather than inline
+ * template-literal fragments: inside a template literal a lone backslash is
+ * consumed as an escape, so a written `]` collapses to `]` and the
+ * character class stops being a class. Keeping them here makes every
+ * backslash explicit and the resulting pattern valid.
+ */
+const CODE_LEAD_BOUNDARY = "[\\s,;:([|/–—-]";
+const CODE_TRAIL_BOUNDARY = "[\\s,;:)\\]|/–—-]";
+
 export function mentionsCode(text: string, code: string): boolean {
   if (!code) return false;
   const escaped = code.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`(^|[\\s,;:([|/–—-])${escaped}($|[\\s,;:)\]|/–—-])`, "u").test(text);
+  return new RegExp(`(^|${CODE_LEAD_BOUNDARY})${escaped}($|${CODE_TRAIL_BOUNDARY})`, "u").test(text);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +303,16 @@ export function linkSymbols(input: {
   const conflicts: SymbolConflict[] = [];
   const limitations: string[] = [];
   let truncated = false;
-  const samePageLegend = input.legends.length > 0;
+
+  /**
+   * Same-page corroboration is a real, checkable fact — the legend entry and
+   * the symbol candidate share a proven page number — but it is NOT evidence
+   * that this candidate is that symbol. It is only ever attached when the
+   * candidate produced no stronger evidence for that legend, and it is scored
+   * at the reporting floor so it can never win a comparison.
+   */
+  const isSamePage = (legend: LegendSymbolDefinition, symbol: SymbolInstanceCandidate) =>
+    legend.pageNumber !== null && symbol.pageNumber !== null && legend.pageNumber === symbol.pageNumber;
 
   const push = (candidate: SymbolToLegendCandidate) => {
     if (legendMatches.length >= MAX_SYMBOL_RELATIONSHIPS_PER_PAGE) {
@@ -327,10 +368,21 @@ export function linkSymbols(input: {
           confidence: round(Math.min(0.8, similarity), 3),
           reason: `the symbol region is coarsely shape-consistent with the legend entry "${legend.label}"`,
         });
+        continue;
+      }
+      // 4. Same-page legend corroboration: attached only when nothing stronger
+      //    applies, and only when the shared page is proven on both sides.
+      if (isSamePage(legend, symbol)) {
+        scored.push({
+          legend,
+          method: "SAME_PAGE_LEGEND_DEFINITION",
+          confidence: SAME_PAGE_CORROBORATION_CONFIDENCE,
+          reason: `the legend entry "${legend.label}" is defined on the same page as this symbol candidate, which is context only and not a match`,
+        });
       }
     }
 
-    // 4. Nearby equipment / tag text is evidence in its own right.
+    // 5. Nearby equipment / tag text is evidence in its own right.
     for (const reference of input.equipmentReferences ?? []) {
       if (!reference.position || !symbol.region) continue;
       const distance = distancePointToBox(reference.position, symbol.region);
@@ -372,7 +424,8 @@ export function linkSymbols(input: {
       const methodLimitations = [SYMBOL_MATCH_LIMITATION, SYMBOL_NO_COUNT_LIMITATION];
       if (item.method === "VECTOR_SHAPE_SIMILARITY") methodLimitations.push("shape consistency uses a coarse descriptor of the region; it cannot identify a symbol on its own");
       if (item.method === "VISUAL_SIMILARITY") methodLimitations.push("visual similarity was reported by the drawing-vision reading and is bounded by that reading's own limits");
-      if (samePageLegend) methodLimitations.push(`the legend definition ${item.legend.id} is on the same page, which is context only and not proof of a match`);
+      if (item.method === "SAME_PAGE_LEGEND_DEFINITION") methodLimitations.push("the only evidence is that this legend entry is defined on the same page; that is context only and does not make the symbol that entry");
+      else if (isSamePage(item.legend, symbol)) methodLimitations.push(`the legend definition ${item.legend.id} is on the same page, which is context only and not proof of a match`);
       if (ambiguous) methodLimitations.push(`${tied.length} legend entr(y/ies) matched comparably, so no single legend entry was preferred`);
       push({
         id: input.allocateId("SL"),
@@ -386,7 +439,7 @@ export function linkSymbols(input: {
         limitations: clipLimitations(methodLimitations),
         evidence: {
           locator: `${pageRef(symbol.pageNumber)}, ${symbol.id} → ${item.legend.id}`,
-          reason: `symbol candidate ${symbol.id} ${item.reason}`,
+          reason: `symbol candidate ${symbol.id}: ${item.reason}`,
           derivedFrom: [symbol.id, item.legend.id],
         },
       });
