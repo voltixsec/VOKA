@@ -137,6 +137,17 @@ export type MaterializedArtifact = {
   limitations: string[];
   /** True when VOKA could not read this artifact and materialized no claim from it. */
   unavailable: boolean;
+  /**
+   * The outcome of the governed byte re-open that produced this materialization.
+   *
+   * `HASH_MISMATCH` is a HARD STOP: the retained bytes did not match the SHA-256
+   * the artifact record describes, so nothing was parsed, no claim was made, and
+   * the analyzer was never invoked. It is carried explicitly so a run can say
+   * WHY an artifact contributed no evidence — "the bytes changed" and "the
+   * artifact could not be read" must never collapse into one vague reason.
+   * Absent only on materializations that never re-opened bytes (test fixtures).
+   */
+  byteVerification?: "OK" | "UNAVAILABLE" | "HASH_MISMATCH";
 };
 
 /**
@@ -257,6 +268,41 @@ export type DocumentIdentityRecord = {
   updatedAt: string;
 };
 
+/**
+ * One durable EVIDENCE OBSERVATION of a finding by one comparison run.
+ *
+ * The finding row carries only the CURRENT evidence projection, so this record
+ * is what keeps a historical projection reconstructible: it links a finding and
+ * a run to the IMMUTABLE claims that observation rested on, in order.
+ */
+export type FindingEvidenceObservationRecord = {
+  observationId: string;
+  companyId: string;
+  findingId: string;
+  comparisonRunId: string;
+  fingerprint: string;
+  evidenceSignatureHash: string;
+  evidenceChanged: boolean;
+  entryCount: number;
+  observedAt: string;
+};
+
+/** One claim reference inside an observation: a relational join, not a claim copy. */
+export type FindingEvidenceObservationEntryRecord = {
+  observationId: string;
+  companyId: string;
+  findingId: string;
+  comparisonRunId: string;
+  claimId: string;
+  ordinal: number;
+};
+
+/** An observation joined with the immutable claims it rested on. */
+export type FindingEvidenceObservationView = FindingEvidenceObservationRecord & {
+  /** Ordered by ordinal. `claim` is null only if the claim row is no longer present. */
+  entries: Array<{ claimId: string; ordinal: number; claim: NormalizedEvidenceClaim | null }>;
+};
+
 export type DocumentRelationRecord = {
   documentRelationId: string;
   companyId: string;
@@ -301,12 +347,36 @@ export type CrossDocumentStore = {
   // findings
   findFindingByFingerprint(input: { companyId: string; comparisonScopeId: string; fingerprint: string }): Promise<CrossDocumentFindingRecord | null>;
   saveFinding(record: CrossDocumentFindingRecord): Promise<void>;
-  updateFindingEngineFlags(input: { companyId: string; findingId: string; engineFlags: FindingEngineFlags; evidenceSignature: EvidenceSignature; comparisonRunId: string; updatedAt: string }): Promise<void>;
+  /**
+   * Writes the engine-owned fields of a finding.
+   *
+   * `reviewState` is deliberately absent from this payload: the engine has no
+   * path to the human review lifecycle. `projectorVersion` IS written, because
+   * it records the projector that produced the CURRENT projection — without
+   * refreshing it, a finding re-projected by a newer engine would keep being
+   * reported as ENGINE_VERSION_CHANGED forever.
+   */
+  updateFindingEngineFlags(input: { companyId: string; findingId: string; engineFlags: FindingEngineFlags; evidenceSignature: EvidenceSignature; comparisonRunId: string; projectorVersion: string; updatedAt: string }): Promise<void>;
   markFindingReviewState(input: { companyId: string; findingId: string; reviewState: ReviewState; updatedAt: string }): Promise<void>;
   listFindings(input: { companyId: string; comparisonScopeId?: string; findingKind?: string; reviewState?: string; stale?: boolean; subjectClusterId?: string; limit: number }): Promise<CrossDocumentFindingRecord[]>;
   findFinding(input: { companyId: string; findingId: string }): Promise<CrossDocumentFindingRecord | null>;
   saveParticipants(input: { companyId: string; participants: readonly FindingParticipant[] }): Promise<void>;
   listParticipants(input: { companyId: string; findingId: string }): Promise<FindingParticipant[]>;
+  /**
+   * Appends ONE durable evidence observation of a finding by one run.
+   *
+   * It never updates an earlier observation: the (finding, run) pair is unique,
+   * so history grows instead of being rewritten. This is what keeps "Run 1 said
+   * 24 vs 22" reconstructible after "Run 2 says 24 vs 23" replaced the finding's
+   * current participant projection.
+   */
+  saveFindingEvidenceObservation(input: { record: FindingEvidenceObservationRecord; entries: readonly FindingEvidenceObservationEntryRecord[] }): Promise<void>;
+  /**
+   * Reads the evidence history of one or more findings, oldest first, joined
+   * with the immutable claims each observation rested on. Company-scoped and
+   * bounded.
+   */
+  listFindingEvidenceObservations(input: { companyId: string; findingId?: string; findingIds?: readonly string[]; limit: number }): Promise<FindingEvidenceObservationView[]>;
   appendReviewEvent(event: FindingReviewEvent): Promise<void>;
   listReviewEvents(input: { companyId: string; findingId: string; limit: number }): Promise<FindingReviewEvent[]>;
 

@@ -20,7 +20,9 @@
  *   methods, so the comparison engine has no path to the review state.
  */
 
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { CROSS_DOCUMENT_BOUNDS } from "@/src/domain/cross-document";
 import type {
   ComparisonScopeArtifactRecord,
   ComparisonScopeRecord,
@@ -28,6 +30,9 @@ import type {
   CrossDocumentStore,
   DocumentIdentityRecord,
   DocumentRelationRecord,
+  FindingEvidenceObservationEntryRecord,
+  FindingEvidenceObservationRecord,
+  FindingEvidenceObservationView,
   MaterializationRecordFixture,
 } from "@/src/application/cross-document/ports";
 import type { SubjectClusterRecord, SubjectMatchRecord } from "@/src/application/cross-document/matching-types";
@@ -719,6 +724,7 @@ export class PrismaCrossDocumentStore implements CrossDocumentStore {
     engineFlags: FindingEngineFlags;
     evidenceSignature: EvidenceSignature;
     comparisonRunId: string;
+    projectorVersion: string;
     updatedAt: string;
   }): Promise<void> {
     const existing = await prisma.crossDocumentFinding.findFirst({ where: { id: input.findingId, companyId: input.companyId }, select: { id: true } });
@@ -735,6 +741,7 @@ export class PrismaCrossDocumentStore implements CrossDocumentStore {
         evidenceChanged: input.engineFlags.evidenceChanged,
         lastReproducedRunId: input.engineFlags.lastReproducedRunId,
         lastReproducedAt: input.engineFlags.lastReproducedAt ? new Date(input.engineFlags.lastReproducedAt) : null,
+        projectorVersion: input.projectorVersion,
         updatedAt: new Date(input.updatedAt),
       },
     });
@@ -889,6 +896,111 @@ export class PrismaCrossDocumentStore implements CrossDocumentStore {
       reliability: String(row.reliability) as FindingParticipant["reliability"],
       confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
       limitations: (row.limitations as string[] | null) ?? [],
+    }));
+  }
+
+  async saveFindingEvidenceObservation(input: {
+    record: FindingEvidenceObservationRecord;
+    entries: readonly FindingEvidenceObservationEntryRecord[];
+  }): Promise<void> {
+    const { record } = input;
+    await prisma.$transaction(async (tx: any) => {
+      // Fails closed across tenants: another company's finding yields no write.
+      const finding = await tx.crossDocumentFinding.findFirst({ where: { id: record.findingId, companyId: record.companyId }, select: { id: true } });
+      if (!finding) return;
+      // Append-only: one observation per (finding, run). A re-run of the same run
+      // collides with itself instead of rewriting an earlier observation.
+      const existing = await tx.findingEvidenceObservation.findFirst({
+        where: { findingId: record.findingId, comparisonRunId: record.comparisonRunId },
+        select: { id: true },
+      });
+      if (existing) return;
+      const entries = input.entries.filter((entry) => entry.claimId);
+      await tx.findingEvidenceObservation.create({
+        data: {
+          id: record.observationId,
+          companyId: record.companyId,
+          findingId: record.findingId,
+          comparisonRunId: record.comparisonRunId,
+          fingerprint: record.fingerprint,
+          evidenceSignatureHash: record.evidenceSignatureHash,
+          evidenceChanged: record.evidenceChanged,
+          entryCount: entries.length,
+          observedAt: new Date(record.observedAt),
+        },
+      });
+      if (!entries.length) return;
+      await tx.findingEvidenceObservationEntry.createMany({
+        data: entries.map((entry) => ({
+          id: `feoe_${createHash("sha256")
+            .update(["voka:2a-10:observation-entry:v1", record.observationId, entry.claimId].join("\u0000"), "utf8")
+            .digest("hex")
+            .slice(0, 40)}`,
+          companyId: entry.companyId,
+          observationId: record.observationId,
+          findingId: record.findingId,
+          comparisonRunId: record.comparisonRunId,
+          claimId: entry.claimId,
+          ordinal: entry.ordinal,
+        })),
+      });
+    });
+  }
+
+  async listFindingEvidenceObservations(input: {
+    companyId: string;
+    findingId?: string;
+    findingIds?: readonly string[];
+    limit: number;
+  }): Promise<FindingEvidenceObservationView[]> {
+    const findingIds = input.findingId ? [input.findingId] : [...(input.findingIds ?? [])];
+    if (!findingIds.length) return [];
+    const limit = Math.max(1, Math.min(input.limit, CROSS_DOCUMENT_BOUNDS.maxEvidenceObservationsPerRead));
+    // Company scope is enforced on the observation row itself, and the finding
+    // ids are additionally verified to belong to the caller's company.
+    const scopedFindings = await prisma.crossDocumentFinding.findMany({
+      where: { companyId: input.companyId, id: { in: findingIds } },
+      select: { id: true },
+      take: findingIds.length,
+    });
+    const allowed = new Set(scopedFindings.map((row: ClaimRow) => String(row.id)));
+    const wanted = findingIds.filter((findingId) => allowed.has(findingId));
+    if (!wanted.length) return [];
+    const rows = await prisma.findingEvidenceObservation.findMany({
+      where: { companyId: input.companyId, findingId: { in: wanted } },
+      orderBy: [{ observedAt: "asc" }, { id: "asc" }],
+      take: limit,
+    });
+    if (!rows.length) return [];
+    const observationIds = rows.map((row: ClaimRow) => String(row.id));
+    const entryRows = await prisma.findingEvidenceObservationEntry.findMany({
+      where: { companyId: input.companyId, observationId: { in: observationIds } },
+      orderBy: [{ ordinal: "asc" }, { id: "asc" }],
+      take: observationIds.length * CROSS_DOCUMENT_BOUNDS.maxEvidenceObservationEntries,
+    });
+    const claimIds = [...new Set(entryRows.map((row: ClaimRow) => String(row.claimId)))];
+    const claimRows = claimIds.length
+      ? await prisma.normalizedEvidenceClaim.findMany({ where: { companyId: input.companyId, id: { in: claimIds } }, take: claimIds.length })
+      : [];
+    const claimById = new Map<string, NormalizedEvidenceClaim>(claimRows.map((row: ClaimRow) => [String(row.id), fromClaimRow(row)]));
+    const entriesByObservation = new Map<string, Array<{ claimId: string; ordinal: number; claim: NormalizedEvidenceClaim | null }>>();
+    for (const row of entryRows) {
+      const observationId = String(row.observationId);
+      const list = entriesByObservation.get(observationId) ?? [];
+      list.push({ claimId: String(row.claimId), ordinal: Number(row.ordinal), claim: claimById.get(String(row.claimId)) ?? null });
+      entriesByObservation.set(observationId, list);
+    }
+    return rows.map((row: ClaimRow) => ({
+      observationId: String(row.id),
+      companyId: String(row.companyId),
+      findingId: String(row.findingId),
+      comparisonRunId: String(row.comparisonRunId),
+      fingerprint: String(row.fingerprint),
+      evidenceSignatureHash: String(row.evidenceSignatureHash),
+      evidenceChanged: Boolean(row.evidenceChanged),
+      entryCount: Number(row.entryCount),
+      observedAt: new Date(row.observedAt as string | Date).toISOString(),
+      entries: entriesByObservation.get(String(row.id)) ?? [],
     }));
   }
 

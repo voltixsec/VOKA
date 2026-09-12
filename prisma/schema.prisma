@@ -185,6 +185,7 @@ model Company {
   documentRevisionMemberships DocumentRevisionMembership[]
   documentRelations        DocumentRelation[]
   activeRevisionDecisions  ActiveRevisionDecision[]
+  findingEvidenceObservations FindingEvidenceObservation[]
   requirements             Requirement[]
   universalAdoptions       UniversalItemAdoption[]
   universalLibrarySectors  CompanyUniversalLibrarySector[]
@@ -2415,6 +2416,7 @@ model NormalizedEvidenceClaim {
   relationEvidence DocumentRelationEvidenceClaim[]
   decisionEvidence ActiveRevisionDecisionEvidenceClaim[]
   participantEntries FindingParticipant[]
+  evidenceObservationEntries FindingEvidenceObservationEntry[]
 
   @@index([companyId, sourceArtifactId])
   @@index([companyId, predicate])
@@ -2531,6 +2533,7 @@ model ComparisonRun {
   matches         SubjectMatch[]
   clusters        SubjectCluster[]
   findings        CrossDocumentFinding[]
+  evidenceObservations FindingEvidenceObservation[]
 
   @@index([companyId, comparisonScopeId, startedAt])
   @@index([companyId, status])
@@ -2651,6 +2654,7 @@ model CrossDocumentFinding {
   subjectCluster  SubjectCluster? @relation(fields: [subjectClusterId], references: [id], onDelete: SetNull)
   participants    FindingParticipant[]
   reviewEvents    FindingReviewEvent[]
+  evidenceObservations FindingEvidenceObservation[]
 
   @@unique([companyId, comparisonScopeId, fingerprint])
   @@index([companyId, findingKind])
@@ -2884,5 +2888,74 @@ model ActiveRevisionDecisionEvidenceClaim {
   claim    NormalizedEvidenceClaim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
 
   @@unique([decisionId, claimId])
+  @@index([claimId])
+}
+
+/// One durable EVIDENCE OBSERVATION of a finding by one comparison run.
+///
+/// This is the relational mechanism that keeps a HISTORICAL finding
+/// reconstructible. The `CrossDocumentFinding` row deliberately carries only the
+/// CURRENT evidence projection (its `evidenceSignature` and its
+/// `FindingParticipant` rows), because a two-source disagreement must never
+/// render as three sides. Without this table the previous projection would be
+/// the only copy of the older evidence and would be destroyed by the next run:
+/// "BOQ 24 vs IFC 22" would stop being readable once the IFC was re-issued as 23.
+///
+/// Every run that reproduces a logical finding appends one observation. Nothing
+/// is updated in place and nothing is deleted, so Run 1 stays readable with its
+/// own immutable claim references after Run 2 has replaced the current
+/// projection. A hash-only signature history is deliberately NOT enough here:
+/// the entries below point at the immutable `NormalizedEvidenceClaim` rows that
+/// carry the exact old locators and the exact old literals.
+model FindingEvidenceObservation {
+  id                    String   @id @default(cuid())
+  companyId             String
+  findingId             String
+  comparisonRunId       String
+  /// The logical finding identity this observation belongs to. Denormalized so a
+  /// scope-level history read never has to join back through the finding row.
+  fingerprint           String
+  /// Hash of the evidence signature at the time of this observation.
+  evidenceSignatureHash String
+  /// Whether this observation's evidence differed from the previous one.
+  evidenceChanged       Boolean  @default(false)
+  entryCount            Int      @default(0)
+  observedAt            DateTime
+  createdAt             DateTime @default(now())
+
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  finding       CrossDocumentFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  comparisonRun ComparisonRun        @relation(fields: [comparisonRunId], references: [id], onDelete: Cascade)
+  entries       FindingEvidenceObservationEntry[]
+
+  @@unique([findingId, comparisonRunId])
+  @@index([companyId, findingId, observedAt])
+  @@index([companyId, comparisonRunId])
+}
+
+/// The exact evidence one observation rested on, as a relational join row.
+///
+/// It references an IMMUTABLE claim instead of copying it: the claim already
+/// holds the verbatim literal, the unit, the exact locator, the citation, the
+/// artifact hash, and the source numeric view, so a second copy would only
+/// create a place where history could drift. The only fields stored here are
+/// the two that are properties of the OBSERVATION rather than of the claim:
+/// which finding/run it belonged to, and its stable display ordinal.
+model FindingEvidenceObservationEntry {
+  id            String   @id @default(cuid())
+  companyId     String
+  observationId String
+  findingId     String
+  comparisonRunId String
+  claimId       String
+  /// Stable display ordinal. It never implies preference or correctness.
+  ordinal       Int
+  addedAt       DateTime @default(now())
+
+  observation FindingEvidenceObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+  claim       NormalizedEvidenceClaim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([observationId, claimId])
+  @@index([companyId, findingId, comparisonRunId])
   @@index([claimId])
 }

@@ -265,6 +265,71 @@ export async function renderFindingsForLocale(input: ReadContext & { comparisonS
   return statements;
 }
 
+/**
+ * The EVIDENCE HISTORY of one finding.
+ *
+ * The finding row carries only the current projection; this read reconstructs
+ * every earlier one from the durable run/finding-evidence associations and the
+ * immutable claims they reference. Each entry is localized so a reviewer sees
+ * the same historical evidence in their own language, with the verbatim source
+ * literal and the exact source locator untranslated.
+ */
+export type FindingEvidenceHistoryItem = {
+  observationId: string;
+  comparisonRunId: string;
+  fingerprint: string;
+  evidenceSignatureHash: string;
+  evidenceChanged: boolean;
+  observedAt: string;
+  entries: Array<{
+    claimId: string;
+    ordinal: number;
+    /** Verbatim source literal of the historical claim; never translated. */
+    valueLiteral: string | null;
+    unit: string | null;
+    /** Exact source locator of the historical claim; never translated. */
+    locator: string | null;
+    pageNumber: number | null;
+    citationId: string | null;
+    sourceArtifactId: string | null;
+    readingChannel: string | null;
+    quantityOrigin: string | null;
+    quantityOriginLabel: string | null;
+    /** True when the immutable claim row itself is gone; never guessed at. */
+    claimMissing: boolean;
+  }>;
+};
+
+export async function listFindingEvidenceHistory(input: ReadContext & { findingId: string; limit?: number }): Promise<FindingEvidenceHistoryItem[]> {
+  const observations = await input.store.listFindingEvidenceObservations({
+    companyId: input.companyId,
+    findingId: input.findingId,
+    limit: input.limit ?? CROSS_DOCUMENT_BOUNDS.maxEvidenceObservationsPerRead,
+  });
+  return observations.map((observation) => ({
+    observationId: observation.observationId,
+    comparisonRunId: observation.comparisonRunId,
+    fingerprint: observation.fingerprint,
+    evidenceSignatureHash: observation.evidenceSignatureHash,
+    evidenceChanged: observation.evidenceChanged,
+    observedAt: observation.observedAt,
+    entries: observation.entries.map((entry) => ({
+      claimId: entry.claimId,
+      ordinal: entry.ordinal,
+      valueLiteral: entry.claim?.assertion.valueLiteral ?? null,
+      unit: entry.claim?.assertion.unitLiteral ?? null,
+      locator: entry.claim?.provenance.locator ?? null,
+      pageNumber: entry.claim?.provenance.pageNumber ?? null,
+      citationId: entry.claim?.provenance.citationId ?? null,
+      sourceArtifactId: entry.claim?.sourceArtifactId ?? null,
+      readingChannel: entry.claim?.readingChannel ?? null,
+      quantityOrigin: entry.claim?.assertion.quantityOrigin ?? null,
+      quantityOriginLabel: entry.claim?.assertion.quantityOrigin ? quantityOriginLabel(entry.claim.assertion.quantityOrigin, input.locale) : null,
+      claimMissing: entry.claim === null,
+    })),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Document governance reads
 // ---------------------------------------------------------------------------

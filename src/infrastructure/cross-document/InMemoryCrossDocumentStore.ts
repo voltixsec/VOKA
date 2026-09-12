@@ -35,6 +35,9 @@ import type {
   CrossDocumentStore,
   DocumentIdentityRecord,
   DocumentRelationRecord,
+  FindingEvidenceObservationEntryRecord,
+  FindingEvidenceObservationRecord,
+  FindingEvidenceObservationView,
   MaterializationRecordFixture,
 } from "@/src/application/cross-document/ports";
 
@@ -68,6 +71,8 @@ export class InMemoryCrossDocumentStore implements CrossDocumentStore {
   private readonly clusters = new Map<string, SubjectClusterRecord>();
   private readonly findings = new Map<string, CrossDocumentFindingRecord>();
   private readonly participants = new Map<string, FindingParticipant[]>();
+  private readonly observations = new Map<string, FindingEvidenceObservationRecord[]>();
+  private readonly observationEntries = new Map<string, FindingEvidenceObservationEntryRecord[]>();
   private readonly reviewEvents = new Map<string, FindingReviewEvent[]>();
   private readonly identities = new Map<string, DocumentIdentityRecord>();
   private readonly memberships = new Map<string, DocumentRevisionMembership>();
@@ -258,18 +263,21 @@ export class InMemoryCrossDocumentStore implements CrossDocumentStore {
     engineFlags: FindingEngineFlags;
     evidenceSignature: EvidenceSignature;
     comparisonRunId: string;
+    projectorVersion: string;
     updatedAt: string;
   }): Promise<void> {
     const key = this.scopeKey(input.companyId, input.findingId);
     const existing = this.findings.get(key);
     if (!existing) return;
-    // Only the engine-owned flags and the evidence signature move. The review
-    // state is deliberately untouched: the engine has no path to it.
+    // Only the engine-owned flags, the evidence signature, and the projector
+    // that produced the current projection move. The review state is
+    // deliberately untouched: the engine has no path to it.
     this.findings.set(key, {
       ...existing,
       engineFlags: input.engineFlags,
       evidenceSignature: input.evidenceSignature,
       comparisonRunId: input.comparisonRunId,
+      projectorVersion: input.projectorVersion,
       updatedAt: input.updatedAt,
     });
   }
@@ -326,6 +334,59 @@ export class InMemoryCrossDocumentStore implements CrossDocumentStore {
   async listParticipants(input: { companyId: string; findingId: string }): Promise<FindingParticipant[]> {
     if (!this.findings.has(this.scopeKey(input.companyId, input.findingId))) return [];
     return this.participants.get(input.findingId) ?? [];
+  }
+
+  async saveFindingEvidenceObservation(input: {
+    record: FindingEvidenceObservationRecord;
+    entries: readonly FindingEvidenceObservationEntryRecord[];
+  }): Promise<void> {
+    const { record } = input;
+    // Cross-tenant writes fail closed: the finding must exist in this company.
+    if (!this.findings.has(this.scopeKey(record.companyId, record.findingId))) return;
+    const key = this.scopeKey(record.companyId, record.findingId);
+    const existing = this.observations.get(key) ?? [];
+    const index = existing.findIndex((observation) => observation.comparisonRunId === record.comparisonRunId);
+    if (index >= 0) {
+      // Append-only: a re-run of the same run id collides with itself instead of
+      // rewriting an earlier observation. History can only grow.
+      return;
+    }
+    this.observations.set(key, [...existing, record]);
+    this.observationEntries.set(
+      this.scopeKey(record.companyId, record.observationId),
+      input.entries
+        .filter((entry) => entry.claimId)
+        .sort((left, right) => left.ordinal - right.ordinal),
+    );
+  }
+
+  async listFindingEvidenceObservations(input: {
+    companyId: string;
+    findingId?: string;
+    findingIds?: readonly string[];
+    limit: number;
+  }): Promise<FindingEvidenceObservationView[]> {
+    const wanted = input.findingId ? [input.findingId] : (input.findingIds ?? []);
+    const views: FindingEvidenceObservationView[] = [];
+    for (const findingId of wanted) {
+      if (!this.findings.has(this.scopeKey(input.companyId, findingId))) continue;
+      for (const record of this.observations.get(this.scopeKey(input.companyId, findingId)) ?? []) {
+        const entries = this.observationEntries.get(this.scopeKey(input.companyId, record.observationId)) ?? [];
+        views.push({
+          ...record,
+          entries: entries.map((entry) => ({
+            claimId: entry.claimId,
+            ordinal: entry.ordinal,
+            // The referenced claims are immutable, so the historical literal and
+            // locator are read back from the claim itself.
+            claim: this.claims.get(this.scopeKey(input.companyId, entry.claimId)) ?? null,
+          })),
+        });
+      }
+    }
+    return views
+      .sort((left, right) => (left.observedAt < right.observedAt ? -1 : left.observedAt > right.observedAt ? 1 : left.findingId < right.findingId ? -1 : 1))
+      .slice(0, input.limit);
   }
 
   async appendReviewEvent(event: FindingReviewEvent): Promise<void> {

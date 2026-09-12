@@ -154,6 +154,21 @@ export function buildParticipantId(input: { findingId: string; claimId: string }
   return `fpt_${createHash("sha256").update(["voka:2a-10:participant:v1", input.findingId, input.claimId].join("\u0000"), "utf8").digest("hex").slice(0, 40)}`;
 }
 
+/**
+ * Deterministic EVIDENCE-OBSERVATION id: one per finding per run.
+ *
+ * It is deterministic for the same reason the claim id is: a re-run of the same
+ * run collides with itself instead of appending a duplicate, so the
+ * `(findingId, comparisonRunId)` uniqueness the database enforces cannot be
+ * bypassed by a caller, and history can only ever grow.
+ */
+export function buildFindingEvidenceObservationId(input: { findingId: string; comparisonRunId: string }): string {
+  return `feo_${createHash("sha256")
+    .update(["voka:2a-10:evidence-observation:v1", input.findingId, input.comparisonRunId].join("\u0000"), "utf8")
+    .digest("hex")
+    .slice(0, 40)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Finding identity vs evidence signature
 // ---------------------------------------------------------------------------
@@ -250,6 +265,37 @@ export const STALE_REASONS = [
   "CLAIMS_SUPERSEDED",
 ] as const;
 export type StaleReason = (typeof STALE_REASONS)[number];
+
+/**
+ * The fixed precedence used to pick ONE stale reason.
+ *
+ * The strongest, most specific statement about the source wins, so a finding
+ * whose artifact left the scope is never vaguely reported as "not reproduced".
+ * The order is a property of the reasons, not of the order they were observed
+ * in: `selectStaleReason` is a pure function of a SET.
+ */
+export const STALE_REASON_PRECEDENCE: readonly StaleReason[] = [
+  "SCOPE_CHANGED",
+  "ARTIFACT_BYTES_CHANGED",
+  "CLAIMS_SUPERSEDED",
+  "ENGINE_VERSION_CHANGED",
+  "NOT_REPRODUCED",
+];
+
+/**
+ * Selects exactly ONE stale reason from the reasons a run actually observed.
+ *
+ * Deterministic by construction: the input is treated as a set, so the same
+ * combination always yields the same reason regardless of discovery order, and
+ * exactly one reason is ever returned. It reads no date, no clock, and no
+ * review state, so it can never mutate the human lifecycle.
+ */
+export function selectStaleReason(input: { observed: readonly StaleReason[]; projectorVersionChanged: boolean }): StaleReason {
+  const observed = new Set(input.observed);
+  if (input.projectorVersionChanged) observed.add("ENGINE_VERSION_CHANGED");
+  observed.add("NOT_REPRODUCED");
+  return STALE_REASON_PRECEDENCE.find((reason) => observed.has(reason)) ?? "NOT_REPRODUCED";
+}
 
 export type FindingEngineFlags = {
   /** True when the current run reproduced this logical finding. */

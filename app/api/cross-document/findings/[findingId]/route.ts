@@ -1,6 +1,6 @@
 import { ApiError, apiSuccess, withCompanyAuth } from "@/lib/api";
 import { NO_STORE, contextFor, pathSegment } from "@/lib/cross-document/route-context";
-import { getFindingDetail } from "@/src/application/cross-document/ReadModels";
+import { getFindingDetail, listFindingEvidenceHistory } from "@/src/application/cross-document/ReadModels";
 import { listFindingParticipants, listFindingReviewHistory } from "@/src/application/cross-document/FindingReviewService";
 
 /**
@@ -21,6 +21,9 @@ export const GET = withCompanyAuth(["OWNER", "ADMIN", "SALES", "VIEWER"], async 
   if (!detail) throw new ApiError(404, "CROSS_DOCUMENT_FINDING_NOT_FOUND", "The finding was not found for the active company.");
   const events = await listFindingReviewHistory({ companyId: company.companyId, store: context.store, findingId });
   const participants = await listFindingParticipants({ companyId: company.companyId, store: context.store, findingId });
+  // Historical evidence projections: the finding row carries only the current
+  // one, so an earlier "24 vs 22" is read back from the durable observations.
+  const evidenceHistory = await listFindingEvidenceHistory({ companyId: company.companyId, store: context.store, locale: context.locale, findingId });
   return apiSuccess({
     finding: {
       findingId: detail.findingId,
@@ -38,6 +41,7 @@ export const GET = withCompanyAuth(["OWNER", "ADMIN", "SALES", "VIEWER"], async 
       limitations: detail.localized.limitations,
       truncated: detail.truncated,
       participants,
+      evidenceHistory,
       reviewHistory: events,
     },
   }, { headers: NO_STORE });

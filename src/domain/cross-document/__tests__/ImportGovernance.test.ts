@@ -147,6 +147,60 @@ describe("cross-document import governance", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("cannot be bypassed by dynamic invocation, eval, or a string-built module path", () => {
+    // The static import scan above is only meaningful if nothing in the engine
+    // can reach a promotion lane at runtime by constructing a name. Dynamic
+    // import, require, eval, new Function, and Reflect-based property access are
+    // all refused in the cross-document surface.
+    const offenders: string[] = [];
+    const patterns: Array<{ pattern: RegExp; label: string }> = [
+      { pattern: /\brequire\s*\(/u, label: "require()" },
+      { pattern: /\beval\s*\(/u, label: "eval()" },
+      { pattern: /\bnew\s+Function\s*\(/u, label: "new Function()" },
+      { pattern: /\bFunction\s*\(\s*["'`]/u, label: "Function() from a string" },
+      { pattern: /\bReflect\.(get|set|apply|construct)\s*\(/u, label: "Reflect property access" },
+      { pattern: /\bglobalThis\s*\[/u, label: "globalThis bracket access" },
+      { pattern: /\bprocess\.binding\s*\(/u, label: "process.binding()" },
+    ];
+    for (const file of files) {
+      file.text.split("\n").forEach((line, index) => {
+        const trimmed = line.trim();
+        // A comment naming the guard is the guard, not a bypass.
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return;
+        // `import("./ports").DocumentRelationRecord` is a TypeScript type
+        // annotation, erased at compile time. Only expression-position dynamic
+        // import can load a module at runtime.
+        const runtimeImport = /\bimport\s*\(\s*["'`][^"'`]*["'`]\s*\)(?!\s*\.)/u.test(line) || /\bawait\s+import\s*\(/u.test(line);
+        if (runtimeImport) offenders.push(`${file.path}:${index + 1}: dynamic import() — ${trimmed}`);
+        for (const { pattern, label } of patterns) {
+          if (pattern.test(line)) offenders.push(`${file.path}:${index + 1}: ${label} — ${trimmed}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("publishes no commercial predicate, subject namespace, or claim type", () => {
+    // Rates, amounts, currencies, prices, and FX are read by the accepted
+    // workbook analyser only so they can be withheld. Nothing commercial may
+    // become a predicate, a subject namespace, or a finding kind.
+    const commercial = /RATE|AMOUNT|CURRENCY|PRICE|\bFX\b|COMMERCIAL|COST/u;
+    for (const kind of FINDING_KINDS) {
+      expect(commercial.test(kind), `finding kind ${kind} is commercial`).toBe(false);
+    }
+    const offenders: string[] = [];
+    for (const file of files) {
+      file.text.split("\n").forEach((line, index) => {
+        // A predicate/namespace declaration naming a commercial concept.
+        if (!/^\s*(?:RATE|AMOUNT|CURRENCY|PRICE|FX)\s*[:,]/u.test(line)) return;
+        const trimmed = line.trim();
+        if (trimmed.startsWith("//") || trimmed.startsWith("*")) return;
+        offenders.push(`${file.path}:${index + 1}: ${trimmed}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps the 2A-9 derivation family rule intact: DERIVED_FROM is only refused here", () => {
     // 2A-9 `ArtifactDerivation` owns DERIVED_FROM. A 2A-10 document relation may
     // only mention it in order to refuse it, never to implement it.

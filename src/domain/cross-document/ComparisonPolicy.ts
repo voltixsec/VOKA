@@ -104,6 +104,14 @@ export const CROSS_DOCUMENT_BOUNDS = {
   maxSuggestionMatches: 500,
   /** Fraction of token overlap required for a T5 suggestion. Higher is stricter. */
   suggestionTokenOverlapThreshold: 0.85,
+  /**
+   * Claim references retained inside ONE evidence observation. Matches the
+   * participant cap, because an observation records exactly the evidence that
+   * the finding's participants were projected from.
+   */
+  maxEvidenceObservationEntries: 8,
+  /** Evidence observations returned by one history read. */
+  maxEvidenceObservationsPerRead: 50,
 } as const;
 
 // ---------------------------------------------------------------------------

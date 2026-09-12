@@ -276,7 +276,9 @@ export function computeComparison(input: ComputeComparisonInput): ComparisonComp
         participants: familyClaims.slice(0, CROSS_DOCUMENT_BOUNDS.maxParticipantsPerFinding),
         subjectKeys: [],
         reasons: ["this artifact could not be read as evidence, so nothing was compared from it"],
-        limitations: state.limitations,
+        // Same rule as the partial case: the refusal statement is first, so the
+        // bound on finding limitations can never drop it.
+        limitations: ["nothing was asserted about this source, because its evidence could not be read and verified", ...state.limitations],
         truncated: false,
       });
       continue;
@@ -289,7 +291,10 @@ export function computeComparison(input: ComputeComparisonInput): ComparisonComp
         participants: familyClaims.slice(0, 2),
         subjectKeys: [],
         reasons: [...state.truncationReasons],
-        limitations: [...state.limitations, "absence is not asserted against a partial source"],
+        // The absence-safety statement goes FIRST: finding limitations are
+        // bounded, and the one thing a reader must never lose about a partial
+        // source is that nothing was asserted as missing from it.
+        limitations: ["absence is not asserted against a partial source", ...state.limitations],
         truncated: false,
       });
     }

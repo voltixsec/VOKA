@@ -22,12 +22,16 @@ import {
   CROSS_DOCUMENT_ENGINE_VERSION,
   FINDING_PROJECTOR_VERSION,
   SUBJECT_MATCHER_VERSION,
+  buildFindingEvidenceObservationId,
   buildMaterializationId,
   defaultEnabledFindingKinds,
   nextEngineFlags,
+  selectStaleReason,
   type CrossDocumentFindingRecord,
+  type EvidenceSignature,
   type FindingEngineFlags,
   type FindingKind,
+  type FindingParticipant,
   type NormalizedEvidenceClaim,
   type StaleReason,
 } from "@/src/domain/cross-document";
@@ -305,6 +309,7 @@ export async function runCrossDocumentComparison(input: {
       now: startedAt,
     });
     reproducedFingerprints.add(projected.record.fingerprint);
+    const participants = attachParticipantDocumentContext(projected.participants, documentContextMap);
     if (existing) {
       reproducedFindingCount += 1;
       await store.updateFindingEngineFlags({
@@ -313,9 +318,24 @@ export async function runCrossDocumentComparison(input: {
         engineFlags: flags,
         evidenceSignature: projected.record.evidenceSignature,
         comparisonRunId: runId,
+        // This run's projector produced the current projection.
+        projectorVersion: FINDING_PROJECTOR_VERSION,
         updatedAt: startedAt,
       });
-      await store.saveParticipants({ companyId: input.companyId, participants: attachParticipantDocumentContext(projected.participants, documentContextMap) });
+      await store.saveParticipants({ companyId: input.companyId, participants });
+      // The finding row now carries only the CURRENT projection, so the previous
+      // one is preserved as a durable observation instead of being lost.
+      await recordEvidenceObservation({
+        store,
+        companyId: input.companyId,
+        findingId: existing.findingId,
+        fingerprint: projected.record.fingerprint,
+        comparisonRunId: runId,
+        evidenceSignature: projected.record.evidenceSignature,
+        participants,
+        evidenceChanged: signatureChanged,
+        observedAt: startedAt,
+      });
       continue;
     }
     newFindingCount += 1;
@@ -327,7 +347,18 @@ export async function runCrossDocumentComparison(input: {
       reviewState: "OPEN",
     };
     await store.saveFinding(record);
-    await store.saveParticipants({ companyId: input.companyId, participants: attachParticipantDocumentContext(projected.participants, documentContextMap) });
+    await store.saveParticipants({ companyId: input.companyId, participants });
+    await recordEvidenceObservation({
+      store,
+      companyId: input.companyId,
+      findingId: record.findingId,
+      fingerprint: record.fingerprint,
+      comparisonRunId: runId,
+      evidenceSignature: record.evidenceSignature,
+      participants,
+      evidenceChanged: false,
+      observedAt: startedAt,
+    });
   }
 
   // A finding that did not reproduce is flagged — never deleted — and the flag
@@ -335,7 +366,12 @@ export async function runCrossDocumentComparison(input: {
   // immutable claim the finding was projected from, so "the bytes changed", "the
   // artifact left the scope", and "the claims are no longer produced" stay
   // distinguishable instead of collapsing into one vague reason.
-  const currentArtifactState = new Map(materials.map((material) => [material.artifact.artifactId, { sha256: material.artifact.contentSha256, claimCount: material.claims.length }]));
+  const currentArtifactState = new Map(
+    materials.map((material) => [
+      material.artifact.artifactId,
+      { sha256: material.artifact.contentSha256, claimCount: material.claims.length, hashMismatch: material.byteVerification === "HASH_MISMATCH" },
+    ]),
+  );
 
   let notReproducedFindingCount = 0;
   for (const existing of existingFindings) {
@@ -348,6 +384,13 @@ export async function runCrossDocumentComparison(input: {
         observed.push("SCOPE_CHANGED");
         continue;
       }
+      // A failed byte verification is the strongest possible statement about the
+      // source: VOKA refused to read it at all, so the reason says the bytes
+      // changed rather than collapsing into "the claims are no longer produced".
+      if (state.hashMismatch) {
+        observed.push("ARTIFACT_BYTES_CHANGED");
+        continue;
+      }
       // Claims are immutable, so the historical claim still answers what the
       // artifact hash was when this finding was projected.
       const historical = await store.findClaim({ companyId: input.companyId, claimId: entry.claimId });
@@ -357,9 +400,13 @@ export async function runCrossDocumentComparison(input: {
       }
       if (!currentClaimIds.has(entry.claimId)) observed.push("CLAIMS_SUPERSEDED");
     }
-    const precedence: readonly StaleReason[] = ["SCOPE_CHANGED", "ARTIFACT_BYTES_CHANGED", "CLAIMS_SUPERSEDED"];
-    const staleReason: StaleReason = precedence.find((reason) => observed.includes(reason))
-      ?? (existing.projectorVersion !== FINDING_PROJECTOR_VERSION ? "ENGINE_VERSION_CHANGED" : "NOT_REPRODUCED");
+    // Exactly one reason, chosen by a fixed precedence over the SET of reasons
+    // this run observed. The selection is order-independent and date-free, so
+    // the same evidence always produces the same stale reason.
+    const staleReason: StaleReason = selectStaleReason({
+      observed,
+      projectorVersionChanged: existing.projectorVersion !== FINDING_PROJECTOR_VERSION,
+    });
     await store.updateFindingEngineFlags({
       companyId: input.companyId,
       findingId: existing.findingId,
@@ -368,6 +415,9 @@ export async function runCrossDocumentComparison(input: {
       engineFlags: nextEngineFlags({ reproduced: false, evidenceChanged: false, previous: existing.engineFlags, runId, now: startedAt, staleReasonOverride: staleReason }),
       evidenceSignature: existing.evidenceSignature,
       comparisonRunId: runId,
+      // Not re-projected by this run, so the historical projector is preserved:
+      // rewriting it would erase the very evidence the stale reason cites.
+      projectorVersion: existing.projectorVersion,
       updatedAt: startedAt,
     });
   }
@@ -440,6 +490,56 @@ export async function runCrossDocumentComparison(input: {
 
 function emptyEngineFlags(): FindingEngineFlags {
   return { reproduced: false, stale: false, staleReason: null, evidenceChanged: false, lastReproducedRunId: null, lastReproducedAt: null };
+}
+
+/**
+ * Appends ONE durable evidence observation of a finding by this run.
+ *
+ * The finding row is intentionally overwritten with the current projection so a
+ * two-source disagreement never renders as three sides; this is what makes that
+ * safe. Each observation links the finding and the run to the IMMUTABLE claims
+ * it rested on, in a stable order, so an earlier projection — with its old claim
+ * ids, exact old locators, and exact old literals — stays reconstructible after
+ * a later run replaced the current participants.
+ *
+ * It is append-only: the observation id is deterministic over (finding, run),
+ * so a re-run collides with itself instead of appending a duplicate, and no
+ * earlier observation is ever updated or deleted.
+ */
+async function recordEvidenceObservation(input: {
+  store: CrossDocumentStore;
+  companyId: string;
+  findingId: string;
+  fingerprint: string;
+  comparisonRunId: string;
+  evidenceSignature: EvidenceSignature;
+  participants: readonly FindingParticipant[];
+  evidenceChanged: boolean;
+  observedAt: string;
+}): Promise<void> {
+  const observationId = buildFindingEvidenceObservationId({ findingId: input.findingId, comparisonRunId: input.comparisonRunId });
+  const entries = input.participants.slice(0, CROSS_DOCUMENT_BOUNDS.maxEvidenceObservationEntries);
+  await input.store.saveFindingEvidenceObservation({
+    record: {
+      observationId,
+      companyId: input.companyId,
+      findingId: input.findingId,
+      comparisonRunId: input.comparisonRunId,
+      fingerprint: input.fingerprint,
+      evidenceSignatureHash: input.evidenceSignature.signatureHash,
+      evidenceChanged: input.evidenceChanged,
+      entryCount: entries.length,
+      observedAt: input.observedAt,
+    },
+    entries: entries.map((participant, index) => ({
+      observationId,
+      companyId: input.companyId,
+      findingId: input.findingId,
+      comparisonRunId: input.comparisonRunId,
+      claimId: participant.claimId,
+      ordinal: participant.ordinal || index + 1,
+    })),
+  });
 }
 
 export const RUN_VERSIONS = {

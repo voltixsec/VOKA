@@ -34,17 +34,21 @@ export class LocalEvidenceMaterialization implements EvidenceMaterializationPort
 
     let evidence: AcceptedArtifactEvidence;
     let readerLimitations: string[] = [];
+    let byteVerification: "OK" | "UNAVAILABLE" | "HASH_MISMATCH";
     if (verified.status === "OK") {
       const actual = createHash("sha256").update(verified.bytes).digest("hex");
       if (verified.sha256 !== actual) {
         evidence = { kind: "UNAVAILABLE", reason: "the storage layer returned bytes whose digest differs from the digest it reported" };
         readerLimitations = [HASH_MISMATCH_LIMITATION];
+        byteVerification = "HASH_MISMATCH";
       } else {
+        byteVerification = "OK";
         try {
           evidence = await this.dependencies.analyzer.analyze({ artifact, bytes: verified.bytes });
         } catch (error) {
           const reason = error instanceof Error ? error.message : "unknown analysis failure";
           evidence = { kind: "UNAVAILABLE", reason: `the accepted reading channels refused this artifact (${reason})` };
+          byteVerification = "UNAVAILABLE";
         }
       }
     } else if (verified.status === "HASH_MISMATCH") {
@@ -53,12 +57,14 @@ export class LocalEvidenceMaterialization implements EvidenceMaterializationPort
         reason: `the retained bytes hash to ${verified.actualSha256.slice(0, 12)}… but the artifact record records ${verified.expectedSha256.slice(0, 12)}…`,
       };
       readerLimitations = [HASH_MISMATCH_LIMITATION];
+      byteVerification = "HASH_MISMATCH";
     } else {
       evidence = { kind: "UNAVAILABLE", reason: verified.reason };
       readerLimitations = [BYTES_UNAVAILABLE_LIMITATION];
+      byteVerification = "UNAVAILABLE";
     }
 
-    return materializeArtifact({ artifact, lineage, runId, createdAt, evidence, readerLimitations });
+    return { ...materializeArtifact({ artifact, lineage, runId, createdAt, evidence, readerLimitations }), byteVerification };
   }
 }
 

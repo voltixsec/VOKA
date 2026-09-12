@@ -129,7 +129,11 @@ export type HandoffBundle = {
     stale: boolean;
     staleReason: string | null;
     evidenceChanged: boolean;
+    participantIds: string[];
+    /** Immutable claim ids of the CURRENT evidence projection, resolved through the participant rows. */
     participantClaimIds: string[];
+    /** Durable evidence observations recorded for this finding across runs. */
+    evidenceObservationCount: number;
     limitations: string[];
   }>;
   documentIdentities: Array<{
@@ -217,6 +221,8 @@ export const HANDOFF_NOT_EXPOSED_FIELDS: readonly string[] = [
 
 export const MAX_HANDOFF_CLAIMS = 2_000;
 export const MAX_HANDOFF_FINDINGS = 500;
+/** Evidence observations read while building one handoff bundle. */
+export const MAX_HANDOFF_EVIDENCE_OBSERVATIONS = 4_000;
 
 /**
  * Builds the 2A-11 handoff bundle.
@@ -268,9 +274,27 @@ export async function buildCrossDocumentHandoff(input: {
   const quantityClaims: HandoffQuantityClaim[] = scopeClaims
     .filter((claim) => claim.assertion.predicate === "STATED_QUANTITY" && claim.assertion.quantityOrigin !== null)
     .slice(0, CROSS_DOCUMENT_BOUNDS.maxClaimsPerArtifact)
-    .map((claim) => toHandoffQuantityClaim({ claim, clusterId: clusterByClaim.get(claim.claimId) ?? null, membership: membershipById.get(claim.sourceArtifactId) ?? null, identity: identityByArtifact.get(claim.sourceArtifactId) ?? null }));
+    .map((claim) => toHandoffQuantityClaim({ claim, comparisonScopeId: input.comparisonScopeId, clusterId: clusterByClaim.get(claim.claimId) ?? null, membership: membershipById.get(claim.sourceArtifactId) ?? null, identity: identityByArtifact.get(claim.sourceArtifactId) ?? null }));
 
   const latestRun = runs[0] ?? null;
+
+  // The finding row stores PARTICIPANT ids, not claim ids, so the current claim
+  // set is resolved through the durable evidence observations instead of being
+  // relabeled. One bounded read covers every finding in the scope.
+  const observations = await input.store.listFindingEvidenceObservations({
+    companyId: input.companyId,
+    findingIds: findings.map((finding) => finding.findingId),
+    limit: MAX_HANDOFF_EVIDENCE_OBSERVATIONS,
+  });
+  const currentParticipantClaimIds = new Map<string, string[]>();
+  const observationCountByFinding = new Map<string, number>();
+  for (const observation of observations) {
+    observationCountByFinding.set(observation.findingId, (observationCountByFinding.get(observation.findingId) ?? 0) + 1);
+    // `observations` is ordered oldest-first, so the last write per finding wins:
+    // the handoff describes what the sources state NOW, never an old projection.
+    currentParticipantClaimIds.set(observation.findingId, observation.entries.map((entry) => entry.claimId));
+  }
+
   const lineage = buildLineage(scopeClaims);
   const blockedIdentities = new Set(decisions.filter((decision) => decision.status !== "ACTIVE_REVISION_SELECTED").map((decision) => decision.documentIdentityId));
 
@@ -339,7 +363,9 @@ export async function buildCrossDocumentHandoff(input: {
       stale: finding.engineFlags.stale,
       staleReason: finding.engineFlags.staleReason,
       evidenceChanged: finding.engineFlags.evidenceChanged,
-      participantClaimIds: finding.participantIds.map((participantId) => participantId),
+      participantIds: [...finding.participantIds],
+      participantClaimIds: currentParticipantClaimIds.get(finding.findingId) ?? [],
+      evidenceObservationCount: observationCountByFinding.get(finding.findingId) ?? 0,
       limitations: [...finding.limitations],
     })),
     documentIdentities: identities.map((identity) => ({
@@ -398,6 +424,7 @@ export async function buildCrossDocumentHandoff(input: {
 
 function toHandoffQuantityClaim(input: {
   claim: NormalizedEvidenceClaim;
+  comparisonScopeId: string;
   clusterId: string | null;
   membership: DocumentRevisionMembership | null;
   identity: DocumentIdentityRecord | null;
@@ -405,7 +432,7 @@ function toHandoffQuantityClaim(input: {
   const { claim } = input;
   return {
     claimId: claim.claimId,
-    comparisonScopeId: "",
+    comparisonScopeId: input.comparisonScopeId,
     sourceArtifactId: claim.sourceArtifactId,
     sourceKind: claim.sourceKind,
     readingChannel: claim.readingChannel,
