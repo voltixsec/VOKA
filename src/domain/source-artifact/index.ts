@@ -13,6 +13,25 @@ export const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spr
 export const DXF_MIME_TYPE = "image/vnd.dxf";
 export const DXF_MIME_TYPES: readonly string[] = ["image/vnd.dxf", "application/dxf", "application/x-dxf", "image/x-dxf"];
 
+/**
+ * Phase 2A-8: MIME types seen for a textual IFC STEP file.
+ *
+ * IFC has no single registered type, so every common one is accepted here and
+ * the real decision is made from the bytes: `validateSourceArtifactBytes`
+ * requires ISO-10303-21 structure, and the IFC inspector re-checks it and
+ * names the format it actually found. An RVT renamed to `.ifc` is rejected as
+ * Revit, never parsed as STEP.
+ */
+export const IFC_MIME_TYPE = "application/x-step";
+export const IFC_MIME_TYPES: readonly string[] = [
+  "application/x-step",
+  "application/step",
+  "model/ifc",
+  "application/ifc",
+  "application/x-ifc",
+  "model/vnd.ifc",
+];
+
 export const SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES = new Set([
   "application/pdf",
   "image/png",
@@ -20,12 +39,13 @@ export const SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES = new Set([
   "image/webp",
   XLSX_MIME_TYPE,
   ...DXF_MIME_TYPES,
+  ...IFC_MIME_TYPES,
 ]);
 
 export type SourceArtifactContext = "SALES_ASSISTANT" | "TAKEOFF" | "ENGINEERING_TENDER";
-export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX" | "DXF";
+export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX" | "DXF" | "IFC";
 
-const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, XLSX, and ASCII DXF files are supported.";
+const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, XLSX, ASCII DXF, and textual IFC files are supported.";
 
 export class SourceArtifactPolicyError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -41,6 +61,7 @@ export function artifactKindForMime(mimeType: string): SourceArtifactKind {
   // type only routes the file; whether it really is an ASCII DXF is decided
   // later from its bytes.
   if (DXF_MIME_TYPES.includes(mimeType)) return "DXF";
+  if (IFC_MIME_TYPES.includes(mimeType)) return "IFC";
   if (mimeType.startsWith("image/")) return "IMAGE";
   throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
@@ -63,6 +84,7 @@ function resolveKind(file: File): { mimeType: string; kind: SourceArtifactKind }
   if (mimeType === "" || mimeType === "application/octet-stream") {
     if (extension === "xlsx") return { mimeType: XLSX_MIME_TYPE, kind: "XLSX" };
     if (extension === "dxf") return { mimeType: DXF_MIME_TYPE, kind: "DXF" };
+    if (extension === "ifc") return { mimeType: IFC_MIME_TYPE, kind: "IFC" };
   }
   throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
@@ -95,6 +117,12 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
         // the format it actually found, so a DWG renamed to .dxf is rejected as
         // a DWG with a truthful message rather than parsed as text.
         ? looksLikeAsciiDxf(bytes)
+        : kind === "IFC"
+          // Phase 2A-8: a model must carry ISO-10303-21 STEP structure. This is
+          // a cheap first gate only — the IFC inspector re-checks it and names
+          // the format it actually found, so an RVT renamed to .ifc is rejected
+          // as Revit rather than parsed as STEP.
+          ? looksLikeIfcStep(bytes)
         : kind === "IMAGE" && (
         (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
         || (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
@@ -141,6 +169,26 @@ function looksLikeAsciiDxf(bytes: Uint8Array): boolean {
   // Section framing, or a run of pairs long enough that only a DXF could hold
   // it. Matches the inspector's own decision so the two gates cannot disagree.
   return pairs >= 3 && ((sawSection && sawEnd) || pairs >= 64);
+}
+
+/**
+ * Phase 2A-8: cheap upload-time gate for a textual IFC STEP file.
+ *
+ * This is deliberately not the real check. It confirms the file is text and
+ * begins with ISO-10303-21 plus HEADER/DATA framing — enough to reject a
+ * binary RVT, a DWG, a ZIP/IFCZIP, or a prose file at upload. The
+ * authoritative decision belongs to the IFC inspector.
+ */
+function looksLikeIfcStep(bytes: Uint8Array): boolean {
+  if (bytes.length < 16) return false;
+  const head = String.fromCharCode(...bytes.slice(0, Math.min(24, bytes.length)));
+  if (/^AC10\d{2}/u.test(head) || head.startsWith("AutoCAD Binary DXF")) return false;
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) return false;
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return false;
+  const sample = new TextDecoder("latin1").decode(bytes.slice(0, Math.min(bytes.length, 8_192)));
+  if (sample.includes("\u0000")) return false;
+  const upper = sample.toUpperCase();
+  return upper.includes("ISO-10303-21") && /HEADER\s*;/u.test(upper) && /DATA\s*;/u.test(upper);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,3 +320,5 @@ export * from "./DrawingSymbols";
 export * from "./SpreadsheetInspection";
 // Phase 2A-7: ASCII DXF / CAD drawing evidence.
 export * from "./DxfInspection";
+// Phase 2A-8: textual IFC / BIM evidence.
+export * from "./IfcInspection";

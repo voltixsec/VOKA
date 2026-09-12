@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { SourceArtifactPolicyError, validateSourceArtifactBytes, validateSourceArtifactInput, type StoredDxfModel, type StoredPdfPageModel, type StoredSpreadsheetModel } from "@/src/domain/source-artifact";
+import { SourceArtifactPolicyError, validateSourceArtifactBytes, validateSourceArtifactInput, type StoredDxfModel, type StoredIfcModel, type StoredPdfPageModel, type StoredSpreadsheetModel } from "@/src/domain/source-artifact";
 import { inspectPdfBytes } from "@/src/infrastructure/source-artifacts/PdfTextExtractor";
 // Phase 2A-6: the workbook inspector owns bytes; ingest only orchestrates it.
 import { analyzeXlsxBytes, flattenWorkbookText } from "@/src/infrastructure/source-artifacts/spreadsheet";
 // Phase 2A-7: the CAD inspector owns bytes; ingest only orchestrates it.
 import { analyzeDxfBytes, dxfCitationEntries, flattenDxfText } from "@/src/infrastructure/source-artifacts/dxf";
+// Phase 2A-8: the BIM inspector owns bytes; ingest only orchestrates it.
+import { analyzeIfcBytes, flattenIfcText, ifcCitationEntries } from "@/src/infrastructure/source-artifacts/ifc";
 import { LocalSourceArtifactStorage } from "@/src/infrastructure/source-artifacts/LocalSourceArtifactStorage";
 import { analyzePdfInspectionWithOcr } from "@/src/infrastructure/source-artifacts/ocr/OcrDocumentAnalyzer";
 import { createProductionOcrPort, resolveProductionOcrConfig } from "@/src/infrastructure/source-artifacts/ocr/createProductionOcrPort";
@@ -25,12 +27,15 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
   let extractedPages: StoredPdfPageModel | null = null;
   let extractedWorkbook: StoredSpreadsheetModel | null = null;
   let extractedDrawing: StoredDxfModel | null = null;
+  let extractedIfc: StoredIfcModel | null = null;
   let processingState: "TEXT_EXTRACTED" | "STORED_PENDING_VISION" = "STORED_PENDING_VISION";
   let processingError: string | null = null;
   /** Phase 2A-6: one citation per worksheet, carrying sheet and range locators instead of a page number. */
   let spreadsheetCitations: Array<{ sheet: string; usedRange: string; claim: string }> = [];
   /** Phase 2A-7: one citation per significant layer or block, carrying a CAD locator instead of a page number. */
   let dxfCitations: Array<{ locator: string; claim: string }> = [];
+  /** Phase 2A-8: one citation per significant STEP locator instead of a page number. */
+  let ifcCitations: Array<{ locator: string; claim: string }> = [];
   try {
     if (policy.kind === "PDF") {
       try {
@@ -112,6 +117,27 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
         throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_DXF_UNREADABLE", `The drawing was received but its content could not be read safely: ${reason}`);
       }
     }
+    // Phase 2A-8: a textual IFC STEP model is inspected by the governed BIM
+    // pipeline at ingest so later inspections reuse the result. The analysis
+    // produces observed evidence only: no requirement, quotation line, BOM,
+    // product selection, or procurement record is created here or anywhere
+    // downstream of it. A file that is really an RVT, DWG, or IFCZIP fails
+    // here truthfully, because the format decision comes from the bytes rather
+    // than the name.
+    if (policy.kind === "IFC") {
+      try {
+        const analysis = analyzeIfcBytes(bytes, { filename: input.file.name, mimeType: policy.mimeType });
+        extractedText = flattenIfcText(analysis.inspection);
+        extractedIfc = toStoredIfcModel(analysis);
+        processingState = extractedText ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
+        const limitations = [...new Set(analysis.limitations)];
+        processingError = limitations.length ? limitations.join(" | ").slice(0, 2_000) : null;
+        ifcCitations = ifcCitationEntries(analysis.inspection);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "unknown";
+        throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_IFC_UNREADABLE", `The IFC model was received but its content could not be read safely: ${reason}`);
+      }
+    }
     // One citation per page that carries visible machine-readable text. The page locator is set only
     // when the page tree proved attribution; otherwise it stays null. Invisible-layer text is not cited.
     const citedPages = (extractedPages?.pages ?? []).filter((page) => page.text.trim());
@@ -121,7 +147,7 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
         companyId: input.companyId, originalFilename: input.file.name, mimeType: policy.mimeType, sizeBytes: bytes.byteLength,
         contentSha256, kind: policy.kind, storageRef: stored.storageRef, context: policy.context,
         conversationRuntimeId: input.conversationRuntimeId ?? null, processingState, processingError, extractedText,
-        extractedPages: extractedPages ? (JSON.parse(JSON.stringify(extractedPages)) as object) : extractedWorkbook ? (JSON.parse(JSON.stringify(extractedWorkbook)) as object) : extractedDrawing ? (JSON.parse(JSON.stringify(extractedDrawing)) as object) : undefined, createdByUserId: input.userId,
+        extractedPages: extractedPages ? (JSON.parse(JSON.stringify(extractedPages)) as object) : extractedWorkbook ? (JSON.parse(JSON.stringify(extractedWorkbook)) as object) : extractedDrawing ? (JSON.parse(JSON.stringify(extractedDrawing)) as object) : extractedIfc ? (JSON.parse(JSON.stringify(extractedIfc)) as object) : undefined, createdByUserId: input.userId,
         citations: citedPages.length ? { create: citedPages.map((page) => ({
           companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_TEXT", title: input.file.name,
           pageNumber: pageAttributionReliable && typeof page.pageNumber === "number" ? page.pageNumber : null,
@@ -137,6 +163,13 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
           companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_DXF", title: input.file.name,
           // A drawing has no page: the locator is the CAD locator, carried in
           // `lineLocator` alongside the section so it stays exact and traceable.
+          pageNumber: null, lineLocator: entry.locator,
+          provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
+          supportedClaimSummary: entry.claim.slice(0, 500),
+        })) } : ifcCitations.length ? { create: ifcCitations.map((entry) => ({
+          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_IFC", title: input.file.name,
+          // A model has no page: the locator is the STEP locator, carried in
+          // `lineLocator` so it stays exact and traceable.
           pageNumber: null, lineLocator: entry.locator,
           provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
           supportedClaimSummary: entry.claim.slice(0, 500),
@@ -194,6 +227,26 @@ function toStoredDxfModel(analysis: import("@/src/domain/source-artifact").DxfAn
     externalReferenceCount: inspection.externalReferences.length,
     modelSpaceEntityCount: inspection.spaces.MODEL_SPACE.entityCount,
     paperSpaceEntityCount: inspection.spaces.PAPER_SPACE.entityCount,
+    truncated: inspection.truncated,
+    limitations: analysis.limitations,
+  };
+}
+
+/** Bounded persisted shape for an IFC inspection. Version 5 so the PDF page model (2), workbook model (3), and DXF model (4) stay untouched. */
+function toStoredIfcModel(analysis: import("@/src/domain/source-artifact").IfcAnalysis): StoredIfcModel {
+  const inspection = analysis.inspection;
+  return {
+    version: 5,
+    kind: "IFC",
+    schema: inspection.document.schema.declared,
+    schemaFamily: inspection.document.schema.family,
+    projectName: inspection.project?.name ?? null,
+    siteCount: inspection.sites.length,
+    buildingCount: inspection.buildings.length,
+    storeyCount: inspection.storeys.length,
+    spaceCount: inspection.spaces.length,
+    elementCount: inspection.elements.length,
+    systemCount: inspection.systems.length,
     truncated: inspection.truncated,
     limitations: analysis.limitations,
   };

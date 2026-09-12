@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { OcrPort, SourceArtifactInspectionPort, VisualInspectionPort } from "@/src/application/source-artifacts";
-import { projectArtifactInspection, projectDxfInspection, projectSpreadsheetInspection, renderInspectionBrief, unsupportedDrawingMessage, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
+import { projectArtifactInspection, projectDxfInspection, projectIfcInspection, projectSpreadsheetInspection, renderInspectionBrief, unsupportedDrawingMessage, unsupportedIfcMessage, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
 import type { ToolCitation, ToolObservation } from "@/src/application/conversation-runtime";
-import { DXF_MIME_TYPES, isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
+import { DXF_MIME_TYPES, IFC_MIME_TYPES, isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
 import { LocalSourceArtifactStorage } from "./LocalSourceArtifactStorage";
 import { parseBoqCandidates } from "./BoqCandidateParser";
 import { extractPdfText } from "./PdfTextExtractor";
@@ -20,6 +20,8 @@ import { detectSpreadsheetFormat, SpreadsheetInspectionError } from "./spreadshe
 import { analyzeXlsxBytes } from "./spreadsheet/SpreadsheetInspectionAnalyzer";
 // Phase 2A-7: the CAD channel. The group-code reader stays inside the dxf folder.
 import { DxfInspectionError, analyzeDxfBytes, detectDxfFormat } from "./dxf";
+// Phase 2A-8: the BIM channel. The STEP reader stays inside the ifc folder.
+import { IfcInspectionError, analyzeIfcBytes, detectIfcFormat } from "./ifc";
 
 /**
  * Phase 2A-6: truthful, localized message for a workbook VOKA will not open.
@@ -152,6 +154,14 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     // made from the bytes, so a DWG renamed to .dxf is rejected as a DWG.
     if (artifact.kind === "DXF" || isDxfArtifact(artifact)) {
       return inspectDxfArtifact({ artifact, bytes, citations, input });
+    }
+    // Phase 2A-8: an .ifc artifact takes the BIM channel. It returns before the
+    // PDF/BOQ-text path on purpose: a model must never be flattened into
+    // extracted text and pushed through the legacy BOQ line regex, and that
+    // path is the only place requirements are created. The format decision is
+    // made from the bytes, so an RVT renamed to .ifc is rejected as Revit.
+    if (artifact.kind === "IFC" || isIfcArtifact(artifact)) {
+      return inspectIfcArtifact({ artifact, bytes, citations, input });
     }
     // The brief language follows the runtime locale only; it is never inferred from the file contents.
     const briefLocale = input.locale ?? "en";
@@ -469,6 +479,102 @@ async function inspectDxfArtifact(context: {
     evidence: evidence(citations),
     citations,
     // Never populated for a drawing: semantic candidates are observed readings,
+    // not requirement candidates, and only an explicit user confirmation
+    // creates governed state.
+    requirementCandidates: [],
+    artifactInspection: summary,
+    artifactCandidates: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Phase 2A-8: true when the stored record could be an IFC model even if its
+ * kind predates the IFC enum value: the MIME type and the file name are
+ * corroborating evidence, and the byte-level format decision is what actually
+ * decides. An RVT that was renamed to .ifc is caught here and named for what
+ * it is, rather than being parsed as STEP.
+ *
+ * A file named .dxf is never claimed as IFC here: DXF routing already ran.
+ */
+function isIfcArtifact(artifact: { kind: string; mimeType: string; originalFilename: string }): boolean {
+  if (artifact.kind === "IFC") return true;
+  if (IFC_MIME_TYPES.includes(artifact.mimeType.toLowerCase())) return true;
+  return /\.ifc$/iu.test(artifact.originalFilename.trim());
+}
+
+/**
+ * Phase 2A-8: the governed BIM inspection path.
+ *
+ * It is deliberately self-contained: format detection, structural analysis, and
+ * bounded projection happen here, and the method returns without ever reaching
+ * the requirement-creation code below. IFC evidence cannot create a
+ * Requirement, a QuotationLine, a BOM, a ProductSelection, or any procurement
+ * object, and there is no promotion path from a semantic candidate into
+ * governed state.
+ */
+async function inspectIfcArtifact(context: {
+  artifact: { id: string; originalFilename: string; mimeType: string; processingState: string };
+  bytes: Buffer;
+  citations: ToolCitation[];
+  input: Parameters<SourceArtifactInspectionPort["inspect"]>[0];
+}): Promise<ToolObservation> {
+  const { artifact, bytes, citations, input } = context;
+  const locale = input.locale ?? "en";
+  const decision = detectIfcFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
+  if (!decision.supported) {
+    const summary = projectIfcInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      analysis: null,
+      status: "UNAVAILABLE",
+      failure: decision.reason,
+    });
+    return {
+      kind: input.kind,
+      status: "UNAVAILABLE",
+      artifactId: artifact.id,
+      summary: unsupportedIfcMessage(decision, locale),
+      evidence: evidence(citations),
+      citations,
+      artifactInspection: summary,
+      artifactCandidates: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+  let analysis;
+  try {
+    analysis = analyzeIfcBytes(bytes, { filename: artifact.originalFilename, mimeType: artifact.mimeType });
+  } catch (error) {
+    const reason = error instanceof IfcInspectionError || error instanceof Error ? error.message : "unknown";
+    const summary = projectIfcInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      analysis: null,
+      status: "UNAVAILABLE",
+      failure: `the IFC model could not be inspected safely (${reason})`,
+    });
+    return {
+      kind: input.kind,
+      status: "UNAVAILABLE",
+      artifactId: artifact.id,
+      summary: renderInspectionBrief(summary, locale),
+      evidence: evidence(citations),
+      citations,
+      artifactInspection: summary,
+      artifactCandidates: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+  const summary = projectIfcInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis });
+  return {
+    kind: input.kind,
+    status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "COMPLETED",
+    artifactId: artifact.id,
+    summary: renderInspectionBrief(summary, locale),
+    evidence: evidence(citations),
+    citations,
+    // Never populated for a model: semantic candidates are observed readings,
     // not requirement candidates, and only an explicit user confirmation
     // creates governed state.
     requirementCandidates: [],

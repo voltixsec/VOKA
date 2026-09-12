@@ -20,7 +20,7 @@ describe("Sales Assistant attachment intake", () => {
     expect(onAttachment).toHaveBeenCalledWith(image);
     const unsupported = new File(["doc"], "document.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
     fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [unsupported] } });
-    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, WebP, XLSX, and DXF files are supported.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, WebP, XLSX, DXF, and IFC files are supported.");
   });
 
   // Phase 2A-6: a workbook is an attachable source artifact, so the composer
@@ -53,12 +53,37 @@ describe("Sales Assistant attachment intake", () => {
     expect(onAttachment).toHaveBeenCalledWith(file);
   });
 
+  it("accepts a dropped .ifc model", () => {
+    const onAttachment = vi.fn();
+    render(<Composer isArabic={false} value="" inputRef={{ current: null }} attachment={null} primaryActionLabel="Send" hasText={false} isListening={false} disabled={false} voiceUnavailable={false} onChange={vi.fn()} onKeyDown={vi.fn()} onPrimaryAction={vi.fn()} onAttachment={onAttachment} onRemoveAttachment={vi.fn()} />);
+    const file = new File(["ISO-10303-21;"], "model.ifc", { type: "application/x-step" });
+    fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [file] } });
+    expect(onAttachment).toHaveBeenCalledWith(file);
+  });
+
+  it("accepts a .ifc model the browser reported with a generic type", () => {
+    const onAttachment = vi.fn();
+    render(<Composer isArabic={false} value="" inputRef={{ current: null }} attachment={null} primaryActionLabel="Send" hasText={false} isListening={false} disabled={false} voiceUnavailable={false} onChange={vi.fn()} onKeyDown={vi.fn()} onPrimaryAction={vi.fn()} onAttachment={onAttachment} onRemoveAttachment={vi.fn()} />);
+    const file = new File(["ISO-10303-21;"], "model.ifc", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [file] } });
+    expect(onAttachment).toHaveBeenCalledWith(file);
+  });
+
+  it("still rejects a .rvt file at the composer", () => {
+    const onAttachment = vi.fn();
+    render(<Composer isArabic={false} value="" inputRef={{ current: null }} attachment={null} primaryActionLabel="Send" hasText={false} isListening={false} disabled={false} voiceUnavailable={false} onChange={vi.fn()} onKeyDown={vi.fn()} onPrimaryAction={vi.fn()} onAttachment={onAttachment} onRemoveAttachment={vi.fn()} />);
+    const file = new File(["OLE2"], "model.rvt", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [file] } });
+    expect(onAttachment).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, WebP, XLSX, DXF, and IFC files are supported.");
+  });
+
   it("still rejects a .dwg file at the composer", () => {
     const onAttachment = vi.fn();
     render(<Composer isArabic={false} value="" inputRef={{ current: null }} attachment={null} primaryActionLabel="Send" hasText={false} isListening={false} disabled={false} voiceUnavailable={false} onChange={vi.fn()} onKeyDown={vi.fn()} onPrimaryAction={vi.fn()} onAttachment={onAttachment} onRemoveAttachment={vi.fn()} />);
     const file = new File(["AC1027"], "site.dwg", { type: "application/octet-stream" });
     fireEvent.drop(screen.getByTestId("commercial-composer-input"), { dataTransfer: { files: [file] } });
     expect(onAttachment).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, WebP, XLSX, and DXF files are supported.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Only PDF, PNG, JPG, WebP, XLSX, DXF, and IFC files are supported.");
   });
 });

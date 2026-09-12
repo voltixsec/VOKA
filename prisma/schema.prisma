@@ -47,6 +47,10 @@ enum SourceArtifactKind {
   /// Phase 2A-7: ASCII DXF drawings (CAD intelligence). Binary DXF and DWG are
   /// not a supported kind; they are detected and rejected truthfully at ingest.
   DXF
+  /// Phase 2A-8: textual IFC STEP / BIM intelligence. IFCZIP, binary IFC, RVT,
+  /// and DWG are not a supported kind; they are detected and rejected
+  /// truthfully at ingest.
+  IFC
 }
 
 enum SourceArtifactProcessingState {

@@ -1,0 +1,12 @@
+-- Phase 2A-8: textual IFC STEP models become an inspectable source artifact kind.
+--
+-- Additive only: the new enum value does not change any existing row, column,
+-- constraint, or index, and no other enum value is touched. Postgres allows a
+-- new enum value to be added inside a transaction as long as the value is not
+-- used in that same transaction, which is the case here.
+--
+-- IFCZIP, binary IFC, RVT, RFA, DWG, DGN, and Navisworks are deliberately NOT
+-- added. Those formats are out of scope for this phase and are detected at
+-- ingest and rejected with a truthful, format-specific message rather than
+-- being stored under a kind VOKA cannot inspect.
+ALTER TYPE "SourceArtifactKind" ADD VALUE IF NOT EXISTS 'IFC';

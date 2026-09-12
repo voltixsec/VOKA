@@ -1,5 +1,5 @@
 import { isDrawingObservationType } from "@/src/domain/source-artifact";
-import type { DocumentClassification, DxfAnalysis, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, SpreadsheetAnalysis, VisualOrigin } from "@/src/domain/source-artifact";
+import type { DocumentClassification, DxfAnalysis, IfcAnalysis, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, SpreadsheetAnalysis, VisualOrigin } from "@/src/domain/source-artifact";
 import { proposeArtifactCandidates, renderArtifactConflict, type ArtifactCandidateFact, type ArtifactFactConflict, type GovernedFactRef } from "./ArtifactCandidateFacts";
 import {
   GOVERNANCE_STATEMENTS_SPREADSHEET,
@@ -15,6 +15,13 @@ import {
   renderDxfBrief,
   type ProjectedDxf,
 } from "./DxfInspectionProjection";
+import {
+  GOVERNANCE_STATEMENTS_IFC,
+  emptyProjectedIfc,
+  projectIfcAnalysis,
+  renderIfcBrief,
+  type ProjectedIfc,
+} from "./IfcInspectionProjection";
 
 /**
  * Compact, governed projection of an inspected artifact for the assistant and
@@ -365,7 +372,7 @@ export type ArtifactInspectionSummary = {
    * evidence channel. Phase 2A-7: ASCII DXF drawings are a fourth, with CAD
    * locators instead of page numbers.
    */
-  kind: "PDF" | "IMAGE" | "XLSX" | "DXF";
+  kind: "PDF" | "IMAGE" | "XLSX" | "DXF" | "IFC";
   status: ArtifactInspectionStatus;
   pageCount: number | null;
   classification: ProjectedClassification | null;
@@ -393,6 +400,8 @@ export type ArtifactInspectionSummary = {
   spreadsheet: ProjectedSpreadsheet;
   /** Phase 2A-7: bounded CAD evidence. Empty for PDF, image, and workbook artifacts. */
   dxf: ProjectedDxf;
+  /** Phase 2A-8: bounded BIM evidence. Empty for PDF, image, workbook, and DXF artifacts. */
+  ifc: ProjectedIfc;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -563,6 +572,7 @@ export function projectArtifactInspection(input: {
       geometry: emptyProjectedGeometry(),
       spreadsheet: emptyProjectedSpreadsheet(),
       dxf: emptyProjectedDxf(),
+      ifc: emptyProjectedIfc(),
     };
   }
 
@@ -690,6 +700,7 @@ export function projectArtifactInspection(input: {
     geometry,
     spreadsheet: emptyProjectedSpreadsheet(),
     dxf: emptyProjectedDxf(),
+    ifc: emptyProjectedIfc(),
   };
 }
 
@@ -737,6 +748,7 @@ export function projectSpreadsheetInspection(input: {
     geometry: emptyProjectedGeometry(),
     spreadsheet: { ...spreadsheet, limitations },
     dxf: emptyProjectedDxf(),
+    ifc: emptyProjectedIfc(),
   };
 }
 
@@ -784,6 +796,52 @@ export function projectDxfInspection(input: {
     geometry: emptyProjectedGeometry(),
     spreadsheet: emptyProjectedSpreadsheet(),
     dxf: { ...dxf, limitations },
+    ifc: emptyProjectedIfc(),
+  };
+}
+
+/**
+ * Phase 2A-8: projects an inspected IFC model into the bounded governed view
+ * the assistant and the runtime consume.
+ *
+ * A model has no pages, so `pageCount` is null and every citation carries a
+ * STEP locator instead of a page number. The BIM channel states its own
+ * governance: it preserved declared quantities and never calculated geometry,
+ * never inferred units, and never counted equipment.
+ */
+export function projectIfcInspection(input: {
+  artifactId: string;
+  filename: string;
+  analysis: IfcAnalysis | null;
+  status?: ArtifactInspectionStatus;
+  failure?: string | null;
+}): ArtifactInspectionSummary {
+  const ifc = projectIfcAnalysis(input.analysis);
+  const status: ArtifactInspectionStatus = input.status ?? (input.analysis ? "INSPECTED" : "NOT_INSPECTED");
+  const limitations = [...new Set([...ifc.limitations, ...(input.failure ? [input.failure] : [])])].slice(0, MAX_PROJECTED_LIMITATIONS);
+  return {
+    artifactId: input.artifactId,
+    filename: input.filename,
+    kind: "IFC",
+    status,
+    pageCount: null,
+    classification: null,
+    pageClassifications: [],
+    observations: [],
+    observationCount: 0,
+    candidates: [],
+    conflicts: [],
+    limitations,
+    excerpt: null,
+    excerptTruncated: false,
+    governance: [...GOVERNANCE_STATEMENTS_IFC],
+    ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
+    vision: { attempted: false, used: false, providers: [], lowConfidence: false },
+    drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
+    geometry: emptyProjectedGeometry(),
+    spreadsheet: emptyProjectedSpreadsheet(),
+    dxf: emptyProjectedDxf(),
+    ifc: { ...ifc, limitations },
   };
 }
 
@@ -855,6 +913,7 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
   // describe CAD entities in a language built for scanned pages, so it is
   // rendered separately for both languages.
   if (summary.kind === "DXF") return renderDxfBrief(summary, locale);
+  if (summary.kind === "IFC") return renderIfcBrief(summary, locale);
   const ar = locale === "ar";
   const status = STATUS_LABEL[summary.status][locale];
   if (summary.status === "NOT_INSPECTED" || summary.status === "UNAVAILABLE") {
