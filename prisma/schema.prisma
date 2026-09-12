@@ -172,6 +172,19 @@ model Company {
   sourceArtifacts          SourceArtifact[]
   citations                Citation[]
   artifactDerivations      ArtifactDerivation[]
+  crossDocumentClaims      NormalizedEvidenceClaim[]
+  crossDocumentMaterializations CrossDocumentMaterialization[]
+  comparisonScopes         ComparisonScope[]
+  comparisonScopeArtifacts ComparisonScopeArtifact[]
+  comparisonRuns           ComparisonRun[]
+  subjectMatches           SubjectMatch[]
+  subjectClusters          SubjectCluster[]
+  crossDocumentFindings    CrossDocumentFinding[]
+  findingReviewEvents      FindingReviewEvent[]
+  documentIdentities       DocumentIdentity[]
+  documentRevisionMemberships DocumentRevisionMembership[]
+  documentRelations        DocumentRelation[]
+  activeRevisionDecisions  ActiveRevisionDecision[]
   requirements             Requirement[]
   universalAdoptions       UniversalItemAdoption[]
   universalLibrarySectors  CompanyUniversalLibrarySector[]
@@ -277,6 +290,13 @@ model SourceArtifact {
   derivationsAsOriginal    ArtifactDerivation[]         @relation("DerivationOriginal")
   /// Phase 2A-9: derivations in which this artifact is the DERIVED result.
   derivationsAsDerived     ArtifactDerivation[]         @relation("DerivationDerived")
+  /// Phase 2A-10 evidence records that cite this artifact as their source.
+  claimSourceArtifacts     NormalizedEvidenceClaim[]    @relation("ClaimSourceArtifact")
+  materializationRecords   CrossDocumentMaterialization[] @relation("MaterializationSourceArtifact")
+  scopeMemberships         ComparisonScopeArtifact[]    @relation("ScopeArtifact")
+  findingParticipantEntries FindingParticipant[]        @relation("ParticipantSourceArtifact")
+  documentIdentityEvidence DocumentIdentityEvidence[]   @relation("IdentityEvidenceArtifact")
+  revisionMembershipRecords DocumentRevisionMembership[] @relation("MembershipSourceArtifact")
 
   @@unique([companyId, contentSha256, originalFilename])
   @@index([companyId, context, createdAt])
@@ -2058,4 +2078,811 @@ model LocalizedContent {
   @@index([resourceType, resourceId, locale])
   @@index([status])
   @@index([companyId, status])
+}
+
+// ===========================================================================
+// Phase 2A-10 — CROSS-DOCUMENT EVIDENCE + CONSISTENCY ENGINE
+//
+// One derivation family is one document voice; comparison happens ACROSS
+// derivation families. Nothing here decides engineering truth, calculates
+// takeoff quantities, counts equipment, measures geometry, approves quantities,
+// creates a BOM, chooses products, creates quotation lines or procurement
+// demand, ranks suppliers, or creates RFQs, offers, awards, or POs.
+//
+// Relational-integrity notes (deliberate, not incidental):
+// - `NormalizedEvidenceClaim.id` IS the deterministic claim id, so a claim can
+//   never be duplicated by a re-run over unchanged bytes;
+// - `DocumentIdentity.observedFamilyKey` is indexed NON-UNIQUE on purpose: an
+//   evidence-generated key must never force two uncertain documents into one
+//   identity. Only `confirmedIdentityKey`, which is null until a human confirms
+//   the identity, carries a partial unique index;
+// - every important membership is a relational join table, not a String[]:
+//   selected revision memberships, decision evidence claims, relation evidence
+//   claims, finding participants, and subject-cluster members;
+// - Json is used only for bounded snapshots that need no FK integrity.
+// ===========================================================================
+
+/// The comparison predicates Phase 2A-10 publishes. Commercial predicates (rate,
+/// amount, currency) are deliberately absent, so no policy can enable them.
+enum CrossDocumentClaimPredicate {
+  STATED_QUANTITY
+  UNIT_DECLARATION
+  MANUFACTURER
+  BRAND
+  MODEL_REFERENCE
+  CLASSIFICATION_CODE
+  TYPE_NAME
+  EQUIPMENT_TAG
+  IDENTITY_TAG
+  RATING
+  MATERIAL
+  LOCATION
+  SYSTEM_ASSIGNMENT
+  REVISION_LABEL
+  ITEM_NUMBER
+  SECTION_OR_DIVISION
+  DOCUMENT_IDENTITY
+  PROPERTY_VALUE
+  DESCRIPTION_TEXT
+}
+
+/// Which reading an evidence record came from. Native text and OCR text are
+/// separate channels and are never silently merged.
+enum CrossDocumentReadingChannel {
+  PDF_NATIVE_TEXT
+  PDF_OCR_TEXT
+  IMAGE_VISION
+  DRAWING_VISION
+  DRAWING_STRUCTURED
+  WORKBOOK_STRUCTURED
+  DXF_STRUCTURED
+  IFC_MODEL
+}
+
+/// Exactly two quantity origins exist. APPROVED is deliberately absent:
+/// approval is Phase 2A-11's decision, never an evidence-claim origin.
+enum CrossDocumentQuantityOrigin {
+  STATED
+  DECLARED_MODEL
+}
+
+enum CrossDocumentUnitDimension {
+  COUNT
+  LENGTH
+  AREA
+  VOLUME
+  MASS
+  TIME
+  POWER
+  TEMPERATURE
+  PRESSURE
+  FLOW
+  OTHER
+}
+
+enum CrossDocumentCoverage {
+  COMPLETE
+  PARTIAL
+}
+
+enum CrossDocumentLineageRole {
+  STANDALONE
+  DERIVED_INSPECTED
+  ORIGINAL_PROPRIETARY
+}
+
+enum CrossDocumentRevisionContext {
+  UNDETERMINED
+  OBSERVED
+  SUPERSEDED
+  ADDENDUM
+}
+
+enum CrossDocumentSubjectNamespace {
+  GLOBAL_ID
+  EQUIPMENT_TAG
+  MANUFACTURER_MODEL
+  CLASSIFICATION_CODE
+  TYPE_NAME
+  ITEM_NUMBER
+  DRAWING_SHEET
+  SECTION_DIVISION
+  DOCUMENT_IDENTITY
+  TEXT_LABEL
+  ARTIFACT_LOCATOR
+}
+
+enum CrossDocumentSubjectKeyBasis {
+  SOURCE_IDENTIFIER
+  SOURCE_LABEL
+  SOURCE_PROPERTY
+  ENGINE_DERIVED_TEXT_KEY
+}
+
+enum CrossDocumentFindingKind {
+  STATED_QUANTITY_MISMATCH
+  MODEL_REFERENCE_MISMATCH
+  MANUFACTURER_MISMATCH
+  BRAND_MISMATCH
+  RATING_MISMATCH
+  UNIT_MISMATCH
+  UNIT_NOT_COMPARABLE
+  MATERIAL_MISMATCH
+  LOCATION_MISMATCH
+  SYSTEM_ASSIGNMENT_MISMATCH
+  IDENTITY_TAG_MISMATCH
+  TYPE_MISMATCH
+  CLASSIFICATION_MISMATCH
+  REVISION_MISMATCH
+  REVISION_SET_BLOCKED
+  INCLUSION_EXCLUSION_MISMATCH
+  PROPERTY_MISSING_IN_SOURCE
+  SCHEDULE_COUNTERPART_MISSING
+  AMBIGUOUS_SUBJECT_MATCH
+  SUBJECT_SUGGESTION_ONLY
+  EVIDENCE_COVERAGE_INCOMPLETE
+  EVIDENCE_UNAVAILABLE_FOR_COMPARISON
+  DERIVATION_FIDELITY_REVIEW
+  DESCRIPTION_MISMATCH
+}
+
+enum CrossDocumentSeverity {
+  INFO
+  REVIEW
+  ATTENTION
+}
+
+enum CrossDocumentReviewState {
+  OPEN
+  ACKNOWLEDGED
+  NEEDS_INFORMATION
+  RESOLVED
+  DISMISSED
+}
+
+enum CrossDocumentReviewEventKind {
+  TRANSITIONED
+  REOPENED
+  COMMENTED
+}
+
+enum CrossDocumentStaleReason {
+  NOT_REPRODUCED
+  ARTIFACT_BYTES_CHANGED
+  SCOPE_CHANGED
+  ENGINE_VERSION_CHANGED
+  CLAIMS_SUPERSEDED
+}
+
+enum CrossDocumentIdentityKind {
+  DRAWING
+  SPECIFICATION_SECTION
+  BOQ_OR_SCHEDULE
+  BIM_MODEL
+  TENDER_PACKAGE
+  SUBMITTAL
+  UNRESOLVED
+}
+
+enum CrossDocumentIdentityBasis {
+  EVIDENCE_SUGGESTED
+  GOVERNANCE_CONFIRMED
+  UNRESOLVED
+}
+
+enum CrossDocumentRole {
+  SPECIFICATION
+  BOQ
+  DRAWING
+  SCHEDULE
+  BIM_MODEL
+  TENDER
+  ADDENDUM
+  SUBMITTAL
+  UNKNOWN
+}
+
+enum CrossDocumentRoleSource {
+  USER_DECLARED
+  OBSERVED_FROM_CONTENT
+}
+
+enum CrossDocumentMembershipBasis {
+  IDENTITY_SUGGESTION
+  GOVERNANCE_CONFIRMED
+}
+
+/// Phase 2A-10 owns these relations. DERIVED_FROM is deliberately absent:
+/// Phase 2A-9 ArtifactDerivation already owns lineage.
+enum CrossDocumentRelationKind {
+  REVISION_OF
+  SUPERSEDES
+  ADDENDUM_TO
+  REFERENCES
+  SAME_FAMILY
+}
+
+enum CrossDocumentRelationBasis {
+  USER_DECLARED
+  OBSERVED_EVIDENCE
+}
+
+enum CrossDocumentActiveRevisionStatus {
+  UNDECIDED
+  ACTIVE_REVISION_SELECTED
+  BLOCKED_INCOMPATIBLE_ACTIVES
+}
+
+enum CrossDocumentRevisionPolicy {
+  ACTIVE_ONLY
+  INCLUDE_SUPERSEDED
+  SPECIFIC_REVISIONS
+}
+
+enum CrossDocumentRunStatus {
+  COMPLETED
+  BLOCKED
+  FAILED
+}
+
+enum CrossDocumentMatchTier {
+  T0_EXACT_GLOBAL_ID
+  T1_EXACT_TAG
+  T2_EXACT_MANUFACTURER_MODEL
+  T2_EXACT_CLASSIFICATION
+  T2_EXACT_TYPE_NAME
+  T3_EXACT_ITEM_NUMBER
+  T4_LOCATION_SYSTEM_CORROBORATION
+  T5_TOKEN_SIMILARITY_SUGGESTION
+}
+
+enum CrossDocumentMatchClass {
+  SAME_SUBJECT
+  AMBIGUOUS
+  SUGGESTION_ONLY
+  CONFLICT
+  NO_MATCH
+}
+
+/// The immutable, persisted NORMALIZED EVIDENCE CLAIM.
+model NormalizedEvidenceClaim {
+  id                           String                           @id
+  companyId                    String
+  materializationId            String
+  materializedByRunId          String?
+  sourceArtifactId             String
+  artifactSha256               String
+  sourceKind                   SourceArtifactKind
+  readingChannel               CrossDocumentReadingChannel
+  subjectKeyNamespace          CrossDocumentSubjectNamespace
+  subjectKeyValue              String
+  subjectMatchKey              String
+  subjectKeyBasis              CrossDocumentSubjectKeyBasis
+  subjectLabel                 String?
+  predicate                    CrossDocumentClaimPredicate
+  comparisonPolicy             String
+  valueLiteral                 String
+  /// Populated ONLY when the accepted source model supplied a numeric view.
+  valueNumber                  Decimal?                         @db.Decimal(24, 9)
+  valueNumberOrigin            String?
+  unitLiteral                  String?
+  unitDeclared                 Boolean                          @default(false)
+  unitDimension                CrossDocumentUnitDimension?
+  quantityOrigin               CrossDocumentQuantityOrigin?
+  locationKind                 String?
+  locationValue                String?
+  systemValue                  String?
+  sectionValue                 String?
+  qualifiers                   String[]                         @default([])
+  sourceCoverage               CrossDocumentCoverage            @default(COMPLETE)
+  sourceQualifiers             String[]                         @default([])
+  locator                      String
+  humanLocator                 String?
+  pageNumber                   Int?
+  citationId                   String?
+  rawRecordKind                String?
+  rawRecordId                  String?
+  reliability                  String
+  confidence                   Decimal?                         @db.Decimal(5, 4)
+  limitations                  String[]                         @default([])
+  evidenceDocumentFamilyKey    String?
+  observedRevisionLabel        String?
+  revisionContext              CrossDocumentRevisionContext     @default(UNDETERMINED)
+  derivationFamilyRootArtifactId String
+  lineageRole                  CrossDocumentLineageRole         @default(STANDALONE)
+  derivationId                 String?
+  sourceFormat                 String?
+  derivedFormat                String?
+  derivationMethod             String?
+  converterId                  String?
+  converterVersion             String?
+  fidelityLimitations          String[]                         @default([])
+  materializerVersion          String
+  engineVersion                String
+  comparisonScope              String
+  status                       String                           @default("OBSERVED_NOT_APPROVED")
+  purpose                      String                           @default("CROSS_DOCUMENT_COMPARISON_ONLY")
+  createdAt                    DateTime                         @default(now())
+
+  company        Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceArtifact SourceArtifact            @relation("ClaimSourceArtifact", fields: [sourceArtifactId], references: [id], onDelete: Cascade)
+  materialization CrossDocumentMaterialization @relation(fields: [materializationId], references: [id], onDelete: Cascade)
+  matchesAsLeft    SubjectMatch[]                @relation("MatchLeftClaim")
+  matchesAsRight   SubjectMatch[]                @relation("MatchRightClaim")
+  clusterMemberships SubjectClusterMember[]
+  identityEvidence DocumentIdentityEvidence[]
+  revisionMemberships DocumentRevisionMembership[]
+  relationEvidence DocumentRelationEvidenceClaim[]
+  decisionEvidence ActiveRevisionDecisionEvidenceClaim[]
+  participantEntries FindingParticipant[]
+
+  @@index([companyId, sourceArtifactId])
+  @@index([companyId, predicate])
+  @@index([companyId, subjectMatchKey])
+  @@index([companyId, derivationFamilyRootArtifactId])
+  @@index([companyId, materializationId])
+}
+
+/// Per-artifact materialization coverage. Comparison absence logic reads this.
+model CrossDocumentMaterialization {
+  id                  String                   @id
+  companyId           String
+  comparisonScopeId   String
+  sourceArtifactId    String
+  artifactSha256      String
+  sourceKind          SourceArtifactKind
+  materializerVersion String
+  readingChannels     String[]                 @default([])
+  coverage            CrossDocumentCoverage    @default(COMPLETE)
+  claimCount          Int                      @default(0)
+  truncated           Boolean                  @default(false)
+  truncationReasons   String[]                 @default([])
+  warnings            String[]                 @default([])
+  limitations         String[]                 @default([])
+  createdAt           DateTime                 @default(now())
+
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceArtifact SourceArtifact @relation("MaterializationSourceArtifact", fields: [sourceArtifactId], references: [id], onDelete: Cascade)
+  comparisonScope ComparisonScope @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  claims         NormalizedEvidenceClaim[]
+
+  @@unique([companyId, sourceArtifactId, artifactSha256, materializerVersion])
+  @@index([companyId, comparisonScopeId])
+}
+
+model ComparisonScope {
+  id                    String                     @id @default(cuid())
+  companyId             String
+  name                  String
+  context               String
+  projectKey            String?
+  revisionPolicy        CrossDocumentRevisionPolicy @default(ACTIVE_ONLY)
+  predicateFilters      String[]                   @default([])
+  roleFilters           String[]                   @default([])
+  /// Always true: lineage collapse is not configurable.
+  lineageCollapse       Boolean                    @default(true)
+  policyBounds          Json
+  comparisonScopeClass  String
+  createdByUserId       String
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  company         Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  artifacts       ComparisonScopeArtifact[]
+  runs            ComparisonRun[]
+  materializations CrossDocumentMaterialization[]
+  findings        CrossDocumentFinding[]
+  matches         SubjectMatch[]
+  clusters        SubjectCluster[]
+
+  @@index([companyId, createdAt])
+}
+
+/// A scope's artifact membership AND its document role. The role organizes and
+/// filters; it never selects a winner or changes a finding.
+model ComparisonScopeArtifact {
+  id                      String                  @id @default(cuid())
+  comparisonScopeId       String
+  companyId               String
+  artifactId              String
+  documentRole            CrossDocumentRole       @default(UNKNOWN)
+  documentRoleSource      CrossDocumentRoleSource @default(OBSERVED_FROM_CONTENT)
+  roleDeclaredByUserId    String?
+  activeRevisionDecisionId String?
+  addedAt                 DateTime                @default(now())
+
+  comparisonScope        ComparisonScope          @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceArtifact         SourceArtifact            @relation("ScopeArtifact", fields: [artifactId], references: [id], onDelete: Cascade)
+  /// Which governance decision made this artifact's revision the active one.
+  activeRevisionDecision ActiveRevisionDecision?  @relation(fields: [activeRevisionDecisionId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, comparisonScopeId, artifactId])
+  @@index([companyId, artifactId])
+}
+
+model ComparisonRun {
+  id                    String                   @id @default(cuid())
+  companyId             String
+  comparisonScopeId     String
+  engineVersion         String
+  matcherVersion        String
+  projectorVersion      String
+  materializerVersions  Json
+  artifactStates        Json
+  claimCount            Int                      @default(0)
+  matchCount            Int                      @default(0)
+  findingCount          Int                      @default(0)
+  newFindingCount       Int                      @default(0)
+  reproducedFindingCount Int                     @default(0)
+  notReproducedFindingCount Int                  @default(0)
+  truncated             Boolean                  @default(false)
+  limitations           String[]                 @default([])
+  startedAt             DateTime
+  finishedAt            DateTime
+  status                CrossDocumentRunStatus  @default(COMPLETED)
+  blockReasons          String[]                 @default([])
+  actorUserId           String
+  inputDigest           String
+  createdAt             DateTime                 @default(now())
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comparisonScope ComparisonScope @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  matches         SubjectMatch[]
+  clusters        SubjectCluster[]
+  findings        CrossDocumentFinding[]
+
+  @@index([companyId, comparisonScopeId, startedAt])
+  @@index([companyId, status])
+}
+
+/// A durable, fully explained subject match. Never a product selection.
+model SubjectMatch {
+  id                   String                   @id @default(cuid())
+  companyId            String
+  comparisonScopeId    String
+  comparisonRunId      String
+  leftClaimId          String
+  rightClaimId         String
+  leftArtifactId       String
+  rightArtifactId      String
+  tier                 CrossDocumentMatchTier
+  matchClass           CrossDocumentMatchClass
+  subjectNamespace     CrossDocumentSubjectNamespace
+  comparedKeys         String[]                 @default([])
+  corroborators        String[]                 @default([])
+  blockers             String[]                 @default([])
+  reasons              String[]                 @default([])
+  score                Decimal?                 @db.Decimal(6, 4)
+  ambiguous            Boolean                  @default(false)
+  sameDerivationFamily Boolean                  @default(false)
+  reliability          String
+  limitations          String[]                 @default([])
+  matcherVersion       String
+  explanationVersion   String
+  createdAt            DateTime                 @default(now())
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comparisonScope ComparisonScope @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  comparisonRun   ComparisonRun   @relation(fields: [comparisonRunId], references: [id], onDelete: Cascade)
+  leftClaim       NormalizedEvidenceClaim @relation("MatchLeftClaim", fields: [leftClaimId], references: [id], onDelete: Cascade)
+  rightClaim      NormalizedEvidenceClaim @relation("MatchRightClaim", fields: [rightClaimId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, comparisonScopeId, leftClaimId, rightClaimId, tier])
+  @@index([companyId, comparisonScopeId])
+}
+
+/// A durable subject cluster with relational members: Phase 2A-11 needs a stable
+/// cluster identity, not an in-memory id.
+model SubjectCluster {
+  id                      String                   @id @default(cuid())
+  companyId               String
+  comparisonScopeId       String
+  comparisonRunId         String?
+  subjectNamespace        CrossDocumentSubjectNamespace
+  matchKey                String
+  subjectKeys             String[]                 @default([])
+  strongestTier           CrossDocumentMatchTier?
+  ambiguous               Boolean                  @default(false)
+  comparable              Boolean                  @default(false)
+  blockers                String[]                 @default([])
+  reliability             String
+  limitations             String[]                 @default([])
+  matcherVersion          String
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comparisonScope ComparisonScope @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  members         SubjectClusterMember[]
+  findings        CrossDocumentFinding[]
+
+  @@unique([companyId, comparisonScopeId, subjectNamespace, matchKey])
+  @@index([companyId, comparisonScopeId])
+}
+
+/// Relational cluster membership: not a String array.
+model SubjectClusterMember {
+  id               String   @id @default(cuid())
+  subjectClusterId String
+  claimId          String
+  derivationFamilyRootArtifactId String
+  addedAt          DateTime @default(now())
+
+  subjectCluster SubjectCluster           @relation(fields: [subjectClusterId], references: [id], onDelete: Cascade)
+  claim          NormalizedEvidenceClaim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectClusterId, claimId])
+  @@index([claimId])
+}
+
+/// A durable cross-document finding. Finding IDENTITY (fingerprint) excludes the
+/// current differing values; the evidence signature carries them.
+model CrossDocumentFinding {
+  id                   String                    @id @default(cuid())
+  companyId            String
+  comparisonScopeId    String
+  comparisonRunId      String
+  fingerprint          String
+  findingKind          CrossDocumentFindingKind
+  predicate            CrossDocumentClaimPredicate?
+  subjectClusterId     String?
+  subjectKeys          String[]                  @default([])
+  participantFamilies  String[]                  @default([])
+  evidenceSignature    Json
+  statementTemplateKey String
+  severity             CrossDocumentSeverity     @default(REVIEW)
+  reproduced           Boolean                   @default(false)
+  stale                Boolean                   @default(false)
+  staleReason          CrossDocumentStaleReason?
+  evidenceChanged      Boolean                   @default(false)
+  lastReproducedRunId  String?
+  lastReproducedAt     DateTime?
+  reviewState          CrossDocumentReviewState  @default(OPEN)
+  limitations          String[]                  @default([])
+  truncated            Boolean                   @default(false)
+  projectorVersion     String
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comparisonScope ComparisonScope @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  comparisonRun   ComparisonRun   @relation(fields: [comparisonRunId], references: [id], onDelete: Cascade)
+  subjectCluster  SubjectCluster? @relation(fields: [subjectClusterId], references: [id], onDelete: SetNull)
+  participants    FindingParticipant[]
+  reviewEvents    FindingReviewEvent[]
+
+  @@unique([companyId, comparisonScopeId, fingerprint])
+  @@index([companyId, findingKind])
+  @@index([companyId, reviewState])
+  @@index([companyId, stale])
+  @@index([companyId, subjectClusterId])
+}
+
+/// Relational finding participants. No participant is a winner.
+model FindingParticipant {
+  id                              String                     @id @default(cuid())
+  findingId                       String
+  claimId                         String
+  ordinal                         Int
+  sourceArtifactId                String
+  derivationFamilyRootArtifactId  String
+  documentRole                    CrossDocumentRole          @default(UNKNOWN)
+  documentIdentityId              String?
+  documentRevisionMembershipId    String?
+  verbatimValue                   String
+  sourceNumericView               Decimal?                   @db.Decimal(24, 9)
+  unit                            String?
+  unitDeclared                    Boolean                    @default(false)
+  quantityOrigin                  CrossDocumentQuantityOrigin?
+  locator                         String
+  humanLocator                    String?
+  citationId                      String?
+  sourceKind                      SourceArtifactKind
+  readingChannel                  CrossDocumentReadingChannel
+  reliability                     String
+  confidence                      Decimal?                   @db.Decimal(5, 4)
+  limitations                     String[]                   @default([])
+  createdAt                       DateTime                   @default(now())
+
+  finding                    CrossDocumentFinding    @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  claim                      NormalizedEvidenceClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  sourceArtifact             SourceArtifact           @relation("ParticipantSourceArtifact", fields: [sourceArtifactId], references: [id], onDelete: Cascade)
+  documentIdentity           DocumentIdentity?        @relation(fields: [documentIdentityId], references: [id], onDelete: SetNull)
+  documentRevisionMembership DocumentRevisionMembership? @relation(fields: [documentRevisionMembershipId], references: [membershipId], onDelete: SetNull)
+
+  @@unique([findingId, claimId])
+  @@index([findingId, ordinal])
+  @@index([claimId])
+}
+
+/// Append-only human review history. The comparison engine never writes here.
+model FindingReviewEvent {
+  id           String                      @id @default(cuid())
+  findingId    String
+  companyId    String
+  fromState    CrossDocumentReviewState?
+  toState      CrossDocumentReviewState
+  kind         CrossDocumentReviewEventKind @default(TRANSITIONED)
+  actorUserId  String
+  reason       String
+  explicit     Boolean                     @default(true)
+  createdAt    DateTime                    @default(now())
+
+  company Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  finding CrossDocumentFinding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId, createdAt])
+  @@index([companyId, findingId])
+}
+
+/// A governed logical document identity.
+///
+/// `observedFamilyKey` is NON-UNIQUE: an evidence-generated key must never force
+/// two uncertain documents into one identity. Only `confirmedIdentityKey` — null
+/// until a human confirms — carries a partial unique index.
+model DocumentIdentity {
+  id                   String                       @id @default(cuid())
+  companyId            String
+  kind                 CrossDocumentIdentityKind    @default(UNRESOLVED)
+  label                String
+  observedFamilyKey    String
+  confirmedIdentityKey String?
+  identityBasis        CrossDocumentIdentityBasis   @default(EVIDENCE_SUGGESTED)
+  ambiguous            Boolean                      @default(false)
+  limitations          String[]                     @default([])
+  resolverVersion      String
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  company          Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  evidence         DocumentIdentityEvidence[]
+  memberships      DocumentRevisionMembership[]
+  relations        DocumentRelation[]           @relation("RelationFrom")
+  relatedRelations DocumentRelation[]           @relation("RelationTo")
+  decisions        ActiveRevisionDecision[]
+  participants     FindingParticipant[]
+
+  @@index([companyId, observedFamilyKey])
+  @@index([companyId, identityBasis])
+}
+
+model DocumentIdentityEvidence {
+  id                 String   @id @default(cuid())
+  documentIdentityId String
+  evidenceKind       String
+  value              String
+  sourceArtifactId   String
+  claimId            String?
+  locator            String?
+  reliability        String
+  limitations        String[] @default([])
+  createdAt          DateTime @default(now())
+
+  documentIdentity DocumentIdentity        @relation(fields: [documentIdentityId], references: [id], onDelete: Cascade)
+  sourceArtifact   SourceArtifact          @relation("IdentityEvidenceArtifact", fields: [sourceArtifactId], references: [id], onDelete: Cascade)
+  claim            NormalizedEvidenceClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+
+  @@index([documentIdentityId])
+  @@index([sourceArtifactId])
+}
+
+/// Durable SourceArtifact ↔ DocumentIdentity ↔ observed revision evidence.
+model DocumentRevisionMembership {
+  membershipId                    String                      @id
+  companyId                       String
+  documentIdentityId              String
+  sourceArtifactId                String
+  artifactSha256                  String
+  observedRevisionLabel           String?
+  revisionClaimId                 String?
+  membershipBasis                 CrossDocumentMembershipBasis @default(IDENTITY_SUGGESTION)
+  documentRole                    CrossDocumentRole            @default(UNKNOWN)
+  documentRoleSource              CrossDocumentRoleSource      @default(OBSERVED_FROM_CONTENT)
+  derivationFamilyRootArtifactId  String
+  lineageRole                     CrossDocumentLineageRole     @default(STANDALONE)
+  limitations                     String[]                     @default([])
+  createdAt                       DateTime                     @default(now())
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentIdentity DocumentIdentity @relation(fields: [documentIdentityId], references: [id], onDelete: Cascade)
+  sourceArtifact   SourceArtifact   @relation("MembershipSourceArtifact", fields: [sourceArtifactId], references: [id], onDelete: Cascade)
+  revisionClaim    NormalizedEvidenceClaim? @relation(fields: [revisionClaimId], references: [id], onDelete: SetNull)
+  selections       ActiveRevisionDecisionSelection[]
+  participants     FindingParticipant[]
+
+  @@unique([companyId, documentIdentityId, sourceArtifactId, observedRevisionLabel])
+  @@index([companyId, sourceArtifactId])
+  @@index([companyId, documentIdentityId])
+}
+
+/// A document relation. DERIVED_FROM is absent: 2A-9 owns lineage.
+model DocumentRelation {
+  id                        String                        @id @default(cuid())
+  companyId                 String
+  documentIdentityId        String
+  relatedDocumentIdentityId String
+  relationKind              CrossDocumentRelationKind
+  relationBasis             CrossDocumentRelationBasis    @default(USER_DECLARED)
+  declaredByUserId          String?
+  reason                    String
+  limitations               String[]                      @default([])
+  createdAt                 DateTime                      @default(now())
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentIdentity DocumentIdentity @relation("RelationFrom", fields: [documentIdentityId], references: [id], onDelete: Cascade)
+  relatedDocument  DocumentIdentity @relation("RelationTo", fields: [relatedDocumentIdentityId], references: [id], onDelete: Cascade)
+  evidenceClaims   DocumentRelationEvidenceClaim[]
+
+  @@unique([companyId, documentIdentityId, relatedDocumentIdentityId, relationKind])
+  @@index([companyId, documentIdentityId])
+}
+
+/// Relational evidence link for a document relation: not a String array.
+model DocumentRelationEvidenceClaim {
+  id                 String   @id @default(cuid())
+  documentRelationId String
+  claimId            String
+  addedAt            DateTime @default(now())
+
+  documentRelation DocumentRelation       @relation(fields: [documentRelationId], references: [id], onDelete: Cascade)
+  claim            NormalizedEvidenceClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([documentRelationId, claimId])
+  @@index([claimId])
+}
+
+/// Append-only active-revision decision history. The engine may offer
+/// candidates; only a human decision activates a revision.
+model ActiveRevisionDecision {
+  id                     String                           @id @default(cuid())
+  companyId              String
+  documentIdentityId     String
+  comparisonScopeId      String?
+  decisionVersion        Int
+  status                 CrossDocumentActiveRevisionStatus @default(UNDECIDED)
+  actorUserId            String
+  reason                 String
+  decidedAt              DateTime
+  supersedesDecisionId   String?
+  blockedReason          String?
+  limitations            String[]                         @default([])
+  createdAt              DateTime                         @default(now())
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentIdentity DocumentIdentity @relation(fields: [documentIdentityId], references: [id], onDelete: Cascade)
+  selections       ActiveRevisionDecisionSelection[]
+  evidenceClaims   ActiveRevisionDecisionEvidenceClaim[]
+  scopeArtifacts   ComparisonScopeArtifact[]
+
+  @@unique([companyId, documentIdentityId, decisionVersion])
+  @@index([companyId, documentIdentityId, decidedAt])
+}
+
+/// Relational selection of revision memberships: not a String array.
+model ActiveRevisionDecisionSelection {
+  id            String   @id @default(cuid())
+  decisionId    String
+  membershipId  String
+  addedAt       DateTime @default(now())
+
+  decision   ActiveRevisionDecision     @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  membership DocumentRevisionMembership @relation(fields: [membershipId], references: [membershipId], onDelete: Cascade)
+
+  @@unique([decisionId, membershipId])
+  @@index([membershipId])
+}
+
+/// Relational evidence link for a governance decision: not a String array.
+model ActiveRevisionDecisionEvidenceClaim {
+  id         String   @id @default(cuid())
+  decisionId String
+  claimId    String
+  addedAt    DateTime @default(now())
+
+  decision ActiveRevisionDecision   @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  claim    NormalizedEvidenceClaim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, claimId])
+  @@index([claimId])
 }
