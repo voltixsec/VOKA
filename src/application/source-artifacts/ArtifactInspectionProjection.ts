@@ -22,6 +22,13 @@ import {
   renderIfcBrief,
   type ProjectedIfc,
 } from "./IfcInspectionProjection";
+import {
+  emptyProjectedProprietaryOriginal,
+  renderDerivationLineageSentence,
+  renderProprietaryOriginalGuidance,
+  type ProjectedDerivationLineage,
+  type ProjectedProprietaryOriginal,
+} from "./DerivationProjection";
 
 /**
  * Compact, governed projection of an inspected artifact for the assistant and
@@ -370,9 +377,10 @@ export type ArtifactInspectionSummary = {
   /**
    * Phase 2A-6: XLSX workbooks are a third artifact kind with their own
    * evidence channel. Phase 2A-7: ASCII DXF drawings are a fourth, with CAD
-   * locators instead of page numbers.
+   * locators instead of page numbers. Phase 2A-9: DWG and RVT proprietary
+   * originals carry identity and guidance only — never semantic evidence.
    */
-  kind: "PDF" | "IMAGE" | "XLSX" | "DXF" | "IFC";
+  kind: "PDF" | "IMAGE" | "XLSX" | "DXF" | "IFC" | "DWG" | "RVT";
   status: ArtifactInspectionStatus;
   pageCount: number | null;
   classification: ProjectedClassification | null;
@@ -402,6 +410,10 @@ export type ArtifactInspectionSummary = {
   dxf: ProjectedDxf;
   /** Phase 2A-8: bounded BIM evidence. Empty for PDF, image, workbook, and DXF artifacts. */
   ifc: ProjectedIfc;
+  /** Phase 2A-9: identity + guidance for a proprietary original. Empty for every other kind. */
+  proprietaryOriginal: ProjectedProprietaryOriginal;
+  /** Phase 2A-9: bounded lineage when this artifact was DERIVED from an original. Null otherwise. */
+  derivationLineage: ProjectedDerivationLineage | null;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -573,6 +585,8 @@ export function projectArtifactInspection(input: {
       spreadsheet: emptyProjectedSpreadsheet(),
       dxf: emptyProjectedDxf(),
       ifc: emptyProjectedIfc(),
+      proprietaryOriginal: emptyProjectedProprietaryOriginal(),
+      derivationLineage: null,
     };
   }
 
@@ -701,6 +715,8 @@ export function projectArtifactInspection(input: {
     spreadsheet: emptyProjectedSpreadsheet(),
     dxf: emptyProjectedDxf(),
     ifc: emptyProjectedIfc(),
+    proprietaryOriginal: emptyProjectedProprietaryOriginal(),
+    derivationLineage: null,
   };
 }
 
@@ -749,6 +765,8 @@ export function projectSpreadsheetInspection(input: {
     spreadsheet: { ...spreadsheet, limitations },
     dxf: emptyProjectedDxf(),
     ifc: emptyProjectedIfc(),
+    proprietaryOriginal: emptyProjectedProprietaryOriginal(),
+    derivationLineage: null,
   };
 }
 
@@ -797,6 +815,8 @@ export function projectDxfInspection(input: {
     spreadsheet: emptyProjectedSpreadsheet(),
     dxf: { ...dxf, limitations },
     ifc: emptyProjectedIfc(),
+    proprietaryOriginal: emptyProjectedProprietaryOriginal(),
+    derivationLineage: null,
   };
 }
 
@@ -842,6 +862,8 @@ export function projectIfcInspection(input: {
     spreadsheet: emptyProjectedSpreadsheet(),
     dxf: emptyProjectedDxf(),
     ifc: { ...ifc, limitations },
+    proprietaryOriginal: emptyProjectedProprietaryOriginal(),
+    derivationLineage: null,
   };
 }
 
@@ -914,6 +936,9 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
   // rendered separately for both languages.
   if (summary.kind === "DXF") return renderDxfBrief(summary, locale);
   if (summary.kind === "IFC") return renderIfcBrief(summary, locale);
+  // Phase 2A-9: a proprietary original was stored but never parsed. Its brief
+  // is truthful bounded guidance, never a claim of inspection.
+  if (summary.kind === "DWG" || summary.kind === "RVT") return renderProprietaryOriginalGuidance(summary, locale);
   const ar = locale === "ar";
   const status = STATUS_LABEL[summary.status][locale];
   if (summary.status === "NOT_INSPECTED" || summary.status === "UNAVAILABLE") {

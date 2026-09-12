@@ -32,6 +32,13 @@ export const IFC_MIME_TYPES: readonly string[] = [
   "model/vnd.ifc",
 ];
 
+// Phase 2A-9: proprietary originals join the attachable set so they can enter
+// the governed derivation workflow. The declared type only routes the upload:
+// a DWG needs a recognized release signature, and an RVT needs the OLE2
+// compound signature plus the Revit BasicFileInfo marker, both checked from
+// the bytes downstream. The bytes still decide what every file is.
+import { DWG_MIME_TYPES, DWG_MIME_TYPE, looksLikeDwgOriginal, looksLikeRvtOriginal, RVT_MIME_TYPES, RVT_MIME_TYPE } from "./ProprietaryArtifact";
+
 export const SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES = new Set([
   "application/pdf",
   "image/png",
@@ -40,12 +47,14 @@ export const SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES = new Set([
   XLSX_MIME_TYPE,
   ...DXF_MIME_TYPES,
   ...IFC_MIME_TYPES,
+  ...DWG_MIME_TYPES,
+  ...RVT_MIME_TYPES,
 ]);
 
 export type SourceArtifactContext = "SALES_ASSISTANT" | "TAKEOFF" | "ENGINEERING_TENDER";
-export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX" | "DXF" | "IFC";
+export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX" | "DXF" | "IFC" | "DWG" | "RVT";
 
-const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, XLSX, ASCII DXF, and textual IFC files are supported.";
+const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, XLSX, ASCII DXF, textual IFC, DWG, and RVT files are supported.";
 
 export class SourceArtifactPolicyError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -62,6 +71,11 @@ export function artifactKindForMime(mimeType: string): SourceArtifactKind {
   // later from its bytes.
   if (DXF_MIME_TYPES.includes(mimeType)) return "DXF";
   if (IFC_MIME_TYPES.includes(mimeType)) return "IFC";
+  // Phase 2A-9: proprietary originals route by any type a browser may report.
+  // The type only routes the file; whether it really is a DWG (release
+  // signature) or an RVT (OLE2 + Revit marker) is decided later from its bytes.
+  if (DWG_MIME_TYPES.includes(mimeType)) return "DWG";
+  if (RVT_MIME_TYPES.includes(mimeType)) return "RVT";
   if (mimeType.startsWith("image/")) return "IMAGE";
   throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
@@ -85,11 +99,23 @@ function resolveKind(file: File): { mimeType: string; kind: SourceArtifactKind }
     if (extension === "xlsx") return { mimeType: XLSX_MIME_TYPE, kind: "XLSX" };
     if (extension === "dxf") return { mimeType: DXF_MIME_TYPE, kind: "DXF" };
     if (extension === "ifc") return { mimeType: IFC_MIME_TYPE, kind: "IFC" };
+    // Phase 2A-9: proprietary originals a browser reported generically. The
+    // extension routes the upload; the bytes decide whether the file is one.
+    if (extension === "dwg") return { mimeType: DWG_MIME_TYPE, kind: "DWG" };
+    if (extension === "rvt") return { mimeType: RVT_MIME_TYPE, kind: "RVT" };
   }
   throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
 
 export function validateSourceArtifactInput(file: File, contextValue: unknown) {
+  // Phase 2A-9: a Revit family definition is named truthfully and rejected
+  // before any generic "unsupported type" answer can hide what it is.
+  if (/\.rfa$/iu.test(file.name.trim())) {
+    throw new SourceArtifactPolicyError(
+      "SOURCE_ARTIFACT_RFA_UNSUPPORTED",
+      "This is a Revit family definition (.rfa), not a supported project/model artifact in this phase. Export the project that uses it as IFC and attach the exported model.",
+    );
+  }
   const { mimeType, kind } = resolveKind(file);
   const maxBytes = 25 * 1024 * 1024;
   if (!Number.isInteger(file.size) || file.size <= 0 || file.size > maxBytes) {
@@ -123,6 +149,16 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
           // the format it actually found, so an RVT renamed to .ifc is rejected
           // as Revit rather than parsed as STEP.
           ? looksLikeIfcStep(bytes)
+        // Phase 2A-9: a proprietary DWG original must carry a recognized AC10xx
+        // release signature. A renamed random file, an OLE compound document, or
+        // any other binary is rejected here instead of being stored as a DWG.
+        : kind === "DWG"
+          ? looksLikeDwgOriginal(bytes)
+        // Phase 2A-9: a Revit original must carry the OLE2 compound signature
+        // AND the Revit BasicFileInfo structural marker. The container
+        // signature alone proves nothing — OLE2 is a generic container.
+        : kind === "RVT"
+          ? looksLikeRvtOriginal(bytes)
         : kind === "IMAGE" && (
         (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
         || (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
@@ -322,3 +358,6 @@ export * from "./SpreadsheetInspection";
 export * from "./DxfInspection";
 // Phase 2A-8: textual IFC / BIM evidence.
 export * from "./IfcInspection";
+// Phase 2A-9: proprietary originals (DWG / RVT) and governed derivation lineage.
+export * from "./ProprietaryArtifact";
+export * from "./ArtifactDerivation";

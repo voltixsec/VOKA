@@ -10,6 +10,7 @@ import type {
   ObservationReliability,
 } from "@/src/domain/source-artifact";
 import type { ArtifactInspectionStatus, ArtifactInspectionSummary } from "./ArtifactInspectionProjection";
+import { renderDerivationLineageSentence } from "./DerivationProjection";
 
 const MAX_PROJECTED_LIMITATIONS_LOCAL = 8;
 
@@ -396,6 +397,10 @@ export function renderIfcBrief(summary: ArtifactInspectionSummary, locale: "ar" 
   parts.push(ar
     ? `قرأت الملف "${summary.filename}" (${ifcStatusWord(summary.status, ar)}).`
     : `I read "${summary.filename}" (${ifcStatusWord(summary.status, ar)}).`);
+
+  // Phase 2A-9: derivation lineage is augmented around the accepted BIM
+  // evidence — it never replaces it and never claims the reading is verified.
+  if (summary.derivationLineage) parts.push(renderDerivationLineageSentence(summary.derivationLineage, locale));
 
   if (ifc.schema) {
     parts.push(ar

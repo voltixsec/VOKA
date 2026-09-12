@@ -49,20 +49,42 @@ const MIME_TYPES = new Set([
   "application/ifc",
   "application/x-ifc",
   "model/vnd.ifc",
+  // Phase 2A-9: proprietary ORIGINALS join the attachable set so they can
+  // enter the governed derivation workflow. VOKA does not parse them: the
+  // composer must never say a DWG/RVT was inspected, and the bytes still
+  // decide what the file really is.
+  "image/vnd.dwg",
+  "application/acad",
+  "application/x-acad",
+  "application/autocad_dwg",
+  "application/dwg",
+  "application/x-dwg",
+  "application/vnd.revit.rvt",
+  "application/x-revit-rvt",
+  "application/vnd.autodesk.revit.rvt",
+  "application/revit",
 ]);
-const EXTENSIONS = /\.(?:pdf|png|jpe?g|webp|xlsx|dxf|ifc)$/iu;
+const EXTENSIONS = /\.(?:pdf|png|jpe?g|webp|xlsx|dxf|ifc|dwg|rvt)$/iu;
 /** Types that carry no useful information, so the file name is used instead. */
 const GENERIC_TYPES = new Set(["", "application/octet-stream"]);
+/** A Revit family definition is truthfully unsupported — never accepted, never vague. */
+const RFA_EXTENSION = /\.rfa$/iu;
 
 export function Composer({ isArabic, value, inputRef, attachment, attachmentStatus = "READY", primaryActionLabel, hasText, isListening, disabled, voiceUnavailable, interimTranscript, onChange, onKeyDown, onPrimaryAction, onAttachment, onRemoveAttachment, controls, status, elevated = false }: Props) {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const acceptFile = (file: File | null) => {
     if (!file) return;
     const declaredType = file.type.toLowerCase();
+    if (RFA_EXTENSION.test(file.name)) {
+      setAttachmentError(isArabic
+        ? "هذا تعريف عائلة Revit‏ (.rfa)، وهو غير مدعوم كملف مشروع/نموذج في هذه المرحلة. صدّر المشروع الذي يستخدمه كملف IFC وأرفق النموذج المُصدَّر."
+        : "This is a Revit family definition (.rfa), not a supported project/model artifact in this phase. Export the project that uses it as IFC and attach the exported model.");
+      return;
+    }
     // A generic type is treated the same way the upload policy treats it: the
     // extension is corroborating evidence, and the bytes decide.
     const validType = MIME_TYPES.has(declaredType) || (GENERIC_TYPES.has(declaredType) && EXTENSIONS.test(file.name));
-    if (!validType) { setAttachmentError(isArabic ? "يسمح بملفات PDF أو PNG أو JPG أو WebP أو XLSX أو DXF أو IFC فقط." : "Only PDF, PNG, JPG, WebP, XLSX, DXF, and IFC files are supported."); return; }
+    if (!validType) { setAttachmentError(isArabic ? "يسمح بملفات PDF أو PNG أو JPG أو WebP أو XLSX أو DXF أو IFC أو DWG أو RVT فقط." : "Only PDF, PNG, JPG, WebP, XLSX, DXF, IFC, DWG, and RVT files are supported."); return; }
     if (file.size <= 0 || file.size > 25 * 1024 * 1024) { setAttachmentError(isArabic ? "حجم الملف يجب ألا يتجاوز 25 ميجابايت." : "The file must be smaller than 25 MB."); return; }
     setAttachmentError(null); onAttachment(file);
   };
@@ -82,7 +104,7 @@ export function Composer({ isArabic, value, inputRef, attachment, attachmentStat
       <textarea ref={inputRef} id="sales-prompt-input" value={value} onChange={onChange} onKeyDown={onKeyDown} rows={1} placeholder={isArabic ? "اكتب طلبك، اسأل، أو غيّر أي تفصيلة…" : "Message VOKA, ask a question, or change any detail…"} className="block max-h-44 min-h-[4.25rem] w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-[15px] leading-7 text-white outline-none [scrollbar-width:none] placeholder:text-slate-500 [&::-webkit-scrollbar]:hidden sm:px-4 sm:text-base" />
       <div className="flex items-center gap-1.5 px-1 pb-1">
         <label htmlFor="commercial-attachment" className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-transparent text-slate-400 outline-none transition hover:border-white/[0.07] hover:bg-white/[0.055] hover:text-white focus-within:ring-2 focus-within:ring-sky-400 motion-reduce:transition-none"><AssistantIcon name="attach" /><span className="sr-only">{isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"}</span></label>
-        <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/vnd.dxf,application/dxf,application/x-dxf,application/x-step,application/step,model/ifc,application/ifc,.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.dxf,.ifc" onChange={(event) => { acceptFile(event.target.files?.[0] ?? null); event.currentTarget.value = ""; }} className="sr-only" />
+        <input id="commercial-attachment" aria-label={isArabic ? "إرفاق ملف تجاري" : "Attach commercial file"} type="file" accept="application/pdf,image/png,image/jpeg,image/webp,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/vnd.dxf,application/dxf,application/x-dxf,application/x-step,application/step,model/ifc,application/ifc,image/vnd.dwg,application/acad,application/dwg,application/vnd.revit.rvt,application/x-revit-rvt,.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.dxf,.ifc,.dwg,.rvt" onChange={(event) => { acceptFile(event.target.files?.[0] ?? null); event.currentTarget.value = ""; }} className="sr-only" />
         <span className="hidden text-[11px] text-slate-600 sm:inline">{isArabic ? "اختر ملفاً أو اسحبه أو الصقه · اضغط إدخال للإرسال" : "Choose, drop, or paste a file · Enter to send"}</span>
         <button type="button" data-testid="primary-voice-action" title={voiceUnavailable ? (isArabic ? "الإدخال الصوتي غير مدعوم" : "Voice input is not supported") : undefined} aria-label={primaryActionLabel} disabled={disabled} onClick={onPrimaryAction} className="ms-auto inline-flex min-h-11 items-center gap-2 rounded-full bg-gradient-to-r from-sky-300 to-cyan-200 px-4 py-2 text-xs font-bold text-slate-950 shadow-[0_10px_30px_-14px_rgba(56,189,248,.8)] outline-none transition hover:brightness-105 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-wait disabled:opacity-50 motion-reduce:transition-none">
           <AssistantIcon name={hasText || isListening ? "send" : "mic"} className="h-4 w-4" /><span>{primaryActionLabel}</span>

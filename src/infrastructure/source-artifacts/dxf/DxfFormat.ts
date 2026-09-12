@@ -1,4 +1,6 @@
-import { MAX_DXF_BYTES, MAX_DXF_LIMITATIONS, type DxfFormat } from "@/src/domain/source-artifact";
+// Phase 2A-9: the recognized DWG release table is canonical in the domain
+// module, so every detector names the same releases from one source.
+import { DWG_VERSION_PREFIXES, MAX_DXF_BYTES, MAX_DXF_LIMITATIONS, type DxfFormat } from "@/src/domain/source-artifact";
 
 /**
  * Phase 2A-7: truthful CAD format detection.
@@ -37,11 +39,9 @@ export type DxfFormatDecision = {
  * DWG releases begin with their `$ACADVER` string as six ASCII bytes followed
  * by a NUL. Matching that prefix is what lets VOKA say "this is a DWG" instead
  * of "this is not a CAD file", which is a far more useful answer to an engineer
- * who exported the wrong format.
+ * who exported the wrong format. The release table itself is canonical in the
+ * domain layer (Phase 2A-9) and shared with the proprietary-original gate.
  */
-const DWG_VERSION_PREFIXES = [
-  "AC1009", "AC1012", "AC1014", "AC1015", "AC1017", "AC1018", "AC1021", "AC1024", "AC1027", "AC1032", "AC1035",
-] as const;
 
 /** AutoCAD binary DXF header. `\x1A` is the documented end-of-file byte. */
 const BINARY_DXF_PREFIX = "AutoCAD Binary DXF";

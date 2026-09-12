@@ -1,4 +1,6 @@
-import { MAX_IFC_BYTES, MAX_IFC_LIMITATIONS, type IfcFormat } from "@/src/domain/source-artifact";
+// Phase 2A-9: the recognized DWG release table is canonical in the domain
+// module, so every detector names the same releases from one source.
+import { DWG_VERSION_PREFIXES, MAX_IFC_BYTES, MAX_IFC_LIMITATIONS, type IfcFormat } from "@/src/domain/source-artifact";
 
 /**
  * Phase 2A-8: truthful IFC format detection.
@@ -33,9 +35,7 @@ export type IfcFormatDecision = {
 
 const OLE2_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 const ZIP_SIGNATURE = [0x50, 0x4b];
-const DWG_VERSION_PREFIXES = [
-  "AC1009", "AC1012", "AC1014", "AC1015", "AC1017", "AC1018", "AC1021", "AC1024", "AC1027", "AC1032", "AC1035",
-] as const;
+
 const BINARY_DXF_PREFIX = "AutoCAD Binary DXF";
 const STEP_PREFIX = "ISO-10303-21";
 const DGN_SIGNATURES: readonly number[][] = [

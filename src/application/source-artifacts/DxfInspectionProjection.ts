@@ -9,6 +9,7 @@ import type {
   ObservationReliability,
 } from "@/src/domain/source-artifact";
 import type { ArtifactInspectionStatus, ArtifactInspectionSummary } from "./ArtifactInspectionProjection";
+import { renderDerivationLineageSentence } from "./DerivationProjection";
 
 /**
  * Kept local rather than imported from the shared projection module: this
@@ -693,6 +694,10 @@ export function renderDxfBrief(summary: ArtifactInspectionSummary, locale: "ar" 
   parts.push(ar
     ? `قرأت الملف "${summary.filename}" (${dxfStatusWord(summary.status, ar)}).`
     : `I read "${summary.filename}" (${dxfStatusWord(summary.status, ar)}).`);
+
+  // Phase 2A-9: derivation lineage is augmented around the accepted CAD
+  // evidence — it never replaces it and never claims the reading is verified.
+  if (summary.derivationLineage) parts.push(renderDerivationLineageSentence(summary.derivationLineage, locale));
 
   const version = versionSentence(dxf, ar);
   if (version) parts.push(version);

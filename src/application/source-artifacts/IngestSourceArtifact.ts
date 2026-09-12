@@ -15,12 +15,46 @@ import type { OcrPort } from "./ports";
 
 const storage = new LocalSourceArtifactStorage();
 
+/**
+ * Phase 2A-9: the uploaded-file entry point is now a thin wrapper.
+ *
+ * It resolves the declared type/kind/context from the `File` exactly as
+ * before (MIME type first, extension as corroborating evidence for generic
+ * types, bytes as the real decision) and hands the bytes to the common
+ * internal ingestion primitive, which is also the entry point for derived
+ * conversion output. Upload behavior, hash behavior, and every existing
+ * format path are unchanged.
+ */
 export async function ingestSourceArtifact(input: { companyId: string; userId: string; file: File; context: unknown; conversationRuntimeId?: string | null; ocr?: OcrPort | null }) {
   const policy = validateSourceArtifactInput(input.file, input.context);
   const bytes = Buffer.from(await input.file.arrayBuffer());
-  validateSourceArtifactBytes(policy.kind, bytes);
+  return ingestSourceArtifactBytes({
+    companyId: input.companyId,
+    userId: input.userId,
+    bytes,
+    filename: input.file.name,
+    mimeType: policy.mimeType,
+    kind: policy.kind,
+    context: policy.context,
+    conversationRuntimeId: input.conversationRuntimeId,
+    ocr: input.ocr,
+  });
+}
+
+/**
+ * Phase 2A-9: the common internal raw-bytes ingestion primitive.
+ *
+ * Every artifact — user upload or derived conversion output — enters through
+ * here, so derived DXF/IFC files pass exactly the same byte gates, inspection
+ * pipelines, citation rules, and idempotency as uploaded ones. There is no
+ * second DXF/IFC ingestion implementation.
+ */
+export async function ingestSourceArtifactBytes(input: { companyId: string; userId: string; bytes: Buffer; filename: string; mimeType: string; kind: import("@/src/domain/source-artifact").SourceArtifactKind; context: import("@/src/domain/source-artifact").SourceArtifactContext; conversationRuntimeId?: string | null; ocr?: OcrPort | null }) {
+  const policy = { filename: input.filename, mimeType: input.mimeType, kind: input.kind, context: input.context };
+  validateSourceArtifactBytes(policy.kind, input.bytes);
+  const bytes = input.bytes;
   const contentSha256 = createHash("sha256").update(bytes).digest("hex");
-  const existing = await prisma.sourceArtifact.findFirst({ where: { companyId: input.companyId, contentSha256, originalFilename: input.file.name }, include: { citations: { orderBy: { pageNumber: "asc" } } } });
+  const existing = await prisma.sourceArtifact.findFirst({ where: { companyId: input.companyId, contentSha256, originalFilename: policy.filename }, include: { citations: { orderBy: { pageNumber: "asc" } } } });
   if (existing) return { artifact: existing, idempotent: true };
   const stored = await storage.put(bytes, contentSha256);
   let extractedText: string | null = null;
@@ -28,7 +62,7 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
   let extractedWorkbook: StoredSpreadsheetModel | null = null;
   let extractedDrawing: StoredDxfModel | null = null;
   let extractedIfc: StoredIfcModel | null = null;
-  let processingState: "TEXT_EXTRACTED" | "STORED_PENDING_VISION" = "STORED_PENDING_VISION";
+  let processingState: "TEXT_EXTRACTED" | "STORED_PENDING_VISION" | "RECEIVED" = "STORED_PENDING_VISION";
   let processingError: string | null = null;
   /** Phase 2A-6: one citation per worksheet, carrying sheet and range locators instead of a page number. */
   let spreadsheetCitations: Array<{ sheet: string; usedRange: string; claim: string }> = [];
@@ -79,7 +113,7 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
     // here or anywhere downstream of it.
     if (policy.kind === "XLSX") {
       try {
-        const analysis = await analyzeXlsxBytes(bytes, { filename: input.file.name, mimeType: policy.mimeType });
+        const analysis = await analyzeXlsxBytes(bytes, { filename: policy.filename, mimeType: policy.mimeType });
         extractedText = flattenWorkbookText(analysis.workbook);
         extractedWorkbook = toStoredSpreadsheetModel(analysis);
         processingState = extractedText ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
@@ -105,7 +139,7 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
     // because the format decision comes from the bytes rather than the name.
     if (policy.kind === "DXF") {
       try {
-        const analysis = analyzeDxfBytes(bytes, { filename: input.file.name, mimeType: policy.mimeType });
+        const analysis = analyzeDxfBytes(bytes, { filename: policy.filename, mimeType: policy.mimeType });
         extractedText = flattenDxfText(analysis.inspection);
         extractedDrawing = toStoredDxfModel(analysis);
         processingState = extractedText ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
@@ -126,7 +160,7 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
     // than the name.
     if (policy.kind === "IFC") {
       try {
-        const analysis = analyzeIfcBytes(bytes, { filename: input.file.name, mimeType: policy.mimeType });
+        const analysis = analyzeIfcBytes(bytes, { filename: policy.filename, mimeType: policy.mimeType });
         extractedText = flattenIfcText(analysis.inspection);
         extractedIfc = toStoredIfcModel(analysis);
         processingState = extractedText ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
@@ -138,36 +172,48 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
         throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_IFC_UNREADABLE", `The IFC model was received but its content could not be read safely: ${reason}`);
       }
     }
+    // Phase 2A-9: a proprietary DWG/RVT ORIGINAL is stored, never parsed.
+    //
+    // The bytes already passed their structural gate above (a recognized DWG
+    // release signature, or an OLE2 compound signature corroborated by the
+    // Revit BasicFileInfo marker). Nothing else happens to them here: no text
+    // extraction, no CAD/BIM semantic analysis, no citation, and no page
+    // model. The original stays byte-immutable and independently addressable;
+    // intelligence enters the picture only through an explicit
+    // ArtifactDerivation to a separately stored DXF/IFC artifact.
+    if (policy.kind === "DWG" || policy.kind === "RVT") {
+      processingState = "RECEIVED";
+    }
     // One citation per page that carries visible machine-readable text. The page locator is set only
     // when the page tree proved attribution; otherwise it stays null. Invisible-layer text is not cited.
     const citedPages = (extractedPages?.pages ?? []).filter((page) => page.text.trim());
     const pageAttributionReliable = extractedPages?.document.pageAttributionReliable ?? false;
     const artifact = await prisma.sourceArtifact.create({
       data: {
-        companyId: input.companyId, originalFilename: input.file.name, mimeType: policy.mimeType, sizeBytes: bytes.byteLength,
+        companyId: input.companyId, originalFilename: policy.filename, mimeType: policy.mimeType, sizeBytes: bytes.byteLength,
         contentSha256, kind: policy.kind, storageRef: stored.storageRef, context: policy.context,
         conversationRuntimeId: input.conversationRuntimeId ?? null, processingState, processingError, extractedText,
         extractedPages: extractedPages ? (JSON.parse(JSON.stringify(extractedPages)) as object) : extractedWorkbook ? (JSON.parse(JSON.stringify(extractedWorkbook)) as object) : extractedDrawing ? (JSON.parse(JSON.stringify(extractedDrawing)) as object) : extractedIfc ? (JSON.parse(JSON.stringify(extractedIfc)) as object) : undefined, createdByUserId: input.userId,
         citations: citedPages.length ? { create: citedPages.map((page) => ({
-          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_TEXT", title: input.file.name,
+          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_TEXT", title: policy.filename,
           pageNumber: pageAttributionReliable && typeof page.pageNumber === "number" ? page.pageNumber : null,
           provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
           supportedClaimSummary: page.text.slice(0, 500),
         })) } : spreadsheetCitations.length ? { create: spreadsheetCitations.map((entry) => ({
-          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_SPREADSHEET", title: input.file.name,
+          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_SPREADSHEET", title: policy.filename,
           // A worksheet has no page: the locator is the sheet and its used range.
           pageNumber: null, sheet: entry.sheet, lineLocator: entry.usedRange || null,
           provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
           supportedClaimSummary: entry.claim.slice(0, 500),
         })) } : dxfCitations.length ? { create: dxfCitations.map((entry) => ({
-          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_DXF", title: input.file.name,
+          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_DXF", title: policy.filename,
           // A drawing has no page: the locator is the CAD locator, carried in
           // `lineLocator` alongside the section so it stays exact and traceable.
           pageNumber: null, lineLocator: entry.locator,
           provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
           supportedClaimSummary: entry.claim.slice(0, 500),
         })) } : ifcCitations.length ? { create: ifcCitations.map((entry) => ({
-          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_IFC", title: input.file.name,
+          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_IFC", title: policy.filename,
           // A model has no page: the locator is the STEP locator, carried in
           // `lineLocator` so it stays exact and traceable.
           pageNumber: null, lineLocator: entry.locator,

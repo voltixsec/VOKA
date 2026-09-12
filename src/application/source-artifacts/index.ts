@@ -5,3 +5,5 @@ export * from "./SpreadsheetInspectionProjection";
 export * from "./DxfInspectionProjection";
 export * from "./IfcInspectionProjection";
 export * from "./ArtifactInspectionProjection";
+// Phase 2A-9: proprietary original guidance and bounded derivation lineage.
+export * from "./DerivationProjection";

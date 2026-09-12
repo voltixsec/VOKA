@@ -44,13 +44,23 @@ enum SourceArtifactKind {
   IMAGE
   /// Phase 2A-6: structured .xlsx workbooks (Excel / BOQ intelligence).
   XLSX
-  /// Phase 2A-7: ASCII DXF drawings (CAD intelligence). Binary DXF and DWG are
-  /// not a supported kind; they are detected and rejected truthfully at ingest.
+  /// Phase 2A-7: ASCII DXF drawings (CAD intelligence). Binary DXF is
+  /// not a supported kind; it is detected and rejected truthfully at ingest.
   DXF
-  /// Phase 2A-8: textual IFC STEP / BIM intelligence. IFCZIP, binary IFC, RVT,
-  /// and DWG are not a supported kind; they are detected and rejected
+  /// Phase 2A-8: textual IFC STEP / BIM intelligence. IFCZIP, binary IFC,
+  /// and RFA are not a supported kind; they are detected and rejected
   /// truthfully at ingest.
   IFC
+  /// Phase 2A-9: a proprietary binary DWG ORIGINAL artifact. Its bytes are kept
+  /// immutable and are never semantically parsed; a governed ArtifactDerivation
+  /// links it to a separately stored DXF artifact that the 2A-7 CAD
+  /// intelligence inspects.
+  DWG
+  /// Phase 2A-9: a proprietary Revit project (RVT) ORIGINAL artifact. Its bytes
+  /// are kept immutable and are never semantically parsed; a governed
+  /// ArtifactDerivation links it to a separately stored IFC artifact that the
+  /// 2A-8 BIM intelligence inspects.
+  RVT
 }
 
 enum SourceArtifactProcessingState {
@@ -59,6 +69,36 @@ enum SourceArtifactProcessingState {
   STORED_PENDING_VISION
   DRAWING_VISUAL_ANALYSIS_NOT_AVAILABLE
   FAILED
+}
+
+/// Phase 2A-9: how a derived artifact came to exist.
+enum ArtifactDerivationKind {
+  /// A proprietary binary DWG original was derived into an ASCII DXF artifact.
+  DWG_TO_DXF
+  /// A proprietary Revit project original was derived into a textual IFC artifact.
+  RVT_TO_IFC
+}
+
+/// Phase 2A-9: who produced the derived bytes. The two channels must never be
+/// confused: an automated conversion records a converter identity; a
+/// user-provided export records none and VOKA never claims it converted.
+enum ArtifactDerivationMethod {
+  /// A ConversionProvider converted the bytes inside VOKA.
+  AUTOMATED_CONVERSION
+  /// The user exported the derived file externally and explicitly linked it to
+  /// the original artifact.
+  USER_PROVIDED_EXPORT
+}
+
+/// Phase 2A-9: lifecycle of one derivation.
+enum ArtifactDerivationStatus {
+  PENDING
+  RUNNING
+  AWAITING_USER_EXPORT
+  SUCCEEDED
+  FAILED
+  NOT_CONFIGURED
+  REJECTED
 }
 
 enum RequirementQuantityStatus {
@@ -131,6 +171,7 @@ model Company {
   drawingTakeoffSessions   DrawingTakeoffSession[]
   sourceArtifacts          SourceArtifact[]
   citations                Citation[]
+  artifactDerivations      ArtifactDerivation[]
   requirements             Requirement[]
   universalAdoptions       UniversalItemAdoption[]
   universalLibrarySectors  CompanyUniversalLibrarySector[]
@@ -232,10 +273,61 @@ model SourceArtifact {
   createdBy                User?                        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   citations                Citation[]
   takeoffSessions          DrawingTakeoffSession[]
+  /// Phase 2A-9: derivations in which this artifact is the proprietary ORIGINAL.
+  derivationsAsOriginal    ArtifactDerivation[]         @relation("DerivationOriginal")
+  /// Phase 2A-9: derivations in which this artifact is the DERIVED result.
+  derivationsAsDerived     ArtifactDerivation[]         @relation("DerivationDerived")
 
   @@unique([companyId, contentSha256, originalFilename])
   @@index([companyId, context, createdAt])
   @@index([companyId, processingState])
+}
+
+/// Phase 2A-9: explicit, immutable lineage between a proprietary ORIGINAL
+/// artifact (DWG / RVT) and a separately stored DERIVED artifact (DXF / IFC).
+///
+/// The original row is never mutated into the derived format: both artifacts
+/// stay independently addressable forever, and this relation is the only link.
+/// Every automated conversion is idempotent through `derivationKey`
+/// (source hash + kind + method + converter id/version + canonical options);
+/// every user-provided export is idempotent through the source/derived hash
+/// pair. Historical derivations are never overwritten.
+model ArtifactDerivation {
+  id                  String                  @id @default(cuid())
+  companyId           String
+  originalArtifactId  String
+  derivedArtifactId   String?
+  derivationKind      ArtifactDerivationKind
+  derivationMethod    ArtifactDerivationMethod
+  /// Converter identity for AUTOMATED_CONVERSION; always null for
+  /// USER_PROVIDED_EXPORT (VOKA never fabricates a converter for a user export).
+  converterId         String?
+  converterVersion    String?
+  /// Deterministic canonical fingerprint of the conversion options.
+  optionsFingerprint  String
+  sourceFormat        String
+  derivedFormat       String
+  sourceHash          String
+  derivedHash         String?
+  status              ArtifactDerivationStatus @default(PENDING)
+  failureReason       String?
+  /// Channel A: converter/provider warnings. Never merged with VOKA limitations.
+  warnings            String[]                @default([])
+  /// Channel B: static VOKA-authored fidelity limitations. Never merged with
+  /// provider warnings.
+  fidelityLimitations String[]                @default([])
+  /// Deterministic idempotency key, unique per company.
+  derivationKey       String
+  createdAt           DateTime                @default(now())
+  completedAt         DateTime?
+  company             Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  originalArtifact    SourceArtifact          @relation("DerivationOriginal", fields: [originalArtifactId], references: [id], onDelete: Cascade)
+  derivedArtifact     SourceArtifact?         @relation("DerivationDerived", fields: [derivedArtifactId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, derivationKey])
+  @@index([companyId, originalArtifactId])
+  @@index([companyId, derivedArtifactId])
+  @@index([companyId, status, createdAt])
 }
 
 model Citation {

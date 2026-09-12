@@ -22,6 +22,9 @@ import { analyzeXlsxBytes } from "./spreadsheet/SpreadsheetInspectionAnalyzer";
 import { DxfInspectionError, analyzeDxfBytes, detectDxfFormat } from "./dxf";
 // Phase 2A-8: the BIM channel. The STEP reader stays inside the ifc folder.
 import { IfcInspectionError, analyzeIfcBytes, detectIfcFormat } from "./ifc";
+// Phase 2A-9: proprietary originals and derivation lineage on the runtime path.
+import { detectDwgOriginalFormat, detectRvtOriginalFormat } from "@/src/domain/source-artifact";
+import { emptyProjectedDxf, emptyProjectedGeometry, emptyProjectedIfc, emptyProjectedProprietaryOriginal, emptyProjectedSpreadsheet, projectDerivationLineage, type ProjectedDerivationLineage } from "@/src/application/source-artifacts";
 
 /**
  * Phase 2A-6: truthful, localized message for a workbook VOKA will not open.
@@ -147,13 +150,20 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     if (artifact.kind === "XLSX" || isXlsxArtifact(artifact)) {
       return inspectSpreadsheetArtifact({ artifact, bytes, citations, input });
     }
+    // Phase 2A-9: a proprietary ORIGINAL never reaches any semantic channel.
+    // The bounded truthful answer names what the file is (with its version
+    // signature when the bytes carry one) and the governed export path; it
+    // returns before PDF, DXF, IFC, and BOQ requirement creation.
+    if (artifact.kind === "DWG" || artifact.kind === "RVT") {
+      return inspectProprietaryOriginalArtifact({ artifact, bytes, citations, input });
+    }
     // Phase 2A-7: a .dxf artifact takes the CAD channel. It returns before the
     // PDF/BOQ-text path on purpose: a drawing must never be flattened into
     // extracted text and pushed through the legacy BOQ line regex, and that
     // path is the only place requirements are created. The format decision is
     // made from the bytes, so a DWG renamed to .dxf is rejected as a DWG.
     if (artifact.kind === "DXF" || isDxfArtifact(artifact)) {
-      return inspectDxfArtifact({ artifact, bytes, citations, input });
+      return inspectDxfArtifact({ artifact, bytes, citations, input, lineage: await derivationLineageFor(input.companyId, artifact.id) });
     }
     // Phase 2A-8: an .ifc artifact takes the BIM channel. It returns before the
     // PDF/BOQ-text path on purpose: a model must never be flattened into
@@ -161,7 +171,7 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     // path is the only place requirements are created. The format decision is
     // made from the bytes, so an RVT renamed to .ifc is rejected as Revit.
     if (artifact.kind === "IFC" || isIfcArtifact(artifact)) {
-      return inspectIfcArtifact({ artifact, bytes, citations, input });
+      return inspectIfcArtifact({ artifact, bytes, citations, input, lineage: await derivationLineageFor(input.companyId, artifact.id) });
     }
     // The brief language follows the runtime locale only; it is never inferred from the file contents.
     const briefLocale = input.locale ?? "en";
@@ -391,6 +401,117 @@ async function inspectSpreadsheetArtifact(context: {
   };
 }
 
+/** Phase 2A-9: attaches bounded derivation lineage onto an inspection summary. */
+function attachLineage<T extends { derivationLineage: ProjectedDerivationLineage | null }>(summary: T, lineage: ProjectedDerivationLineage | null): T {
+  summary.derivationLineage = lineage;
+  return summary;
+}
+
+/**
+ * Phase 2A-9: bounded lineage for a DERIVED artifact.
+ *
+ * Loads the most recent succeeded derivation in which this artifact is the
+ * derived result, plus the original artifact's filename, and projects both
+ * into the bounded lineage record. Provider internals are never loaded here:
+ * only the lineage fields the projection allows.
+ *
+ * Lineage is AUGMENTATION around the accepted evidence channel, so a lineage
+ * lookup problem (including a database that has not received the 2A-9
+ * migration yet) degrades to "no lineage shown" and never blocks the
+ * inspection itself.
+ */
+async function derivationLineageFor(companyId: string, artifactId: string): Promise<ProjectedDerivationLineage | null> {
+  try {
+    const derivation = await prisma.artifactDerivation.findFirst({
+      where: { companyId, derivedArtifactId: artifactId, status: "SUCCEEDED" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!derivation) return null;
+    const original = await prisma.sourceArtifact.findFirst({ where: { id: derivation.originalArtifactId, companyId }, select: { originalFilename: true } });
+    return projectDerivationLineage({ derivation, originalFilename: original?.originalFilename ?? derivation.sourceHash });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Phase 2A-9: the governed proprietary-original channel.
+ *
+ * A DWG or RVT original is stored bytes, not parsed content. This path reads
+ * only the format/version signature it already accepted at ingest, states it,
+ * and returns truthful bounded guidance — before any PDF, DXF, IFC, or BOQ
+ * requirement path. No citation, observation, candidate, or requirement is
+ * ever produced from a proprietary original here.
+ */
+function inspectProprietaryOriginalArtifact(context: {
+  artifact: { id: string; originalFilename: string; mimeType: string; kind: string; processingState: string };
+  bytes: Buffer;
+  citations: ToolCitation[];
+  input: Parameters<SourceArtifactInspectionPort["inspect"]>[0];
+}): ToolObservation {
+  const { artifact, bytes, citations, input } = context;
+  const locale = input.locale ?? "en";
+  const kind = artifact.kind === "RVT" ? "RVT" : "DWG";
+  const limitations: string[] = [];
+  let versionCode: string | null = null;
+  let versionLabel: string | null = null;
+  let verified = true;
+  if (kind === "DWG") {
+    const decision = detectDwgOriginalFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
+    versionCode = decision.versionCode;
+    versionLabel = decision.versionLabel;
+    if (!decision.isDwg) limitations.push(`the retained bytes no longer carry a recognized DWG version signature (${decision.reason})`);
+  } else {
+    const decision = detectRvtOriginalFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
+    verified = decision.decision === "RVT";
+    if (!verified) limitations.push(`the retained bytes could not be corroborated as a Revit project (${decision.reason})`);
+  }
+  limitations.push("VOKA does not parse proprietary CAD/BIM originals; the retained bytes are kept immutable for lineage only");
+  const summary = {
+    artifactId: artifact.id,
+    filename: artifact.originalFilename,
+    kind: kind as "DWG" | "RVT",
+    status: "UNAVAILABLE" as ArtifactInspectionStatus,
+    pageCount: null,
+    classification: null,
+    pageClassifications: [],
+    observations: [],
+    observationCount: 0,
+    candidates: [],
+    conflicts: [],
+    limitations: limitations.slice(0, 8),
+    excerpt: null,
+    excerptTruncated: false,
+    governance: [
+      "a proprietary original is retained bytes only: it is never semantically inspected, and its derived artifact carries the evidence",
+      "observed values are not approved, verified, or selected",
+    ],
+    ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
+    vision: { attempted: false, used: false, providers: [], lowConfidence: false },
+    drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
+    geometry: emptyProjectedGeometry(),
+    spreadsheet: emptyProjectedSpreadsheet(),
+    dxf: emptyProjectedDxf(),
+    ifc: emptyProjectedIfc(),
+    proprietaryOriginal: { attempted: false, used: false as const, format: kind as "DWG" | "RVT", versionCode, versionLabel, verified, limitations: limitations.slice(0, 8) },
+    derivationLineage: null,
+  };
+  return {
+    kind: input.kind,
+    status: "UNAVAILABLE",
+    artifactId: artifact.id,
+    summary: renderInspectionBrief(summary, locale),
+    evidence: evidence(citations),
+    citations,
+    // Never populated for a proprietary original: no semantic parsing ran, so
+    // there is nothing to promote and nothing to review.
+    requirementCandidates: [],
+    artifactInspection: summary,
+    artifactCandidates: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Phase 2A-7: true when the stored record could be a drawing even if its kind
  * predates the DXF enum value: the MIME type and the file name are
@@ -419,21 +540,25 @@ async function inspectDxfArtifact(context: {
   bytes: Buffer;
   citations: ToolCitation[];
   input: Parameters<SourceArtifactInspectionPort["inspect"]>[0];
+  /** Phase 2A-9: bounded derivation lineage when this drawing was derived from a proprietary original. */
+  lineage: ProjectedDerivationLineage | null;
 }): Promise<ToolObservation> {
-  const { artifact, bytes, citations, input } = context;
+  // Phase 2A-9: lineage is attached in every branch so a derived drawing stays
+  // traceable to its original even when its own inspection fails.
+  const { artifact, bytes, citations, input, lineage } = context;
   const locale = input.locale ?? "en";
   const decision = detectDxfFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
   if (!decision.supported) {
     // An unsupported drawing is still a truthful answer: VOKA says what it
     // found and that it did not read the file, rather than implying otherwise.
     // A DWG is named as a DWG, never quietly treated as a DXF.
-    const summary = projectDxfInspection({
+    const summary = attachLineage(projectDxfInspection({
       artifactId: artifact.id,
       filename: artifact.originalFilename,
       analysis: null,
       status: "UNAVAILABLE",
       failure: decision.reason,
-    });
+    }), lineage);
     return {
       kind: input.kind,
       status: "UNAVAILABLE",
@@ -451,13 +576,13 @@ async function inspectDxfArtifact(context: {
     analysis = analyzeDxfBytes(bytes, { filename: artifact.originalFilename, mimeType: artifact.mimeType });
   } catch (error) {
     const reason = error instanceof DxfInspectionError || error instanceof Error ? error.message : "unknown";
-    const summary = projectDxfInspection({
+    const summary = attachLineage(projectDxfInspection({
       artifactId: artifact.id,
       filename: artifact.originalFilename,
       analysis: null,
       status: "UNAVAILABLE",
       failure: `the drawing could not be inspected safely (${reason})`,
-    });
+    }), lineage);
     return {
       kind: input.kind,
       status: "UNAVAILABLE",
@@ -470,7 +595,7 @@ async function inspectDxfArtifact(context: {
       createdAt: new Date().toISOString(),
     };
   }
-  const summary = projectDxfInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis });
+  const summary = attachLineage(projectDxfInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis }), lineage);
   return {
     kind: input.kind,
     status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "COMPLETED",
@@ -518,18 +643,22 @@ async function inspectIfcArtifact(context: {
   bytes: Buffer;
   citations: ToolCitation[];
   input: Parameters<SourceArtifactInspectionPort["inspect"]>[0];
+  /** Phase 2A-9: bounded derivation lineage when this model was derived from a proprietary original. */
+  lineage: ProjectedDerivationLineage | null;
 }): Promise<ToolObservation> {
-  const { artifact, bytes, citations, input } = context;
+  // Phase 2A-9: lineage is attached in every branch so a derived model stays
+  // traceable to its original even when its own inspection fails.
+  const { artifact, bytes, citations, input, lineage } = context;
   const locale = input.locale ?? "en";
   const decision = detectIfcFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
   if (!decision.supported) {
-    const summary = projectIfcInspection({
+    const summary = attachLineage(projectIfcInspection({
       artifactId: artifact.id,
       filename: artifact.originalFilename,
       analysis: null,
       status: "UNAVAILABLE",
       failure: decision.reason,
-    });
+    }), lineage);
     return {
       kind: input.kind,
       status: "UNAVAILABLE",
@@ -547,13 +676,13 @@ async function inspectIfcArtifact(context: {
     analysis = analyzeIfcBytes(bytes, { filename: artifact.originalFilename, mimeType: artifact.mimeType });
   } catch (error) {
     const reason = error instanceof IfcInspectionError || error instanceof Error ? error.message : "unknown";
-    const summary = projectIfcInspection({
+    const summary = attachLineage(projectIfcInspection({
       artifactId: artifact.id,
       filename: artifact.originalFilename,
       analysis: null,
       status: "UNAVAILABLE",
       failure: `the IFC model could not be inspected safely (${reason})`,
-    });
+    }), lineage);
     return {
       kind: input.kind,
       status: "UNAVAILABLE",
@@ -566,7 +695,7 @@ async function inspectIfcArtifact(context: {
       createdAt: new Date().toISOString(),
     };
   }
-  const summary = projectIfcInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis });
+  const summary = attachLineage(projectIfcInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis }), lineage);
   return {
     kind: input.kind,
     status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "COMPLETED",
