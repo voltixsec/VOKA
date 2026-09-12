@@ -1,5 +1,5 @@
 import { isDrawingObservationType } from "@/src/domain/source-artifact";
-import type { DocumentClassification, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, SpreadsheetAnalysis, VisualOrigin } from "@/src/domain/source-artifact";
+import type { DocumentClassification, DxfAnalysis, ImageInspection, ObservationOrigin, ObservedFact, ObservationReliability, ObservationType, PdfInspection, SpreadsheetAnalysis, VisualOrigin } from "@/src/domain/source-artifact";
 import { proposeArtifactCandidates, renderArtifactConflict, type ArtifactCandidateFact, type ArtifactFactConflict, type GovernedFactRef } from "./ArtifactCandidateFacts";
 import {
   GOVERNANCE_STATEMENTS_SPREADSHEET,
@@ -8,6 +8,13 @@ import {
   renderSpreadsheetBrief,
   type ProjectedSpreadsheet,
 } from "./SpreadsheetInspectionProjection";
+import {
+  GOVERNANCE_STATEMENTS_DXF,
+  emptyProjectedDxf,
+  projectDxfAnalysis,
+  renderDxfBrief,
+  type ProjectedDxf,
+} from "./DxfInspectionProjection";
 
 /**
  * Compact, governed projection of an inspected artifact for the assistant and
@@ -353,8 +360,12 @@ export type DrawingVisionOutcome = "RAN" | "NO_QUALIFIED_PAGES" | "NOT_CONFIGURE
 export type ArtifactInspectionSummary = {
   artifactId: string;
   filename: string;
-  /** Phase 2A-6: XLSX workbooks are a third artifact kind with their own evidence channel. */
-  kind: "PDF" | "IMAGE" | "XLSX";
+  /**
+   * Phase 2A-6: XLSX workbooks are a third artifact kind with their own
+   * evidence channel. Phase 2A-7: ASCII DXF drawings are a fourth, with CAD
+   * locators instead of page numbers.
+   */
+  kind: "PDF" | "IMAGE" | "XLSX" | "DXF";
   status: ArtifactInspectionStatus;
   pageCount: number | null;
   classification: ProjectedClassification | null;
@@ -380,6 +391,8 @@ export type ArtifactInspectionSummary = {
   geometry: ProjectedArtifactGeometry;
   /** Phase 2A-6: bounded workbook evidence. Empty for PDF and image artifacts. */
   spreadsheet: ProjectedSpreadsheet;
+  /** Phase 2A-7: bounded CAD evidence. Empty for PDF, image, and workbook artifacts. */
+  dxf: ProjectedDxf;
 };
 
 const GOVERNANCE_STATEMENTS = [
@@ -549,6 +562,7 @@ export function projectArtifactInspection(input: {
       drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
       geometry: emptyProjectedGeometry(),
       spreadsheet: emptyProjectedSpreadsheet(),
+      dxf: emptyProjectedDxf(),
     };
   }
 
@@ -675,6 +689,7 @@ export function projectArtifactInspection(input: {
     drawing,
     geometry,
     spreadsheet: emptyProjectedSpreadsheet(),
+    dxf: emptyProjectedDxf(),
   };
 }
 
@@ -721,6 +736,54 @@ export function projectSpreadsheetInspection(input: {
     drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
     geometry: emptyProjectedGeometry(),
     spreadsheet: { ...spreadsheet, limitations },
+    dxf: emptyProjectedDxf(),
+  };
+}
+
+/**
+ * Phase 2A-7: projects an inspected ASCII DXF drawing into the bounded governed
+ * view the assistant and the runtime consume.
+ *
+ * A drawing has no pages and no extracted narrative text, so the page-shaped
+ * fields stay empty rather than being filled with stand-ins: `pageCount` is
+ * null and every citation carries a CAD locator — section, handle, layer,
+ * block, layout, and space — instead of a page number. The CAD channel states
+ * its own governance, because the generic document promise is not the promise a
+ * drawing reading makes: it preserved coordinates and declared units exactly,
+ * measured nothing, recalculated no dimension, and counted no equipment.
+ */
+export function projectDxfInspection(input: {
+  artifactId: string;
+  filename: string;
+  analysis: DxfAnalysis | null;
+  status?: ArtifactInspectionStatus;
+  failure?: string | null;
+}): ArtifactInspectionSummary {
+  const dxf = projectDxfAnalysis(input.analysis);
+  const status: ArtifactInspectionStatus = input.status ?? (input.analysis ? "INSPECTED" : "NOT_INSPECTED");
+  const limitations = [...new Set([...dxf.limitations, ...(input.failure ? [input.failure] : [])])].slice(0, MAX_PROJECTED_LIMITATIONS);
+  return {
+    artifactId: input.artifactId,
+    filename: input.filename,
+    kind: "DXF",
+    status,
+    pageCount: null,
+    classification: null,
+    pageClassifications: [],
+    observations: [],
+    observationCount: 0,
+    candidates: [],
+    conflicts: [],
+    limitations,
+    excerpt: null,
+    excerptTruncated: false,
+    governance: [...GOVERNANCE_STATEMENTS_DXF],
+    ocr: { attempted: false, used: false, pages: [], engines: [], lowConfidence: false },
+    vision: { attempted: false, used: false, providers: [], lowConfidence: false },
+    drawing: { attempted: false, used: false, pages: [], providers: [], lowConfidence: false, outcome: null },
+    geometry: emptyProjectedGeometry(),
+    spreadsheet: emptyProjectedSpreadsheet(),
+    dxf: { ...dxf, limitations },
   };
 }
 
@@ -787,6 +850,11 @@ export function renderInspectionBrief(summary: ArtifactInspectionSummary, locale
   // describe cells in a language built for scanned pages, so it is rendered
   // separately for both languages.
   if (summary.kind === "XLSX") return renderSpreadsheetBrief(summary, locale);
+  // Phase 2A-7: a drawing has its own evidence channel and its own vocabulary.
+  // Routing it through the page-based brief would either invent page numbers or
+  // describe CAD entities in a language built for scanned pages, so it is
+  // rendered separately for both languages.
+  if (summary.kind === "DXF") return renderDxfBrief(summary, locale);
   const ar = locale === "ar";
   const status = STATUS_LABEL[summary.status][locale];
   if (summary.status === "NOT_INSPECTED" || summary.status === "UNAVAILABLE") {

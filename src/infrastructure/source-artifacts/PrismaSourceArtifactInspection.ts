@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { OcrPort, SourceArtifactInspectionPort, VisualInspectionPort } from "@/src/application/source-artifacts";
-import { projectArtifactInspection, projectSpreadsheetInspection, renderInspectionBrief, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
+import { projectArtifactInspection, projectDxfInspection, projectSpreadsheetInspection, renderInspectionBrief, unsupportedDrawingMessage, type ArtifactInspectionStatus } from "@/src/application/source-artifacts";
 import type { ToolCitation, ToolObservation } from "@/src/application/conversation-runtime";
-import { isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
+import { DXF_MIME_TYPES, isStoredPdfPageModel, type ArtifactPage } from "@/src/domain/source-artifact";
 import { LocalSourceArtifactStorage } from "./LocalSourceArtifactStorage";
 import { parseBoqCandidates } from "./BoqCandidateParser";
 import { extractPdfText } from "./PdfTextExtractor";
@@ -18,6 +18,8 @@ import type { PageRasterizerPort } from "./ocr/PageRasterizer";
 // Phase 2A-6: the workbook channel. ExcelJS stays inside the spreadsheet folder.
 import { detectSpreadsheetFormat, SpreadsheetInspectionError } from "./spreadsheet/ExcelWorkbookInspector";
 import { analyzeXlsxBytes } from "./spreadsheet/SpreadsheetInspectionAnalyzer";
+// Phase 2A-7: the CAD channel. The group-code reader stays inside the dxf folder.
+import { DxfInspectionError, analyzeDxfBytes, detectDxfFormat } from "./dxf";
 
 /**
  * Phase 2A-6: truthful, localized message for a workbook VOKA will not open.
@@ -142,6 +144,14 @@ export class PrismaSourceArtifactInspection implements SourceArtifactInspectionP
     // regex, and that path is the only place requirements are created.
     if (artifact.kind === "XLSX" || isXlsxArtifact(artifact)) {
       return inspectSpreadsheetArtifact({ artifact, bytes, citations, input });
+    }
+    // Phase 2A-7: a .dxf artifact takes the CAD channel. It returns before the
+    // PDF/BOQ-text path on purpose: a drawing must never be flattened into
+    // extracted text and pushed through the legacy BOQ line regex, and that
+    // path is the only place requirements are created. The format decision is
+    // made from the bytes, so a DWG renamed to .dxf is rejected as a DWG.
+    if (artifact.kind === "DXF" || isDxfArtifact(artifact)) {
+      return inspectDxfArtifact({ artifact, bytes, citations, input });
     }
     // The brief language follows the runtime locale only; it is never inferred from the file contents.
     const briefLocale = input.locale ?? "en";
@@ -362,6 +372,103 @@ async function inspectSpreadsheetArtifact(context: {
     evidence: evidence(citations),
     citations,
     // Never populated for a workbook: observed structured line candidates are
+    // not requirement candidates, and only an explicit user confirmation
+    // creates governed state.
+    requirementCandidates: [],
+    artifactInspection: summary,
+    artifactCandidates: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Phase 2A-7: true when the stored record could be a drawing even if its kind
+ * predates the DXF enum value: the MIME type and the file name are
+ * corroborating evidence, and the byte-level format decision is what actually
+ * decides. A DWG that was renamed to .dxf is caught here and named for what it
+ * is, rather than being parsed as text.
+ */
+function isDxfArtifact(artifact: { kind: string; mimeType: string; originalFilename: string }): boolean {
+  if (artifact.kind === "DXF") return true;
+  if (DXF_MIME_TYPES.includes(artifact.mimeType.toLowerCase())) return true;
+  return /\.dxf$/iu.test(artifact.originalFilename.trim());
+}
+
+/**
+ * Phase 2A-7: the governed CAD inspection path.
+ *
+ * It is deliberately self-contained: format detection, structural analysis, and
+ * bounded projection happen here, and the method returns without ever reaching
+ * the requirement-creation code below. DXF evidence cannot create a
+ * Requirement, a QuotationLine, a BOM, a ProductSelection, or any procurement
+ * object, and there is no promotion path from a semantic candidate into
+ * governed state.
+ */
+async function inspectDxfArtifact(context: {
+  artifact: { id: string; originalFilename: string; mimeType: string; processingState: string };
+  bytes: Buffer;
+  citations: ToolCitation[];
+  input: Parameters<SourceArtifactInspectionPort["inspect"]>[0];
+}): Promise<ToolObservation> {
+  const { artifact, bytes, citations, input } = context;
+  const locale = input.locale ?? "en";
+  const decision = detectDxfFormat({ bytes, filename: artifact.originalFilename, mimeType: artifact.mimeType });
+  if (!decision.supported) {
+    // An unsupported drawing is still a truthful answer: VOKA says what it
+    // found and that it did not read the file, rather than implying otherwise.
+    // A DWG is named as a DWG, never quietly treated as a DXF.
+    const summary = projectDxfInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      analysis: null,
+      status: "UNAVAILABLE",
+      failure: decision.reason,
+    });
+    return {
+      kind: input.kind,
+      status: "UNAVAILABLE",
+      artifactId: artifact.id,
+      summary: unsupportedDrawingMessage(decision, locale),
+      evidence: evidence(citations),
+      citations,
+      artifactInspection: summary,
+      artifactCandidates: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+  let analysis;
+  try {
+    analysis = analyzeDxfBytes(bytes, { filename: artifact.originalFilename, mimeType: artifact.mimeType });
+  } catch (error) {
+    const reason = error instanceof DxfInspectionError || error instanceof Error ? error.message : "unknown";
+    const summary = projectDxfInspection({
+      artifactId: artifact.id,
+      filename: artifact.originalFilename,
+      analysis: null,
+      status: "UNAVAILABLE",
+      failure: `the drawing could not be inspected safely (${reason})`,
+    });
+    return {
+      kind: input.kind,
+      status: "UNAVAILABLE",
+      artifactId: artifact.id,
+      summary: renderInspectionBrief(summary, locale),
+      evidence: evidence(citations),
+      citations,
+      artifactInspection: summary,
+      artifactCandidates: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+  const summary = projectDxfInspection({ artifactId: artifact.id, filename: artifact.originalFilename, analysis });
+  return {
+    kind: input.kind,
+    status: artifact.processingState === "FAILED" ? "UNAVAILABLE" : "COMPLETED",
+    artifactId: artifact.id,
+    summary: renderInspectionBrief(summary, locale),
+    evidence: evidence(citations),
+    citations,
+    // Never populated for a drawing: semantic candidates are observed readings,
     // not requirement candidates, and only an explicit user confirmation
     // creates governed state.
     requirementCandidates: [],

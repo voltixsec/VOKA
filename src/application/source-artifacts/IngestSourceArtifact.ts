@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { SourceArtifactPolicyError, validateSourceArtifactBytes, validateSourceArtifactInput, type StoredPdfPageModel, type StoredSpreadsheetModel } from "@/src/domain/source-artifact";
+import { SourceArtifactPolicyError, validateSourceArtifactBytes, validateSourceArtifactInput, type StoredDxfModel, type StoredPdfPageModel, type StoredSpreadsheetModel } from "@/src/domain/source-artifact";
 import { inspectPdfBytes } from "@/src/infrastructure/source-artifacts/PdfTextExtractor";
 // Phase 2A-6: the workbook inspector owns bytes; ingest only orchestrates it.
 import { analyzeXlsxBytes, flattenWorkbookText } from "@/src/infrastructure/source-artifacts/spreadsheet";
+// Phase 2A-7: the CAD inspector owns bytes; ingest only orchestrates it.
+import { analyzeDxfBytes, dxfCitationEntries, flattenDxfText } from "@/src/infrastructure/source-artifacts/dxf";
 import { LocalSourceArtifactStorage } from "@/src/infrastructure/source-artifacts/LocalSourceArtifactStorage";
 import { analyzePdfInspectionWithOcr } from "@/src/infrastructure/source-artifacts/ocr/OcrDocumentAnalyzer";
 import { createProductionOcrPort, resolveProductionOcrConfig } from "@/src/infrastructure/source-artifacts/ocr/createProductionOcrPort";
@@ -22,10 +24,13 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
   let extractedText: string | null = null;
   let extractedPages: StoredPdfPageModel | null = null;
   let extractedWorkbook: StoredSpreadsheetModel | null = null;
+  let extractedDrawing: StoredDxfModel | null = null;
   let processingState: "TEXT_EXTRACTED" | "STORED_PENDING_VISION" = "STORED_PENDING_VISION";
   let processingError: string | null = null;
   /** Phase 2A-6: one citation per worksheet, carrying sheet and range locators instead of a page number. */
   let spreadsheetCitations: Array<{ sheet: string; usedRange: string; claim: string }> = [];
+  /** Phase 2A-7: one citation per significant layer or block, carrying a CAD locator instead of a page number. */
+  let dxfCitations: Array<{ locator: string; claim: string }> = [];
   try {
     if (policy.kind === "PDF") {
       try {
@@ -86,6 +91,27 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
         throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_XLSX_UNREADABLE", "The workbook was received but its content could not be read safely.");
       }
     }
+    // Phase 2A-7: an ASCII DXF drawing is inspected by the governed CAD
+    // pipeline at ingest so later inspections reuse the result, exactly as the
+    // PDF and workbook paths reuse their persisted models. The analysis
+    // produces observed evidence only: no requirement, quotation line, BOM,
+    // product selection, or procurement record is created here or anywhere
+    // downstream of it. A drawing that is really a DWG fails here truthfully,
+    // because the format decision comes from the bytes rather than the name.
+    if (policy.kind === "DXF") {
+      try {
+        const analysis = analyzeDxfBytes(bytes, { filename: input.file.name, mimeType: policy.mimeType });
+        extractedText = flattenDxfText(analysis.inspection);
+        extractedDrawing = toStoredDxfModel(analysis);
+        processingState = extractedText ? "TEXT_EXTRACTED" : "STORED_PENDING_VISION";
+        const limitations = [...new Set(analysis.limitations)];
+        processingError = limitations.length ? limitations.join(" | ").slice(0, 2_000) : null;
+        dxfCitations = dxfCitationEntries(analysis.inspection);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "unknown";
+        throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_DXF_UNREADABLE", `The drawing was received but its content could not be read safely: ${reason}`);
+      }
+    }
     // One citation per page that carries visible machine-readable text. The page locator is set only
     // when the page tree proved attribution; otherwise it stays null. Invisible-layer text is not cited.
     const citedPages = (extractedPages?.pages ?? []).filter((page) => page.text.trim());
@@ -95,7 +121,7 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
         companyId: input.companyId, originalFilename: input.file.name, mimeType: policy.mimeType, sizeBytes: bytes.byteLength,
         contentSha256, kind: policy.kind, storageRef: stored.storageRef, context: policy.context,
         conversationRuntimeId: input.conversationRuntimeId ?? null, processingState, processingError, extractedText,
-        extractedPages: extractedPages ? (JSON.parse(JSON.stringify(extractedPages)) as object) : extractedWorkbook ? (JSON.parse(JSON.stringify(extractedWorkbook)) as object) : undefined, createdByUserId: input.userId,
+        extractedPages: extractedPages ? (JSON.parse(JSON.stringify(extractedPages)) as object) : extractedWorkbook ? (JSON.parse(JSON.stringify(extractedWorkbook)) as object) : extractedDrawing ? (JSON.parse(JSON.stringify(extractedDrawing)) as object) : undefined, createdByUserId: input.userId,
         citations: citedPages.length ? { create: citedPages.map((page) => ({
           companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_TEXT", title: input.file.name,
           pageNumber: pageAttributionReliable && typeof page.pageNumber === "number" ? page.pageNumber : null,
@@ -105,6 +131,13 @@ export async function ingestSourceArtifact(input: { companyId: string; userId: s
           companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_SPREADSHEET", title: input.file.name,
           // A worksheet has no page: the locator is the sheet and its used range.
           pageNumber: null, sheet: entry.sheet, lineLocator: entry.usedRange || null,
+          provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
+          supportedClaimSummary: entry.claim.slice(0, 500),
+        })) } : dxfCitations.length ? { create: dxfCitations.map((entry) => ({
+          companyId: input.companyId, sourceType: "SOURCE_ARTIFACT_DXF", title: input.file.name,
+          // A drawing has no page: the locator is the CAD locator, carried in
+          // `lineLocator` alongside the section so it stays exact and traceable.
+          pageNumber: null, lineLocator: entry.locator,
           provenance: "FILE_CONTENT", verificationState: "RECEIVED_NOT_USER_VERIFIED", confidence: null,
           supportedClaimSummary: entry.claim.slice(0, 500),
         })) } : undefined,
@@ -139,6 +172,30 @@ function toStoredSpreadsheetModel(analysis: import("@/src/domain/source-artifact
       hiddenRowCount: sheet.hiddenRowCount,
       hiddenColumnCount: sheet.hiddenColumnCount,
     })),
+  };
+}
+
+/** Bounded persisted shape for a drawing inspection. Version 4 so the PDF page model (2) and workbook model (3) stay untouched. */
+function toStoredDxfModel(analysis: import("@/src/domain/source-artifact").DxfAnalysis): StoredDxfModel {
+  const inspection = analysis.inspection;
+  return {
+    version: 4,
+    kind: "DXF",
+    versionCode: inspection.document.version.code,
+    versionLabel: inspection.document.version.label,
+    unitsCode: inspection.document.units.code,
+    unitsName: inspection.document.units.name,
+    layerCount: inspection.layers.length,
+    blockCount: inspection.blocks.length,
+    entityCount: inspection.entityCount,
+    insertCount: inspection.inserts.length,
+    textCount: inspection.texts.length,
+    dimensionCount: inspection.dimensions.length,
+    externalReferenceCount: inspection.externalReferences.length,
+    modelSpaceEntityCount: inspection.spaces.MODEL_SPACE.entityCount,
+    paperSpaceEntityCount: inspection.spaces.PAPER_SPACE.entityCount,
+    truncated: inspection.truncated,
+    limitations: analysis.limitations,
   };
 }
 

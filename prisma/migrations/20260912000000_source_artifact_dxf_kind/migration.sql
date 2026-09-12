@@ -1,0 +1,12 @@
+-- Phase 2A-7: ASCII DXF drawings become an inspectable source artifact kind.
+--
+-- Additive only: the new enum value does not change any existing row, column,
+-- constraint, or index, and no other enum value is touched. Postgres allows a
+-- new enum value to be added inside a transaction as long as the value is not
+-- used in that same transaction, which is the case here.
+--
+-- Binary DXF, DWG, DGN, IFC, and RVT are deliberately NOT added. Those formats
+-- are out of scope for this phase and are detected at ingest and rejected with
+-- a truthful, format-specific message rather than being stored under a kind
+-- VOKA cannot inspect.
+ALTER TYPE "SourceArtifactKind" ADD VALUE IF NOT EXISTS 'DXF';

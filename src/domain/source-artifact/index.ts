@@ -1,18 +1,31 @@
 /** Phase 2A-6: the canonical MIME type for an OOXML (non-macro) workbook. */
 export const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+/**
+ * Phase 2A-7: MIME types seen for an ASCII DXF drawing.
+ *
+ * DXF has no single registered type, so every common one is accepted here and
+ * the real decision is made from the bytes: `validateSourceArtifactBytes`
+ * requires DXF group-code structure, and the drawing inspector re-checks it and
+ * names the format it actually found. A DWG renamed to `.dxf` is rejected as a
+ * DWG, never parsed as text.
+ */
+export const DXF_MIME_TYPE = "image/vnd.dxf";
+export const DXF_MIME_TYPES: readonly string[] = ["image/vnd.dxf", "application/dxf", "application/x-dxf", "image/x-dxf"];
+
 export const SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES = new Set([
   "application/pdf",
   "image/png",
   "image/jpeg",
   "image/webp",
   XLSX_MIME_TYPE,
+  ...DXF_MIME_TYPES,
 ]);
 
 export type SourceArtifactContext = "SALES_ASSISTANT" | "TAKEOFF" | "ENGINEERING_TENDER";
-export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX";
+export type SourceArtifactKind = "PDF" | "IMAGE" | "XLSX" | "DXF";
 
-const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, and XLSX files are supported.";
+const UNSUPPORTED_TYPE_MESSAGE = "Only PDF, PNG, JPG/JPEG, WebP, XLSX, and ASCII DXF files are supported.";
 
 export class SourceArtifactPolicyError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -24,6 +37,10 @@ export class SourceArtifactPolicyError extends Error {
 export function artifactKindForMime(mimeType: string): SourceArtifactKind {
   if (mimeType === "application/pdf") return "PDF";
   if (mimeType === XLSX_MIME_TYPE) return "XLSX";
+  // Phase 2A-7: any of the DXF types browsers report resolves to one kind. The
+  // type only routes the file; whether it really is an ASCII DXF is decided
+  // later from its bytes.
+  if (DXF_MIME_TYPES.includes(mimeType)) return "DXF";
   if (mimeType.startsWith("image/")) return "IMAGE";
   throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
@@ -31,19 +48,21 @@ export function artifactKindForMime(mimeType: string): SourceArtifactKind {
 /**
  * Resolves the artifact kind from the declared MIME type.
  *
- * A browser sometimes hands over a workbook with an empty or generic
- * `application/octet-stream` type. The `.xlsx` extension is accepted as
- * corroborating evidence for that one case, and the real decision is made
- * later from the bytes: `validateSourceArtifactBytes` checks the ZIP container
- * signature and the workbook inspector verifies the OOXML structure, so a
- * renamed file still cannot talk its way into the parser.
+ * A browser sometimes hands over a workbook or a drawing with an empty or
+ * generic `application/octet-stream` type. The file extension is accepted as
+ * corroborating evidence for those two cases, and the real decision is made
+ * later from the bytes: `validateSourceArtifactBytes` checks the container
+ * signature or the DXF group-code shape, and the format-specific inspector
+ * verifies the structure, so a renamed file still cannot talk its way into a
+ * parser.
  */
 function resolveKind(file: File): { mimeType: string; kind: SourceArtifactKind } {
   const mimeType = file.type.toLowerCase();
   if (SUPPORTED_SOURCE_ARTIFACT_MIME_TYPES.has(mimeType)) return { mimeType, kind: artifactKindForMime(mimeType) };
   const extension = /\.([A-Za-z0-9]{1,8})$/u.exec(file.name.trim().toLowerCase())?.[1];
-  if ((mimeType === "" || mimeType === "application/octet-stream") && extension === "xlsx") {
-    return { mimeType: XLSX_MIME_TYPE, kind: "XLSX" };
+  if (mimeType === "" || mimeType === "application/octet-stream") {
+    if (extension === "xlsx") return { mimeType: XLSX_MIME_TYPE, kind: "XLSX" };
+    if (extension === "dxf") return { mimeType: DXF_MIME_TYPE, kind: "DXF" };
   }
   throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_TYPE_UNSUPPORTED", UNSUPPORTED_TYPE_MESSAGE);
 }
@@ -70,12 +89,58 @@ export function validateSourceArtifactBytes(kind: SourceArtifactKind, bytes: Uin
     ? ascii(0, 5) === "%PDF-"
     : kind === "XLSX"
       ? hasZipContainer
-      : kind === "IMAGE" && (
-      (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
-      || (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
-      || (ascii(0, 4) === "RIFF" && ascii(8, 4) === "WEBP")
-    );
+      : kind === "DXF"
+        // Phase 2A-7: a drawing must carry DXF group-code structure. This is a
+        // cheap first gate only — the drawing inspector re-checks it and names
+        // the format it actually found, so a DWG renamed to .dxf is rejected as
+        // a DWG with a truthful message rather than parsed as text.
+        ? looksLikeAsciiDxf(bytes)
+        : kind === "IMAGE" && (
+        (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
+        || (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+        || (ascii(0, 4) === "RIFF" && ascii(8, 4) === "WEBP")
+      );
   if (!valid) throw new SourceArtifactPolicyError("SOURCE_ARTIFACT_CONTENT_INVALID", "The attachment content does not match its declared file type.");
+}
+
+/**
+ * Phase 2A-7: cheap upload-time gate for an ASCII DXF drawing.
+ *
+ * This is deliberately not the real check. It confirms the file is text and
+ * begins with DXF group-code pair structure — a numeric group code followed by
+ * a value, repeated — which is enough to reject a binary DWG, a PDF, or a text
+ * file at upload. The authoritative decision belongs to the drawing inspector,
+ * which reads the sections and names the format it actually found.
+ *
+ * The domain layer cannot import the infrastructure reader, so this stays a
+ * small structural test rather than a second parser.
+ */
+function looksLikeAsciiDxf(bytes: Uint8Array): boolean {
+  if (bytes.length < 8) return false;
+  // Binary DWG releases start with their version string; binary DXF starts with
+  // its own banner. Neither is an ASCII DXF and neither should reach the parser.
+  const head = String.fromCharCode(...bytes.slice(0, Math.min(20, bytes.length)));
+  if (/^AC10\d{2}/u.test(head) || head.startsWith("AutoCAD Binary DXF")) return false;
+  // An OLE2 compound document (Revit) or a ZIP is not a drawing either.
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) return false;
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return false;
+  const sample = new TextDecoder("latin1").decode(bytes.slice(0, Math.min(bytes.length, 4_096)));
+  if (sample.includes("\u0000")) return false;
+  const lines = sample.split(/\r\n|\r|\n/);
+  let pairs = 0;
+  let sawSection = false;
+  let sawEnd = false;
+  for (let index = 0; index + 1 < lines.length && index < 1_024; index += 2) {
+    const codeLine = (lines[index] ?? "").trim();
+    if (!/^-?\d{1,4}$/u.test(codeLine)) break;
+    pairs += 1;
+    const value = (lines[index + 1] ?? "").trim();
+    if (codeLine === "0" && value === "SECTION") sawSection = true;
+    if (codeLine === "0" && (value === "ENDSEC" || value === "EOF")) sawEnd = true;
+  }
+  // Section framing, or a run of pairs long enough that only a DXF could hold
+  // it. Matches the inspector's own decision so the two gates cannot disagree.
+  return pairs >= 3 && ((sawSection && sawEnd) || pairs >= 64);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,3 +270,5 @@ export * from "./DrawingDimensions";
 export * from "./DrawingSymbols";
 // Phase 2A-6: Excel / structured BOQ workbook evidence.
 export * from "./SpreadsheetInspection";
+// Phase 2A-7: ASCII DXF / CAD drawing evidence.
+export * from "./DxfInspection";

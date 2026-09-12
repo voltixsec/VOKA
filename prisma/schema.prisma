@@ -44,6 +44,9 @@ enum SourceArtifactKind {
   IMAGE
   /// Phase 2A-6: structured .xlsx workbooks (Excel / BOQ intelligence).
   XLSX
+  /// Phase 2A-7: ASCII DXF drawings (CAD intelligence). Binary DXF and DWG are
+  /// not a supported kind; they are detected and rejected truthfully at ingest.
+  DXF
 }
 
 enum SourceArtifactProcessingState {
