@@ -186,6 +186,25 @@ model Company {
   documentRelations        DocumentRelation[]
   activeRevisionDecisions  ActiveRevisionDecision[]
   findingEvidenceObservations FindingEvidenceObservation[]
+  /// Phase 2A-11 engineering takeoff + governed Engineering BOM.
+  engineeringTakeoffScopes EngineeringTakeoffScope[]
+  engineeringCountingRules EngineeringCountingRule[]
+  engineeringOccurrenceLedgerEntries EngineeringOccurrenceLedgerEntry[]
+  engineeringQuantityCandidates EngineeringQuantityCandidate[]
+  engineeringCandidateSources EngineeringQuantityCandidateSource[]
+  engineeringCandidateConflicts EngineeringCandidateConflict[]
+  engineeringQuantityDecisions EngineeringQuantityDecision[]
+  engineeringDecisionSources EngineeringQuantityDecisionSource[]
+  engineeringDecisionClaims EngineeringQuantityDecisionClaim[]
+  engineeringCalculations  EngineeringCalculation[]
+  engineeringCalculationInputs EngineeringCalculationInput[]
+  engineeringAdjustments   EngineeringAdjustment[]
+  engineeringBomVersions   EngineeringBomVersion[]
+  engineeringBomVersionDecisions EngineeringBomVersionDecision[]
+  engineeringBomRows       EngineeringBomRow[]
+  engineeringBomRowConstraints EngineeringBomRowConstraint[]
+  engineeringBomRowAdjustments EngineeringBomRowAdjustment[]
+  engineeringBomRequiredSubjects EngineeringBomRequiredSubject[]
   requirements             Requirement[]
   universalAdoptions       UniversalItemAdoption[]
   universalLibrarySectors  CompanyUniversalLibrarySector[]
@@ -463,6 +482,10 @@ model User {
   createdSourceArtifacts SourceArtifact[]
   createdRequirements  Requirement[]
   notifications        Notification[]
+  engineeringQuantityDecisions EngineeringQuantityDecision[] @relation("EngineeringDecisionActor")
+  engineeringAdjustmentApprovals EngineeringAdjustment[] @relation("EngineeringAdjustmentApprover")
+  engineeringBomVersions EngineeringBomVersion[] @relation("EngineeringBomActor")
+  engineeringBomApprovals EngineeringBomVersion[] @relation("EngineeringBomApprover")
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
@@ -2417,6 +2440,10 @@ model NormalizedEvidenceClaim {
   decisionEvidence ActiveRevisionDecisionEvidenceClaim[]
   participantEntries FindingParticipant[]
   evidenceObservationEntries FindingEvidenceObservationEntry[]
+  /// Phase 2A-11 engineering records that consume this governed claim.
+  engineeringLedgerEntries EngineeringOccurrenceLedgerEntry[] @relation("LedgerEvidenceClaim")
+  engineeringCandidateSources EngineeringQuantityCandidateSource[] @relation("CandidateSourceClaim")
+  engineeringDecisionClaims EngineeringQuantityDecisionClaim[] @relation("DecisionSourceClaim")
 
   @@index([companyId, sourceArtifactId])
   @@index([companyId, predicate])
@@ -2597,6 +2624,7 @@ model SubjectCluster {
 
   company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   comparisonScope ComparisonScope @relation(fields: [comparisonScopeId], references: [id], onDelete: Cascade)
+  comparisonRun   ComparisonRun?  @relation(fields: [comparisonRunId], references: [id], onDelete: SetNull)
   members         SubjectClusterMember[]
   findings        CrossDocumentFinding[]
 
@@ -2958,4 +2986,805 @@ model FindingEvidenceObservationEntry {
   @@unique([observationId, claimId])
   @@index([companyId, findingId, comparisonRunId])
   @@index([claimId])
+}
+
+// ===========================================================================
+// PHASE 2A-11 — ENGINEERING TAKEOFF + GOVERNED BOM
+// ===========================================================================
+//
+// ADDITIVE ONLY. Nothing above this line is altered. No existing column, type,
+// index, constraint, or row is dropped, renamed, or backfilled.
+//
+// This phase owns ENGINEERING TRUTH. Nothing in this block creates or
+// references a Quotation, QuotationLine, Invoice, ProductSelection, Supplier,
+// ProcurementRequirement, Rfq, Offer, Award, or PurchaseOrder, and no field
+// carries a price, rate, amount, currency, pack size, minimum order quantity,
+// order quantity, or lead time. That absence is the point of the phase.
+//
+// Naming note: the engineering takeoff root is an ANALYSIS SCOPE that
+// REFERENCES the existing project/context identity through the nullable
+// `projectContextKey` string. It deliberately does NOT create a second project
+// master table.
+
+/// Where an engineering quantity came from, or what governance made of it.
+/// A quantity ORIGIN is not a quantity STATUS: STATED says where a number came
+/// from, APPROVED_ENGINEERING says a human adopted it.
+enum EngineeringQuantityOrigin {
+  OBSERVED
+  STATED
+  DECLARED_MODEL
+  COUNTED
+  CALCULATED
+  ADJUSTED
+  APPROVED_ENGINEERING
+}
+
+enum EngineeringRequirementKind {
+  EQUIPMENT
+  MATERIAL
+  COMPONENT_OR_ACCESSORY
+  SERVICE_OR_WORK
+}
+
+enum EngineeringRequirementNature {
+  PHYSICAL_ARTICLE
+  PERFORMED_SERVICE
+}
+
+enum EngineeringReadinessState {
+  NOT_READY
+  BLOCKED
+  REVIEW_REQUIRED
+  READY_FOR_DECISION
+  APPROVED
+}
+
+enum EngineeringBomCompletenessState {
+  INCOMPLETE
+  REVIEW_REQUIRED
+  PARTIALLY_APPROVED
+  APPROVED
+}
+
+enum EngineeringTakeoffScopeKind {
+  MATERIAL_TAKEOFF
+  EQUIPMENT_SCHEDULE_TAKEOFF
+  SYSTEM_TAKEOFF
+  DISCIPLINE_TAKEOFF
+  WHOLE_PACKAGE_TAKEOFF
+}
+
+enum EngineeringTakeoffScopeState {
+  OPEN
+  DECIDING
+  BOM_ISSUED
+  SUPERSEDED
+}
+
+enum EngineeringOccurrenceClass {
+  MODEL_SPACE_INSTANCE
+  DRAWING_MODEL_ENTITY
+  TYPE_DEFINITION
+  TYPE_OBJECT
+  PAPER_SPACE_ENTITY
+  TITLE_BLOCK
+  LEGEND_SYMBOL
+  ANNOTATION_SYMBOL
+  DIMENSION_ENTITY
+  TEXT_LABEL
+  BLOCK_DEFINITION
+  XREF_REFERENCE
+  PROPERTY_SET
+  QUANTITY_SET
+  MATERIAL_ASSIGNMENT
+  CLASSIFICATION_ASSIGNMENT
+  SYSTEM_CONTAINER
+  SPATIAL_CONTAINER
+  RELATIONSHIP_OBJECT
+  DOCUMENT_REFERENCE
+  LAYER_DEFINITION
+  STYLE_DEFINITION
+}
+
+enum EngineeringCountingRuleFamily {
+  DXF
+  IFC
+}
+
+enum EngineeringCandidateBasis {
+  SOURCE_CLAIM
+  OCCURRENCE_COUNT
+  GOVERNED_CALCULATION
+  ENGINEERING_ADJUSTMENT
+}
+
+enum EngineeringCandidateConflictState {
+  UNDISPUTED
+  CONFLICTING
+  AMBIGUOUS_SUBJECT
+  BLOCKED_INCOMPATIBLE_UNITS
+}
+
+enum EngineeringQuantityDecisionState {
+  APPROVED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+enum EngineeringQuantityDecisionBasis {
+  ADOPTED_SOURCE_VALUE
+  ADOPTED_COUNTED_VALUE
+  ADOPTED_CALCULATED_VALUE
+  ADOPTED_ADJUSTED_VALUE
+  RESOLVED_SOURCE_CONFLICT
+  REPLACED_BY_REVISED_EVIDENCE
+  CORRECTED_BY_HUMAN
+}
+
+enum EngineeringCalculationInputSource {
+  EVIDENCE_CLAIM
+  QUANTITY_DECISION
+  ADJUSTMENT
+  CALCULATION_RESULT
+}
+
+enum EngineeringAdjustmentType {
+  WASTAGE
+  SPARE_ALLOWANCE
+  CUTTING_LOSS
+  CONTINGENCY
+  OVERLAP
+  LAPPING
+  COVERAGE_ALLOWANCE
+}
+
+enum EngineeringAdjustmentMode {
+  PERCENTAGE
+  MULTIPLIER
+  ABSOLUTE_ADDITION
+}
+
+enum EngineeringBomVersionState {
+  DRAFT
+  APPROVED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+enum EngineeringBomRowConstraintKind {
+  REQUIRED_SPECIFICATION
+  MANUFACTURER
+  NAMED_TENDER_MODEL
+  DIMENSION
+  RATING_OR_PERFORMANCE
+  MATERIAL_SPECIFICATION
+  STANDARD_OR_CODE
+}
+
+/// How a BOM version resolved one REQUIRED engineering subject.
+///
+/// `CARRIED_BY_ROW` means an approved decision produced a row. Every other value
+/// describes required governed work the version did NOT resolve into a row, so a
+/// reader can never mistake an approved subset for a whole BOM.
+enum EngineeringBomSubjectResolution {
+  /// An approved decision produced a BOM row for the subject.
+  CARRIED_BY_ROW
+  /// The subject has no decision at all yet.
+  NO_DECISION
+  /// The subject's only decision is SUPERSEDED or WITHDRAWN.
+  DECISION_RETIRED
+  /// The subject has governed candidates but no decision was taken.
+  CANDIDATE_WITHOUT_DECISION
+  /// The subject exists only as an unresolved/conflicting candidate.
+  UNRESOLVED_CANDIDATE
+}
+
+/// The durable engineering analysis root.
+///
+/// It REFERENCES the existing project/context identity through
+/// `projectContextKey` and never owns project master data. `comparisonScopeId`
+/// and `comparisonRunId` bind it to the accepted Phase 2A-10 evidence state it
+/// derived from, so a takeoff is always traceable to the evidence it read.
+model EngineeringTakeoffScope {
+  id                   String                       @id
+  companyId            String
+  /// Reference to the existing project/context identity. NOT a second project master.
+  projectContextKey    String?
+  name                 String
+  description          String                       @default("")
+  scopeKind            EngineeringTakeoffScopeKind
+  state                EngineeringTakeoffScopeState @default(OPEN)
+  /// Accepted Phase 2A-10 comparison scope this takeoff derives from.
+  comparisonScopeId    String
+  comparisonRunId      String?
+  evidenceInputDigest  String?
+  acceptedClaimCount   Int                          @default(0)
+  withheldClaimCount   Int                          @default(0)
+  revisionPolicy       String                       @default("ACTIVE_ONLY")
+  readiness            EngineeringReadinessState    @default(NOT_READY)
+  readinessReasons     String[]                     @default([])
+  completeness         EngineeringBomCompletenessState?
+  blockReasons         String[]                     @default([])
+  limitations          String[]                     @default([])
+  scopeVersion         Int                          @default(1)
+  supersedesScopeId    String?
+  createdByUserId      String
+  takeoffContractVersion String                     @default("2a-11.takeoff.v1")
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  company              Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supersedesScope      EngineeringTakeoffScope? @relation("TakeoffScopeVersion", fields: [supersedesScopeId], references: [id], onDelete: SetNull)
+  supersededByScopes   EngineeringTakeoffScope[] @relation("TakeoffScopeVersion")
+  countingRules        EngineeringCountingRule[]
+  ledgerEntries        EngineeringOccurrenceLedgerEntry[]
+  candidates           EngineeringQuantityCandidate[]
+  decisions            EngineeringQuantityDecision[]
+  calculations         EngineeringCalculation[]
+  adjustments          EngineeringAdjustment[]
+  bomVersions          EngineeringBomVersion[]
+
+  @@unique([companyId, comparisonScopeId, scopeKind, name])
+  @@index([companyId, state])
+  @@index([companyId, comparisonScopeId])
+  @@index([companyId, readiness])
+}
+
+/// A versioned counting rule. Persisted onto every occurrence it admitted, so a
+/// later rule change cannot silently reinterpret history.
+model EngineeringCountingRule {
+  id                   String                        @id
+  companyId            String
+  takeoffScopeId       String
+  family               EngineeringCountingRuleFamily
+  ruleVersion          String
+  description          String
+  admittedEntityTypes  String[]                      @default([])
+  modelSpaceOnly       Boolean                       @default(true)
+  requiresSubjectIdentity Boolean                    @default(true)
+  createdAt            DateTime                      @default(now())
+
+  company              Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope         EngineeringTakeoffScope @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  ledgerEntries        EngineeringOccurrenceLedgerEntry[]
+
+  @@unique([companyId, takeoffScopeId, family, ruleVersion])
+  @@index([companyId, takeoffScopeId])
+}
+
+/// The durable occurrence ledger. One row per occurrence VOKA considered,
+/// included or excluded, with its exact locator, classification, reason, and the
+/// counting rule that judged it. A counted quantity is reproducible by re-reading
+/// these rows rather than by re-running the counter.
+model EngineeringOccurrenceLedgerEntry {
+  id                             String                       @id
+  companyId                      String
+  takeoffScopeId                 String
+  countingRuleId                 String
+  subjectMatchKey                String?
+  subjectKeyNamespace            String?
+  artifactId                     String
+  /// Phase 2A-9 family root: always the original proprietary artifact.
+  derivationFamilyRootArtifactId String
+  /// Phase 2A-10 claim id when the occurrence also has governed evidence.
+  evidenceClaimId                String?
+  locator                        String
+  family                         EngineeringCountingRuleFamily
+  sourceType                     String
+  occurrenceClass                EngineeringOccurrenceClass
+  included                       Boolean
+  inclusionReason                String?
+  exclusionReason                String?
+  note                           String?
+  countingRuleVersion            String
+  createdAt                      DateTime                     @default(now())
+
+  company       Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope  EngineeringTakeoffScope @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  countingRule  EngineeringCountingRule @relation(fields: [countingRuleId], references: [id], onDelete: Cascade)
+  evidenceClaim NormalizedEvidenceClaim? @relation("LedgerEvidenceClaim", fields: [evidenceClaimId], references: [id], onDelete: SetNull)
+  candidateReferences EngineeringQuantityCandidateSource[] @relation("CandidateLedgerEntry")
+
+  @@index([companyId, takeoffScopeId, included])
+  @@index([companyId, takeoffScopeId, subjectMatchKey])
+  @@index([companyId, derivationFamilyRootArtifactId])
+  @@index([companyId, artifactId])
+}
+
+/// A governed engineering quantity candidate.
+///
+/// A candidate is NOT an approval. There is no approved-value field here, and
+/// `conflictState` may hold a candidate at CONFLICTING indefinitely until an
+/// explicit engineering decision resolves it.
+model EngineeringQuantityCandidate {
+  id                             String                             @id
+  companyId                      String
+  takeoffScopeId                 String
+  subjectMatchKey                String
+  subjectKeyNamespace            String
+  subjectLabel                   String?
+  requirementKind                EngineeringRequirementKind        @default(MATERIAL)
+  origin                         EngineeringQuantityOrigin
+  basis                          EngineeringCandidateBasis
+  value                          Decimal?                           @db.Decimal(18, 3)
+  unitLiteral                    String?
+  unitDimension                  String?
+  /// Verbatim source literal, when the candidate came from source evidence.
+  valueLiteral                   String?
+  /// Accepted Phase 2A-10 subject cluster, when the candidate has one.
+  subjectClusterId               String?
+  contributingDerivationFamilyRoots String[]                        @default([])
+  conflictState                  EngineeringCandidateConflictState  @default(UNDISPUTED)
+  conflictReason                 String?
+  readiness                      EngineeringReadinessState         @default(NOT_READY)
+  readinessReasons               String[]                           @default([])
+  evidenceCoverage               String                             @default("COMPLETE")
+  limitations                    String[]                           @default([])
+  createdAt                      DateTime                           @default(now())
+
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope EngineeringTakeoffScope @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  sourceReferences EngineeringQuantityCandidateSource[]
+  conflictingWith  EngineeringCandidateConflict[] @relation("LeftCandidate")
+  conflictedBy     EngineeringCandidateConflict[] @relation("RightCandidate")
+  decisions        EngineeringQuantityDecisionSource[]
+  calculations     EngineeringCalculationInput[]  @relation("CalculationInputCandidate")
+  sourceCalculations EngineeringCalculation[]     @relation("CandidateCalculation")
+
+  @@unique([companyId, takeoffScopeId, subjectMatchKey, origin, basis])
+  @@index([companyId, takeoffScopeId, conflictState])
+  @@index([companyId, subjectMatchKey])
+  @@index([companyId, readiness])
+}
+
+/// Exact provenance of a candidate. Relational rather than a String[] pointer,
+/// so every citation retains its own locator and lineage.
+model EngineeringQuantityCandidateSource {
+  id             String   @id @default(cuid())
+  companyId      String
+  candidateId    String
+  basis          EngineeringCandidateBasis
+  claimId        String?
+  sourceArtifactId String?
+  derivationFamilyRootArtifactId String?
+  locator        String?
+  humanLocator   String?
+  citationId     String?
+  ledgerEntryId  String?
+  calculationId  String?
+  adjustmentId   String?
+  createdAt      DateTime @default(now())
+
+  company      Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  candidate    EngineeringQuantityCandidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  evidenceClaim NormalizedEvidenceClaim?       @relation("CandidateSourceClaim", fields: [claimId], references: [id], onDelete: SetNull)
+  ledgerEntry  EngineeringOccurrenceLedgerEntry? @relation("CandidateLedgerEntry", fields: [ledgerEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([candidateId, basis, claimId, ledgerEntryId])
+  @@index([companyId, candidateId])
+  @@index([claimId])
+}
+
+/// An explicit recorded conflict between two candidates.
+///
+/// The row records the DISPUTE, never a winner: there is no selected side, no
+/// preferred side, and no resolved value. Resolution lives in a decision.
+model EngineeringCandidateConflict {
+  id                String                           @id @default(cuid())
+  companyId         String
+  takeoffScopeId    String
+  subjectMatchKey   String
+  leftCandidateId   String
+  rightCandidateId  String
+  conflictState     EngineeringCandidateConflictState
+  reason            String
+  requiresExplicitDecision Boolean                   @default(true)
+  resolvedByDecisionId String?
+  createdAt         DateTime                         @default(now())
+
+  company       Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leftCandidate EngineeringQuantityCandidate   @relation("LeftCandidate", fields: [leftCandidateId], references: [id], onDelete: Cascade)
+  rightCandidate EngineeringQuantityCandidate  @relation("RightCandidate", fields: [rightCandidateId], references: [id], onDelete: Cascade)
+
+  @@unique([leftCandidateId, rightCandidateId])
+  @@index([companyId, takeoffScopeId, subjectMatchKey])
+}
+
+/// A governed, immutable engineering quantity decision.
+///
+/// APPEND-ONLY. A later decision supersedes an earlier one by reference; the
+/// earlier row is retired through `state`/`supersededByDecisionId` and its
+/// approved value is never rewritten.
+model EngineeringQuantityDecision {
+  id                        String                            @id
+  companyId                 String
+  takeoffScopeId            String
+  /// Engineering subject key this decision resolves. The subject column
+  /// (not a claim id) is what keeps history continuous across claim churn.
+  subjectMatchKey           String
+  subjectKeyNamespace       String
+  subjectLabel              String?
+  requirementKind           EngineeringRequirementKind
+  /// Monotonic version for this subject inside this scope.
+  decisionVersion           Int
+  approvedValue             Decimal                            @db.Decimal(18, 3)
+  approvedUnitLiteral       String
+  approvedUnitDimension     String
+  quantityOrigin            EngineeringQuantityOrigin
+  decisionBasis             EngineeringQuantityDecisionBasis
+  actorUserId               String
+  rationale                 String
+  decidedAt                 DateTime
+  selectedCandidateId       String?
+  resolvedConflictSubjectKey String?
+  supersedesDecisionId      String?
+  supersededByDecisionId    String?
+  state                     EngineeringQuantityDecisionState   @default(APPROVED)
+  revisionMembershipIds     String[]                           @default([])
+  documentIdentityIds       String[]                           @default([])
+  limitations               String[]                           @default([])
+  decisionContractVersion   String                             @default("2a-11.decision.v1")
+  createdAt                 DateTime                           @default(now())
+
+  company       Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope  EngineeringTakeoffScope @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  actor         User                    @relation("EngineeringDecisionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  supersedesDecision EngineeringQuantityDecision?  @relation("DecisionVersion", fields: [supersedesDecisionId], references: [id], onDelete: SetNull)
+  supersededByDecision EngineeringQuantityDecision[] @relation("DecisionVersion")
+  sources       EngineeringQuantityDecisionSource[]
+  sourceClaims  EngineeringQuantityDecisionClaim[]
+  adjustmentBases EngineeringAdjustment[]  @relation("AdjustmentBaseDecision")
+  bomRows       EngineeringBomRow[]
+  bomVersionLinks EngineeringBomVersionDecision[]
+
+  @@unique([companyId, takeoffScopeId, subjectMatchKey, decisionVersion])
+  @@index([companyId, takeoffScopeId, state])
+  @@index([companyId, subjectMatchKey])
+  @@index([companyId, decidedAt])
+}
+
+/// The candidates a decision relied on. Relational, so a conflict-resolving
+/// decision records every side it considered.
+model EngineeringQuantityDecisionSource {
+  id           String   @id @default(cuid())
+  companyId    String
+  decisionId   String
+  candidateId  String
+  /// Governed calculation this decision consumed, when it consumed one.
+  calculationId String?
+  createdAt    DateTime @default(now())
+
+  company   Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  decision  EngineeringQuantityDecision   @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  candidate EngineeringQuantityCandidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  calculation EngineeringCalculation?     @relation("DecisionCalculation", fields: [calculationId], references: [id], onDelete: SetNull)
+
+  @@unique([decisionId, candidateId])
+  @@index([candidateId])
+  @@index([calculationId])
+}
+
+/// The exact Phase 2A-10 claims a decision rests on.
+model EngineeringQuantityDecisionClaim {
+  id           String   @id @default(cuid())
+  companyId    String
+  decisionId   String
+  claimId      String
+  createdAt    DateTime @default(now())
+
+  company   Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  decision  EngineeringQuantityDecision   @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  claim     NormalizedEvidenceClaim       @relation("DecisionSourceClaim", fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, claimId])
+  @@index([claimId])
+}
+
+/// A governed engineering calculation.
+///
+/// Every input is a separate row naming the governed record it read, so the
+/// arithmetic can be re-derived by hand and no hidden assumption can enter.
+/// When any input is unresolved the row is BLOCKED and holds no result.
+model EngineeringCalculation {
+  id                 String                 @id
+  companyId          String
+  takeoffScopeId     String
+  subjectMatchKey    String
+  subjectKeyNamespace String
+  subjectLabel       String?
+  requirementKind    EngineeringRequirementKind
+  ruleId             String
+  ruleVersion        String
+  resultValue        Decimal?                @db.Decimal(18, 3)
+  resultUnitLiteral  String?
+  resultDimension    String?
+  blocked            Boolean                 @default(false)
+  blockedReasons     String[]                @default([])
+  inputDigest        String
+  actorUserId        String
+  computedAt         DateTime
+  calculationContractVersion String         @default("2a-11.calculation.v1")
+  createdAt          DateTime                @default(now())
+
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope EngineeringTakeoffScope @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  inputs       EngineeringCalculationInput[]
+  consumedByDecisions EngineeringQuantityDecisionSource[] @relation("DecisionCalculation")
+  candidates   EngineeringQuantityCandidate[]      @relation("CandidateCalculation")
+
+  @@unique([companyId, takeoffScopeId, subjectMatchKey, ruleId, inputDigest])
+  @@index([companyId, takeoffScopeId, blocked])
+}
+
+/// One explicit input of a governed calculation.
+model EngineeringCalculationInput {
+  id                   String                          @id @default(cuid())
+  companyId            String
+  calculationId        String
+  inputName            String
+  source               EngineeringCalculationInputSource
+  sourceReferenceId    String
+  inputValue           Decimal?                         @db.Decimal(18, 3)
+  inputUnitLiteral     String?
+  resolved             Boolean
+  unresolvedReason     String?
+  /// Candidate this input read, when it read one.
+  candidateId          String?
+  createdAt            DateTime                         @default(now())
+
+  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  calculation EngineeringCalculation  @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  candidate   EngineeringQuantityCandidate? @relation("CalculationInputCandidate", fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@unique([calculationId, inputName])
+  @@index([companyId, calculationId])
+}
+
+/// A governed engineering adjustment.
+///
+/// It NEVER mutates the base quantity: `baseDecisionId` and `baseValue` record
+/// the approved base it extends, and `adjustedValue` is a separate result.
+model EngineeringAdjustment {
+  id                String                      @id
+  companyId         String
+  takeoffScopeId    String
+  subjectMatchKey   String
+  subjectKeyNamespace String
+  subjectLabel      String?
+  requirementKind   EngineeringRequirementKind
+  adjustmentType    EngineeringAdjustmentType
+  mode              EngineeringAdjustmentMode
+  adjustmentFactor  Decimal                      @db.Decimal(18, 6)
+  normalizedFactor  Decimal?                     @db.Decimal(18, 6)
+  unitLiteral       String?
+  dimension         String?
+  /// The APPROVED decision this adjustment extends. Never copied as independent truth.
+  baseDecisionId    String
+  baseValue         Decimal                      @db.Decimal(18, 3)
+  adjustedValue     Decimal?                     @db.Decimal(18, 3)
+  blocked           Boolean                      @default(false)
+  blockedReasons    String[]                     @default([])
+  rationale         String
+  ruleId            String
+  ruleVersion       String
+  actorUserId       String
+  requiresApproval  Boolean                      @default(false)
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  readiness         EngineeringReadinessState    @default(NOT_READY)
+  adjustmentContractVersion String               @default("2a-11.adjustment.v1")
+  createdAt         DateTime                     @default(now())
+
+  company      Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope EngineeringTakeoffScope       @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  baseDecision EngineeringQuantityDecision   @relation("AdjustmentBaseDecision", fields: [baseDecisionId], references: [id], onDelete: Cascade)
+  approvedBy   User?                         @relation("EngineeringAdjustmentApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  bomRows      EngineeringBomRowAdjustment[]
+
+  @@unique([companyId, takeoffScopeId, subjectMatchKey, adjustmentType, ruleVersion])
+  @@index([companyId, takeoffScopeId, blocked])
+  @@index([baseDecisionId])
+}
+
+/// A versioned Engineering BOM.
+///
+/// IMMUTABLE once APPROVED. A change produces a new version referencing the one
+/// it replaces; the previous version's rows are never touched. There is no
+/// price, currency, supplier, packing, or procurement field anywhere here.
+model EngineeringBomVersion {
+  id                  String                    @id
+  companyId           String
+  takeoffScopeId      String
+  /// Engineering scope this version covers.
+  engineeringScope    String
+  versionNumber       Int
+  previousVersionId   String?
+  state               EngineeringBomVersionState @default(DRAFT)
+  completeness        EngineeringBomCompletenessState @default(INCOMPLETE)
+  /// Accepted Phase 2A-10 evidence state this version was built from.
+  comparisonScopeId   String?
+  comparisonRunId     String?
+  evidenceInputDigest String?
+  actorUserId         String
+  reason              String
+  changeNote          String                    @default("")
+  approvedByUserId    String?
+  approvedAt          DateTime?
+  rowCount            Int                       @default(0)
+  approvedRowCount    Int                       @default(0)
+  /// Required governed subjects this version did NOT carry into a row. Non-zero
+  /// means an approved subset is present and the BOM is not whole.
+  unresolvedRequiredSubjectCount Int             @default(0)
+  completenessReasons String[]                  @default([])
+  limitations         String[]                  @default([])
+  bomContractVersion  String                    @default("2a-11.bom.v1")
+  createdAt           DateTime                  @default(now())
+
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  takeoffScope    EngineeringTakeoffScope @relation(fields: [takeoffScopeId], references: [id], onDelete: Cascade)
+  actor           User                    @relation("EngineeringBomActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  approvedBy      User?                   @relation("EngineeringBomApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  previousVersion EngineeringBomVersion?  @relation("BomVersion", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions    EngineeringBomVersion[] @relation("BomVersion")
+  rows            EngineeringBomRow[]
+  sourceDecisions EngineeringBomVersionDecision[]
+  requiredSubjects EngineeringBomRequiredSubject[]
+
+  @@unique([companyId, takeoffScopeId, versionNumber])
+  // Composite tenant key so Phase 2A-12 can reference an engineering BOM
+  // version by (companyId, id) — for example from a child row whose own
+  // companyId must agree — instead of relying on a globally unique id plus an
+  // application-only tenant check.
+  @@unique([companyId, id])
+  @@index([companyId, takeoffScopeId, state])
+  @@index([companyId, completeness])
+}
+
+/// The approved decisions a BOM version snapshotted.
+model EngineeringBomVersionDecision {
+  id           String   @id @default(cuid())
+  companyId    String
+  bomVersionId String
+  decisionId   String
+  createdAt    DateTime @default(now())
+
+  company    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bomVersion EngineeringBomVersion       @relation(fields: [bomVersionId], references: [id], onDelete: Cascade)
+  decision   EngineeringQuantityDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@unique([bomVersionId, decisionId])
+  @@index([decisionId])
+}
+
+/// The required-subject coverage manifest of a BOM version.
+///
+/// This model closes a completeness gap. A BOM version is built from APPROVED
+/// decisions, so a scope with ten required subjects and one approved decision
+/// would otherwise produce a one-row version that `computeBomCompleteness`
+/// reports as complete — because it only ever sees the rows that were created.
+/// The manifest records EVERY subject the governed engineering scope required,
+/// together with how (or whether) the version resolved it, so an approved
+/// SUBSET can never be read as a complete BOM.
+///
+/// A subject is REQUIRED when the takeoff scope carries governed work for it:
+/// a decision (any lifecycle state) or a candidate. An UNRESOLVED subject keeps
+/// its unresolved status and reason here even though it contributes no row.
+model EngineeringBomRequiredSubject {
+  id                String                    @id @default(cuid())
+  companyId         String
+  bomVersionId      String
+  /// Engineering subject key required by the governed takeoff scope.
+  subjectMatchKey   String
+  subjectKeyNamespace String
+  subjectLabel      String?
+  requirementKind   EngineeringRequirementKind
+  /// How this version resolved the subject, or that it left it unresolved.
+  resolution        EngineeringBomSubjectResolution
+  /// The decision that satisfied the subject, when one did.
+  resolvedByDecisionId String?
+  /// The BOM row that carries the subject, when the version produced one.
+  bomRowId          String?
+  /// Why the subject is unresolved or was omitted. Never empty for a non-row.
+  reason            String?
+  createdAt         DateTime                  @default(now())
+
+  company    Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bomVersion EngineeringBomVersion  @relation(fields: [bomVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([bomVersionId, subjectMatchKey])
+  @@index([companyId, bomVersionId, resolution])
+}
+
+/// One row of an Engineering BOM version.
+///
+/// A row is PRODUCT-AGNOSTIC: it carries a generic engineering subject,
+/// specification constraints, and an approved quantity. There is deliberately
+/// no catalog item, no product selection, no supplier, no price, and no
+/// procurement order quantity on this model.
+model EngineeringBomRow {
+  id                        String                    @id
+  companyId                 String
+  bomVersionId              String
+  /// Stable row key across versions, so one requirement can be tracked.
+  rowKey                    String
+  position                  Int
+  engineeringSubject        String
+  requirementKind           EngineeringRequirementKind
+  requirementNature         EngineeringRequirementNature
+  approvedQuantity          Decimal                   @db.Decimal(18, 3)
+  unitLiteral               String
+  unitDimension             String
+  quantityDecisionId        String
+  decisionVersion           Int
+  quantityOrigin            EngineeringQuantityOrigin
+  systemContext             String?
+  locationContext           String?
+  sourceClaimIds            String[]                  @default([])
+  sourceArtifactIds         String[]                  @default([])
+  derivationFamilyRootArtifactIds String[]           @default([])
+  occurrenceLedgerEntryIds  String[]                  @default([])
+  readiness                 EngineeringReadinessState @default(NOT_READY)
+  readinessReasons          String[]                  @default([])
+  limitations               String[]                  @default([])
+  isApprovedRow             Boolean                   @default(false)
+  createdAt                 DateTime                  @default(now())
+
+  company        Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bomVersion     EngineeringBomVersion       @relation(fields: [bomVersionId], references: [id], onDelete: Cascade)
+  quantityDecision EngineeringQuantityDecision @relation(fields: [quantityDecisionId], references: [id], onDelete: Restrict)
+  constraints    EngineeringBomRowConstraint[]
+  adjustments    EngineeringBomRowAdjustment[]
+
+  @@unique([bomVersionId, rowKey])
+  // Composite tenant key so Phase 2A-12 can reference a BOM row by
+  // (companyId, id) rather than depending on a globally unique id alone.
+  @@unique([companyId, id])
+  @@index([companyId, bomVersionId, readiness])
+  @@index([quantityDecisionId])
+  @@index([companyId, requirementKind])
+}
+
+/// A specification constraint on a BOM row.
+///
+/// Manufacturer and tender-model constraints are SPECIFICATION ONLY. A
+/// manufacturer is not a supplier and a named tender model is not a product
+/// selection, so no selection or supplier reference exists here.
+model EngineeringBomRowConstraint {
+  id                String                        @id @default(cuid())
+  companyId         String
+  bomRowId          String
+  kind              EngineeringBomRowConstraintKind
+  value             String
+  sourceClaimId     String?
+  locator           String?
+  isSpecificationOnly Boolean                     @default(true)
+  createdAt         DateTime                      @default(now())
+
+  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bomRow  EngineeringBomRow  @relation(fields: [bomRowId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, bomRowId])
+  @@index([bomRowId, kind])
+}
+
+/// Adjustment lineage of a BOM row, keeping the base quantity visible rather
+/// than folding it into one unexplained approved figure.
+model EngineeringBomRowAdjustment {
+  id             String   @id @default(cuid())
+  companyId      String
+  bomRowId       String
+  adjustmentId   String
+  adjustmentType EngineeringAdjustmentType
+  mode           EngineeringAdjustmentMode
+  factor         Decimal  @db.Decimal(18, 6)
+  baseValue      Decimal  @db.Decimal(18, 3)
+  adjustedValue  Decimal? @db.Decimal(18, 3)
+  createdAt      DateTime @default(now())
+
+  company    Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bomRow     EngineeringBomRow     @relation(fields: [bomRowId], references: [id], onDelete: Cascade)
+  adjustment EngineeringAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+
+  @@unique([bomRowId, adjustmentId])
+  @@index([adjustmentId])
 }
